@@ -181,8 +181,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/30 flex items-end sm:items-center justify-center z-50 sm:p-4">
-      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-5xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
+      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 w-full sm:max-w-5xl max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Modal Header */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <div className="min-w-0 flex-1">

@@ -8,8 +8,8 @@ interface LoadingOverlayProps {
 
 export default function LoadingOverlay({ message = 'Loading...', progress, subMessage }: LoadingOverlayProps) {
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 animate-scale-in">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-6 sm:p-8 max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Spinner */}
         <div className="flex flex-col items-center">
           <div className="relative">

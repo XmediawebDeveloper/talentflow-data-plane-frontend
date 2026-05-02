@@ -231,10 +231,12 @@ export default function NotificationsPage() {
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
           </div>
         ) : notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-            <Bell className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-lg font-medium">No notifications</p>
-            <p className="text-sm text-gray-400 mt-1">
+          <div className="flex flex-col items-center justify-center py-14 sm:py-16 text-center px-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 mb-3 sm:mb-4 rounded-full bg-muted/50 border border-border flex items-center justify-center">
+              <Bell className="w-6 h-6 sm:w-7 sm:h-7 text-muted-foreground" />
+            </div>
+            <p className="text-base sm:text-lg font-semibold text-foreground mb-1">No notifications</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {filter === 'unread' ? 'All notifications have been read' : "You're all caught up!"}
             </p>
           </div>

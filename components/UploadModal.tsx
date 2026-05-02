@@ -577,8 +577,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   // Storage percentage calculation removed (no longer displayed in UI)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto relative">
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
           <div className="min-w-0">
             <h2 className="text-base sm:text-xl text-gray-900">Upload Resume</h2>

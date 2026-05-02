@@ -425,7 +425,7 @@ export default function TeamChatPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[calc(100vh-80px)] items-center justify-center bg-gray-100">
+      <div className="flex h-[calc(100dvh-80px)] items-center justify-center bg-gray-100">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-gray-400 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading chat...</p>
@@ -435,7 +435,7 @@ export default function TeamChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-80px)] bg-gray-100">
+    <div className="flex h-[calc(100dvh-80px)] bg-gray-100">
       {/* Left Sidebar - Channels List */}
       <div className="hidden md:flex md:w-64 lg:w-72 bg-white border-r border-gray-200 flex-col">
         {/* Header */}

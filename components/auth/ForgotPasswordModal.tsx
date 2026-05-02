@@ -202,8 +202,8 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md overflow-hidden animate-scale-in max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header */}
         <div className="relative bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white">
           <button

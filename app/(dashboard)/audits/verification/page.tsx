@@ -154,102 +154,102 @@ export default function LogVerificationPage() {
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50/50">
       <div>
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
+        <div className="mb-5 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300 flex-shrink-0">
                 <ShieldCheck className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Log Verification</h1>
-                <p className="text-sm text-gray-500 mt-0.5">Verify audit log consistency after data plane actions</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Log Verification</h1>
+                <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Verify audit log consistency after data plane actions</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 self-end sm:self-auto">
               <button
                 onClick={refresh}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-200 rounded-lg sm:rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
               >
                 <RefreshCw className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Refresh</span>
+                <span className="text-xs sm:text-sm font-medium text-gray-700">Refresh</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Pending</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.pending}</p>
-                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  Awaiting verification
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-5 sm:mb-6 lg:mb-8">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5 lg:p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Pending</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{stats.pending}</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <Clock className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">Awaiting verification</span>
                 </p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-700 rounded-xl flex items-center justify-center shadow-lg shadow-gray-300">
-                <Clock className="w-6 h-6 text-white" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-gradient-to-br from-gray-500 to-gray-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-gray-300 flex-shrink-0">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Verified / Match</p>
-                <p className="text-3xl font-bold text-green-700 mt-2">{stats.match}</p>
-                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  Audit logs confirmed
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5 lg:p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Verified / Match</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-700 mt-1 sm:mt-2">{stats.match}</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                  <span className="truncate">Audit logs confirmed</span>
                 </p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-800 rounded-xl flex items-center justify-center shadow-lg shadow-green-200">
-                <CheckCircle2 className="w-6 h-6 text-white" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-gradient-to-br from-green-600 to-green-800 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-green-200 flex-shrink-0">
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Mismatches</p>
-                <p className="text-3xl font-bold text-red-700 mt-2">{stats.mismatch}</p>
-                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                  <XCircle className="w-3 h-3 text-red-500" />
-                  Field discrepancies found
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5 lg:p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Mismatches</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-700 mt-1 sm:mt-2">{stats.mismatch}</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                  <span className="truncate">Field discrepancies found</span>
                 </p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-xl flex items-center justify-center shadow-lg shadow-red-200">
-                <XCircle className="w-6 h-6 text-white" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-red-200 flex-shrink-0">
+                <XCircle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Not Found</p>
-                <p className="text-3xl font-bold text-amber-700 mt-2">{stats.notFound}</p>
-                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 text-amber-500" />
-                  {stats.error > 0 ? `+ ${stats.error} errors` : 'No matching audit entry'}
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5 lg:p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Not Found</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-amber-700 mt-1 sm:mt-2">{stats.notFound}</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                  <span className="truncate">{stats.error > 0 ? `+ ${stats.error} errors` : 'No matching audit entry'}</span>
                 </p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl flex items-center justify-center shadow-lg shadow-amber-200">
-                <AlertTriangle className="w-6 h-6 text-white" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-amber-200 flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Action Buttons & Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-gray-100">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <button
                   onClick={handleVerifyAll}
                   disabled={isVerifying}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-gray-900 text-white rounded-lg sm:rounded-xl hover:bg-gray-800 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   {isVerifying ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -265,7 +265,7 @@ export default function LogVerificationPage() {
                 <button
                   onClick={handleRetryNotFound}
                   disabled={isVerifying || stats.notFound === 0}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-200 rounded-lg sm:rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   <RotateCcw className="w-4 h-4 text-gray-600" />
                   <span className="text-sm font-medium text-gray-700">Retry Not Found</span>
@@ -273,7 +273,7 @@ export default function LogVerificationPage() {
                 <button
                   onClick={handleClearVerified}
                   disabled={isVerifying}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-200 rounded-lg sm:rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   <Trash2 className="w-4 h-4 text-gray-600" />
                   <span className="text-sm font-medium text-gray-700">Clear Verified</span>
@@ -281,7 +281,7 @@ export default function LogVerificationPage() {
                 <button
                   onClick={handleClearAll}
                   disabled={isVerifying}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-red-200 rounded-xl hover:bg-red-50 hover:border-red-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white border border-red-200 rounded-lg sm:rounded-xl hover:bg-red-50 hover:border-red-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
                   <span className="text-sm font-medium text-red-600">Clear All</span>
@@ -294,25 +294,25 @@ export default function LogVerificationPage() {
           </div>
 
           {/* Filters */}
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex-1 min-w-[280px]">
+          <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="flex-1 min-w-0 sm:min-w-[280px]">
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search by action, entity, user email..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm"
+                    className="w-full h-10 pl-10 sm:pl-11 pr-3 sm:pr-4 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm"
                   />
                 </div>
               </div>
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm cursor-pointer"
+                  className="appearance-none w-full sm:w-auto h-10 pl-3 sm:pl-4 pr-10 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm cursor-pointer"
                 >
                   <option value="">All Statuses</option>
                   <option value="PENDING">Pending</option>

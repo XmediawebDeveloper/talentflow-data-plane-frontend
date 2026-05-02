@@ -100,18 +100,18 @@ export default function AdminDashboard({
   const filteredJdRecentActivity = filterLast24Hours(jdRecentActivity).slice(0, 10);
 
   const getActivityIcon = (action: string) => {
-    if (action.includes('resume')) return <FileText className="w-4 h-4 text-blue-600" />;
-    if (action.includes('jd') || action.includes('job')) return <Briefcase className="w-4 h-4 text-purple-600" />;
-    if (action.includes('user')) return <Users className="w-4 h-4 text-green-600" />;
-    if (action.includes('scoring') || action.includes('assessment')) return <Award className="w-4 h-4 text-orange-600" />;
+    if (action.includes('resume')) return <FileText className="w-4 h-4 text-brand-cyan" />;
+    if (action.includes('jd') || action.includes('job')) return <Briefcase className="w-4 h-4 text-brand-blue" />;
+    if (action.includes('user')) return <Users className="w-4 h-4 text-brand-teal" />;
+    if (action.includes('scoring') || action.includes('assessment')) return <Award className="w-4 h-4 text-brand-orange-deep" />;
     return <Activity className="w-4 h-4 text-gray-600" />;
   };
 
   const getActivityAccent = (action: string): string => {
-    if (action.includes('resume')) return 'bg-blue-50 ring-blue-100';
-    if (action.includes('jd') || action.includes('job')) return 'bg-purple-50 ring-purple-100';
-    if (action.includes('user')) return 'bg-green-50 ring-green-100';
-    if (action.includes('scoring') || action.includes('assessment')) return 'bg-orange-50 ring-orange-100';
+    if (action.includes('resume')) return 'bg-brand-cyan/10 ring-brand-cyan/15';
+    if (action.includes('jd') || action.includes('job')) return 'bg-brand-blue/10 ring-brand-blue/15';
+    if (action.includes('user')) return 'bg-brand-teal/10 ring-brand-teal/15';
+    if (action.includes('scoring') || action.includes('assessment')) return 'bg-brand-orange/10 ring-brand-orange/15';
     return 'bg-gray-100 ring-gray-200';
   };
 
@@ -132,46 +132,59 @@ export default function AdminDashboard({
 
   if (loading) {
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 bg-slate-50 flex items-center justify-center">
         <div className="flex items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
-          <span className="text-gray-600">Loading dashboard...</span>
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+          <span className="text-gray-700 font-medium">Loading dashboard...</span>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 bg-slate-50">
+      <div className="p-4 md:p-8">
       {/* Welcome Banner */}
       <div className="mb-8">
         <WelcomeBanner user={user} tenant={tenant} />
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+        <div className="mb-6 p-4 bg-brand-orange/10 border border-brand-orange/30 rounded-lg text-brand-orange-deep text-sm">
           {error}
         </div>
       )}
 
       {/* Plan Overview - Admin Only */}
       {isTenantAdmin && (tenant?.subscription || quotaData) && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-            <div className="flex items-center gap-2">
-              {quotaData?.is_trial ? (
-                <Sparkles className="w-5 h-5 text-amber-500" />
-              ) : (
-                <CreditCard className="w-5 h-5 text-indigo-600" />
-              )}
+        <div className="relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 mb-6 sm:mb-8">
+          <div className="pointer-events-none absolute -top-20 -right-20 h-48 w-48 rounded-full bg-brand-blue/5 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-brand-cyan/5 blur-3xl" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-2.5">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${
+                quotaData?.is_trial
+                  ? 'bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/15 ring-brand-orange/20'
+                  : 'bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/15 ring-brand-blue/20'
+              }`}>
+                {quotaData?.is_trial ? (
+                  <Sparkles className="w-4.5 h-4.5 text-brand-orange-deep" />
+                ) : (
+                  <CreditCard className="w-4.5 h-4.5 text-brand-blue" />
+                )}
+              </span>
               <h2 className="text-lg font-semibold text-gray-900">Plan Overview</h2>
               {quotaData?.is_trial && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Free Trial</span>
+                <span className="text-xs bg-brand-orange/15 text-brand-orange-deep border border-brand-orange/20 px-2 py-0.5 rounded-full font-medium">Free Trial</span>
               )}
             </div>
             <button
               onClick={() => router.push('/subscription/current-plan')}
-              className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+              className={`text-sm font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${
+                quotaData?.is_trial
+                  ? 'text-white bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange shadow-md shadow-brand-orange/25'
+                  : 'text-brand-blue hover:bg-brand-blue/5'
+              }`}
             >
               {quotaData?.is_trial ? 'Upgrade Plan' : 'Manage Plan'} <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
@@ -294,48 +307,50 @@ export default function AdminDashboard({
       )}
 
       {/* Stats Cards */}
-    
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         {/* Resumes Card - Clickable with navigation links (only if plan includes resume_upload) */}
-        {hasPlanFeature('resume_upload') && <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
-          <div className="flex items-center justify-between">
+        {hasPlanFeature('resume_upload') && <div className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:shadow-lg hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-blue/5 blur-2xl group-hover:bg-brand-blue/10 transition-colors" />
+          <div className="relative flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Resumes</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_resumes || 0}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_resumes || 0}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span
-                  className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
+                  className="text-xs text-brand-blue font-medium cursor-pointer hover:underline hover:text-brand-blue-2 transition-colors"
                   onClick={() => router.push('/recruitment/my-resumes')}
                 >
                   {stats?.my_resumes || 0} My Resumes
                 </span>
-                <span className="text-xs text-gray-400">|</span>
+                <span className="text-xs text-gray-300">|</span>
                 <span
-                  className="text-xs text-purple-600 cursor-pointer hover:underline hover:text-purple-700 transition-colors"
+                  className="text-xs text-brand-cyan font-medium cursor-pointer hover:underline hover:text-brand-teal transition-colors"
                   onClick={() => router.push('/recruitment/resume-database')}
                 >
                   {stats?.internal_db_resumes || 0} Internal DB
                 </span>
               </div>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <FileText className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/10">
+              <FileText className="w-6 h-6 text-brand-blue" />
             </div>
           </div>
         </div>}
 
         {/* Job Descriptions Card - Clickable with status filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-purple-300 transition-all">
-          <div className="flex items-center justify-between">
+        <div className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:shadow-lg hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 hover:-translate-y-0.5 transition-all">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-cyan/5 blur-2xl group-hover:bg-brand-cyan/10 transition-colors" />
+          <div className="relative flex items-center justify-between">
             <div>
               <p
-                className="text-sm text-gray-600 cursor-pointer hover:text-purple-600 transition-colors"
+                className="text-sm text-gray-600 cursor-pointer hover:text-brand-cyan transition-colors"
                 onClick={() => router.push('/recruitment/job-openings')}
               >
                 Job Descriptions
               </p>
               <p
-                className="text-3xl font-semibold text-gray-900 mt-1 cursor-pointer hover:text-purple-600 transition-colors"
+                className="text-3xl font-bold text-gray-900 mt-1 tracking-tight cursor-pointer hover:text-brand-cyan transition-colors"
                 onClick={() => router.push('/recruitment/job-openings')}
               >
                 {stats?.total_jds || 0}
@@ -343,14 +358,14 @@ export default function AdminDashboard({
               {/* JD02A & JD02B: Show published, draft, and my JDs counts - All clickable */}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span
-                  className="text-xs text-green-600 cursor-pointer hover:underline hover:text-green-700 transition-colors"
+                  className="text-xs text-green-600 font-medium cursor-pointer hover:underline hover:text-green-700 transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=published'); }}
                 >
                   {stats?.active_jds || 0} Published
                 </span>
-                <span className="text-xs text-gray-400">|</span>
+                <span className="text-xs text-gray-300">|</span>
                 <span
-                  className="text-xs text-yellow-600 cursor-pointer hover:underline hover:text-yellow-700 transition-colors"
+                  className="text-xs text-brand-orange-deep font-medium cursor-pointer hover:underline hover:text-brand-orange transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=draft'); }}
                 >
                   {stats?.draft_jds || 0} Draft
@@ -358,27 +373,28 @@ export default function AdminDashboard({
               </div>
             </div>
             <div
-              className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center cursor-pointer flex-shrink-0"
+              className="w-12 h-12 bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 shadow-sm shadow-brand-cyan/10"
               onClick={() => router.push('/recruitment/job-openings')}
             >
-              <Briefcase className="w-6 h-6 text-purple-600" />
+              <Briefcase className="w-6 h-6 text-brand-cyan" />
             </div>
           </div>
         </div>
 
         {/* Users Card - Clickable for admins */}
         <div
-          className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${canManageUsers ? 'cursor-pointer hover:shadow-md hover:border-green-300 transition-all' : 'hover:shadow-md transition-shadow'}`}
+          className={`group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 ${canManageUsers ? 'cursor-pointer hover:shadow-lg hover:shadow-brand-teal/10 hover:border-brand-teal/30 hover:-translate-y-0.5 transition-all' : 'hover:shadow-md transition-shadow'}`}
           onClick={() => canManageUsers && onNavigateToUsers?.()}
         >
-          <div className="flex items-center justify-between">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-teal/5 blur-2xl group-hover:bg-brand-teal/10 transition-colors" />
+          <div className="relative flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Users</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_users || 0}</p>
-              <p className="text-xs text-green-600 mt-1">{stats?.active_users || 0} Active</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_users || 0}</p>
+              <p className="text-xs text-green-600 font-medium mt-1">{stats?.active_users || 0} Active</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Users className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-teal/10">
+              <Users className="w-6 h-6 text-brand-teal" />
             </div>
           </div>
         </div>
@@ -386,25 +402,26 @@ export default function AdminDashboard({
         {/* Assessments Card - Clickable (only if plan includes assessment) */}
         {hasPlanFeature('assessment') && (
           <div
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-orange-300 transition-all"
+            className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 cursor-pointer hover:shadow-lg hover:shadow-brand-orange/10 hover:border-brand-orange/30 hover:-translate-y-0.5 transition-all"
             onClick={() => router.push('/recruitment/assessments')}
           >
-            <div className="flex items-center justify-between">
+            <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-orange/5 blur-2xl group-hover:bg-brand-orange/10 transition-colors" />
+            <div className="relative flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Assessments</p>
-                <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_assessments || 0}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_assessments || 0}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-xs text-green-600">{stats?.assessment_completed_count || 0} Completed</span>
+                  <span className="text-xs text-green-600 font-medium">{stats?.assessment_completed_count || 0} Completed</span>
                   {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
                     <>
-                      <span className="text-xs text-gray-400">|</span>
-                      <span className="text-xs text-blue-600">Avg: {stats.assessment_average_score}%</span>
+                      <span className="text-xs text-gray-300">|</span>
+                      <span className="text-xs text-brand-blue font-medium">Avg: {stats.assessment_average_score}%</span>
                     </>
                   )}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Award className="w-6 h-6 text-orange-600" />
+              <div className="w-12 h-12 bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-orange/10">
+                <Award className="w-6 h-6 text-brand-orange-deep" />
               </div>
             </div>
           </div>
@@ -414,18 +431,23 @@ export default function AdminDashboard({
       {/* JD02A: Subscription Units */}
       {subscriptionUnits && (
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Units</h2>
+          <div className="flex items-center gap-2.5 mb-4">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+              <Layers className="w-4 h-4 text-brand-blue" />
+            </span>
+            <h2 className="text-lg font-semibold text-gray-900">Available Units</h2>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Resume Upload Units */}
             {subscriptionUnits.RU && hasPlanFeature('resume_upload') && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 transition-all">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Upload className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Upload className="w-5 h-5 text-brand-blue" />
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 whitespace-nowrap">Resume Storage</p>
-                <p className="text-xl font-semibold text-gray-900">
+                <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.RU.is_unlimited ? 'Unlimited' : subscriptionUnits.RU.available}
                 </p>
                 {!subscriptionUnits.RU.is_unlimited && (
@@ -433,9 +455,9 @@ export default function AdminDashboard({
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>{subscriptionUnits.RU.used} / {subscriptionUnits.RU.limit} used</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-blue to-brand-blue-2'}`}
                         style={{ width: `${Math.min(subscriptionUnits.RU.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -446,14 +468,14 @@ export default function AdminDashboard({
 
             {/* Resume Scoring Units */}
             {subscriptionUnits.RS && hasPlanFeature('resume_scoring') && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 transition-all">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-brand-cyan" />
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 whitespace-nowrap">Resume Scoring</p>
-                <p className="text-xl font-semibold text-gray-900">
+                <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
                 </p>
                 {!subscriptionUnits.RS.is_unlimited && (
@@ -461,9 +483,9 @@ export default function AdminDashboard({
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>{subscriptionUnits.RS.used} / {subscriptionUnits.RS.limit} used</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-blue-500'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-cyan to-brand-teal'}`}
                         style={{ width: `${Math.min(subscriptionUnits.RS.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -474,14 +496,14 @@ export default function AdminDashboard({
 
             {/* Assessment Units */}
             {subscriptionUnits.AS && hasPlanFeature('assessment') && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-orange/10 hover:border-brand-orange/30 transition-all">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <ClipboardCheck className="w-5 h-5 text-orange-600" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <ClipboardCheck className="w-5 h-5 text-brand-orange-deep" />
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 whitespace-nowrap">Assessment</p>
-                <p className="text-xl font-semibold text-gray-900">
+                <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
                 </p>
                 {!subscriptionUnits.AS.is_unlimited && (
@@ -489,9 +511,9 @@ export default function AdminDashboard({
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>{subscriptionUnits.AS.used} / {subscriptionUnits.AS.limit} used</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-orange-500'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-gradient-to-r from-brand-orange to-brand-orange-deep'}`}
                         style={{ width: `${Math.min(subscriptionUnits.AS.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -502,14 +524,14 @@ export default function AdminDashboard({
 
             {/* AI Interview Units */}
             {subscriptionUnits.AIU && hasPlanFeature('ai_interview') && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue-2/30 transition-all">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Video className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand-blue-2/15 to-brand-blue/10 ring-1 ring-brand-blue-2/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Video className="w-5 h-5 text-brand-blue-2" />
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 whitespace-nowrap">AI Interview</p>
-                <p className="text-xl font-semibold text-gray-900">
+                <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
                 </p>
                 {!subscriptionUnits.AIU.is_unlimited && (
@@ -517,9 +539,9 @@ export default function AdminDashboard({
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>{subscriptionUnits.AIU.used} / {subscriptionUnits.AIU.limit} used</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-yellow-500' : 'bg-purple-500'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-blue-2 to-brand-blue'}`}
                         style={{ width: `${Math.min(subscriptionUnits.AIU.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -530,14 +552,14 @@ export default function AdminDashboard({
 
             {/* Max Users */}
             {subscriptionUnits.max_seats && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-teal/10 hover:border-brand-teal/30 transition-all">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <UserCheck className="w-5 h-5 text-teal-600" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <UserCheck className="w-5 h-5 text-brand-teal" />
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 whitespace-nowrap">Max Users</p>
-                <p className="text-xl font-semibold text-gray-900">
+                <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.max_seats.is_unlimited ? 'Unlimited' : subscriptionUnits.max_seats.available}
                 </p>
                 {!subscriptionUnits.max_seats.is_unlimited && (
@@ -545,9 +567,9 @@ export default function AdminDashboard({
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>{subscriptionUnits.max_seats.used} / {subscriptionUnits.max_seats.limit} used</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-yellow-500' : 'bg-teal-500'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-teal to-brand-cyan'}`}
                         style={{ width: `${Math.min(subscriptionUnits.max_seats.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -562,20 +584,24 @@ export default function AdminDashboard({
       {/* JD02A: JD Recent Activity - Last 24 hours only, max 10 items */}
       {filteredJdRecentActivity.length > 0 && (
         <div className="mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent JD Activity</h2>
-              <Briefcase className="w-5 h-5 text-gray-400" />
+              <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                  <Briefcase className="w-4 h-4 text-brand-blue" />
+                </span>
+                Recent JD Activity
+              </h2>
             </div>
             <div className="space-y-3">
               {filteredJdRecentActivity.map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-lg"
+                  className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gradient-to-r from-brand-blue/[0.03] to-transparent rounded-xl border border-gray-100 hover:border-brand-blue/20 hover:shadow-sm hover:shadow-brand-blue/5 transition-all"
                 >
                   <div className="flex items-start sm:items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Briefcase className="w-4 h-4 text-purple-600" />
+                    <div className="w-8 h-8 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Briefcase className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
@@ -597,57 +623,62 @@ export default function AdminDashboard({
       {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6">
+          <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900 mb-4">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan/15 to-brand-teal/15 ring-1 ring-brand-cyan/20">
+              <Sparkles className="w-4 h-4 text-brand-teal" />
+            </span>
+            Quick Actions
+          </h2>
           <div className="space-y-3">
             <button
               onClick={() => router.push('/recruitment/jd-creation')}
-              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+              className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-blue/[0.02] hover:bg-brand-blue/[0.04] hover:border-brand-blue/30 hover:shadow-sm hover:shadow-brand-blue/10 transition-all"
             >
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-gray-800" />
+              <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center group-hover:bg-brand-blue/15 transition-colors">
+                <Briefcase className="w-5 h-5 text-brand-blue" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium text-gray-900">Create New Job</p>
+                <p className="text-sm font-semibold text-gray-900">Create New Job</p>
                 <p className="text-xs text-gray-500">Post a new job opening</p>
               </div>
             </button>
 
             <button
               onClick={onNavigateToTenants}
-              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
+              className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-cyan/[0.02] hover:bg-brand-cyan/[0.04] hover:border-brand-cyan/30 hover:shadow-sm hover:shadow-brand-cyan/10 transition-all"
             >
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-gray-800" />
+              <div className="w-10 h-10 bg-brand-cyan/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center group-hover:bg-brand-cyan/15 transition-colors">
+                <Building2 className="w-5 h-5 text-brand-cyan" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium text-gray-900">Manage Team</p>
+                <p className="text-sm font-semibold text-gray-900">Manage Team</p>
                 <p className="text-xs text-gray-500">Add or edit team members</p>
               </div>
             </button>
 
             <button
               onClick={onNavigateToUsers}
-              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
+              className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-teal/[0.02] hover:bg-brand-teal/[0.04] hover:border-brand-teal/30 hover:shadow-sm hover:shadow-brand-teal/10 transition-all"
             >
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-gray-800" />
+              <div className="w-10 h-10 bg-brand-teal/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center group-hover:bg-brand-teal/15 transition-colors">
+                <Users className="w-5 h-5 text-brand-teal" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium text-gray-900">Manage Users</p>
+                <p className="text-sm font-semibold text-gray-900">Manage Users</p>
                 <p className="text-xs text-gray-500">Add users & permissions</p>
               </div>
             </button>
 
             <button
               onClick={onNavigateToSettings}
-              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+              className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-orange/[0.02] hover:bg-brand-orange/[0.04] hover:border-brand-orange/30 hover:shadow-sm hover:shadow-brand-orange/10 transition-all"
             >
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Settings className="w-5 h-5 text-gray-600" />
+              <div className="w-10 h-10 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center group-hover:bg-brand-orange/15 transition-colors">
+                <Settings className="w-5 h-5 text-brand-orange-deep" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium text-gray-900">Settings</p>
+                <p className="text-sm font-semibold text-gray-900">Settings</p>
                 <p className="text-xs text-gray-500">System configuration</p>
               </div>
             </button>
@@ -655,11 +686,13 @@ export default function AdminDashboard({
         </div>
 
         {/* Recent Activity - Last 24 hours only, max 10 items - Feed View */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 md:col-span-2 overflow-hidden">
-          <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] md:col-span-2 overflow-hidden">
+          <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent">
             <div className="min-w-0">
-              <h2 className="flex items-center gap-2 text-base sm:text-lg font-semibold text-gray-900">
-                <Activity className="w-5 h-5 text-gray-600" />
+              <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                  <Activity className="w-4 h-4 text-brand-blue" />
+                </span>
                 Recent Activity
               </h2>
               <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
@@ -671,14 +704,14 @@ export default function AdminDashboard({
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+              <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm">
                 Last 24 hours
               </span>
             </div>
           </div>
 
           {filteredRecentActivity.length > 0 ? (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-gray-100 max-h-[28rem] overflow-y-auto scrollbar-auto-hide">
               {filteredRecentActivity.map((activity) => {
                 // Build details display based on activity type
                 const getDetailsDisplay = () => {
@@ -781,8 +814,8 @@ export default function AdminDashboard({
                             </p>
                           )}
                           <div className="mt-1.5 flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 pl-0.5 pr-2 py-0.5 text-[11px] font-medium text-gray-700">
-                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-800 text-[9px] font-semibold text-white">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 pl-0.5 pr-2 py-0.5 text-[11px] font-medium text-brand-blue">
+                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 text-[9px] font-semibold text-white shadow-sm">
                                 {initials}
                               </span>
                               {userLabel}
@@ -804,8 +837,8 @@ export default function AdminDashboard({
             </ul>
           ) : (
             <div className="text-center py-12 px-6">
-              <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                <Activity className="w-6 h-6 text-gray-400" />
+              <div className="mx-auto h-12 w-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mb-3">
+                <Activity className="w-6 h-6 text-brand-blue" />
               </div>
               <p className="text-sm font-medium text-gray-900">No activity in the last 24 hours</p>
               <p className="text-xs text-gray-500 mt-1">New actions will appear here as your team works</p>
@@ -814,6 +847,7 @@ export default function AdminDashboard({
         </div>
       </div>
 
+      </div>
     </main>
   );
 }

@@ -85,8 +85,8 @@ export default function AITalentMatchProgressPanel({
   // Show error state
   if (error) {
     return (
-      <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4 sm:p-6">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-sm w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
@@ -107,8 +107,8 @@ export default function AITalentMatchProgressPanel({
 
   // Show progress panel
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-4 sm:p-6">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header */}
         <div className="text-center mb-4 sm:mb-5">
           <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">

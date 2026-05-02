@@ -540,9 +540,12 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                 ))}
 
                 {filteredTickets.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Ticket className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                    <p className="text-sm">No tickets found</p>
+                  <div className="text-center py-10">
+                    <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-muted/50 border border-border flex items-center justify-center">
+                      <Ticket className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground mb-1">No tickets found</p>
+                    <p className="text-xs text-muted-foreground">Try adjusting your search or filters</p>
                   </div>
                 )}
               </div>

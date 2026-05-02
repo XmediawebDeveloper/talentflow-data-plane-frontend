@@ -374,8 +374,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   // Success Screen
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-8 text-center">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-5 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
             <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
           </div>
@@ -391,8 +391,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   // Duplicate Invitation Error Screen
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-5 sm:p-8 max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
           <div className="text-center mb-4 sm:mb-6">
             <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
               <AlertTriangle className="w-7 h-7 sm:w-10 sm:h-10 text-amber-600" />
@@ -452,8 +452,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   // Loading Screen
   if (view === 'loading' || isLoadingAssessments) {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-8 text-center">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-5 sm:p-8 text-center">
           <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 animate-spin text-gray-600 mx-auto mb-3 sm:mb-4" />
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
           <p className="text-gray-500 text-xs sm:text-sm">Checking for existing assessments</p>
@@ -465,8 +465,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   // No Assessment Screen - With blur background
   if (view === 'no-assessment') {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
           {/* Header - Grey Theme */}
           <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -522,8 +522,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
   // Invite Screen (Main) - With blur background
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-3xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-teal-600 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">

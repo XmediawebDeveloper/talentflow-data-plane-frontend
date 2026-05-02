@@ -1141,28 +1141,28 @@ export default function HelpCenterPage() {
   if (selectedArticle) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
           {/* Back button */}
           <button
             onClick={() => router.push('/help')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-8 group"
+            className="inline-flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 mb-5 sm:mb-8 group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             <span>Back to Help Center</span>
           </button>
 
           {/* Article header */}
-          <div className="mb-8">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="w-14 h-14 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
-                <selectedArticle.icon className="w-7 h-7 text-white" />
+          <div className="mb-5 sm:mb-8">
+            <div className="flex items-start gap-3 sm:gap-4 mb-4">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
+                <selectedArticle.icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{selectedArticle.title}</h1>
-                <p className="text-gray-600">{selectedArticle.subtitle}</p>
-                <div className="flex items-center gap-4 text-sm text-gray-500 mt-3">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight mb-1 sm:mb-2">{selectedArticle.title}</h1>
+                <p className="text-sm sm:text-base text-gray-600">{selectedArticle.subtitle}</p>
+                <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-500 mt-2 sm:mt-3 flex-wrap">
                   <span className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" />
+                    <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     {selectedArticle.readTime} read
                   </span>
                   <span className="px-2 py-0.5 bg-gray-100 rounded-full capitalize">{selectedArticle.category}</span>
@@ -1172,7 +1172,7 @@ export default function HelpCenterPage() {
           </div>
 
           {/* Article content */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 md:p-10">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-8 md:p-10">
             {selectedArticle.content}
           </div>
 
@@ -1210,37 +1210,37 @@ export default function HelpCenterPage() {
   // Help center home
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Book className="w-8 h-8 text-white" />
+        <div className="text-center mb-6 sm:mb-10">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-800 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+            <Book className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Help Center</h1>
-          <p className="text-gray-600 text-lg">Find answers, guides, and tutorials to help you succeed</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight mb-1 sm:mb-2">Help Center</h1>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 px-2">Find answers, guides, and tutorials to help you succeed</p>
         </div>
 
         {/* Search */}
-        <div className="max-w-2xl mx-auto mb-10">
+        <div className="max-w-2xl mx-auto mb-6 sm:mb-10">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search for help articles..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-lg shadow-sm"
+              className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm sm:text-base lg:text-lg shadow-sm"
             />
           </div>
         </div>
 
         {/* Categories */}
-        <div className="flex flex-wrap justify-center gap-2 mb-10">
+        <div className="flex gap-2 mb-6 sm:mb-10 overflow-x-auto scrollbar-hide -mx-1 px-1 justify-start sm:justify-center sm:flex-wrap">
           {categories.map(category => (
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`px-5 py-2.5 rounded-full flex items-center gap-2 transition-all font-medium ${
+              className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-5 rounded-full text-xs sm:text-sm transition-all font-medium whitespace-nowrap flex-shrink-0 ${
                 selectedCategory === category.id
                   ? 'bg-gray-800 text-white shadow-md'
                   : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
@@ -1253,36 +1253,36 @@ export default function HelpCenterPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-10">
           <button
             onClick={() => router.push('/help?article=getting-started')}
-            className="p-6 bg-gradient-to-br from-gray-800 to-gray-900 text-white rounded-2xl hover:shadow-xl transition-all text-left"
+            className="p-4 sm:p-6 bg-gradient-to-br from-gray-800 to-gray-900 text-white rounded-xl sm:rounded-2xl hover:shadow-xl transition-all text-left"
           >
-            <Lightbulb className="w-8 h-8 mb-3" />
-            <div className="text-lg font-semibold">Quick Start Guide</div>
-            <div className="text-gray-300 mt-1">New to TalentFlow? Start here</div>
+            <Lightbulb className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3" />
+            <div className="text-base sm:text-lg font-semibold">Quick Start Guide</div>
+            <div className="text-xs sm:text-sm text-gray-300 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
           </button>
           <button
             onClick={() => router.push('/support-tickets')}
-            className="p-6 bg-white border border-gray-200 rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left"
+            className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left"
           >
-            <MessageCircle className="w-8 h-8 mb-3 text-gray-700" />
-            <div className="text-lg font-semibold text-gray-900">Contact Support</div>
-            <div className="text-gray-500 mt-1">Get personalized help</div>
+            <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-gray-700" />
+            <div className="text-base sm:text-lg font-semibold text-gray-900">Contact Support</div>
+            <div className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Get personalized help</div>
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
-            className="p-6 bg-white border border-gray-200 rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left"
+            className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left"
           >
-            <Settings className="w-8 h-8 mb-3 text-gray-700" />
-            <div className="text-lg font-semibold text-gray-900">Settings</div>
-            <div className="text-gray-500 mt-1">Configure your account</div>
+            <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-gray-700" />
+            <div className="text-base sm:text-lg font-semibold text-gray-900">Settings</div>
+            <div className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Configure your account</div>
           </button>
         </div>
 
         {/* Articles Grid */}
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">
+          <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 mb-4 sm:mb-6">
             {selectedCategory === 'all' ? 'All Articles' : categories.find(c => c.id === selectedCategory)?.name}
             <span className="text-gray-400 font-normal ml-2">({filteredArticles.length})</span>
           </h2>
@@ -1293,16 +1293,16 @@ export default function HelpCenterPage() {
               <p className="text-lg">No articles found matching your search</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
               {filteredArticles.map(article => (
                 <button
                   key={article.id}
                   onClick={() => router.push(`/help?article=${article.id}`)}
-                  className="p-6 bg-white border border-gray-200 rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left group"
+                  className="p-4 sm:p-5 lg:p-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left group"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 transition-colors">
-                      <article.icon className="w-6 h-6 text-gray-700" />
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 transition-colors">
+                      <article.icon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 group-hover:text-gray-700 mb-1 line-clamp-2">

@@ -1260,8 +1260,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">{confirmAction.title}</h3>
             <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-3">

@@ -431,26 +431,26 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   }, []);
 
   const getActivityIcon = (action: string) => {
-    if (action.includes('login')) return <LogIn className="h-4 w-4 text-blue-500" />;
+    if (action.includes('login')) return <LogIn className="h-4 w-4 text-brand-blue" />;
     if (action.includes('logout')) return <LogOut className="h-4 w-4 text-gray-500" />;
-    if (action.includes('jd_create') || action.includes('jd_publish')) return <Briefcase className="h-4 w-4 text-green-500" />;
-    if (action.includes('jd_update')) return <Edit2 className="h-4 w-4 text-yellow-500" />;
+    if (action.includes('jd_create') || action.includes('jd_publish')) return <Briefcase className="h-4 w-4 text-green-600" />;
+    if (action.includes('jd_update')) return <Edit2 className="h-4 w-4 text-brand-orange" />;
     if (action.includes('jd_archive')) return <Archive className="h-4 w-4 text-gray-500" />;
-    if (action.includes('resume_upload')) return <Upload className="h-4 w-4 text-purple-500" />;
-    if (action.includes('scoring')) return <Star className="h-4 w-4 text-orange-500" />;
-    if (action.includes('assessment')) return <CheckCircle className="h-4 w-4 text-teal-500" />;
-    if (action.includes('ai_match')) return <Sparkles className="h-4 w-4 text-indigo-500" />;
+    if (action.includes('resume_upload')) return <Upload className="h-4 w-4 text-brand-cyan" />;
+    if (action.includes('scoring')) return <Star className="h-4 w-4 text-brand-orange-deep" />;
+    if (action.includes('assessment')) return <CheckCircle className="h-4 w-4 text-brand-teal" />;
+    if (action.includes('ai_match')) return <Sparkles className="h-4 w-4 text-brand-blue-2" />;
     return <Activity className="h-4 w-4 text-gray-400" />;
   };
 
   const getActivityAccent = (action: string): string => {
-    if (action.includes('login')) return 'bg-blue-50 ring-blue-100';
+    if (action.includes('login')) return 'bg-brand-blue/10 ring-brand-blue/15';
     if (action.includes('jd_create') || action.includes('jd_publish')) return 'bg-green-50 ring-green-100';
-    if (action.includes('jd_update')) return 'bg-yellow-50 ring-yellow-100';
-    if (action.includes('resume_upload')) return 'bg-purple-50 ring-purple-100';
-    if (action.includes('scoring')) return 'bg-orange-50 ring-orange-100';
-    if (action.includes('assessment')) return 'bg-teal-50 ring-teal-100';
-    if (action.includes('ai_match')) return 'bg-indigo-50 ring-indigo-100';
+    if (action.includes('jd_update')) return 'bg-brand-orange/10 ring-brand-orange/15';
+    if (action.includes('resume_upload')) return 'bg-brand-cyan/10 ring-brand-cyan/15';
+    if (action.includes('scoring')) return 'bg-brand-orange/10 ring-brand-orange-deep/15';
+    if (action.includes('assessment')) return 'bg-brand-teal/10 ring-brand-teal/15';
+    if (action.includes('ai_match')) return 'bg-brand-blue-2/10 ring-brand-blue-2/15';
     return 'bg-gray-50 ring-gray-100';
   };
 
@@ -475,24 +475,30 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-8 bg-gray-50">
+    <div className="bg-slate-50 flex-1">
+      <div className="space-y-6 p-4 md:p-8">
       {/* Welcome Banner */}
       <WelcomeBanner user={user} tenant={tenant} />
 
       {/* JD Status Boxes */}
-      <Card className="border-gray-200">
+      <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">Job Description Status</CardTitle>
-              <CardDescription className="text-gray-600">
-                Overview of all job descriptions by status
-              </CardDescription>
+            <div className="flex items-start gap-3">
+              <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                <Briefcase className="h-4.5 w-4.5 text-brand-blue" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-semibold text-gray-900">Job Description Status</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Overview of all job descriptions by status
+                </CardDescription>
+              </div>
             </div>
             {canCreateJD && (
               <Button
                 onClick={() => router.push('/recruitment/jd-creation')}
-                className="bg-gray-800 hover:bg-gray-900"
+                className="bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
               >
                 <Briefcase className="mr-2 h-4 w-4" />
                 Create Job
@@ -504,18 +510,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {/* Published JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 dark:bg-green-900/20 dark:border-green-800 dark:hover:border-green-700 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-green-100 bg-gradient-to-br from-green-50 to-green-50/40 hover:border-green-300 hover:shadow-md hover:shadow-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:border-green-700 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 dark:text-green-400 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 dark:text-green-400 mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.published}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                <div className="p-1.5 bg-green-100 dark:bg-green-900/40 rounded-lg ring-1 ring-green-200/60">
                   <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Published</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Published</h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Active job postings</p>
                 </div>
               </div>
@@ -523,18 +529,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
             {/* Draft JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 dark:bg-yellow-900/20 dark:border-yellow-800 dark:hover:border-yellow-700 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 dark:bg-yellow-900/20 dark:border-yellow-800 dark:hover:border-yellow-700 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-600 dark:text-yellow-400 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-orange-deep dark:text-yellow-400 mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.draft}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-yellow-100 dark:bg-yellow-900/40 rounded-lg">
-                  <Edit2 className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <div className="p-1.5 bg-brand-orange/15 dark:bg-yellow-900/40 rounded-lg ring-1 ring-brand-orange/20">
+                  <Edit2 className="h-4 w-4 text-brand-orange-deep dark:text-yellow-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Draft</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Draft</h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Incomplete postings</p>
                 </div>
               </div>
@@ -542,18 +548,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
             {/* Disabled JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 dark:bg-red-900/20 dark:border-red-800 dark:hover:border-red-700 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-red-100 bg-gradient-to-br from-red-50 to-red-50/40 hover:border-red-300 hover:shadow-md hover:shadow-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:border-red-700 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 dark:text-red-400 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 dark:text-red-400 mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.disabled}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 dark:bg-red-900/40 rounded-lg">
+                <div className="p-1.5 bg-red-100 dark:bg-red-900/40 rounded-lg ring-1 ring-red-200/60">
                   <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Disabled</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Disabled</h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Temporarily hidden</p>
                 </div>
               </div>
@@ -561,18 +567,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
             {/* Archived JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white hover:border-gray-300 hover:shadow-md hover:shadow-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-600 dark:text-gray-300 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-600 dark:text-gray-300 mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.archived}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <div className="p-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg ring-1 ring-gray-200/60">
                   <Archive className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Archived</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Archived</h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Closed postings</p>
                 </div>
               </div>
@@ -584,10 +590,12 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Published Jobs */}
-        <Card className="border-gray-200">
+        <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Briefcase className="h-5 w-5 text-gray-600" />
+            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <Briefcase className="h-4 w-4 text-brand-blue" />
+              </span>
               Published Jobs
             </CardTitle>
             <CardDescription className="text-gray-600">
@@ -597,17 +605,17 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <CardContent>
             {loadingJDs ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
               </div>
             ) : publishedJDs.length === 0 ? (
               <div className="text-center py-8">
-                <Briefcase className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                <Briefcase className="h-10 w-10 text-gray-300 mx-auto mb-3" />
                 <p className="text-sm text-gray-600">No published jobs yet</p>
                 {canCreateJD && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="mt-3"
+                    className="mt-3 border-brand-blue/30 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50"
                     onClick={() => router.push('/recruitment/jd-creation')}
                   >
                     Create First Job
@@ -619,13 +627,13 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 {publishedJDs.map((jd) => (
                   <div
                     key={jd.id}
-                    className="flex items-start justify-between p-3 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
+                    className="flex items-start justify-between p-3 rounded-xl border border-gray-100 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02] hover:shadow-sm hover:shadow-brand-blue/5 transition-all cursor-pointer"
                     onClick={() => handleViewJobDetails(jd)}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {jd.job_id && (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium border border-blue-200">
+                          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-medium border border-brand-blue/20">
                             {jd.job_id}
                           </span>
                         )}
@@ -662,7 +670,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         e.stopPropagation();
                         handleAIMatch(jd);
                       }}
-                      className="ml-2"
+                      className="ml-2 text-brand-orange hover:text-brand-orange-deep hover:bg-brand-orange/10"
                     >
                       <Sparkles className="h-4 w-4" />
                     </Button>
@@ -673,7 +681,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {publishedJDs.length > 0 && (
               <Button
                 variant="ghost"
-                className="mt-4 w-full"
+                className="mt-4 w-full text-brand-blue hover:text-brand-blue-2 hover:bg-brand-blue/5"
                 onClick={() => router.push('/recruitment/job-openings?status=published')}
               >
                 View all published jobs
@@ -684,10 +692,12 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         </Card>
 
         {/* Draft Jobs */}
-        <Card className="border-gray-200">
+        <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <FileText className="h-5 w-5 text-gray-600" />
+            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15">
+                <FileText className="h-4 w-4 text-brand-orange-deep" />
+              </span>
               Draft Jobs
             </CardTitle>
             <CardDescription className="text-gray-600">
@@ -697,11 +707,11 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <CardContent>
             {loadingJDs ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-brand-orange" />
               </div>
             ) : draftJDs.length === 0 ? (
               <div className="text-center py-8">
-                <FileText className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                <FileText className="h-10 w-10 text-gray-300 mx-auto mb-3" />
                 <p className="text-sm text-gray-600">No drafts saved</p>
               </div>
             ) : (
@@ -709,19 +719,19 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 {draftJDs.map((jd) => (
                   <div
                     key={jd.id}
-                    className="flex items-start justify-between p-3 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all"
+                    className="flex items-start justify-between p-3 rounded-xl border border-gray-100 hover:border-brand-orange/30 hover:bg-brand-orange/[0.02] hover:shadow-sm hover:shadow-brand-orange/5 transition-all"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {jd.job_id && (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium border border-blue-200">
+                          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-medium border border-brand-blue/20">
                             {jd.job_id}
                           </span>
                         )}
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {jd.title || 'Untitled Draft'}
                         </p>
-                        <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
+                        <Badge className="bg-brand-orange/15 text-brand-orange-deep hover:bg-brand-orange/15 border border-brand-orange/20">
                           Draft
                         </Badge>
                       </div>
@@ -742,7 +752,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         variant="outline"
                         size="sm"
                         onClick={() => handleViewJobDetails(jd)}
-                        className="ml-2"
+                        className="ml-2 border-brand-blue/30 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50"
                       >
                         <Edit2 className="h-4 w-4" />
                       </Button>
@@ -754,7 +764,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {draftJDs.length > 0 && (
               <Button
                 variant="ghost"
-                className="mt-4 w-full"
+                className="mt-4 w-full text-brand-orange-deep hover:text-brand-orange-deep hover:bg-brand-orange/10"
                 onClick={() => router.push('/recruitment/job-openings?status=draft')}
               >
                 View all drafts
@@ -767,9 +777,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
       {/* Quick Actions - only show if user has at least one permission */}
       {(canCreateJD || canUploadResumes || canViewResumes) && (
-        <Card className="border-gray-200">
+        <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Quick Actions</CardTitle>
+            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan/15 to-brand-teal/15 ring-1 ring-brand-cyan/20">
+                <Sparkles className="h-4 w-4 text-brand-teal" />
+              </span>
+              Quick Actions
+            </CardTitle>
             <CardDescription className="text-gray-600">Common tasks to get you started</CardDescription>
           </CardHeader>
           <CardContent>
@@ -777,41 +792,49 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               {canCreateJD && (
                 <Button
                   variant="outline"
-                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  className="group h-auto flex-col gap-2 py-5 border-gray-100 bg-gradient-to-br from-white to-brand-blue/[0.02] hover:border-brand-blue/40 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all"
                   onClick={() => router.push('/recruitment/jd-creation')}
                 >
-                  <Briefcase className="h-6 w-6 text-gray-600" />
-                  <span className="text-sm text-gray-900">Create Job</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 group-hover:bg-brand-blue/15 transition-colors">
+                    <Briefcase className="h-5 w-5 text-brand-blue" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-900">Create Job</span>
                 </Button>
               )}
               {canUploadResumes && (
                 <Button
                   variant="outline"
-                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  className="group h-auto flex-col gap-2 py-5 border-gray-100 bg-gradient-to-br from-white to-brand-cyan/[0.03] hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 hover:-translate-y-0.5 transition-all"
                   onClick={() => router.push('/recruitment/my-resumes')}
                 >
-                  <FileText className="h-6 w-6 text-gray-600" />
-                  <span className="text-sm text-gray-900">Upload Resumes</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 group-hover:bg-brand-cyan/15 transition-colors">
+                    <FileText className="h-5 w-5 text-brand-cyan" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-900">Upload Resumes</span>
                 </Button>
               )}
               {canViewResumes && (
                 <Button
                   variant="outline"
-                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  className="group h-auto flex-col gap-2 py-5 border-gray-100 bg-gradient-to-br from-white to-brand-teal/[0.03] hover:border-brand-teal/40 hover:shadow-md hover:shadow-brand-teal/10 hover:-translate-y-0.5 transition-all"
                   onClick={() => router.push('/recruitment/resume-scoring')}
                 >
-                  <Target className="h-6 w-6 text-gray-600" />
-                  <span className="text-sm text-gray-900">Score Resumes</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15 group-hover:bg-brand-teal/15 transition-colors">
+                    <Target className="h-5 w-5 text-brand-teal" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-900">Score Resumes</span>
                 </Button>
               )}
               {canViewResumes && (
                 <Button
                   variant="outline"
-                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  className="group h-auto flex-col gap-2 py-5 border-gray-100 bg-gradient-to-br from-white to-brand-orange/[0.03] hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 hover:-translate-y-0.5 transition-all"
                   onClick={() => router.push('/recruitment/ai-talent-match')}
                 >
-                  <Sparkles className="h-6 w-6 text-gray-600" />
-                  <span className="text-sm text-gray-900">AI Talent Match</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 group-hover:bg-brand-orange/15 transition-colors">
+                    <Sparkles className="h-5 w-5 text-brand-orange-deep" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-900">AI Talent Match</span>
                 </Button>
               )}
             </div>
@@ -820,11 +843,13 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       )}
 
       {/* Recent Activity */}
-      <Card className="border-gray-200 overflow-hidden">
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4 border-b border-gray-100 bg-gray-50/50">
+      <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] overflow-hidden">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent">
           <div className="min-w-0">
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Clock className="h-5 w-5 text-gray-600" />
+            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <Clock className="h-4 w-4 text-brand-blue" />
+              </span>
               Recent Activity
             </CardTitle>
             <CardDescription className="text-gray-600 mt-1">
@@ -836,7 +861,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+            <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm">
               Last 24 hours
             </span>
           </div>
@@ -844,18 +869,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         <CardContent className="p-0">
           {loadingActivity ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
             </div>
           ) : recentActivity24h.length === 0 ? (
             <div className="text-center py-12 px-6">
-              <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                <Activity className="h-6 w-6 text-gray-400" />
+              <div className="mx-auto h-12 w-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mb-3">
+                <Activity className="h-6 w-6 text-brand-blue" />
               </div>
               <p className="text-sm font-medium text-gray-900">No activity in the last 24 hours</p>
               <p className="text-xs text-gray-500 mt-1">Your recent actions will appear here</p>
             </div>
           ) : (
-            <ul className="relative divide-y divide-gray-100">
+            <ul className="relative divide-y divide-gray-100 max-h-[28rem] overflow-y-auto scrollbar-auto-hide">
               {recentActivity24h.map((activity) => {
                 const detail = activity.details as Record<string, any> | null;
                 const detailText =
@@ -905,6 +930,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -98,17 +98,17 @@ export default function SearchFilterBar({
   ];
 
   return (
-    <div className="bg-gray-50 p-4 rounded-t-lg">
-      <div className="flex gap-3">
+    <div className="bg-muted/40 p-3 sm:p-4 rounded-t-xl border border-border border-b-0">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         {/* Global Search Bar */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <div className="flex-1 relative min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             placeholder="Search by name, email, phone, or skills..."
             value={localSearchQuery}
             onChange={(e) => setLocalSearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent transition-all"
+            className="w-full h-10 pl-10 pr-20 border border-border rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 focus-visible:border-transparent transition-all bg-background text-foreground placeholder:text-muted-foreground text-sm"
           />
           {localSearchQuery && (
             <button
@@ -116,84 +116,90 @@ export default function SearchFilterBar({
                 setLocalSearchQuery('');
                 onSearchChange('');
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 transition-colors"
+              className="absolute right-10 top-1/2 -translate-y-1/2 hover:bg-accent/60 rounded-full p-1 transition-colors"
+              aria-label="Clear search"
             >
-              <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+              <X className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
           )}
           {localSearchQuery && localSearchQuery !== debouncedSearch && (
-            <div className="absolute right-12 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-gray-800 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute right-[4.5rem] top-1/2 -translate-y-1/2">
+              <div className="w-3.5 h-3.5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
           <button
             onClick={() => setShowSearchTips(!showSearchTips)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 hover:bg-accent/60 rounded-full p-1 transition-colors"
+            aria-label="Search tips"
           >
-            <HelpCircle className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+            <HelpCircle className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
 
-        {/* Advanced Filters Button */}
-        <button
-          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-          className={`flex items-center gap-2 h-10 px-4 border rounded-md transition-colors ${
-            activeFilterCount > 0
-              ? 'border-gray-800 bg-gray-50 text-gray-800'
-              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          Advanced Filters
-          {activeFilterCount > 0 && (
-            <span className="bg-gray-800 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-
-        {/* Sort Dropdown */}
-        <div className="relative">
+        <div className="flex gap-2 sm:gap-3">
+          {/* Advanced Filters Button */}
           <button
-            onClick={() => setShowSort(!showSort)}
-            className="flex items-center gap-2 h-10 px-4 border border-gray-300 bg-white rounded-md hover:bg-gray-50"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 text-sm font-medium border rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 ${
+              activeFilterCount > 0
+                ? 'border-[var(--primary)] bg-background text-[var(--primary)] shadow-sm'
+                : 'border-border bg-background text-foreground hover:bg-accent/50'
+            }`}
           >
-            <span className="text-sm text-gray-700">Sort</span>
-            <ChevronDown className="w-4 h-4 text-gray-500" />
+            <SlidersHorizontal className="w-4 h-4" />
+            <span className="hidden sm:inline">Advanced Filters</span>
+            <span className="sm:hidden">Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-semibold rounded-full min-w-5 h-5 px-1">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
 
-          {showSort && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20">
-              {[
-                { value: 'latest', label: 'Latest Upload' },
-                { value: 'lastUpdated', label: 'Recently Updated' },
-                { value: 'name-asc', label: 'Name A-Z' },
-                { value: 'name-desc', label: 'Name Z-A' },
-                { value: 'experience-high', label: 'Experience (High to Low)' },
-                { value: 'experience-low', label: 'Experience (Low to High)' },
-              ].map(option => (
-                <button
-                  key={option.value}
-                  onClick={() => {
-                    onSortChange(option.value);
-                    setShowSort(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                    sortBy === option.value ? 'text-gray-800 bg-gray-50' : 'text-gray-700'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Sort Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSort(!showSort)}
+              className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 text-sm font-medium border border-border bg-background text-foreground rounded-lg hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1"
+            >
+              <span>Sort</span>
+              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showSort ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showSort && (
+              <div className="absolute right-0 mt-2 w-56 bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 z-20">
+                {[
+                  { value: 'latest', label: 'Latest Upload' },
+                  { value: 'lastUpdated', label: 'Recently Updated' },
+                  { value: 'name-asc', label: 'Name A-Z' },
+                  { value: 'name-desc', label: 'Name Z-A' },
+                  { value: 'experience-high', label: 'Experience (High to Low)' },
+                  { value: 'experience-low', label: 'Experience (Low to High)' },
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      onSortChange(option.value);
+                      setShowSort(false);
+                    }}
+                    className={`w-full text-left px-3 mx-1 py-2 text-sm rounded-md transition-colors ${
+                      sortBy === option.value ? 'text-foreground bg-accent/60 font-medium' : 'text-foreground hover:bg-accent/50'
+                    }`}
+                    style={{ width: 'calc(100% - 8px)' }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Advanced Filters Panel */}
       {showAdvancedFilters && (
-        <div className="mt-4 bg-white rounded-lg shadow-lg border border-gray-200 p-6">
-          <div className="grid grid-cols-3 gap-6">
+        <div className="mt-3 sm:mt-4 bg-card rounded-lg shadow-sm border border-border p-4 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Skills Filter */}
             <div>
               <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
@@ -509,26 +515,26 @@ export default function SearchFilterBar({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
-            <div className="text-sm text-gray-600">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-5 sm:mt-6 pt-4 sm:pt-6 border-t border-border">
+            <div className="text-sm text-muted-foreground">
               {activeFilterCount > 0 ? (
-                <span className="text-gray-800">
+                <span className="text-foreground font-medium">
                   {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
                 </span>
               ) : (
                 <span>No filters applied</span>
               )}
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={handleClearFilters}
-                className="px-6 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center justify-center h-10 px-5 text-sm font-medium border border-border bg-background text-foreground rounded-lg hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1"
               >
                 Clear All
               </button>
               <button
                 onClick={handleApplyFilters}
-                className="px-8 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                className="inline-flex items-center justify-center h-10 px-6 text-sm font-medium bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1"
               >
                 Apply Filters
               </button>
@@ -558,7 +564,7 @@ export default function SearchFilterBar({
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {/* Partial Text Match */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -626,7 +632,7 @@ export default function SearchFilterBar({
           {/* Search Fields */}
           <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
             <h4 className="text-sm text-gray-900 mb-3">Searchable Fields (High Accuracy)</h4>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
               {[
                 { label: 'Candidate Name', icon: '👤' },
                 { label: 'Email Address', icon: '✉️' },

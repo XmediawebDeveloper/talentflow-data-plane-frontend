@@ -31,31 +31,32 @@ export function EmptyState({
   children,
 }: EmptyStateProps) {
   return (
-    <div className="flex-1 flex items-center justify-center py-20">
-      <div className="text-center max-w-md mx-auto px-6">
+    <div className="flex-1 flex items-center justify-center py-12 sm:py-20 px-4">
+      <div className="text-center max-w-md mx-auto">
         {/* Icon */}
-        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
-          <Icon className="w-10 h-10 text-blue-600" />
+        <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 sm:mb-6 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center">
+          <Icon className="w-8 h-8 sm:w-10 sm:h-10 text-[var(--text-muted)]" />
         </div>
 
         {/* Title */}
-        <h3 className="text-gray-900 mb-3 text-2xl">{title}</h3>
+        <h3 className="text-[var(--text-primary)] text-lg sm:text-xl font-semibold mb-2 tracking-tight">{title}</h3>
 
         {/* Description */}
-        <p className="text-gray-600 mb-6 leading-relaxed">{description}</p>
+        <p className="text-[var(--text-secondary)] text-sm sm:text-base mb-5 sm:mb-6 leading-relaxed">{description}</p>
 
         {/* Actions */}
         {(action || secondaryAction) && (
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 sm:gap-3">
             {action && (
               <button
                 onClick={action.onClick}
                 className={`
-                  px-5 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium
+                  inline-flex items-center justify-center h-10 px-5 rounded-lg transition-all duration-150 text-sm font-medium
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2
                   ${
                     action.variant === 'secondary'
-                      ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                      ? 'bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
+                      : 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md'
                   }
                 `}
               >
@@ -65,7 +66,7 @@ export function EmptyState({
             {secondaryAction && (
               <button
                 onClick={secondaryAction.onClick}
-                className="px-5 py-2.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] rounded-lg transition-colors"
               >
                 {secondaryAction.label}
               </button>
@@ -74,7 +75,7 @@ export function EmptyState({
         )}
 
         {/* Custom children */}
-        {children && <div className="mt-6">{children}</div>}
+        {children && <div className="mt-5 sm:mt-6">{children}</div>}
       </div>
     </div>
   );
@@ -91,9 +92,9 @@ export function SimpleEmptyState({
   suggestion?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="text-gray-400 mb-2 text-lg">{message}</div>
-      <div className="text-sm text-gray-500">{suggestion}</div>
+    <div className="flex flex-col items-center justify-center py-10 sm:py-12 px-4 text-center">
+      <div className="text-[var(--text-secondary)] mb-1.5 text-sm sm:text-base font-medium">{message}</div>
+      <div className="text-xs sm:text-sm text-[var(--text-muted)]">{suggestion}</div>
     </div>
   );
 }

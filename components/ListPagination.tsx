@@ -54,47 +54,47 @@ export default function ListPagination({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mt-4 sm:mt-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-5">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="text-sm sm:text-base text-gray-600">Show:</span>
+    <div className="bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mt-4 sm:mt-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
                 onItemsPerPageChange(Number(e.target.value));
                 onPageChange(1);
               }}
-              className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base text-black"
+              className="h-9 px-2.5 sm:px-3 border border-border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 text-sm bg-background text-foreground"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>{size}</option>
               ))}
             </select>
-            <span className="text-sm sm:text-base text-gray-600">per page</span>
+            <span className="text-sm text-muted-foreground">per page</span>
           </div>
 
-          <div className="hidden sm:block h-6 w-px bg-gray-300" />
+          <div className="hidden sm:block h-5 w-px bg-border" />
 
-          <span className="text-xs sm:text-base text-gray-600">
-            Showing <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
-            <span className="font-medium text-gray-900">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
-            <span className="font-medium text-gray-900">{totalItems}</span> {itemLabel}
+          <span className="text-xs sm:text-sm text-muted-foreground">
+            Showing <span className="font-medium text-foreground">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
+            <span className="font-medium text-foreground">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
+            <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
           </span>
         </div>
 
-        <div className="flex items-center justify-center sm:justify-end gap-1.5 sm:gap-2">
+        <div className="flex items-center justify-center sm:justify-end gap-1 sm:gap-1.5">
           <button
             onClick={() => handlePageClick(safePage - 1)}
             disabled={safePage === 1}
-            className={`p-2 sm:p-2.5 rounded-lg border transition-all ${
+            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition-colors ${
               safePage === 1
-                ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                ? 'border-border text-muted-foreground opacity-40 cursor-not-allowed'
+                : 'border-border text-foreground hover:bg-accent/50'
             }`}
             title="Previous page"
           >
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            <ChevronLeft className="w-4 h-4" />
           </button>
 
           <div className="flex items-center gap-1 sm:gap-1.5">
@@ -103,12 +103,12 @@ export default function ListPagination({
                 key={`${page}-${index}`}
                 onClick={() => typeof page === 'number' && handlePageClick(page)}
                 disabled={page === '...'}
-                className={`min-w-[34px] sm:min-w-[42px] h-8 sm:h-10 px-2 sm:px-4 rounded-lg text-sm sm:text-base transition-all ${
+                className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 sm:px-3 rounded-md text-sm font-medium transition-colors ${
                   page === safePage
-                    ? 'bg-gray-800 text-white shadow-sm'
+                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
                     : page === '...'
-                    ? 'text-gray-400 cursor-default'
-                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'text-muted-foreground cursor-default'
+                    : 'border border-border text-foreground hover:bg-accent/50'
                 }`}
               >
                 {page}
@@ -119,14 +119,14 @@ export default function ListPagination({
           <button
             onClick={() => handlePageClick(safePage + 1)}
             disabled={safePage === totalPages}
-            className={`p-2 sm:p-2.5 rounded-lg border transition-all ${
+            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition-colors ${
               safePage === totalPages
-                ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                ? 'border-border text-muted-foreground opacity-40 cursor-not-allowed'
+                : 'border-border text-foreground hover:bg-accent/50'
             }`}
             title="Next page"
           >
-            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>

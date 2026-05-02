@@ -85,14 +85,15 @@ export default function NotificationCenter({
           />
 
           {/* Panel */}
-          <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 animate-scale-in max-h-[calc(100vh-80px)] overflow-y-auto">
+          <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-popover text-popover-foreground rounded-xl shadow-2xl border border-border z-50 animate-scale-in max-h-[calc(100dvh-5rem)] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="px-4 py-3 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-gray-900">Notifications</h3>
+            <div className="px-4 py-3 border-b border-border flex-shrink-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <h3 className="text-foreground font-semibold text-sm">Notifications</h3>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-muted-foreground hover:text-foreground hover:bg-accent/60 rounded-md p-1 transition-colors"
+                  aria-label="Close notifications"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -101,14 +102,14 @@ export default function NotificationCenter({
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     onClick={onMarkAllAsRead}
-                    className="text-gray-800 hover:text-gray-900"
+                    className="text-foreground hover:underline font-medium"
                   >
                     Mark all as read
                   </button>
-                  <span className="text-gray-300">•</span>
+                  <span className="text-muted-foreground">·</span>
                   <button
                     onClick={onClearAll}
-                    className="text-gray-600 hover:text-gray-700"
+                    className="text-muted-foreground hover:text-foreground hover:underline"
                   >
                     Clear all
                   </button>
@@ -117,20 +118,22 @@ export default function NotificationCenter({
             </div>
 
             {/* Notifications List */}
-            <div className="max-h-96 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {notifications.length === 0 ? (
                 <div className="px-4 py-12 text-center">
-                  <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-600">No notifications</p>
-                  <p className="text-xs text-gray-500 mt-1">You're all caught up!</p>
+                  <div className="w-14 h-14 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-3">
+                    <Bell className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-foreground font-medium">No notifications</p>
+                  <p className="text-xs text-muted-foreground mt-1">You&apos;re all caught up!</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-border">
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`px-4 py-3 hover:bg-gray-50 transition-colors ${
-                        !notification.read ? 'bg-gray-50/50' : ''
+                      className={`px-4 py-3 hover:bg-accent/40 transition-colors cursor-pointer ${
+                        !notification.read ? 'bg-accent/20' : ''
                       }`}
                       onClick={() => !notification.read && onMarkAsRead(notification.id)}
                     >

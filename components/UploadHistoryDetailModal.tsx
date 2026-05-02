@@ -86,8 +86,8 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
         {/* Header */}
         <div className={`flex items-start justify-between p-4 sm:p-6 border-b ${config.borderColor} bg-gradient-to-r ${config.bgColor}`}>
           <div className="flex items-start gap-2.5 sm:gap-4 min-w-0">

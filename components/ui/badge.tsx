@@ -16,7 +16,17 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+          "text-foreground border-border [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        // Semantic variants — soft tinted background + readable text + subtle border.
+        // All colors come from the existing dark-mode override palette (no new colors).
+        success:
+          "border-green-200 bg-green-50 text-green-700 [a&]:hover:bg-green-100",
+        warning:
+          "border-amber-200 bg-amber-50 text-amber-700 [a&]:hover:bg-amber-100",
+        info:
+          "border-blue-200 bg-blue-50 text-blue-700 [a&]:hover:bg-blue-100",
+        muted:
+          "border-border bg-muted text-muted-foreground [a&]:hover:bg-accent",
       },
     },
     defaultVariants: {

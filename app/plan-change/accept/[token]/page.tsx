@@ -42,41 +42,41 @@ export default function PlanChangeAcceptPage() {
   }, [token]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4 sm:p-6">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
           {/* Header */}
-          <div className={`px-8 py-6 ${
+          <div className={`px-5 sm:px-7 py-5 sm:py-6 ${
             status === 'success' ? 'bg-gradient-to-r from-green-600 to-emerald-600'
             : status === 'error' ? 'bg-gradient-to-r from-red-600 to-orange-600'
             : 'bg-gradient-to-r from-blue-600 to-indigo-600'
           }`}>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                {status === 'loading' && <Loader2 className="w-6 h-6 text-white animate-spin" />}
-                {status === 'success' && <CheckCircle className="w-6 h-6 text-white" />}
-                {status === 'error' && <XCircle className="w-6 h-6 text-white" />}
+              <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                {status === 'loading' && <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-white animate-spin" />}
+                {status === 'success' && <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />}
+                {status === 'error' && <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />}
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl font-bold text-white truncate">
                   {status === 'loading' && 'Processing...'}
                   {status === 'success' && 'Changes Accepted'}
                   {status === 'error' && 'Acceptance Failed'}
                 </h1>
-                <p className="text-white/80 text-sm mt-0.5">Plan Change Acceptance</p>
+                <p className="text-white/80 text-xs sm:text-sm mt-0.5">Plan Change Acceptance</p>
               </div>
             </div>
           </div>
 
           {/* Content */}
-          <div className="px-8 py-8">
+          <div className="px-5 sm:px-7 py-6 sm:py-8">
             <p className="text-gray-700 text-sm leading-relaxed">{message || 'Processing your acceptance...'}</p>
 
             {status !== 'loading' && (
-              <div className="mt-6">
+              <div className="mt-5 sm:mt-6">
                 <a
                   href="/login"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 transition-all"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium text-sm hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition-all w-full sm:w-auto"
                 >
                   <LogIn className="w-4 h-4" />
                   Go to Login

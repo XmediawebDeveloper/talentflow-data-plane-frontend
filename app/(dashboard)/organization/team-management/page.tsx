@@ -328,18 +328,18 @@ export default function TeamManagementPage() {
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="mb-5 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Team Management</h1>
-              <p className="text-gray-600">Manage teams, members, and view usage</p>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight mb-1 sm:mb-2">Team Management</h1>
+              <p className="text-sm sm:text-base text-gray-600">Manage teams, members, and view usage</p>
             </div>
             {canCreateTeams && (
               <button
                 onClick={handleOpenCreateModal}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl transition-all shadow-lg bg-gray-800 text-white hover:bg-gray-900 hover:shadow-xl"
+                className="inline-flex items-center justify-center gap-2 h-10 sm:h-11 px-4 sm:px-5 rounded-lg transition-all shadow-sm hover:shadow-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] text-sm font-medium w-full sm:w-auto"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                 Create Team
               </button>
             )}
@@ -347,10 +347,10 @@ export default function TeamManagementPage() {
         </div>
 
         {/* Tabs — Usage and Analytics visible based on permissions */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-5 sm:mb-6 overflow-x-auto scrollbar-hide -mx-1 px-1">
           <button
             onClick={() => setActiveTab('teams')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+            className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
               activeTab === 'teams'
                 ? 'bg-gray-800 text-white'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -362,7 +362,7 @@ export default function TeamManagementPage() {
           {canViewUsageTab && (
             <button
               onClick={() => setActiveTab('usage')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'usage'
                   ? 'bg-gray-800 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -375,7 +375,7 @@ export default function TeamManagementPage() {
           {canViewAnalyticsTab && (
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'analytics'
                   ? 'bg-gray-800 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -388,7 +388,7 @@ export default function TeamManagementPage() {
           {isTenantAdmin && (
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'history'
                   ? 'bg-gray-800 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -415,14 +415,14 @@ export default function TeamManagementPage() {
             <TeamStatsCards stats={stats} />
 
             {/* Team Organization Info */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-8">
-              <div className="flex gap-4">
-                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Info className="w-5 h-5 text-white" />
+            <div className="bg-muted/40 border border-border rounded-xl p-4 sm:p-5 lg:p-6 mb-5 sm:mb-6 lg:mb-8">
+              <div className="flex gap-3 sm:gap-4">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Info className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Team Organization</h3>
-                  <p className="text-gray-700 leading-relaxed">
+                  <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">Team Organization</h3>
+                  <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
                     Teams help organize users by department, project, or function. Assign team leads to manage
                     workflows and track team performance metrics like active jobs and resume counts.
                   </p>

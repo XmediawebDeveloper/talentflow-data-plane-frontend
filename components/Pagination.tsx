@@ -63,39 +63,39 @@ export default function Pagination({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-6 py-3 sm:py-4 border-t border-border bg-card">
       {/* Left: Items per page */}
       {showItemsPerPage && (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
+          <span className="text-sm text-muted-foreground">Show</span>
           <select
             value={itemsPerPage}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="px-2 sm:px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+            className="h-8 px-2 sm:px-3 text-sm border border-border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 bg-background text-foreground"
           >
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <span className="text-sm text-gray-700">per page</span>
+          <span className="text-sm text-muted-foreground">per page</span>
         </div>
       )}
 
       {/* Center: Page info */}
-      <div className="text-xs sm:text-sm text-gray-700 text-center">
-        Showing <span className="text-gray-900">{startItem}</span> to{' '}
-        <span className="text-gray-900">{endItem}</span> of{' '}
-        <span className="text-gray-900">{totalItems}</span> results
+      <div className="text-xs sm:text-sm text-muted-foreground text-center">
+        Showing <span className="text-foreground font-medium">{startItem}</span> to{' '}
+        <span className="text-foreground font-medium">{endItem}</span> of{' '}
+        <span className="text-foreground font-medium">{totalItems}</span> results
       </div>
 
       {/* Right: Pagination controls */}
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-1 sm:gap-1.5">
         {/* First page */}
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
           title="First page"
         >
           <ChevronsLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -105,7 +105,7 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
           title="Previous page"
         >
           <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -118,12 +118,12 @@ export default function Pagination({
               key={index}
               onClick={() => typeof page === 'number' && onPageChange(page)}
               disabled={page === '...'}
-              className={`min-w-[36px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 text-sm rounded-md transition-colors ${
+              className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 text-sm font-medium rounded-md transition-colors ${
                 page === currentPage
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
                   : page === '...'
-                  ? 'cursor-default text-gray-400'
-                  : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'cursor-default text-muted-foreground'
+                  : 'border border-border text-foreground hover:bg-accent/50'
               }`}
             >
               {page}
@@ -131,7 +131,7 @@ export default function Pagination({
           ))}
         </div>
         {/* Mobile: Show current page / total */}
-        <span className="sm:hidden text-sm text-gray-700 px-2">
+        <span className="sm:hidden text-sm text-muted-foreground px-2 font-medium">
           {currentPage} / {totalPages}
         </span>
 
@@ -139,7 +139,7 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
           title="Next page"
         >
           <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -149,7 +149,7 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
           title="Last page"
         >
           <ChevronsRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
