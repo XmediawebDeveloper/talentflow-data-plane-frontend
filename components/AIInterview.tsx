@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -65,6 +65,8 @@ export default function AIInterview() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>([]);
   const [stats, setStats] = useState<AIInterviewStatsResponse | null>(null);
@@ -514,12 +516,43 @@ export default function AIInterview() {
       if (activeTab === 'completed') return config.status === 'completed' || config.status === 'cancelled';
       return true;
     });
-    if (modeFilter === 'all') return base;
-    return base.filter((config) => {
+    const byMode = modeFilter === 'all' ? base : base.filter((config) => {
       // Single source of truth for mode: special_instructions.interview_mode.
       const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
       return modeFilter === 'timed' ? mode === 'fixed' : mode === 'flexible';
     });
+    const q = searchQuery.trim().toLowerCase();
+    const bySearch = q
+      ? byMode.filter((c) => {
+          const haystack = [
+            c.jd_title,
+            c.position,
+            c.display_id,
+            c.jd_short_id,
+            c.created_by_name,
+            ...(Array.isArray(c.jd_must_have_skills) ? c.jd_must_have_skills : []),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(q);
+        })
+      : byMode;
+    const sorted = [...bySearch].sort((a, b) => {
+      if (sortBy === 'active') {
+        const aw = normalizeConfigStatus(a.status) === 'published' ? 0 : 1;
+        const bw = normalizeConfigStatus(b.status) === 'published' ? 0 : 1;
+        if (aw !== bw) return aw - bw;
+      } else if (sortBy === 'draft') {
+        const aw = a.status === 'draft' ? 0 : 1;
+        const bw = b.status === 'draft' ? 0 : 1;
+        if (aw !== bw) return aw - bw;
+      }
+      const at = new Date(a.created_at || 0).getTime();
+      const bt = new Date(b.created_at || 0).getTime();
+      return sortBy === 'oldest' ? at - bt : bt - at;
+    });
+    return sorted;
   })();
   const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / configListItemsPerPage));
   const paginatedConfigs = filteredConfigs.slice(
@@ -564,7 +597,7 @@ export default function AIInterview() {
 
   useEffect(() => {
     setConfigListPage(1);
-  }, [activeTab, modeFilter]);
+  }, [activeTab, modeFilter, searchQuery, sortBy]);
 
   useEffect(() => {
     setProcessingPage(1);
@@ -587,83 +620,121 @@ export default function AIInterview() {
     );
   }
 
+  // Quota usage for the header progress bar
+  const quotaUsedPct = (() => {
+    if (isUnlimited || totalUnits <= 0 || availableUnits === null) return 0;
+    const used = Math.max(0, totalUnits - availableUnits);
+    return Math.min(100, Math.round((used / totalUnits) * 100));
+  })();
+  const quotaTone = isUnlimited
+    ? 'neutral'
+    : availableUnits !== null && availableUnits <= 0
+    ? 'danger'
+    : availableUnits !== null && availableUnits <= 2
+    ? 'warning'
+    : 'neutral';
+
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-      <div className="w-full">
+    <div className="flex-1 p-3 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-gray-50/40">
+      <div className="w-full max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div>
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 sm:mb-2">AI Interview Platform</h1>
-            <p className="text-xs sm:text-sm text-gray-600">
-              Configure and manage AI-powered interview sessions
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 lg:gap-6 mb-5 sm:mb-8">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[10px] sm:text-[11px] font-medium tracking-wide">
+                <Sparkles className="w-3 h-3" />
+                AI Interview
+              </span>
+              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium uppercase tracking-wider">Platform</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight break-words">
+              AI Interview Platform
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-xl">
+              Configure, launch, and analyze AI-powered interviews. Multi-round evaluations with real-time scoring and proctoring.
             </p>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            {/* AI Interview Quota Badge */}
+          <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+            {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm ${
-                isUnlimited
-                  ? 'bg-gray-100 border-gray-300'
-                  : availableUnits !== null && availableUnits <= 0
-                  ? 'bg-red-50 border-red-300'
-                  : availableUnits !== null && availableUnits <= 2
-                  ? 'bg-gray-100 border-gray-300'
-                  : 'bg-gray-50 border-gray-200'
+              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-white shadow-sm transition-all ${
+                quotaTone === 'danger'
+                  ? 'border-red-200 ring-1 ring-red-100'
+                  : quotaTone === 'warning'
+                  ? 'border-amber-200 ring-1 ring-amber-100'
+                  : 'border-gray-200'
               }`}>
-                <Zap className={`w-4 h-4 ${
-                  isUnlimited
-                    ? 'text-gray-700'
-                    : availableUnits !== null && availableUnits <= 0
-                    ? 'text-red-600'
-                    : availableUnits !== null && availableUnits <= 2
-                    ? 'text-gray-700'
-                    : 'text-gray-600'
-                }`} />
-                <div className="flex flex-col">
-                  <span className="text-xs text-gray-500 font-medium">Interview Quota</span>
-                  <div className="flex items-center gap-1">
-                    {isUnlimited ? (
-                      <span className="text-sm font-bold text-gray-800">Unlimited</span>
-                    ) : availableUnits !== null ? (
-                      <>
-                        <span className={`text-sm font-bold ${
-                          availableUnits === 0
+                <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                  quotaTone === 'danger'
+                    ? 'bg-red-50 text-red-600'
+                    : quotaTone === 'warning'
+                    ? 'bg-amber-50 text-amber-600'
+                    : 'bg-gray-900 text-white'
+                }`}>
+                  <Zap className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col min-w-[88px]">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold leading-none">Quota</span>
+                  {isUnlimited ? (
+                    <span className="text-xs font-semibold text-gray-900 mt-0.5">Unlimited</span>
+                  ) : availableUnits !== null ? (
+                    <>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className={`text-sm font-semibold tabular-nums leading-none ${
+                          quotaTone === 'danger'
                             ? 'text-red-700'
-                            : availableUnits <= 2
-                            ? 'text-orange-700'
+                            : quotaTone === 'warning'
+                            ? 'text-amber-700'
                             : 'text-gray-900'
                         }`}>{availableUnits}</span>
-                        <span className="text-xs text-gray-500">/ {totalUnits} available</span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-gray-400">Loading...</span>
-                    )}
-                  </div>
+                        <span className="text-[10px] text-gray-400">/ {totalUnits}</span>
+                      </div>
+                      <div className="mt-1 h-0.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            quotaTone === 'danger'
+                              ? 'bg-red-500'
+                              : quotaTone === 'warning'
+                              ? 'bg-amber-500'
+                              : 'bg-gray-900'
+                          }`}
+                          style={{ width: `${quotaUsedPct}%` }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 mt-0.5">Loading…</span>
+                  )}
                 </div>
               </div>
             )}
             {canCreateAIInterviews && (
               <button
                 onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                className="flex items-center gap-2 bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm"
+                className="group inline-flex items-center gap-1.5 bg-gray-900 text-white px-3.5 py-2 rounded-lg hover:bg-black hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-sm ring-1 ring-gray-900/10"
               >
-                <Settings className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                <span className="hidden sm:inline">Create AI Interview</span>
-                <span className="sm:hidden">Create AI Interview</span>
+                <Plus className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 group-hover:rotate-90" />
+                <span>Create AI Interview</span>
               </button>
             )}
           </div>
         </div>
 
         {/* AI-Powered Interviews Banner */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
-          <div className="flex items-start gap-2 sm:gap-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-gray-50 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm">
+          <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-gray-900/[0.03] blur-2xl" aria-hidden />
+          <div className="relative flex items-start gap-3 sm:gap-4">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gray-900 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div className="min-w-0">
-              <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1">AI-Powered Interviews</h3>
-              <p className="text-xs sm:text-sm text-gray-600">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <h3 className="text-sm font-semibold text-gray-900">AI-Powered Interviews</h3>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-100">
+                  LIVE
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
                 Create multi-round AI interview configurations linked to job descriptions. AI conducts HR, Technical, and Behavioral rounds with auto-suggested topics. Track candidate performance, round-wise scores, and weighted evaluations.
               </p>
             </div>
@@ -671,153 +742,274 @@ export default function AIInterview() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 mb-4 sm:mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
-            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-5 sm:mb-8">
+          {[
+            {
+              label: 'Total Configs',
+              value: stats?.total_configs ?? 0,
+              icon: FileText,
+              tone: 'slate',
+              hint: 'All interview templates',
+            },
+            {
+              label: 'Active',
+              value: stats?.published_configs ?? 0,
+              icon: Globe,
+              tone: 'emerald',
+              hint: 'Published & live',
+              trend: 'up' as const,
+            },
+            {
+              label: 'Candidates Invited',
+              value: stats?.candidates_invited ?? 0,
+              icon: Users,
+              tone: 'blue',
+              hint: 'Across all interviews',
+              trend: 'up' as const,
+            },
+            {
+              label: 'Avg. Score',
+              value: stats?.average_score != null ? `${stats.average_score}%` : '—',
+              icon: TrendingUp,
+              tone: 'amber',
+              hint: 'Weighted across rounds',
+            },
+          ].map(({ label, value, icon: Icon, tone, hint, trend }) => {
+            const toneStyles: Record<string, string> = {
+              slate: 'bg-gray-100 text-gray-700',
+              emerald: 'bg-emerald-50 text-emerald-600',
+              blue: 'bg-blue-50 text-blue-600',
+              amber: 'bg-amber-50 text-amber-600',
+            };
+            return (
+              <div
+                key={label}
+                className="group relative bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-3 sm:p-5 hover:shadow-md hover:-translate-y-0.5 hover:border-gray-300 transition-all duration-200 cursor-default min-w-0"
+              >
+                <div className="flex items-start justify-between mb-2.5 sm:mb-4 gap-2">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  {trend === 'up' && (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-100 flex-shrink-0">
+                      <ArrowUpRight className="w-3 h-3" />
+                      Live
+                    </span>
+                  )}
+                </div>
+                <div className="text-xl sm:text-3xl font-semibold text-gray-900 tracking-tight tabular-nums truncate">
+                  {value}
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-1 min-w-0">
+                  <span className="text-xs sm:text-sm text-gray-500 font-medium truncate">{label}</span>
+                  <span className="hidden lg:inline text-[11px] text-gray-400 truncate">{hint}</span>
+                </div>
               </div>
-              <span className="text-xs sm:text-sm text-gray-500">Total Configs</span>
-            </div>
-            <div className="text-xl sm:text-3xl text-gray-900">{stats?.total_configs ?? 0}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
-            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-              </div>
-              <span className="text-xs sm:text-sm text-gray-500">Published</span>
-            </div>
-            <div className="text-xl sm:text-3xl text-gray-900">{stats?.published_configs ?? 0}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
-            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-              </div>
-              <span className="text-xs sm:text-sm text-gray-500">Invited</span>
-            </div>
-            <div className="text-xl sm:text-3xl text-gray-900">{stats?.candidates_invited ?? 0}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
-            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
-              </div>
-              <span className="text-xs sm:text-sm text-gray-500">Avg. Score</span>
-            </div>
-            <div className="text-xl sm:text-3xl text-gray-900">{stats?.average_score != null ? `${stats.average_score}%` : '-'}</div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Main Content */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           {/* Tabs */}
-          <div className="border-b border-gray-200 px-3 sm:px-6">
-            <div className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide">
+          <div className="border-b border-gray-200 px-3 sm:px-6 bg-gradient-to-b from-white to-gray-50/40">
+            <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide -mb-px">
               {[
-                { key: 'all', label: 'All AI Interviews' },
-                { key: 'published', label: 'Active' },
-                { key: 'draft', label: 'Draft' },
+                { key: 'all', label: 'All AI Interviews', count: configs.length },
+                { key: 'published', label: 'Active', count: configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length },
+                { key: 'draft', label: 'Draft', count: configs.filter((c) => c.status === 'draft').length },
                 // { key: 'completed', label: 'Completed' },
                 // { key: 'archived', label: 'Archived' },
                 // { key: 'processing', label: 'Processing' },
                 { key: 'audit', label: 'Activity Logs' },
                 { key: 'consent', label: 'Consent Logs' },
                 { key: 'settings', label: 'Settings' },
-              ].map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as TabKey)}
-                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === tab.key
-                      ? 'border-gray-800 text-gray-800 font-medium'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+              ].map(tab => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key as TabKey)}
+                    className={`relative inline-flex items-center gap-1.5 sm:gap-2 py-3 sm:py-3.5 px-2.5 sm:px-3 min-h-[44px] text-xs sm:text-sm border-b-2 transition-all duration-200 whitespace-nowrap ${
+                      isActive
+                        ? 'border-gray-900 text-gray-900 font-semibold'
+                        : 'border-transparent text-gray-500 hover:text-gray-900 font-medium'
+                    }`}
+                  >
+                    {tab.label}
+                    {typeof tab.count === 'number' && (
+                      <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums transition-colors ${
+                        isActive
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && (
             <div className="p-3 sm:p-6">
-              {/* Mode filter */}
-              <div className="flex items-center gap-2 mb-4">
-                {(['all', 'timed', 'conversational'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setModeFilter(m)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      modeFilter === m
-                        ? 'bg-gray-800 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {m === 'all' ? 'All' : m === 'timed' ? 'Timed' : 'Conversational'}
-                  </button>
-                ))}
+              {/* Filters bar: mode pills + search + sort */}
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-gray-100/80 border border-gray-200 self-start overflow-x-auto scrollbar-hide max-w-full">
+                  {(['all', 'timed', 'conversational'] as const).map((m) => {
+                    const isActive = modeFilter === m;
+                    const Icon = m === 'timed' ? Clock : m === 'conversational' ? MessageSquare : Activity;
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => setModeFilter(m)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+                          isActive
+                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                        {m === 'all' ? 'All' : m === 'timed' ? 'Timed' : 'Conversational'}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2 flex-1 lg:justify-end min-w-0">
+                  <div className="relative flex-1 lg:max-w-xs min-w-0">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search title, ID, skill…"
+                      className="w-full pl-9 pr-9 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 placeholder:text-gray-400 transition-colors"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        aria-label="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 cursor-pointer text-gray-700 font-medium transition-colors"
+                    >
+                      <option value="newest">Newest</option>
+                      <option value="oldest">Oldest</option>
+                      <option value="active">Active first</option>
+                      <option value="draft">Draft first</option>
+                    </select>
+                    <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 rotate-90 pointer-events-none" />
+                  </div>
+                </div>
               </div>
               {filteredConfigs.length === 0 ? (
-                <div className="text-center py-16">
-                  <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-500 mb-2">
-                    {activeTab === 'archived' ? 'No archived configurations' : 'No AI interview configurations found'}
-                  </p>
-                  {activeTab !== 'archived' && (
-                    <>
-                      <p className="text-sm text-gray-400 mb-4">Create your first configuration to get started</p>
-                      {canCreateAIInterviews && (
-                        <button
-                          onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-                        >
-                          <Settings className="w-4 h-4" />
-                          Create AI Interview
-                        </button>
+                <div className="text-center py-16 sm:py-20">
+                  <div className="relative inline-flex items-center justify-center mb-5">
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-gray-100 to-gray-50 blur-xl scale-150" aria-hidden />
+                    <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-white to-gray-50 border border-gray-200 shadow-sm flex items-center justify-center">
+                      {searchQuery ? (
+                        <Search className="w-9 h-9 text-gray-300" strokeWidth={1.5} />
+                      ) : (
+                        <Video className="w-9 h-9 text-gray-300" strokeWidth={1.5} />
                       )}
-                    </>
+                    </div>
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-1.5">
+                    {searchQuery
+                      ? 'No matches found'
+                      : activeTab === 'archived'
+                      ? 'No archived configurations'
+                      : 'No AI interviews yet'}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+                    {searchQuery
+                      ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
+                      : activeTab === 'archived'
+                      ? 'Configurations you archive will show up here.'
+                      : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
+                  </p>
+                  {!searchQuery && activeTab !== 'archived' && canCreateAIInterviews && (
+                    <button
+                      onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
+                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-gray-900 text-white rounded-xl hover:bg-black hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-sm"
+                    >
+                      <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
+                      Create your first interview
+                    </button>
+                  )}
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Clear search
+                    </button>
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {paginatedConfigs.map((config) => {
                     const enabledRounds = config.rounds_config
                       ? config.rounds_config.filter((r: any) => r.enabled !== false)
                       : [];
+                    const normalizedStatus = normalizeConfigStatus(config.status);
+                    const statusStyles: Record<string, { dot: string; chip: string; label: string }> = {
+                      published: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Active' },
+                      draft: { dot: 'bg-gray-400', chip: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Draft' },
+                      completed: { dot: 'bg-blue-500', chip: 'bg-blue-50 text-blue-700 border-blue-200', label: 'Completed' },
+                      cancelled: { dot: 'bg-red-500', chip: 'bg-red-50 text-red-700 border-red-200', label: 'Cancelled' },
+                      archived: { dot: 'bg-orange-500', chip: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Archived' },
+                    };
+                    const statusStyle = statusStyles[normalizedStatus] || { dot: 'bg-gray-400', chip: 'bg-gray-100 text-gray-700 border-gray-200', label: getStatusLabel(config.status) };
 
                     return (
                       <div
                         key={config.id}
                         onClick={() => router.push(`/recruitment/ai-interviews/${config.id}`)}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer gap-3"
+                        className="group relative flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-5 border border-gray-200 rounded-2xl bg-white hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer gap-4 overflow-hidden"
                       >
+                        {normalizedStatus === 'published' && (
+                          <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full bg-gradient-to-b from-emerald-400 to-emerald-500" aria-hidden />
+                        )}
                         <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <Video className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                            normalizedStatus === 'published'
+                              ? 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'
+                              : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                          }`}>
+                            <Video className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
                               {config.display_id && (
-                                <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-gray-900 text-white rounded">
+                                <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-gray-900 text-white rounded-md">
                                   {config.display_id}
                                 </span>
                               )}
-                              <h3 className="font-medium text-gray-900">
+                              <h3 className="font-semibold text-gray-900 text-[15px] truncate">
                                 {config.jd_title || config.position || 'Untitled'}
                               </h3>
                               {config.jd_version && (
-                                <span className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-500 rounded">
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">
                                   v{config.jd_version}
                                 </span>
                               )}
-                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(config.status)}`}>
-                                {getStatusLabel(config.status)}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${statusStyle.chip}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
+                                {statusStyle.label}
                               </span>
                               {(() => {
                                 const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
@@ -828,116 +1020,89 @@ export default function AIInterview() {
                                 } catch {}
                                 if (mode === 'fixed') {
                                   return (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                                       <Clock className="w-3 h-3" />
                                       Timed
                                     </span>
                                   );
                                 }
                                 return (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
                                     <MessageSquare className="w-3 h-3" />
-                                    {hasBuffer ? 'Conversational\u2011incl.Buffer' : 'Conversational'}
+                                    {hasBuffer ? 'Conversational + Buffer' : 'Conversational'}
                                   </span>
                                 );
                               })()}
+                              {enabledRounds.length > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-200">
+                                  <GitBranch className="w-3 h-3" />
+                                  {enabledRounds.length} rounds
+                                </span>
+                              )}
                             </div>
-                            {/* JD reference line — mirrors Assessments card style */}
-                            {(config.jd_short_id || config.jd_title) && (
-                              <div className="text-xs text-gray-700 font-medium mb-1">
-                                {config.jd_short_id && <span>{config.jd_short_id}</span>}
+                            {config.jd_short_id && (
+                              <div className="text-xs text-gray-500 mb-2">
+                                <span className="font-mono">{config.jd_short_id}</span>
                                 {(config.jd_title || config.position) && (
-                                  <span className={config.jd_short_id ? 'ml-2' : ''}>{config.jd_title || config.position}</span>
-                                )}
-                                {config.jd_version && (
-                                  <span className="ml-1 text-gray-500">v{config.jd_version}</span>
+                                  <span className="ml-1.5 text-gray-400">· {config.jd_title || config.position}</span>
                                 )}
                               </div>
                             )}
-                            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 flex-wrap">
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                            <div className="flex items-center gap-x-4 gap-y-1 text-xs text-gray-500 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gray-400" />
                                 {getInterviewDuration(config.duration_minutes, (config as any).special_instructions)}
                               </span>
                               {enabledRounds.length > 0 && (
-                                <>
-                                  <span>{enabledRounds.length} rounds</span>
-                                  <span className="text-[10px] sm:text-xs text-gray-400 hidden sm:inline">
-                                    {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}
-                                  </span>
-                                </>
+                                <span className="hidden sm:inline-flex items-center gap-1.5 text-gray-400">
+                                  <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                  {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(' · ')}
+                                </span>
                               )}
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-3.5 h-3.5" />
+                              <span className="inline-flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                 {formatIST(config.created_at)}
                               </span>
                               {config.created_by_name && (
-                                <span className="text-xs text-gray-400">
-                                  by {config.created_by_name}
+                                <span className="inline-flex items-center gap-1 text-gray-400">
+                                  by <span className="text-gray-500">{config.created_by_name}</span>
                                 </span>
                               )}
                             </div>
                             {config.jd_must_have_skills && config.jd_must_have_skills.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
+                              <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-gray-100">
+                                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mr-0.5">Skills</span>
                                 {config.jd_must_have_skills.slice(0, 4).map((skill: string) => (
-                                  <span key={skill} className="px-2 py-0.5 bg-gray-50 text-gray-500 text-xs rounded-full border border-gray-200">
+                                  <span key={skill} className="px-2 py-0.5 bg-gray-50 text-gray-600 text-[11px] font-medium rounded-md border border-gray-200">
                                     {skill}
                                   </span>
                                 ))}
                                 {config.jd_must_have_skills.length > 4 && (
-                                  <span className="text-xs text-gray-400">+{config.jd_must_have_skills.length - 4} more</span>
+                                  <span className="text-[11px] text-gray-400 font-medium">+{config.jd_must_have_skills.length - 4} more</span>
                                 )}
                               </div>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap" onClick={(e) => e.stopPropagation()}>
-                          {/* Share button for published configs */}
-                          {normalizeConfigStatus(config.status) === 'published' && canShareAIInterviews && (
-                            <button
-                              onClick={() => setShareConfig(config)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap bg-gray-700 text-white hover:bg-gray-800"
-                            >
-                              <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                              Share
-                            </button>
-                          )}
-
-                          {/* Edit / Continue Editing button — draft only */}
+                        <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap lg:justify-end w-full lg:w-auto" onClick={(e) => e.stopPropagation()}>
+                          {/* Edit — draft only (primary action) */}
                           {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
-                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-black hover:shadow-sm transition-all duration-200 whitespace-nowrap"
                             >
-                              <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                              Edit
+                              <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="hidden sm:inline">Continue Editing</span>
+                              <span className="sm:hidden">Edit</span>
                             </button>
                           )}
 
-
-                          {/* Track Invites for published */}
-                          {normalizeConfigStatus(config.status) === 'published' && canInviteAIInterviews && (
-                            <button
-                              onClick={() => handleViewInvitations(config)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap bg-gray-700 text-white hover:bg-gray-800"
-                              title="Track invitation status"
-                            >
-                              <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span className="hidden xl:inline">
-                                Track Invites{config.invitations_count ? ` (${config.invitations_count})` : ''}
-                              </span>
-                              <span className="xl:hidden">
-                                Track{config.invitations_count ? ` (${config.invitations_count})` : ''}
-                              </span>
-                            </button>
-                          )}
-
-                          {/* Results for published configs */}
-                          {normalizeConfigStatus(config.status) === 'published' && (
+                          {/* Results — primary for published */}
+                          {normalizedStatus === 'published' && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-black hover:shadow-sm transition-all duration-200 whitespace-nowrap"
                               title="View interview results"
                             >
                               <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -945,65 +1110,92 @@ export default function AIInterview() {
                             </button>
                           )}
 
+                          {/* Track Invites — secondary */}
+                          {normalizedStatus === 'published' && canInviteAIInterviews && (
+                            <button
+                              onClick={() => handleViewInvitations(config)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 whitespace-nowrap"
+                              title="Track invitation status"
+                            >
+                              <Users className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span>Invites{config.invitations_count ? ` · ${config.invitations_count}` : ''}</span>
+                            </button>
+                          )}
+
+                          {/* Share — secondary, hidden on smallest screens (available via 3-dot menu) */}
+                          {normalizedStatus === 'published' && canShareAIInterviews && (
+                            <button
+                              onClick={() => setShareConfig(config)}
+                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 whitespace-nowrap"
+                            >
+                              <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                              Share
+                            </button>
+                          )}
+
                           {/* 3-dot menu */}
-                          <div className="relative" ref={openMenuId === config.id ? menuRef : undefined}>
+                          <div className="relative flex-shrink-0" ref={openMenuId === config.id ? menuRef : undefined}>
                             <button
                               onClick={() => setOpenMenuId(openMenuId === config.id ? null : config.id)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                              className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                              aria-label="More actions"
                             >
-                              <MoreVertical className="w-5 h-5" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
                             {openMenuId === config.id && (
-                              <div className="absolute right-0 top-full mt-1 w-44 sm:w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[70vh] overflow-y-auto">
+                              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-gray-200 rounded-xl shadow-lg ring-1 ring-black/5 z-50 max-h-[70vh] overflow-y-auto p-1">
                                 <button
                                   onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
-                                  className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
                                 >
-                                  <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <Eye className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                   View Details
                                 </button>
                                 {config.status === 'published' && canShareAIInterviews && (
                                   <button
                                     onClick={() => handleCopyLink(config)}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
                                   >
-                                    <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <Copy className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Copy Link
                                   </button>
                                 )}
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
                                   >
-                                    <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <Send className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Share / Invite
                                   </button>
                                 )}
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => handleViewInvitations(config)}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
                                   >
-                                    <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <Users className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     View Invitations
                                   </button>
+                                )}
+                                {(canArchiveAIInterviews || canDeleteAIInterviews) && (
+                                  <div className="my-1 h-px bg-gray-100" />
                                 )}
                                 {config.status !== 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleArchiveConfig(config)}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
                                   >
-                                    <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <Archive className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Archive
                                   </button>
                                 )}
                                 {config.status === 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleUnarchiveConfig(config)}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
                                   >
-                                    <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Unarchive
                                   </button>
                                 )}
@@ -1012,13 +1204,13 @@ export default function AIInterview() {
                                     onClick={() => handleDeleteConfig(config)}
                                     disabled={!!config.invitations_count && config.invitations_count > 0}
                                     title={config.invitations_count && config.invitations_count > 0 ? 'Cannot delete — candidates have already started this interview' : ''}
-                                    className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm ${
+                                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg ${
                                       config.invitations_count && config.invitations_count > 0
                                         ? 'text-gray-400 cursor-not-allowed opacity-60'
                                         : 'text-red-600 hover:bg-red-50'
                                     } transition-colors`}
                                   >
-                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <Trash2 className="w-4 h-4 flex-shrink-0" />
                                     Delete
                                   </button>
                                 )}

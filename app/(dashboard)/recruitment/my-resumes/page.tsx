@@ -575,24 +575,9 @@ export default function MyResumesPage() {
   };
 
   const handleCloseUploadHistory = async () => {
-    // Filter only my-resumes batches
-    const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
-
-    // Check if there are any pending items
-    const hasPendingItems = myResumesHistory.some(batch => batch.pending > 0);
-
-    if (!hasPendingItems && myResumesHistory.length > 0) {
-      // All batches are completed, delete them from the backend
-      try {
-        await resumeService.deleteCompletedBatches();
-        // Clear local state
-        setUploadHistory([]);
-      } catch (error) {
-        console.error('Failed to delete completed batches:', error);
-      }
-    }
-
-    // Close the modal and reset filter
+    // Note: completed batches are intentionally retained so the Completed
+    // tab stays useful as a history view. If the user wants to clear it
+    // they can call deleteCompletedBatches() explicitly elsewhere.
     setIsUploadHistoryModalOpen(false);
     setIsUploadHistoryMinimized(false);
     setUploadHistoryFilter(null);
@@ -2017,13 +2002,9 @@ export default function MyResumesPage() {
 
     // For multiple files, use bulk upload with async processing
     try {
-      // Auto-clear previous completed batches before starting a new upload
-      try {
-        await resumeService.deleteCompletedBatches();
-        setUploadHistory(prev => prev.filter(r => r.pending > 0 || r.status === 'processing'));
-      } catch (e) {
-        // Non-critical — proceed even if cleanup fails
-      }
+      // Note: previous completed batches are intentionally kept — the
+      // Completed tab in the Upload History modal serves as the history
+      // view, so wiping on every new upload would defeat its purpose.
 
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
@@ -3231,19 +3212,17 @@ export default function MyResumesPage() {
                   const activeRecords = myResumesHistory.filter(isActive);
                   const completedRecords = myResumesHistory.filter(r => !isActive(r));
 
-                  const completedCount = myResumesHistory.reduce((sum, r) => sum + (r.completed || 0), 0);
-                  const duplicatedCount = myResumesHistory.reduce((sum, r) => sum + (r.duplicated || 0), 0);
-                  const versionedCount = myResumesHistory.reduce((sum, r) => sum + (r.versioned || 0), 0);
-                  const failedCount = myResumesHistory.reduce((sum, r) => sum + (r.errors || 0), 0);
-                  const pendingCount = activeRecords.reduce((sum, r) => sum + (r.pending || 0), 0);
-                  const totalFiles = myResumesHistory.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
-                  const successRate = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
-                  const activeProcessed = activeRecords.reduce(
-                    (sum, r) => sum + (r.completed || 0) + (r.errors || 0) + (r.duplicated || 0) + (r.versioned || 0),
-                    0
-                  );
-
+                  // Stats are scoped to the records in the active tab — when a
+                  // batch finishes its numbers move from Currently Processing
+                  // into Completed automatically.
                   const displayRecords = uploadHistoryTab === 'current' ? activeRecords : completedRecords;
+                  const completedCount = displayRecords.reduce((sum, r) => sum + (r.completed || 0), 0);
+                  const duplicatedCount = displayRecords.reduce((sum, r) => sum + (r.duplicated || 0), 0);
+                  const versionedCount = displayRecords.reduce((sum, r) => sum + (r.versioned || 0), 0);
+                  const failedCount = displayRecords.reduce((sum, r) => sum + (r.errors || 0), 0);
+                  const pendingCount = displayRecords.reduce((sum, r) => sum + (r.pending || 0), 0);
+                  const totalFiles = displayRecords.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
+                  const successRate = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
 
                   return (
                     <>
@@ -3287,39 +3266,7 @@ export default function MyResumesPage() {
                         </button>
                       </div>
 
-                      {/* Currently Processing tab — compact live stats */}
-                      {uploadHistoryTab === 'current' && activeRecords.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
-                          <div className="bg-white border border-blue-200 rounded-xl p-3 sm:p-4">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 animate-spin" />
-                              <span className="text-[10px] sm:text-xs text-gray-700">In&nbsp;Progress</span>
-                            </div>
-                            <div className="text-lg sm:text-2xl font-bold text-blue-700">{activeRecords.length}</div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">batch{activeRecords.length !== 1 ? 'es' : ''}</div>
-                          </div>
-                          <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
-                              <span className="text-[10px] sm:text-xs text-gray-700">Queued</span>
-                            </div>
-                            <div className="text-lg sm:text-2xl font-bold text-gray-700">{pendingCount}</div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">file{pendingCount !== 1 ? 's' : ''} left</div>
-                          </div>
-                          <div className="bg-white border border-green-200 rounded-xl p-3 sm:p-4">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
-                              <span className="text-[10px] sm:text-xs text-gray-700">Processed</span>
-                            </div>
-                            <div className="text-lg sm:text-2xl font-bold text-green-700">{activeProcessed}</div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">so far</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Completed tab — lifetime stats grid */}
-                      {uploadHistoryTab === 'completed' && (
-                      <>
+                      {/* 6-card stats grid — same layout in both tabs, scoped to the tab's records */}
                       {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
                         {/* Completed */}
@@ -3438,8 +3385,6 @@ export default function MyResumesPage() {
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      )}
-                        </>
                       )}
 
                       {/* Overall ETA Banner — only relevant on the Currently Processing tab */}

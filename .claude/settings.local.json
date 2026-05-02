@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR>=912 && NR<=1981 && /^[[:space:]]*<div[[:space:]]*$/ {print NR}' components/AssessmentResults.tsx)",
+      "Bash(awk 'NR>=912 && NR<=1981 { *)",
+      "Bash(awk 'NR>=966 && NR<=1803 { *)",
+      "Bash(awk 'NR>=966 && NR<=1786 { *)",
+      "Bash(awk 'NR>=1019 && NR<=1222 { *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

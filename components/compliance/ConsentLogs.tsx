@@ -192,7 +192,6 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               </div>
             </div>
           </div>
-        </div>
       )}
 
       {/* Table */}

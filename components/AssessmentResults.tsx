@@ -1218,6 +1218,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 )}
               </div>
             </div>
+          </div>
         </div>
 
         {/* Candidates Results Table */}
