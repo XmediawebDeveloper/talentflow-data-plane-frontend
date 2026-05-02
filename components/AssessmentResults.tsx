@@ -133,6 +133,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportStep, setExportStep] = useState<'format' | 'scope'>('format');
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
+  // In-flight feedback so the recruiter sees a spinner while a large
+  // server-side export streams down. Toast.loading is used to surface a
+  // persistent indicator that gets dismissed with success/error.
+  const [isExporting, setIsExporting] = useState(false);
 
   interface ColumnConfig {
     id: string;
@@ -568,6 +572,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Export current page only
   const handleExportCurrentPage = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    const _toastId = toast.loading('Preparing export… this may take a moment for large datasets.');
     try {
       const enabledColumnIds = columns
         .filter(col => col.enabled)
@@ -611,17 +618,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
-      toast.success(`Current page exported to ${formatName} successfully! (${currentPageCandidates.length} results)`);
+      toast.success(`Current page exported to ${formatName} successfully! (${currentPageCandidates.length} results)`, { id: _toastId });
       setShowExportModal(false);
       setExportStep('format');
     } catch (error) {
       console.error('Failed to export current page:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error('Failed to export results. Please try again.', { id: _toastId });
+    } finally {
+      setIsExporting(false);
     }
   };
 
   // Export all filtered results
   const handleExportAllFiltered = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    const _toastId = toast.loading('Preparing export of all filtered results…');
     try {
       const enabledColumnIds = columns
         .filter(col => col.enabled)
@@ -665,17 +677,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
-      toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`);
+      toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`, { id: _toastId });
       setShowExportModal(false);
       setExportStep('format');
     } catch (error) {
       console.error('Failed to export all results:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error('Failed to export results. Please try again.', { id: _toastId });
+    } finally {
+      setIsExporting(false);
     }
   };
 
   // Export only the selected candidates
   const handleExportSelected = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    const _toastId = toast.loading('Preparing export of selected results…');
     try {
       const enabledColumnIds = columns
         .filter(col => col.enabled)
@@ -710,12 +727,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
-      toast.success(`${selectedRows.length} selected candidate${selectedRows.length > 1 ? 's' : ''} exported to ${formatName} successfully!`);
+      toast.success(`${selectedRows.length} selected candidate${selectedRows.length > 1 ? 's' : ''} exported to ${formatName} successfully!`, { id: _toastId });
       setShowExportModal(false);
       setExportStep('format');
     } catch (error) {
       console.error('Failed to export selected candidates:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error('Failed to export results. Please try again.', { id: _toastId });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -1376,19 +1395,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               )}
                             </button>
                           ) : null}
-                          <button
-                            onClick={() => handleDeleteResult(candidate.id, candidate.name)}
-                            disabled={isDeleting === candidate.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
-                            title="Delete"
-                            aria-label={`Delete result for ${candidate.name || 'candidate'}`}
-                          >
-                            {isDeleting === candidate.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3 h-3" />
-                            )}
-                          </button>
+                          {/* Delete removed — destructive per-row delete
+                              broke the audit trail (AS27) and there's no
+                              recruiter workflow that requires it. Compliance
+                              erasure should go through the candidates table
+                              right-to-be-forgotten flow instead. */}
                         </div>
                       </div>
                     </div>
@@ -1704,19 +1715,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               )}
                             </button>
                           ) : null}
-                          <button
-                            onClick={() => handleDeleteResult(candidate.id, candidate.name)}
-                            disabled={isDeleting === candidate.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
-                            title="Delete"
-                            aria-label={`Delete result for ${candidate.name || 'candidate'}`}
-                          >
-                            {isDeleting === candidate.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
-                            ) : (
-                              <Trash2 className="w-3 h-3 flex-shrink-0" />
-                            )}
-                          </button>
+                          {/* Delete removed — see comment in mobile card
+                              variant above. */}
                         </div>
                       </td>
                     </tr>
@@ -1914,13 +1914,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     {selectedRows.length > 0 && (
                       <button
                         onClick={handleExportSelected}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-green-500 rounded-lg hover:bg-green-50 transition-all group"
+                        disabled={isExporting}
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-green-500 rounded-lg hover:bg-green-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors flex-shrink-0">
-                          <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                          {isExporting ? (
+                            <div className="w-4 h-4 border-2 border-green-700 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                          )}
                         </div>
                         <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm sm:text-base font-medium text-gray-900">Selected Candidates</div>
+                          <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'Selected Candidates'}</div>
                           <div className="text-xs sm:text-sm text-gray-500">
                             Export only the {selectedRows.length} selected candidate{selectedRows.length > 1 ? 's' : ''}
                           </div>
@@ -1932,13 +1937,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     {areColumnsCustomized() ? (
                       <button
                         onClick={handleExportAllFiltered}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-indigo-500 rounded-lg hover:bg-indigo-50 transition-all group"
+                        disabled={isExporting}
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-indigo-500 rounded-lg hover:bg-indigo-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors flex-shrink-0">
-                          <Users className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-700" />
+                          {isExporting ? (
+                            <div className="w-4 h-4 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-700" />
+                          )}
                         </div>
                         <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm sm:text-base font-medium text-gray-900">All Filtered Results</div>
+                          <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'All Filtered Results'}</div>
                           <div className="text-xs sm:text-sm text-gray-500">
                             Export all {filteredCandidates.length} results with {enabledColumnsCount} selected columns
                             <div className="text-xs text-indigo-600 mt-1">
@@ -1951,13 +1961,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       /* Show "Current Page" if columns are NOT customized */
                       <button
                         onClick={handleExportCurrentPage}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-purple-500 rounded-lg hover:bg-purple-50 transition-all group"
+                        disabled={isExporting}
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-purple-500 rounded-lg hover:bg-purple-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors flex-shrink-0">
-                          <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-700" />
+                          {isExporting ? (
+                            <div className="w-4 h-4 border-2 border-purple-700 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-700" />
+                          )}
                         </div>
                         <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm sm:text-base font-medium text-gray-900">Current Page</div>
+                          <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'Current Page'}</div>
                           <div className="text-xs sm:text-sm text-gray-500">
                             Export {paginatedCandidates.length} results visible on this page
                           </div>

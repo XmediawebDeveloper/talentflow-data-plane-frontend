@@ -14,6 +14,7 @@ import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
 import ScoredResumesTable from './ScoredResumesTable';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
+import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
 import VersionHistoryModal from './VersionHistoryModal';
@@ -141,6 +142,35 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const [showInviteToAssessmentModal, setShowInviteToAssessmentModal] = useState(false);
+  // ShareAssessmentModal (used by the assessment-side flow) reused here so
+  // the JD-page "Invite for Assessment" flow matches the same UX. We need
+  // the assessment(s) loaded before we can mount it.
+  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
+  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
+  const [isLoadingShareAssessments, setIsLoadingShareAssessments] = useState(false);
+
+  const handleOpenShareAssessment = async () => {
+    if (isLoadingShareAssessments) return;
+    setIsLoadingShareAssessments(true);
+    try {
+      const resp = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      const items = (resp?.items || []).filter((a: any) => a?.status === 'published' || a?.status === 'PUBLISHED' || true);
+      if (items.length === 0) {
+        // Fallback to the older invite modal if there are no assessments
+        // configured under this JD — ShareAssessmentModal needs at least
+        // one to mount.
+        setShowInviteToAssessmentModal(true);
+        return;
+      }
+      setShareAssessments(items);
+      setShowShareAssessmentModal(true);
+    } catch (err) {
+      console.error('Failed to load assessments for JD:', err);
+      setShowInviteToAssessmentModal(true);
+    } finally {
+      setIsLoadingShareAssessments(false);
+    }
+  };
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showSelectSourceModal, setShowSelectSourceModal] = useState(false);
   const [showJDHistory, setShowJDHistory] = useState(false);
@@ -473,6 +503,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               invitedBy: result.invite_source || 'System',
               inviteSource: result.invite_source || 'Manual',
               status: result.status || (result.completed_at ? 'completed' : 'in_progress'),
+              // Without scoring_status the JD-side getResultStatus() falls
+              // through to the started_at branch and shows In Progress
+              // even after the candidate completes. Map it from the API.
+              scoring_status: result.scoring_status,
               sent_at: result.sent_at || undefined,
               started_at: result.started_at || undefined,
               completed_at: result.completed_at || undefined,
@@ -1436,13 +1470,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 4. Invite for Assessment */}
+              {/* 4. Invite for Assessment — opens the same
+                  ShareAssessmentModal used by the assessment-side flow so
+                  the JD-page invite matches that UX (Share Assessment via
+                  Email, candidate type/select, expiry, live email preview). */}
               {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
                 <QuickActionButton
                   icon={<Mail className="w-4 h-4" />}
                   label="Invite for Assessment"
-                  onClick={() => setShowInviteToAssessmentModal(true)}
-                  disabled={!features.assessment || job.status === 'Disabled'}
+                  onClick={handleOpenShareAssessment}
+                  disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments}
                   disabledTooltip={
                     !features.assessment
                       ? 'Assessments module is not enabled for your organization'
@@ -1657,12 +1694,54 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         />
       )}
 
-      {/* Invite to Assessment Modal */}
+      {/* Invite to Assessment Modal — fallback only when the JD has no
+          assessments yet. The primary path now uses ShareAssessmentModal
+          below, identical to the assessment-side flow. */}
       {showInviteToAssessmentModal && (
         <InviteToAssessmentModal
           jobTitle={job.title}
           jobId={job.id}
           onClose={() => setShowInviteToAssessmentModal(false)}
+        />
+      )}
+
+      {/* Share Assessment via Email — same modal the assessment-side page
+          uses, so the JD page's "Invite for Assessment" matches the UX
+          shown for assessment-level share. */}
+      {showShareAssessmentModal && shareAssessments.length > 0 && (
+        <ShareAssessmentModal
+          isOpen={showShareAssessmentModal}
+          onClose={() => {
+            setShowShareAssessmentModal(false);
+            setShareAssessments([]);
+          }}
+          assessment={{
+            id: shareAssessments[0].id,
+            title: shareAssessments[0].title,
+            duration: `${shareAssessments[0].duration_minutes || 30} min`,
+            questions: (shareAssessments[0].hr_enabled ? 1 : 0)
+              + (shareAssessments[0].technical_enabled ? 1 : 0)
+              + (shareAssessments[0].coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: shareAssessments[0].short_id,
+            jd_short_id: job.id,
+            jd_title: job.title,
+            jd_version: shareAssessments[0].jd_version,
+          }}
+          additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            duration: `${a.duration_minutes || 30} min`,
+            questions: (a.hr_enabled ? 1 : 0)
+              + (a.technical_enabled ? 1 : 0)
+              + (a.coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: a.short_id,
+            jd_short_id: job.id,
+            jd_title: job.title,
+            jd_version: a.jd_version,
+          }))}
+          inviteSource="JD"
         />
       )}
 

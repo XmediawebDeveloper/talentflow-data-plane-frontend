@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AssessmentResults from '@/components/AssessmentResults';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -10,8 +10,15 @@ import { useAuth } from '@/lib/hooks/useAuth';
 export default function AssessmentResultsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const assessmentId = params.id as string;
+  // Source-aware back nav: when the page is opened from a JD's Track
+  // Invites popup ( ?from=jd&jd_id=… ) the Back button must return to
+  // that JD detail view instead of dropping the user on the global
+  // Assessments list.
+  const fromSource = searchParams.get('from');
+  const fromJdId = searchParams.get('jd_id');
   const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
@@ -44,6 +51,10 @@ export default function AssessmentResultsPage() {
   }, [assessmentId]);
 
   const handleBack = () => {
+    if (fromSource === 'jd' && fromJdId) {
+      router.push(`/recruitment/job-details?id=${fromJdId}`);
+      return;
+    }
     router.push('/recruitment/assessments');
   };
 
@@ -60,10 +71,10 @@ export default function AssessmentResultsPage() {
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
         <div className="text-red-500 text-lg">{error}</div>
         <button
-          onClick={() => router.push('/recruitment/assessments')}
+          onClick={handleBack}
           className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
         >
-          Back to Assessments
+          {fromSource === 'jd' ? 'Back to Job Details' : 'Back to Assessments'}
         </button>
       </div>
     );

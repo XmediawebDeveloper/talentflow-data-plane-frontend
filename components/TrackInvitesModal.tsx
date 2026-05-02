@@ -38,7 +38,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   const [invitations, setInvitations] = useState<any[]>([]);
   const [stats, setStats] = useState({
     total: 0,
-    sent: 0,
+    expired: 0,
     started: 0,
     completed: 0,
     failed: 0,
@@ -73,7 +73,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
       if (!assessmentsResponse.data?.items || assessmentsResponse.data.items.length === 0) {
         setInvitations([]);
-        setStats({ total: 0, sent: 0, started: 0, completed: 0, failed: 0 });
+        setStats({ total: 0, expired: 0, started: 0, completed: 0, failed: 0 });
         setIsLoading(false);
         return;
       }
@@ -86,10 +86,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
             params: { page_size: 100 }
           });
           if (invitationsResponse.data?.items) {
+            // Carry the source assessment's enabled-round flags onto each
+            // invitation row so the table can decide per-row whether to
+            // render a Tech Score / Coding Score cell. Without this the
+            // popup shows an empty Coding column for tech-only assessments
+            // (and vice versa).
             allInvitations.push(...invitationsResponse.data.items.map((inv: any) => ({
               ...inv,
               assessment_title: assessment.title,
               assessment_id: assessment.id,
+              assessment_technical_enabled: assessment.technical_enabled,
+              assessment_coding_enabled: assessment.coding_enabled,
             })));
           }
         } catch (err) {
@@ -97,13 +104,27 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
         }
       }
 
-      // Calculate stats using effective status (timestamp-aware)
+      // Single-bucket classifier so stats stay mutually exclusive — same
+      // rule as the assessment-level popup. Every invitation falls into
+      // exactly one of completed / failed / expired / started / sent.
+      const _now = new Date();
+      const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
+        const s = (inv.status || '').toLowerCase();
+        if (s === 'completed' || inv.completed_at) return 'completed';
+        if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
+        if (s === 'expired') return 'expired';
+        if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
+          return 'expired';
+        }
+        if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
+        return 'sent';
+      };
       const newStats = {
         total: allInvitations.length,
-        sent: allInvitations.filter(inv => ['sent', 'opened', 'pending'].includes(getEffectiveStatus(inv))).length,
-        started: allInvitations.filter(inv => getEffectiveStatus(inv) === 'started').length,
-        completed: allInvitations.filter(inv => getEffectiveStatus(inv) === 'completed').length,
-        failed: allInvitations.filter(inv => ['failed', 'expired', 'abandoned', 'bounced'].includes(getEffectiveStatus(inv))).length,
+        expired: allInvitations.filter(inv => _bucket(inv) === 'expired').length,
+        started: allInvitations.filter(inv => _bucket(inv) === 'started').length,
+        completed: allInvitations.filter(inv => _bucket(inv) === 'completed').length,
+        failed: allInvitations.filter(inv => _bucket(inv) === 'failed').length,
       };
 
       setInvitations(allInvitations);
@@ -151,7 +172,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     const effective = getEffectiveStatus(inv);
     const base = "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0";
     if (effective === 'completed') {
-      return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Done</span>;
+      return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Completed</span>;
     }
     if (effective === 'failed') {
       return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
@@ -189,7 +210,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
             <div className="flex items-center gap-1.5 sm:gap-2">
               <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0" />
               <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">
-                <span className="hidden sm:inline">Assessment Invitations Status</span>
+                <span className="hidden sm:inline">Invite Status Tracking</span>
                 <span className="sm:hidden">Invite Status</span>
               </h2>
             </div>
@@ -205,48 +226,49 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
         {/* Stats Cards */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+          {/* Mirrors the assessment-level popup's stats row exactly. */}
           <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1 sm:gap-4">
             <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-500 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                 <Users className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Total</span>
+                <span>Total Invited</span>
               </div>
               <p className="text-sm sm:text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
             <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-blue-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <Mail className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Sent</span>
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-amber-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <Clock className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Invite Expired</span>
               </div>
-              <p className="text-sm sm:text-2xl font-bold text-blue-600">{stats.sent}</p>
+              <p className="text-sm sm:text-2xl font-bold text-amber-600">{stats.expired}</p>
             </div>
             <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                 <X className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Failed</span>
+                <span>Invite Failed</span>
               </div>
               <p className="text-sm sm:text-2xl font-bold text-red-600">{stats.failed}</p>
             </div>
             <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-yellow-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                 <Play className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Active</span>
+                <span>In Progress</span>
               </div>
-              <p className="text-sm sm:text-2xl font-bold text-yellow-600">{stats.started}</p>
+              <p className="text-sm sm:text-2xl font-bold text-gray-700">{stats.started}</p>
             </div>
             <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-green-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                 <CheckCircle className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Done</span>
+                <span>Completed</span>
               </div>
-              <p className="text-sm sm:text-2xl font-bold text-green-600">{stats.completed}</p>
+              <p className="text-sm sm:text-2xl font-bold text-gray-700">{stats.completed}</p>
             </div>
             <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-purple-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                 <TrendingUp className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Rate</span>
+                <span>Completion Rate</span>
               </div>
-              <p className="text-sm sm:text-2xl font-bold text-purple-600">
+              <p className="text-sm sm:text-2xl font-bold text-gray-700">
                 {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
               </p>
             </div>
@@ -350,7 +372,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                           </div>
                           {getEffectiveStatus(invitation) === 'completed' && (
                             <button
-                              onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
+                              onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
                               className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-purple-600 hover:bg-purple-50 rounded transition-colors"
                             >
                               <Eye className="w-3 h-3" />
@@ -412,7 +434,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                 })}
               </div>
 
-              {/* Desktop Table View */}
+              {/* Desktop Table View — Tech / Coding columns only render
+                  when at least one row in the JD's invitations belongs to
+                  an assessment that has that round enabled. Same rule as
+                  the Results page: no all-empty columns. */}
               <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full min-w-[800px]">
                   <thead>
@@ -422,7 +447,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                       <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment</th>
                       <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
+                      {invitations.some(inv => inv.assessment_technical_enabled) && (
+                        <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                      )}
+                      {invitations.some(inv => inv.assessment_coding_enabled) && (
+                        <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                      )}
                       <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
@@ -493,38 +523,60 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-3 lg:px-4">
-                            {getEffectiveStatus(invitation) === 'completed' ? (
-                              <div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-600">Score</span>
-                                  <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
-                                    {invitation.overall_score != null ? `${Math.round(invitation.overall_score)}%` : 'N/A'}
-                                  </span>
-                                  {invitation.passed !== null && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                      {invitation.passed ? 'Passed' : 'Failed'}
+                          {/* Tech Score column body — render the cell only
+                              when *some* row has tech enabled (column header
+                              is gated identically). For a row whose source
+                              assessment doesn't have tech, render '—'. */}
+                          {invitations.some(inv => inv.assessment_technical_enabled) && (
+                            <td className="py-3 px-3 lg:px-4 text-sm">
+                              {(() => {
+                                if (!invitation.assessment_technical_enabled) return <span className="text-gray-400">—</span>;
+                                const ready =
+                                  invitation.technical_score != null
+                                  && invitation.scoring_status !== 'processing'
+                                  && invitation.scoring_status !== 'pending';
+                                if (!ready) return <span className="text-gray-400">—</span>;
+                                const v = invitation.technical_score;
+                                return (
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span className={`font-medium ${v >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {Math.round(v)}%
                                     </span>
-                                  )}
-                                </div>
-                              </div>
-                            ) : getEffectiveStatus(invitation) === 'started' ? (
-                              <div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-600">Progress</span>
-                                  <span className="font-medium text-yellow-600">
-                                    {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
-                                  </span>
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
+                                    <span className={`text-[10px] font-medium ${v >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {v >= 70 ? 'Pass' : 'Fail'}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                          )}
+                          {invitations.some(inv => inv.assessment_coding_enabled) && (
+                            <td className="py-3 px-3 lg:px-4 text-sm">
+                              {(() => {
+                                if (!invitation.assessment_coding_enabled) return <span className="text-gray-400">—</span>;
+                                const ready =
+                                  invitation.coding_score != null
+                                  && invitation.scoring_status !== 'processing'
+                                  && invitation.scoring_status !== 'pending';
+                                if (!ready) return <span className="text-gray-400">—</span>;
+                                const v = invitation.coding_score;
+                                return (
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span className={`font-medium ${v >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {Math.round(v)}%
+                                    </span>
+                                    <span className={`text-[10px] font-medium ${v >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {v >= 70 ? 'Pass' : 'Fail'}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                          )}
                           <td className="py-3 px-3 lg:px-4">
                             {getEffectiveStatus(invitation) === 'completed' ? (
                               <button
-                                onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
+                                onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
                                 className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 rounded-lg transition-colors whitespace-nowrap"
                               >
                                 <Eye className="w-3.5 h-3.5" />

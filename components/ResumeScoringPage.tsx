@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronRight, Building2, Calendar, Users } from 'lucide-react';
+import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronLeft, ChevronRight, Building2, Calendar, Users } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -163,6 +163,7 @@ interface ResumeScoringPageProps {
   resumes?: Resume[];
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
+  historyLoading?: boolean;
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
   onLoadJdScores?: (jdId: string, jdTitle?: string) => Promise<void>;
@@ -183,6 +184,7 @@ export default function ResumeScoringPage({
   resumes: propResumes = [],
   folders: propFolders = [],
   scoredHistory = [],
+  historyLoading = false,
   onSaveScores,
   onRefreshHistory,
   onLoadJdScores,
@@ -1182,19 +1184,57 @@ export default function ResumeScoringPage({
 
     return (
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-white">
-        {/* Header with Back Button */}
+        {/* Header with Back Button + Prev/Next nav */}
         <div className="mb-6">
-          <button
-            onClick={() => {
-              setViewMode('history');
-              setSelectedHistoryItem(null);
+          {(() => {
+            const _historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
+            const _prevItem = _historyIdx > 0 ? scoredHistory[_historyIdx - 1] : null;
+            const _nextItem = _historyIdx >= 0 && _historyIdx < scoredHistory.length - 1 ? scoredHistory[_historyIdx + 1] : null;
+            const _goToHistoryItem = (item: ScoredResumeData) => {
+              setSelectedHistoryItem(item);
+              setSelectedScoredResumes([]);
               setSelectedStatusFilter('all');
-            }}
-            className="flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4 font-medium transition-colors hover:gap-3"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Scored Candidates
-          </button>
+              onLoadJdScores?.(item.jobId, item.jobTitle);
+            };
+            return (
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => {
+                    setViewMode('history');
+                    setSelectedHistoryItem(null);
+                    setSelectedStatusFilter('all');
+                  }}
+                  className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors hover:gap-3"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  Back to Scored Candidates
+                </button>
+                {scoredHistory.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => _prevItem && _goToHistoryItem(_prevItem)}
+                      disabled={!_prevItem}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </button>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                      {(_historyIdx >= 0 ? _historyIdx : 0) + 1} / {scoredHistory.length}
+                    </span>
+                    <button
+                      onClick={() => _nextItem && _goToHistoryItem(_nextItem)}
+                      disabled={!_nextItem}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="bg-white rounded-xl shadow-lg border-2 border-gray-300 p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -2219,6 +2259,11 @@ export default function ResumeScoringPage({
             itemLabel="jobs"
           />
           </>
+        ) : historyLoading && scoredHistory.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
+            <Loader className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600">Loading scoring history...</p>
+          </div>
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
             <div className="max-w-md mx-auto">

@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, ChevronLeft, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -907,19 +907,55 @@ export default function AITalentMatchPage({
             return (
               <>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                  <button
-                    onClick={() => {
-                      setViewMode('history');
-                      setSelectedHistoryItem(null);
-                      setSelectedJob('');
-                      setSelectedCandidates([]);
-                      router.push('/recruitment/ai-talent-match', { scroll: false });
-                    }}
-                    className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                    Back to Matched Jobs
-                  </button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={() => {
+                        setViewMode('history');
+                        setSelectedHistoryItem(null);
+                        setSelectedJob('');
+                        setSelectedCandidates([]);
+                        router.push('/recruitment/ai-talent-match', { scroll: false });
+                      }}
+                      className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                      Back to Matched Jobs
+                    </button>
+                    {(() => {
+                      const _matchIdx = matchHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
+                      const _prevMatch = _matchIdx > 0 ? matchHistory[_matchIdx - 1] : null;
+                      const _nextMatch = _matchIdx >= 0 && _matchIdx < matchHistory.length - 1 ? matchHistory[_matchIdx + 1] : null;
+                      const _goToMatch = (item: MatchHistory) => {
+                        setSelectedHistoryItem(item);
+                        setSelectedCandidates([]);
+                        setSelectedJob('');
+                      };
+                      if (matchHistory.length <= 1) return null;
+                      return (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => _prevMatch && _goToMatch(_prevMatch)}
+                            disabled={!_prevMatch}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            Previous
+                          </button>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
+                            {(_matchIdx >= 0 ? _matchIdx : 0) + 1} / {matchHistory.length}
+                          </span>
+                          <button
+                            onClick={() => _nextMatch && _goToMatch(_nextMatch)}
+                            disabled={!_nextMatch}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+                          >
+                            Next
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
                   {/* Run AI Match button */}
                   {canRunAIMatch && (
                     <button

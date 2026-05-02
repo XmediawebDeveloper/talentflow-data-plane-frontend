@@ -539,6 +539,18 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
       <div className="p-4 space-y-4">
 
+        {/* Inline warning when all entries are Command/Certification — the
+            interview needs at least one type "Skill" to assess as a competency. */}
+        {config.skills.length > 0 && !config.skills.some(s => (s.type ?? 'Skill') === 'Skill') && (
+          <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700">
+              Add at least one entry of type <strong>Skill</strong> here.
+              All current entries are Commands or Certifications, which can&apos;t be assessed as a standalone competency.
+            </p>
+          </div>
+        )}
+
         {/* Flexible mode: locked notice replaces the add-skill input */}
         {mode === 'flexible' && isLocked ? (
           <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
@@ -1230,6 +1242,25 @@ export default function AIInterviewConfig() {
           if (mthMainSkills) loadedSiRef.current.mth_main_skills = mthMainSkills;
           if (nthMainSkills) loadedSiRef.current.nth_main_skills = nthMainSkills;
 
+          // Re-baseline mth_skills_snapshot when pollution scrub or legacy
+          // fallback changed the displayed skill list. Otherwise the snapshot
+          // (taken when the previous, larger set was visible) doesn't match
+          // the new displayed set, mthSkillsChanged trips on every Continue
+          // click, and the user gets a regeneration even with no edits.
+          const snapshotMatches = (saved?: string[], main?: string[]): boolean => {
+            if (!Array.isArray(saved) || !Array.isArray(main)) return false;
+            if (saved.length !== main.length) return false;
+            const setMain = new Set(main.map(s => s.toLowerCase().trim()));
+            for (const s of saved) if (!setMain.has(s.toLowerCase().trim())) return false;
+            return true;
+          };
+          if (mthMainSkills && !snapshotMatches(parsedSi.mth_skills_snapshot, mthMainSkills)) {
+            loadedSiRef.current.mth_skills_snapshot = mthMainSkills;
+          }
+          if (nthMainSkills && !snapshotMatches(parsedSi.nth_skills_snapshot, nthMainSkills)) {
+            loadedSiRef.current.nth_skills_snapshot = nthMainSkills;
+          }
+
           const toSkillEntries = (skills: string[] = []) =>
             skills.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType }));
 
@@ -1580,6 +1611,12 @@ export default function AIInterviewConfig() {
     if (mth.skills.length === 0) {
       return 'At least one Must-Have skill is required before generating clusters.';
     }
+    if (!mth.skills.some(s => (s.type ?? 'Skill') === 'Skill')) {
+      return 'Must-Have must include at least one entry of type "Skill" (not just Commands or Certifications).';
+    }
+    if (nth.enabled && nth.skills.length > 0 && !nth.skills.some(s => (s.type ?? 'Skill') === 'Skill')) {
+      return 'Nice-to-Have must include at least one entry of type "Skill" (not just Commands or Certifications).';
+    }
     return '';
   })();
   const canContinueToClusters = !continueDisabledReason;
@@ -1904,6 +1941,22 @@ export default function AIInterviewConfig() {
     if (nth.enabled && nth.skills.length === 0) {
       toast.error('Nice-to-Have Skills is enabled but has no skills. Please add at least one skill or disable the Nice-to-Have round.');
       return;
+    }
+
+    // Validate skill-type mix: each enabled bucket must contain at least one
+    // entry of type "Skill". If everything is marked Command/Certification,
+    // there's nothing for the AI interview to assess as a competency.
+    const hasMthSkillEntry = mth.skills.some(s => (s.type ?? 'Skill') === 'Skill');
+    if (!hasMthSkillEntry) {
+      toast.error('Must-Have Skills must include at least one entry of type "Skill" (not just Commands or Certifications).');
+      return;
+    }
+    if (nth.enabled) {
+      const hasNthSkillEntry = nth.skills.some(s => (s.type ?? 'Skill') === 'Skill');
+      if (!hasNthSkillEntry) {
+        toast.error('Nice-to-Have Skills must include at least one entry of type "Skill" (not just Commands or Certifications).');
+        return;
+      }
     }
 
     await proceedToClusters();

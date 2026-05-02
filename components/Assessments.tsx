@@ -2704,14 +2704,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-amber-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                     <Clock className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Expired</span>
+                    <span>Invite Expired</span>
                   </div>
                   <p className="text-sm sm:text-2xl font-bold text-amber-600">{invitationStats.expired}</p>
                 </div>
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                     <X className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Failed</span>
+                    <span>Invite Failed</span>
                   </div>
                   <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.failed}</p>
                 </div>
@@ -2760,8 +2760,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                      {/* Tech / Coding Score columns are conditional on the
+                          assessment having that round enabled — same rule as
+                          the Results page. Showing a "Coding Score" column
+                          for a JD without a coding round produced a
+                          permanent "—" column that confused recruiters. */}
+                      {(selectedAssessmentForTracking?.technical_enabled ?? true) && (
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                      )}
+                      {selectedAssessmentForTracking?.coding_enabled && (
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                      )}
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
@@ -2921,35 +2930,63 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               other surface (Results list, Detail view, PDF).
                               Show "—" until AI scoring is finished — surfacing
                               0% / Fail mid-evaluation was misleading because
-                              the candidate's answers haven't been judged yet. */}
-                          <td className="py-3 px-4 text-sm">
-                            {invitation.status === 'completed' && invitation.scoring_status === 'completed' && invitation.technical_score != null ? (
-                              <div className="flex flex-col items-start gap-0.5">
-                                <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {Math.round(invitation.technical_score)}%
-                                </span>
-                                <span className={`text-[10px] font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-sm">
-                            {invitation.status === 'completed' && invitation.scoring_status === 'completed' && invitation.coding_score != null ? (
-                              <div className="flex flex-col items-start gap-0.5">
-                                <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {Math.round(invitation.coding_score)}%
-                                </span>
-                                <span className={`text-[10px] font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
+                              the candidate's answers haven't been judged yet.
+                              Cells are gated on the round being enabled for
+                              this assessment so a Tech-only JD doesn't carry
+                              an empty Coding column. */}
+                          {/* Score is shown when a numeric value is on the
+                              row. Earlier the gate also required
+                              scoring_status === 'completed', but the
+                              listInvitations endpoint didn't include that
+                              field — which silently hid every score. The
+                              backend now ships scoring_status; we still
+                              treat its absence as "show the score if it
+                              exists" so the popup keeps parity with the
+                              Results page. */}
+                          {(selectedAssessmentForTracking?.technical_enabled ?? true) && (() => {
+                            const techReady =
+                              invitation.technical_score != null
+                              && invitation.scoring_status !== 'processing'
+                              && invitation.scoring_status !== 'pending';
+                            return (
+                              <td className="py-3 px-4 text-sm">
+                                {techReady ? (
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {Math.round(invitation.technical_score)}%
+                                    </span>
+                                    <span className={`text-[10px] font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                            );
+                          })()}
+                          {selectedAssessmentForTracking?.coding_enabled && (() => {
+                            const codingReady =
+                              invitation.coding_score != null
+                              && invitation.scoring_status !== 'processing'
+                              && invitation.scoring_status !== 'pending';
+                            return (
+                              <td className="py-3 px-4 text-sm">
+                                {codingReady ? (
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {Math.round(invitation.coding_score)}%
+                                    </span>
+                                    <span className={`text-[10px] font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                            );
+                          })()}
                           <td className="py-3 px-4">
                             {(invitation.status === 'completed' || invitation.completed_at) ? (
                               <button

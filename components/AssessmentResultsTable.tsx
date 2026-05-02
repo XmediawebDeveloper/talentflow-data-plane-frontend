@@ -91,7 +91,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     { id: 'inviteSource', label: 'Invite Source', enabled: true },
     ...(hasTechnicalRound ? [{ id: 'techScore', label: 'Tech Score', enabled: true }] : []),
     ...(hasCodingRound ? [{ id: 'codingScore', label: 'Coding Score', enabled: true }] : []),
-    { id: 'status', label: 'Status', enabled: true },
+    { id: 'status', label: 'Result Status', enabled: true },
     { id: 'timeline', label: 'Timeline', enabled: true },
     { id: 'completed', label: 'Completed', enabled: true },
     { id: 'duration', label: 'Duration', enabled: true },
@@ -156,11 +156,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   // Helper: determine display status from result
   const getResultStatus = (result: AssessmentResult): string => {
-    if ((result.status === 'completed' || result.completed_at) && result.scoring_status === 'completed') return 'Completed';
+    // The Result Status column = candidate's submission state, NOT AI
+    // scoring state. completed_at OR status='completed' means the
+    // candidate finished — display Completed even while scoring is
+    // still running. (The Tech/Coding score cells gate on scoring_status
+    // separately and show '—' until scoring is done.)
+    if (result.status === 'completed' || result.completed_at) return 'Completed';
     if (result.status === 'in_progress' || result.started_at) return 'In Progress';
-    if ((result.status === 'completed' || result.completed_at) && result.scoring_status !== 'completed') return 'In Progress';
     if (result.status === 'pending') return 'Pending';
-    // Fallback: check completedDate string
     if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Completed';
     if (result.completedDate === 'In Progress') return 'In Progress';
     return 'Pending';
@@ -872,17 +875,22 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         );
                       }
                       if (col.id === 'techScore') {
+                        // Match the Results page exactly: hide the value
+                        // until AI scoring is finished, then render with
+                        // green-on-pass / red-on-fail using the 70%
+                        // passing threshold (not 50%).
+                        const scoringDone = result.scoring_status === 'completed';
                         const techRound = result.roundScores.find(r => r.roundName === 'Technical');
                         const techPct = techRound && techRound.maxScore > 0 ? (techRound.score / techRound.maxScore) * 100 : null;
                         return (
                           <td key={col.id} className="py-3 px-4 text-center">
                             <div className="flex flex-col items-center gap-1">
-                              <span className={`text-lg font-semibold ${techPct !== null ? getScoreColor(techPct) : 'text-gray-400'}`}>
-                                {techPct !== null ? `${Math.round(techPct)}%` : '-'}
+                              <span className={`text-lg font-semibold ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                {scoringDone && techPct !== null ? `${Math.round(techPct)}%` : '—'}
                               </span>
-                              {techPct !== null && (
-                                <span className={`text-xs font-medium ${techPct >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {techPct >= 50 ? 'Pass' : 'Fail'}
+                              {scoringDone && techPct !== null && (
+                                <span className={`text-xs font-medium ${techPct >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {techPct >= 70 ? 'Pass' : 'Fail'}
                                 </span>
                               )}
                             </div>
@@ -890,17 +898,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         );
                       }
                       if (col.id === 'codingScore') {
+                        const scoringDone = result.scoring_status === 'completed';
                         const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
                         const codingPct = codingRound && codingRound.maxScore > 0 ? (codingRound.score / codingRound.maxScore) * 100 : null;
                         return (
                           <td key={col.id} className="py-3 px-4 text-center">
                             <div className="flex flex-col items-center gap-1">
-                              <span className={`text-lg font-semibold ${codingPct !== null ? getScoreColor(codingPct) : 'text-gray-400'}`}>
-                                {codingPct !== null ? `${Math.round(codingPct)}%` : '-'}
+                              <span className={`text-lg font-semibold ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                {scoringDone && codingPct !== null ? `${Math.round(codingPct)}%` : '—'}
                               </span>
-                              {codingPct !== null && (
-                                <span className={`text-xs font-medium ${codingPct >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {codingPct >= 50 ? 'Pass' : 'Fail'}
+                              {scoringDone && codingPct !== null && (
+                                <span className={`text-xs font-medium ${codingPct >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {codingPct >= 70 ? 'Pass' : 'Fail'}
                                 </span>
                               )}
                             </div>
@@ -993,51 +1002,44 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       return null;
                     })}
 
-                    {/* Actions */}
-                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
+                    {/* Actions — same icon-only trio as the assessment-
+                        side Results page (View / PDF / Delete) so the JD
+                        view matches it visually. */}
+                    <td className="px-2 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                         {getResultStatus(result) !== 'Pending' && (
-                        <button
-                          onClick={() => {
-                            if (result.assessmentId) {
-                              router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                          title="View Details"
-                        >
-                          <Award className="w-3 h-3" />
-                          View Details
-                        </button>
+                          <button
+                            onClick={() => {
+                              if (result.assessmentId) {
+                                router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
+                              }
+                            }}
+                            className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            title="View Details"
+                            aria-label={`View details for ${result.candidateName || 'candidate'}`}
+                          >
+                            <Eye className="w-3.5 h-3.5 shrink-0" />
+                          </button>
                         )}
                         {canDownloadPDF && canDownloadResultPdf(result) && (
                           <button
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download PDF Report"
+                            aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
                           >
                             {downloadingPDF === result.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                             ) : (
-                              <Download className="w-3 h-3" />
+                              <Download className="w-3 h-3 flex-shrink-0" />
                             )}
-                            PDF
                           </button>
                         )}
-                        <button
-                          onClick={() => handleDeleteResult(result)}
-                          disabled={isDeleting !== null && isDeleting === result.id}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
-                          title="Delete"
-                        >
-                          {isDeleting !== null && isDeleting === result.id ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
-                          Delete
-                        </button>
+                        {/* Delete removed — destructive per-row delete
+                            broke the audit trail (AS27) and there's no
+                            recruiter workflow that needs it. Erasure goes
+                            through the candidates RTBF flow instead. */}
                       </div>
                     </td>
                   </tr>
@@ -1188,24 +1190,28 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       </div>
                     )}
                     {enabledColumns.find(c => c.id === 'techScore') && (() => {
+                      const scoringDone = result.scoring_status === 'completed';
                       const techRound = result.roundScores.find(r => r.roundName === 'Technical');
                       const techPct = techRound && techRound.maxScore > 0 ? (techRound.score / techRound.maxScore) * 100 : null;
-                      return techPct !== null ? (
+                      if (!scoringDone || techPct === null) return null;
+                      return (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <BarChart3 className="w-3 h-3" />
-                          Tech: <span className={getScoreColor(techPct)}>{Math.round(techPct)}%</span>
+                          Tech: <span className={techPct >= 70 ? 'text-green-600' : 'text-red-600'}>{Math.round(techPct)}%</span>
                         </div>
-                      ) : null;
+                      );
                     })()}
                     {enabledColumns.find(c => c.id === 'codingScore') && (() => {
+                      const scoringDone = result.scoring_status === 'completed';
                       const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
                       const codingPct = codingRound && codingRound.maxScore > 0 ? (codingRound.score / codingRound.maxScore) * 100 : null;
-                      return codingPct !== null ? (
+                      if (!scoringDone || codingPct === null) return null;
+                      return (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <BarChart3 className="w-3 h-3" />
-                          Coding: <span className={getScoreColor(codingPct)}>{Math.round(codingPct)}%</span>
+                          Coding: <span className={codingPct >= 70 ? 'text-green-600' : 'text-red-600'}>{Math.round(codingPct)}%</span>
                         </div>
-                      ) : null;
+                      );
                     })()}
                     {enabledColumns.find(c => c.id === 'completed') && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
@@ -1250,18 +1256,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         {downloadingPDF === result.id ? 'Downloading...' : 'PDF'}
                       </button>
                     )}
-                    <button
-                      onClick={() => handleDeleteResult(result)}
-                      disabled={isDeleting !== null && isDeleting === result.id}
-                      className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      {isDeleting !== null && isDeleting === result.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
-                      )}
-                      Delete
-                    </button>
+                    {/* Delete removed — see desktop-table comment above. */}
                   </div>
 
                   {/* Expanded Details */}

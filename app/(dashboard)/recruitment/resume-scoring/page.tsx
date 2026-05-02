@@ -43,6 +43,7 @@ export default function ResumeScoringRoute() {
   const [folders, setFolders] = useState<any[]>([]);
   const [scoredHistory, setScoredHistory] = useState<ScoredResumeData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
   const [initialScoreId, setInitialScoreId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
@@ -346,6 +347,7 @@ export default function ResumeScoringRoute() {
   const loadScoredHistory = async () => {
     // Load scored history sidebar from the API - only page 1 (sorted by created_at DESC)
     // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
+    setHistoryLoading(true);
     try {
       // Probe for total then pull all scored resumes in a single request
       const probe = await scoringService.getAllScoredResumes({ page_size: 1, page: 1 });
@@ -499,6 +501,8 @@ export default function ResumeScoringRoute() {
       } catch (e) {
         console.error('Failed to load from localStorage:', e);
       }
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -745,6 +749,7 @@ export default function ResumeScoringRoute() {
         resumes={resumes}
         folders={folders}
         scoredHistory={scoredHistory}
+        historyLoading={historyLoading}
         onSaveScores={saveScoredHistory}
         onRefreshHistory={loadScoredHistory}
         onLoadJdScores={loadJdScores}

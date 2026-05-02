@@ -36,7 +36,7 @@ export default function AIInterviewResultsPage() {
   }, [configId]);
 
   const handleBack = () => {
-    router.push(`/recruitment/ai-interviews/${configId}`);
+    router.push('/recruitment/ai-interviews');
   };
 
   if (isLoading) {
