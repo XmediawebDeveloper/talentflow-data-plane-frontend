@@ -277,8 +277,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   // Show blocked message for exact duplicates only
   if (hasOnlyExactDuplicates) {
     return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
             <div className="flex items-start gap-4">
@@ -363,8 +363,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
 
   return (
     <>
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
           <div className="flex items-start gap-4">

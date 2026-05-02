@@ -1636,8 +1636,8 @@ export default function AIInterview() {
         };
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] lg:max-w-5xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
               {/* Header */}
               <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
                 <div className="min-w-0">
@@ -1884,8 +1884,8 @@ export default function AIInterview() {
 
       {/* Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">{confirmAction.title}</h3>
             <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-2 sm:gap-3">
@@ -1909,8 +1909,8 @@ export default function AIInterview() {
       )}
 
       {showPublishedModal && (
-        <div className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-[1px] flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 text-center">
+        <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-gray-200 p-6 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="relative inline-flex items-center justify-center mb-4">
               <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
               <span className="absolute w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />

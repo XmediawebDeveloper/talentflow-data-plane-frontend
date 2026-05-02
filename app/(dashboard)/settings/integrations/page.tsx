@@ -68,41 +68,41 @@ export default function IntegrationsPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 sm:gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
-          <p className="text-gray-600">Loading integrations...</p>
+          <p className="text-sm text-gray-600">Loading integrations...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-5 sm:mb-6 lg:mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-              <LinkIcon className="w-7 h-7 text-white" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <LinkIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Integrations</h1>
-              <p className="text-sm text-gray-600">Connect TalentFlow with your favorite tools</p>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Integrations</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Connect TalentFlow with your favorite tools</p>
             </div>
           </div>
         </div>
 
         {/* Category Filter */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-5 sm:mb-6 overflow-x-auto scrollbar-hide">
           {categories.map((category) => (
             <button
               key={category}
               onClick={() => setFilter(category)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`inline-flex items-center justify-center h-9 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 filter === category
-                  ? 'bg-gray-800 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
               }`}
             >
               {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -111,18 +111,20 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Integrations Grid */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           {filteredIntegrations.length === 0 ? (
-            <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <LinkIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Integrations Found</h3>
-              <p className="text-gray-500">No integrations available in this category.</p>
+            <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-muted/50 border border-border flex items-center justify-center">
+                <LinkIcon className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">No integrations found</h3>
+              <p className="text-sm text-gray-500">No integrations available in this category.</p>
             </div>
           ) : (
             filteredIntegrations.map((integration) => (
               <div
                 key={integration.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6 hover:shadow-md hover:border-[var(--border-dark)] transition-all"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
@@ -169,7 +171,7 @@ export default function IntegrationsPage() {
                       <button
                         onClick={() => connectIntegration(integration.integration_type)}
                         disabled={connectingId === integration.integration_type}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 bg-[var(--primary)] text-[var(--primary-foreground)] text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md transition-all disabled:opacity-50"
                       >
                         {connectingId === integration.integration_type ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -187,12 +189,12 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Request Integration */}
-        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-          <h3 className="font-medium text-gray-900 mb-2">Need a different integration?</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Let us know what tools you'd like to connect with TalentFlow.
+        <div className="mt-6 sm:mt-8 bg-muted/40 border border-border rounded-xl p-5 sm:p-6 text-center">
+          <h3 className="text-base font-semibold text-gray-900 mb-1.5">Need a different integration?</h3>
+          <p className="text-xs sm:text-sm text-gray-500 mb-4">
+            Let us know what tools you&apos;d like to connect with TalentFlow.
           </p>
-          <button className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+          <button className="inline-flex items-center justify-center h-10 px-5 bg-white border border-gray-300 text-sm text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
             Request Integration
           </button>
         </div>

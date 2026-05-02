@@ -158,53 +158,53 @@ function ScoredResumeDetailContent() {
     <main className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-8 py-6">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
           <button
             onClick={handleBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Job Details
           </button>
 
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                <Target className="w-8 h-8 text-white" />
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                <Target className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-white" />
               </div>
-              <div>
-                <h1 className="text-2xl text-gray-900 font-bold mb-1">{resumeData.candidateName}</h1>
-                <p className="text-gray-700 mb-2">{resumeData.title || 'Candidate'}</p>
-                <div className="flex items-center gap-4 text-sm text-gray-600">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl text-gray-900 font-semibold tracking-tight mb-1 truncate">{resumeData.candidateName}</h1>
+                <p className="text-sm sm:text-base text-gray-700 mb-2 truncate">{resumeData.title || 'Candidate'}</p>
+                <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600 flex-wrap">
                   {resumeData.email && (
-                    <span className="flex items-center gap-1.5">
-                      <Mail className="w-4 h-4" />
-                      {resumeData.email}
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">{resumeData.email}</span>
                     </span>
                   )}
                   {resumeData.phone && (
                     <span className="flex items-center gap-1.5">
-                      <Phone className="w-4 h-4" />
+                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                       {resumeData.phone}
                     </span>
                   )}
                   {resumeData.location && (
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4" />
-                      {resumeData.location}
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">{resumeData.location}</span>
                     </span>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:justify-start gap-4 flex-wrap">
               {/* Match Score */}
               <div className="text-center">
-                <div className={`text-4xl font-bold ${getScoreColor(resumeData.scorePercentage)}`}>
+                <div className={`text-2xl sm:text-3xl lg:text-4xl font-bold ${getScoreColor(resumeData.scorePercentage)}`}>
                   {resumeData.scorePercentage}%
                 </div>
-                <span className={`inline-flex px-3 py-1 rounded-full text-sm border mt-2 ${getMatchStatusColor(resumeData.matchStatus)}`}>
+                <span className={`inline-flex px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm border mt-1.5 sm:mt-2 ${getMatchStatusColor(resumeData.matchStatus)}`}>
                   {resumeData.matchStatus}
                 </span>
               </div>
@@ -213,16 +213,16 @@ function ScoredResumeDetailContent() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => setShowResumePreview(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 h-9 sm:h-10 px-3 sm:px-4 bg-gray-800 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors"
                 >
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Resume
                 </button>
                 <button
                   onClick={handleDownloadScorecard}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 h-9 sm:h-10 px-3 sm:px-4 border border-gray-300 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Download Scorecard
                 </button>
               </div>
@@ -230,18 +230,18 @@ function ScoredResumeDetailContent() {
           </div>
 
           {/* Job Context */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-sm text-gray-600">
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-xs sm:text-sm text-gray-600">
               Scored against: <span className="font-medium text-gray-900">{jobTitle}</span>
             </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-t border-gray-200">
+        <div className="flex border-t border-gray-200 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-6 py-3 text-sm font-medium transition-colors relative ${
+            className={`px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex-shrink-0 ${
               activeTab === 'overview'
                 ? 'text-gray-900 bg-white'
                 : 'text-gray-600 hover:text-gray-900'
@@ -254,7 +254,7 @@ function ScoredResumeDetailContent() {
           </button>
           <button
             onClick={() => setActiveTab('scorecard')}
-            className={`px-6 py-3 text-sm font-medium transition-colors relative ${
+            className={`px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex-shrink-0 ${
               activeTab === 'scorecard'
                 ? 'text-gray-900 bg-white'
                 : 'text-gray-600 hover:text-gray-900'
@@ -269,15 +269,15 @@ function ScoredResumeDetailContent() {
       </div>
 
       {/* Content */}
-      <div className="px-8 py-6">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
             {/* Left Column - Candidate Info */}
-            <div className="col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-5 lg:space-y-6">
               {/* AI Summary */}
               {resumeData.aiSummary && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
                     <Star className="w-5 h-5 text-yellow-500" />
                     AI Summary
                   </h3>
@@ -287,8 +287,8 @@ function ScoredResumeDetailContent() {
 
               {/* Key Strengths */}
               {resumeData.strengths && resumeData.strengths.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
                     <CheckCircle className="w-5 h-5 text-green-600" />
                     Key Strengths
                   </h3>
@@ -305,8 +305,8 @@ function ScoredResumeDetailContent() {
 
               {/* Gaps/Improvement Areas */}
               {resumeData.gaps && resumeData.gaps.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-yellow-600" />
                     Areas for Consideration
                   </h3>
@@ -323,8 +323,8 @@ function ScoredResumeDetailContent() {
 
               {/* Skills */}
               {resumeData.skills && resumeData.skills.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
                     <Code className="w-5 h-5 text-blue-600" />
                     Skills
                   </h3>
@@ -343,9 +343,9 @@ function ScoredResumeDetailContent() {
             </div>
 
             {/* Right Column - Score Breakdown */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-5 lg:space-y-6">
               {/* Overall Score Card */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Match Score</h3>
                 <div className="text-center">
                   <div className={`text-5xl font-bold ${getScoreColor(resumeData.scorePercentage)}`}>
@@ -356,7 +356,7 @@ function ScoredResumeDetailContent() {
               </div>
 
               {/* Score Breakdown */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Score Breakdown</h3>
                 <div className="space-y-4">
                   {[
@@ -383,7 +383,7 @@ function ScoredResumeDetailContent() {
               </div>
 
               {/* Candidate Details */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Candidate Details</h3>
                 <div className="space-y-3 text-sm">
                   {resumeData.currentCompany && (

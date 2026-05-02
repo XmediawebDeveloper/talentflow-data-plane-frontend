@@ -40,30 +40,30 @@ const faqs = [
 
 export default function FAQPage() {
   return (
-    <div className="py-20">
-      <div className="container mx-auto max-w-[1400px] px-6">
+    <div className="py-10 sm:py-14 md:py-20">
+      <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
         {/* Hero */}
-        <div className="text-center mb-16">
-          <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
+        <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-xs sm:text-sm">
             FAQ
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4 px-2 sm:px-0 tracking-tight">
             Frequently Asked Questions
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto px-2 sm:px-0">
             Everything you need to know about TalentFlow
           </p>
         </div>
 
         {/* FAQ Accordion */}
         <div className="max-w-3xl mx-auto">
-          <Accordion type="single" collapsible className="space-y-4">
+          <Accordion type="single" collapsible className="space-y-3 sm:space-y-4">
             {faqs.map((faq, index) => (
-              <AccordionItem key={index} value={`item-${index}`} className="border rounded-lg px-6">
-                <AccordionTrigger className="text-left text-lg font-semibold text-gray-900 dark:text-white hover:no-underline">
+              <AccordionItem key={index} value={`item-${index}`} className="border border-border rounded-xl px-4 sm:px-6 bg-card shadow-sm">
+                <AccordionTrigger className="text-left text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-white hover:no-underline py-4 sm:py-5">
                   {faq.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-gray-600 dark:text-gray-400">
+                <AccordionContent className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
                   {faq.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -72,11 +72,11 @@ export default function FAQPage() {
         </div>
 
         {/* Still have questions */}
-        <div className="text-center mt-16">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+        <div className="text-center mt-10 sm:mt-12 md:mt-16">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
             Still have questions?
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-5 sm:mb-6 max-w-md mx-auto px-4 sm:px-0">
             Our team is here to help. Get in touch and we&apos;ll get back to you within 24 hours.
           </p>
         </div>

@@ -235,8 +235,8 @@ export default function PlanChangeReviewModal() {
     (summary.features_added && summary.features_added.length > 0);
 
   return (
-    <div className="fixed inset-0 z-[88] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[88] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">

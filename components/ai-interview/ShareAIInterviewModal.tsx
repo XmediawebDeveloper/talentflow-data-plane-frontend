@@ -762,8 +762,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Success screen
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" role="dialog" aria-modal="true">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600" />
           </div>
@@ -780,7 +780,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   if (showDuplicateError) {
     return (
       <div
-        className="fixed inset-0 bg-gray-900/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowDuplicateError(false);
@@ -843,7 +843,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/40 backdrop-blur-[1px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-6 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -851,7 +851,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       aria-modal="true"
       aria-label="Send AI Interview via Email"
     >
-      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 max-w-4xl w-full max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">

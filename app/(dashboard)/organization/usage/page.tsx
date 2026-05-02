@@ -33,14 +33,14 @@ export default function UsagePage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Page Title */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">
             {isStandardUser ? 'My Usage' : isBillingManager ? 'Billing & Usage' : 'Organization Usage'}
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
             {isStandardUser
               ? 'View your personal consumption history'
               : isBillingManager

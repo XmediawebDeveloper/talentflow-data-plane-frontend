@@ -264,8 +264,8 @@ export default function AddSeatsModal({
   const addonDisplayName = (pricing?.addon_name || 'User Seat Pack').replace(/\s*-?\s*Pro$/i, '').trim();
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4">
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
         {/* Header */}
         <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex-shrink-0 overflow-hidden">

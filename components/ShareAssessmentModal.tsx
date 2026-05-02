@@ -464,8 +464,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
@@ -481,8 +481,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Duplicate invitation error popup
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-6 sm:p-8 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-amber-600" />
@@ -529,8 +529,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">

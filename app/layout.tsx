@@ -112,7 +112,22 @@ export default function RootLayout({
               <GlobalDialogProvider>
                 <ScoringProgressProvider>
                   {children}
-                  <Toaster position="top-right" richColors closeButton />
+                  <Toaster
+                    position="top-right"
+                    richColors
+                    closeButton
+                    expand={false}
+                    visibleToasts={4}
+                    toastOptions={{
+                      classNames: {
+                        toast: 'group rounded-lg border border-border shadow-lg',
+                        title: 'text-sm font-semibold',
+                        description: 'text-xs text-muted-foreground',
+                        actionButton: 'text-xs font-medium',
+                      },
+                      duration: 4500,
+                    }}
+                  />
                   {/* Global subscription inactive modal - catches events from API interceptor */}
                   <SubscriptionInactiveModal />
                   {/* Global session-expired modal - shown on 401 from any API call.

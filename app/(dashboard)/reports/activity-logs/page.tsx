@@ -52,43 +52,44 @@ export default function ActivityLogsPage() {
   });
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        <div className="mb-5 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
-                <BarChart3 className="w-7 h-7 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Activity Logs</h1>
-                <p className="text-sm text-gray-600">Track all activities across your organization</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Activity Logs</h1>
+                <p className="text-xs sm:text-sm text-gray-600">Track all activities across your organization</p>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+            <button className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors self-end sm:self-auto">
               <Download className="w-4 h-4" />
-              Export Logs
+              <span className="hidden sm:inline">Export Logs</span>
+              <span className="sm:hidden">Export</span>
             </button>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-5 sm:mb-6">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search activities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
+              className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none"
             />
           </div>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
+            className="h-10 px-3 sm:px-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -102,20 +103,20 @@ export default function ActivityLogsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="divide-y divide-gray-200">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="p-4 hover:bg-gray-50">
-                <div className="flex items-start gap-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${categoryColors[log.category]}`}>
+              <div key={log.id} className="p-3 sm:p-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${categoryColors[log.category]}`}>
                     {categoryIcons[log.category]}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">{log.action}</p>
-                        <p className="text-sm text-gray-500">{log.details}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{log.action}</p>
+                        <p className="text-xs sm:text-sm text-gray-500 truncate">{log.details}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-500">{log.timestamp}</p>
-                        <p className="text-xs text-gray-400">{log.user}</p>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">{log.timestamp}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
                   </div>

@@ -24,25 +24,25 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="py-20">
-      <div className="container mx-auto max-w-[1400px] px-6">
+    <div className="py-10 sm:py-14 md:py-20">
+      <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
         {/* Hero */}
-        <div className="text-center mb-16">
-          <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
+        <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-xs sm:text-sm">
             Contact Us
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4 px-2 sm:px-0 tracking-tight">
             Get in touch
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto px-2 sm:px-0">
             Have a question or want to learn more? We&apos;d love to hear from you.
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+        <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 max-w-6xl mx-auto">
           {/* Contact Form */}
-          <Card className="p-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+          <Card className="p-5 sm:p-6 md:p-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">
               Send us a message
             </h2>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -105,7 +105,7 @@ export default function ContactPage() {
           </Card>
 
           {/* Contact Info */}
-          <div className="space-y-8">
+          <div className="space-y-4 sm:space-y-6 lg:space-y-8">
             <Card className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 bg-gray-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center flex-shrink-0">

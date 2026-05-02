@@ -57,13 +57,13 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
         <>
           {/* Overlay */}
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+            className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 animate-in fade-in duration-200"
             onClick={onClose}
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
               {/* Header */}
               <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">

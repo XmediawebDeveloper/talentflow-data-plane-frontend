@@ -224,23 +224,23 @@ export default function ResumeDetailPage() {
     <FeatureGate feature="resume_upload">
     <main className="flex-1 bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-6">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
         <div className="max-w-7xl mx-auto">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl text-gray-900">{resume.name}</h1>
-              <p className="text-sm text-gray-500">{resume.title}</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight truncate">{resume.name}</h1>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">{resume.title}</p>
             </div>
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors self-end sm:self-auto"
             >
               <Download className="w-4 h-4" />
               Download
@@ -250,13 +250,13 @@ export default function ResumeDetailPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex max-w-7xl mx-auto w-full">
-        {/* Sidebar */}
-        <div className="w-60 border-r border-gray-200 bg-gray-50 p-4">
-          <div className="space-y-1">
+      <div className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full">
+        {/* Sidebar - desktop tabs / mobile horizontal scroll */}
+        <div className="lg:w-60 lg:border-r border-b lg:border-b-0 border-gray-200 bg-gray-50 p-2 sm:p-3 lg:p-4">
+          <div className="flex lg:flex-col gap-1 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('preview')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm transition-colors whitespace-nowrap flex-shrink-0 lg:w-full ${
                 activeTab === 'preview'
                   ? 'bg-gray-800 text-white'
                   : 'text-gray-700 hover:bg-gray-100'
@@ -267,7 +267,7 @@ export default function ResumeDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab('details')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm transition-colors whitespace-nowrap flex-shrink-0 lg:w-full ${
                 activeTab === 'details'
                   ? 'bg-gray-800 text-white'
                   : 'text-gray-700 hover:bg-gray-100'
@@ -278,7 +278,7 @@ export default function ResumeDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm transition-colors whitespace-nowrap flex-shrink-0 lg:w-full ${
                 activeTab === 'history'
                   ? 'bg-gray-800 text-white'
                   : 'text-gray-700 hover:bg-gray-100'
@@ -291,7 +291,7 @@ export default function ResumeDetailPage() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-8 overflow-y-auto">
+        <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {activeTab === 'preview' && (
             <div className="h-full min-h-[600px]">
               {loadingPdf ? (
@@ -358,7 +358,7 @@ export default function ResumeDetailPage() {
             <div className="space-y-6">
               <section>
                 <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Personal Profile</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Name</div>
                     <div className="text-sm text-gray-900">{resume.name}</div>
@@ -423,7 +423,7 @@ export default function ResumeDetailPage() {
 
               <section>
                 <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Upload Information</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Source</div>
                     <div className="text-sm">

@@ -1346,14 +1346,14 @@ export default function AITalentMatchPage({
 
       {/* Assessment Selection Modal - for details/results view */}
       {isAssessmentModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={(e) => {
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setIsAssessmentModalOpen(false);
             setSelectedAssessments([]);
             setAssessmentSearchQuery('');
           }
         }}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col mx-2 sm:mx-0">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             <div className="p-4 sm:p-6 border-b border-gray-200">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <h2 className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900">Select Active Assessments</h2>
@@ -2469,14 +2469,14 @@ export default function AITalentMatchPage({
 
       {/* Assessment Selection Modal */}
       {isAssessmentModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={(e) => {
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setIsAssessmentModalOpen(false);
             setSelectedAssessments([]);
             setAssessmentSearchQuery('');
           }
         }}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col mx-2 sm:mx-0">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             <div className="p-4 sm:p-6 border-b border-gray-200">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <h2 className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900">Select Active Assessments</h2>

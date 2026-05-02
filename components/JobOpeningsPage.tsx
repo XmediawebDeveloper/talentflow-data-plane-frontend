@@ -435,7 +435,7 @@ export default function JobOpeningsPage() {
             {jobs.map((job) => (
               <div
                 key={job.id}
-                className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-lg transition-all duration-200 group"
+                className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
@@ -795,8 +795,8 @@ export default function JobOpeningsPage() {
 
       {/* Job Quota Exceeded Modal */}
       {showQuotaModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="text-center">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Briefcase className="w-8 h-8 text-red-600" />
@@ -829,8 +829,8 @@ export default function JobOpeningsPage() {
 
       {/* Insufficient Units Modal - when RS, RU, AS are all 0 */}
       {showInsufficientUnitsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="text-center">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-8 h-8 text-orange-600" />

@@ -1012,7 +1012,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-xl border transition-all cursor-pointer ${selectedJobs.has(job.id) ? 'border-gray-700 shadow-md' : 'border-gray-200 hover:border-gray-400 hover:shadow-md'}`}
+                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer ${selectedJobs.has(job.id) ? 'border-[var(--primary)] shadow-md ring-1 ring-[var(--primary)]/30' : 'border-gray-200 hover:border-[var(--border-dark)] hover:shadow-md hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -1283,7 +1283,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-xl border transition-all cursor-pointer p-4 sm:p-6 ${selectedJobs.has(job.id) ? 'border-gray-700 shadow-md' : 'border-gray-200 hover:border-gray-400 hover:shadow-md'}`}
+                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 sm:p-6 ${selectedJobs.has(job.id) ? 'border-[var(--primary)] shadow-md ring-1 ring-[var(--primary)]/30' : 'border-gray-200 hover:border-[var(--border-dark)] hover:shadow-md hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-5">
@@ -1538,19 +1538,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           )
         ) : (
           // Empty State
-          <div className="bg-white rounded-xl border border-gray-200 p-10 sm:p-20 text-center">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-8 sm:p-12 md:p-16 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 bg-muted/50 border border-border rounded-full flex items-center justify-center">
                 {searchQuery || activeFiltersCount > 0 ? (
-                  <Search className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400" />
+                  <Search className="w-7 h-7 sm:w-9 sm:h-9 text-muted-foreground" />
                 ) : (
-                  <Briefcase className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400" />
+                  <Briefcase className="w-7 h-7 sm:w-9 sm:h-9 text-muted-foreground" />
                 )}
               </div>
-              <h3 className="text-xl sm:text-2xl font-medium text-gray-900 mb-2 sm:mb-3">
+              <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2 tracking-tight">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="text-base sm:text-lg text-gray-600 mb-6 sm:mb-8">
+              <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6 leading-relaxed">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -1569,9 +1569,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     setDatePostedFilter('all');
                     setSalaryRangeFilter('all');
                   }}
-                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all inline-flex items-center gap-2 text-base font-medium"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--surface-hover)] transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                 >
-                  <XCircle className="w-5 h-5" />
+                  <XCircle className="w-4 h-4" />
                   Clear Filters
                 </button>
               ) : (
@@ -1583,9 +1583,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     }
                     onCreateNew();
                   }}
-                  className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all inline-flex items-center gap-2 text-base font-medium"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4" />
                   Create Job
                 </button>
               )}
@@ -1691,8 +1691,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-4 sm:p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="text-center">
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" />

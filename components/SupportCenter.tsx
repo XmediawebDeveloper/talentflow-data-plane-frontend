@@ -1296,9 +1296,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {filteredTickets.length === 0 && (
-                    <div className="text-center py-8 sm:py-12">
-                      <Ticket className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400" />
-                      <p className="text-xs sm:text-sm text-gray-600">No tickets found</p>
+                    <div className="text-center py-10 sm:py-14">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 rounded-full bg-muted/50 border border-border flex items-center justify-center">
+                        <Ticket className="w-6 h-6 sm:w-7 sm:h-7 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground mb-1">No tickets found</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Try adjusting your search or filters</p>
                     </div>
                   )}
                 </>

@@ -146,8 +146,8 @@ export default function ScoringVersionSelectionModal({
   const singleVersionResumes = resumesWithVersions.filter(r => (r.loadedVersions?.length || 0) <= 1);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
         <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">

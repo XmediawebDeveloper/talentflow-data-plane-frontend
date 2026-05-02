@@ -999,7 +999,7 @@ export default function ScoredResumesTable({
         {filteredResumes.map((resume) => (
           <div
             key={resume.id}
-            className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
+            className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-[var(--border-dark)] transition-all cursor-pointer"
             onClick={(e) => handleRowClick(resume.id, e)}
           >
             {/* Card Header */}
@@ -1217,8 +1217,8 @@ export default function ScoredResumesTable({
 
       {/* Export Format Selection Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Export Scored Resumes</h3>
@@ -1414,8 +1414,8 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
 
   if (isLoadingAssessments) {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-6 sm:p-8 text-center">
           <Loader className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
           <p className="text-gray-500 text-sm">Checking for existing assessments</p>

@@ -195,22 +195,22 @@ export default function ActivityLogsPage() {
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="mb-5 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                 <Activity className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Activity Logs</h1>
-                <p className="text-sm text-gray-600">Recent system activity timeline</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Activity Logs</h1>
+                <p className="text-xs sm:text-sm text-gray-600">Recent system activity timeline</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <select
                 value={limit}
                 onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-black"
+                className="flex-1 sm:flex-none h-10 px-3 sm:px-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-black"
               >
                 <option value="25">Last 25</option>
                 <option value="50">Last 50</option>
@@ -218,10 +218,10 @@ export default function ActivityLogsPage() {
               </select>
               <button
                 onClick={fetchRecentActivity}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-black"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-black text-sm font-medium transition-colors"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
+                <span className="hidden sm:inline">Refresh</span>
               </button>
             </div>
           </div>
@@ -254,14 +254,14 @@ export default function ActivityLogsPage() {
               {Object.entries(groupedLogs).map(([date, dayLogs]) => (
                 <div key={date}>
                   {/* Date Header */}
-                  <div className="sticky top-0 bg-gray-50 px-6 py-3 border-b border-gray-100">
-                    <h3 className="text-sm font-medium text-gray-700">{date}</h3>
+                  <div className="sticky top-0 bg-gray-50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 z-10">
+                    <h3 className="text-xs sm:text-sm font-medium text-gray-700">{date}</h3>
                   </div>
 
                   {/* Activities for this date */}
                   <div className="relative">
                     {/* Timeline line */}
-                    <div className="absolute left-[2.75rem] top-0 bottom-0 w-0.5 bg-gray-200" />
+                    <div className="absolute left-[1.4rem] sm:left-[2.75rem] top-0 bottom-0 w-0.5 bg-gray-200" />
 
                     {dayLogs.map((log, index) => {
                       const ActionIcon = getActionIcon(log.action);
@@ -270,7 +270,7 @@ export default function ActivityLogsPage() {
                       return (
                         <div
                           key={log.id}
-                          className="relative flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition-colors"
+                          className="relative flex items-start gap-3 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors"
                         >
                           {/* Timeline dot */}
                           <div className={`relative z-10 w-9 h-9 rounded-full ${getActionColor(log.action)} flex items-center justify-center shadow-sm`}>

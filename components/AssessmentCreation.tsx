@@ -1802,8 +1802,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {/* Full-screen JD Creation Modal */}
         {showJDCreation && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-[98vw] sm:w-[95vw] h-[95vh] flex flex-col">
+          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-[98vw] sm:w-[95vw] h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Modal Header */}
               <div className="bg-gray-800 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0 rounded-t-xl sm:rounded-t-2xl">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -1848,8 +1848,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50 relative">
         {/* Auto-saving overlay */}
         {isAutoSaving && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 flex items-center gap-3">
+          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-4 sm:p-5 flex items-center gap-3">
               <Loader2 className="w-5 h-5 animate-spin text-gray-700" />
               <span className="text-sm sm:text-base text-gray-700 font-medium">Auto-saving draft...</span>
             </div>
@@ -2492,8 +2492,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {/* Coding Confirmation Popup */}
         {showCodingConfirm && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
               {/* Header */}
               <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-blue-50 border-b border-blue-200'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
                 <div className="flex items-center gap-2 sm:gap-3">
@@ -2593,8 +2593,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {/* Minimum Round Required Popup */}
         {showMinRoundPopup && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-sm w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
               {/* Header */}
               <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
