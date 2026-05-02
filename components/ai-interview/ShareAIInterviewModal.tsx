@@ -134,6 +134,21 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }).finally(() => setQuotaStatsLoading(false));
   }, [isOpen]);
 
+  // Lock background scroll + close on Escape while modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isOpen, onClose]);
+
   // Load resumes when database mode is selected
   useEffect(() => {
     if (inputMode === 'database') {
@@ -747,12 +762,12 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Success screen
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+      <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600" />
           </div>
-          <h3 className="text-gray-900 mb-2">Invitations Sent!</h3>
+          <h3 className="text-gray-900 text-base sm:text-lg font-semibold mb-2">Invitations Sent!</h3>
           <p className="text-gray-600 text-sm">
             Email invitations have been sent to {sentCount} candidate{sentCount > 1 ? 's' : ''}
           </p>
@@ -764,8 +779,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Duplicate invitation error popup
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
+      <div
+        className="fixed inset-0 bg-gray-900/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowDuplicateError(false);
+            setDuplicateEmail('');
+          }
+        }}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-amber-600" />
@@ -790,25 +815,25 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </ul>
           </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowDuplicateError(false);
-                setDuplicateEmail('');
-              }}
-              className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-            >
-              Try Different Email
-            </button>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={() => {
                 setShowDuplicateError(false);
                 setDuplicateEmail('');
                 onClose();
               }}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Close
+            </button>
+            <button
+              onClick={() => {
+                setShowDuplicateError(false);
+                setDuplicateEmail('');
+              }}
+              className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-black transition-colors"
+            >
+              Try Different Email
             </button>
           </div>
         </div>
@@ -817,29 +842,38 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div
+      className="fixed inset-0 bg-gray-900/40 backdrop-blur-[1px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Send AI Interview via Email"
+    >
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-              <Mail className="w-5 h-5 text-white" />
+        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-white">Send AI Interview via Email</h2>
-              <p className="text-gray-100 text-sm">{config.jd_title || config.position} - AI Interview</p>
+            <div className="min-w-0">
+              <h2 className="text-white text-sm sm:text-base font-semibold truncate">Send AI Interview via Email</h2>
+              <p className="text-gray-100 text-xs sm:text-sm truncate">{config.jd_title || config.position} — AI Interview</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+            aria-label="Close dialog"
+            className="text-white hover:bg-white/20 p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Config Info Banner */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-4">

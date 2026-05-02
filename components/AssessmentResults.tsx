@@ -1053,7 +1053,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
                     setCurrentPage(1);
                   }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                 >
                   <option value="all">All</option>
                   <option value="Completed">Completed</option>
@@ -1072,7 +1072,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
                     setCurrentPage(1);
                   }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                 >
                   <option value="all">All</option>
                   <option value="pass">Pass</option>
@@ -1092,7 +1092,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                       setCurrentPage(1);
                     }}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -1113,7 +1113,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                       setCurrentPage(1);
                     }}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -1123,8 +1123,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
               )}
 
-              {/* Date Range Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Date Range Filter - full width on mobile */}
+              <div className="col-span-2 flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                 <label htmlFor="assessment-results-date-from" className="sr-only">Filter from date</label>
                 <input
@@ -1133,7 +1133,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   value={dateFrom}
                   max={dateTo || undefined}
                   onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="From date"
                   aria-label="Filter from date"
                 />
@@ -1145,30 +1145,32 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   value={dateTo}
                   min={dateFrom || undefined}
                   onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="To date"
                   aria-label="Filter to date"
                 />
               </div>
 
-              {/* Clear Filters Button */}
-              {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
-                <button
-                  onClick={() => {
-                    setRoundFilters({});
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setPassFailFilter('all');
-                    setDateFrom('');
-                    setDateTo('');
-                    setCurrentPage(1);
-                  }}
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
-                >
-                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  Clear
-                </button>
-              )}
+              {/* Clear Filters & Columns - full width on mobile */}
+              <div className="col-span-2 sm:col-span-1 flex items-center gap-2 sm:gap-3">
+                {/* Clear Filters Button */}
+                {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
+                  <button
+                    onClick={() => {
+                      setRoundFilters({});
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setPassFailFilter('all');
+                      setDateFrom('');
+                      setDateTo('');
+                      setCurrentPage(1);
+                    }}
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+                  >
+                    <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Clear
+                  </button>
+                )}
 
               {/* AS-24: Customize Columns Button */}
               <div className="relative">
@@ -1221,6 +1223,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 )}
               </div>
             </div>
+          </div>
         </div>
 
         {/* Candidates Results Table */}
@@ -1668,8 +1671,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="px-2 sm:px-4 py-4">
+                        <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
@@ -1690,9 +1693,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
                               {downloadingPDF === candidate.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                               ) : (
-                                <Download className="w-3 h-3" />
+                                <Download className="w-3 h-3 flex-shrink-0" />
                               )}
                             </button>
                           ) : null}
@@ -1704,9 +1707,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             aria-label={`Delete result for ${candidate.name || 'candidate'}`}
                           >
                             {isDeleting === candidate.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                             ) : (
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3 flex-shrink-0" />
                             )}
                           </button>
                         </div>

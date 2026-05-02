@@ -459,66 +459,66 @@ export default function Dashboard({
           </div>
 
           {/* Usage Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
             {/* Resume Upload Units */}
-            {hasPlanFeature('resume_upload') && <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-5 h-5 text-gray-800" />
+            {hasPlanFeature('resume_upload') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
                 </div>
               </div>
-              <div className="text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
-              <div className="text-xs text-gray-600 mb-3">Resume Storage</div>
+              <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">Resume Storage</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gray-800 h-2 rounded-full" 
+                  <div
+                    className="bg-gray-800 h-2 rounded-full"
                     style={{ width: `${limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%` }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-10 text-right">
+                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[10px] sm:text-xs text-gray-500">
                 {usage?.resumeUploads?.toLocaleString() || '1,593'} used of {limits?.resumeUploads?.toLocaleString() || '2,450'}
               </div>
             </div>}
 
             {/* Job Posting Units */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                  <Briefcase className="w-5 h-5 text-green-600" />
+            <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                 </div>
               </div>
-              <div className="text-2xl text-gray-900 mb-1">{limits?.jobPostings || '100'}</div>
-              <div className="text-xs text-gray-600 mb-3">Job Postings</div>
+              <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.jobPostings || '100'}</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">Job Postings</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-green-600 h-2 rounded-full" 
+                  <div
+                    className="bg-green-600 h-2 rounded-full"
                     style={{ width: `${limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%` }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-10 text-right">
+                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[10px] sm:text-xs text-gray-500">
                 {usage?.jobPostings || '42'} used of {limits?.jobPostings || '100'}
               </div>
             </div>
 
             {/* Assessment Units */}
-            {hasPlanFeature('assessment') && <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-yellow-600" />
+            {hasPlanFeature('assessment') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
                 </div>
               </div>
-              <div className="text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
-              <div className="text-xs text-gray-600 mb-3">Assessment Units</div>
+              <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">Assessment Units</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -526,26 +526,26 @@ export default function Dashboard({
                     style={{ width: `${limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%` }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-10 text-right">
+                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[10px] sm:text-xs text-gray-500">
                 {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
             </div>}
 
             {/* AI Interview Units */}
-            {hasPlanFeature('ai_interview') && <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                  <Video className="w-5 h-5 text-gray-800" />
+            {hasPlanFeature('ai_interview') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Video className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
                 </div>
               </div>
-              <div className="text-2xl text-gray-900 mb-1">
+              <div className="text-xl sm:text-2xl text-gray-900 mb-1">
                 {limits?.aiInterviews === 'unlimited' ? 'Unlimited' : limits?.aiInterviews || 'Unlimited'}
               </div>
-              <div className="text-xs text-gray-600 mb-3">AI Interviews</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">AI Interviews</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -557,12 +557,12 @@ export default function Dashboard({
                     }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-10 text-right">
+                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.aiInterviews === 'unlimited' ? '∞' :
                     typeof limits?.aiInterviews === 'number' ? `${Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100)}%` : '∞'}
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[10px] sm:text-xs text-gray-500">
                 {limits?.aiInterviews === 'unlimited'
                   ? `${usage?.aiInterviews || '87'} conducted this month`
                   : `${usage?.aiInterviews || '87'} used of ${limits?.aiInterviews || 'Unlimited'}`}

@@ -596,10 +596,10 @@ a:focus:not(:focus-visible) {
   }
 
   /* Reduce page padding on mobile */
-  main > div {
+  /* main > div {
     padding-left: 1rem;
     padding-right: 1rem;
-  }
+  } */
 
   /* Touch-friendly tap targets */
   /* button,

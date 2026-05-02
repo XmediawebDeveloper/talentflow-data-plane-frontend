@@ -423,56 +423,60 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         </div>
       )}
-      {/* Sticky dark header */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
-        <div className="px-5 lg:px-8 py-4 lg:py-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
+      {/* Header (sticky on lg+, scrolls on mobile to avoid covering content) */}
+      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b border-gray-700 lg:sticky lg:top-0 z-20 shadow-md">
+        <div className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-3.5">
+          <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5 flex-wrap">
             <button
               onClick={onBack}
-              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white transition-colors text-sm sm:text-base"
+              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm min-h-[36px] -ml-1.5 px-1.5 rounded"
             >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              Back to AI Interviews
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+              <span className="hidden xs:inline sm:hidden">Back</span>
+              <span className="hidden sm:inline">Back to AI Interviews</span>
+              <span className="xs:hidden sm:hidden">Back</span>
             </button>
             {totalCount != null && totalCount > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={onPrev}
                   disabled={!onPrev || currentIndex === 0}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Previous"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
+                  <ChevronLeft className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:inline">Previous</span>
                 </button>
-                <span className="text-sm text-white/80 font-medium px-1">
+                <span className="text-xs sm:text-sm text-white/80 font-medium px-1 tabular-nums">
                   {(currentIndex ?? 0) + 1} / {totalCount}
                 </span>
                 <button
                   onClick={onNext}
                   disabled={!onNext || currentIndex === totalCount - 1}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Next"
                 >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-4 h-4 flex-shrink-0" />
                 </button>
               </div>
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-            <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
-                <Video className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-start gap-2 sm:gap-2.5 lg:gap-3 min-w-0 flex-1">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center flex-shrink-0">
+                <Video className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 {/* Line 1: AI-002  Title  v1  Status */}
-                <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2 flex-wrap">
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-1.5 flex-wrap">
                   {config.display_id && (
-                    <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-white/90 text-gray-900 rounded text-xs sm:text-sm font-bold">
+                    <span className="px-1.5 sm:px-2 py-0.5 bg-white/90 text-gray-900 rounded text-[10px] sm:text-xs font-bold">
                       {config.display_id}
                     </span>
                   )}
-                  <h1 className="text-sm sm:text-lg lg:text-2xl text-white font-semibold truncate">
+                  <h1 className="text-sm sm:text-base lg:text-lg text-white font-semibold break-words min-w-0 flex-1 sm:flex-initial">
                     {config.jd_title || config.position || 'Untitled'}
                   </h1>
                   {config.jd_version && (
@@ -480,17 +484,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       v{config.jd_version}
                     </span>
                   )}
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-200/30 text-gray-100 border border-gray-300/30">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium bg-gray-200/30 text-gray-100 border border-gray-300/30">
                     {getStatusLabel(config.status)}
                   </span>
                 </div>
 
                 {/* Line 2: Linked to JD */}
                 {config.jd_short_id && (
-                  <div className="text-sm text-gray-100 mb-2">
+                  <div className="text-[11px] sm:text-xs text-gray-100/90 mb-1.5">
                     <span className="font-medium">Linked to: {config.jd_short_id}</span>
                     {config.jd_title && (
-                      <span> - {config.jd_title}</span>
+                      <span> · {config.jd_title}</span>
                     )}
                     {config.jd_version && (
                       <span className="ml-1 text-gray-300">v{config.jd_version}</span>
@@ -499,72 +503,75 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 )}
 
                 {/* Line 3: Stats */}
-                <div className="text-xs sm:text-sm text-gray-100 flex items-center gap-2 sm:gap-3 lg:gap-4 flex-wrap">
+                <div className="text-[11px] sm:text-xs text-gray-100 flex items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-wrap">
                   {config.jd_experience_level && <span>{config.jd_experience_level}</span>}
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
+                    <Clock className="w-3 h-3" />
                     {formattedDuration}
                   </span>
-                  <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border ${
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-medium rounded-full border ${
                     interviewMode === 'flexible'
                       ? 'bg-blue-400/20 text-blue-100 border-blue-300/30'
                       : 'bg-orange-400/20 text-orange-100 border-orange-300/30'
                   }`}>
                     {interviewMode === 'flexible' ? (
-                      <><Zap className="w-3 h-3" /> Flexible</>
+                      <><Zap className="w-2.5 h-2.5" /> Flexible</>
                     ) : (
-                      <><Timer className="w-3 h-3" /> Fixed</>
+                      <><Timer className="w-2.5 h-2.5" /> Fixed</>
                     )}
                   </span>
                   {enabledRounds.length > 0 && (
-                    <span className="flex items-center gap-1.5 flex-wrap">
-                      <Layers className="w-3.5 h-3.5 shrink-0" />
+                    <span className="flex items-center gap-1 flex-wrap">
+                      <Layers className="w-3 h-3 shrink-0" />
                       {enabledRounds.map((r, i) => (
-                        <span key={i} className="px-2 py-0.5 text-xs bg-white/10 text-white rounded-full border border-white/20">
+                        <span key={i} className="px-1.5 py-0.5 text-[10px] sm:text-[11px] bg-white/10 text-white rounded-full border border-white/20">
                           {ROUND_LABELS[r.type] || r.type}
                         </span>
                       ))}
                     </span>
                   )}
                   <span className="flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" />
+                    <Users className="w-3 h-3" />
                     {invitationStats.total} invite{invitationStats.total !== 1 ? 's' : ''}
                   </span>
                   {config.created_at && (
-                    <span>Created {formatIST(config.created_at)}</span>
+                    <span className="hidden sm:inline">Created {formatIST(config.created_at)}</span>
                   )}
                   {config.updated_at && (
-                    <span>Last Updated {formatIST(config.updated_at)}</span>
+                    <span className="hidden md:inline">Updated {formatIST(config.updated_at)}</span>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 self-start sm:self-auto flex-wrap">
               {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                 <button
                   onClick={() => {
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
                     router.push(url);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 text-sm bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors font-medium"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 min-h-[40px] text-xs sm:text-sm bg-white text-gray-900 hover:bg-gray-50 rounded-lg transition-colors font-medium"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Continue Editing
+                  <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="hidden sm:inline">Continue Editing</span>
+                  <span className="sm:hidden">Edit</span>
                 </button>
               )}
               <button
                 onClick={handleExportCSV}
                 title="Export clusters & HR questions to CSV"
-                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                aria-label="Export to CSV"
+                className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors"
               >
                 <Download className="w-4 h-4" />
               </button>
               {onRefresh && (
                 <button
                   onClick={onRefresh}
-                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                  aria-label="Refresh"
+                  className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -574,42 +581,31 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
         </div>
       </div>
 
-      {/* Sticky tab bar */}
-      <div className="bg-white border-b border-gray-200 sticky top-[148px] z-10">
-        <div className="px-5 lg:px-8">
-          <div className="flex gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`py-3 sm:py-4 text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'overview' ? 'border-gray-800 text-gray-800 font-medium' : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Interview Details
-            </button>
-            <button
-              onClick={() => setActiveTab('activity')}
-              className={`py-3 sm:py-4 text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'activity' ? 'border-gray-800 text-gray-800 font-medium' : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Recent Activity
-            </button>
-            <button
-              onClick={() => setActiveTab('versions')}
-              className={`py-3 sm:py-4 text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'versions' ? 'border-gray-800 text-gray-800 font-medium' : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Version History
-            </button>
-            <button
-              onClick={() => setActiveTab('info')}
-              className={`py-3 sm:py-4 text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'info' ? 'border-gray-800 text-gray-800 font-medium' : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              AI Interview Info
-            </button>
+      {/* Tab bar (scrolls with content; horizontally scrollable on small screens) */}
+      <div className="bg-white border-b border-gray-200 z-10">
+        <div className="px-3 sm:px-5 lg:px-8">
+          <div className="flex gap-1 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide -mb-px">
+            {([
+              { key: 'overview', label: 'Interview Details' },
+              { key: 'activity', label: 'Recent Activity' },
+              { key: 'versions', label: 'Version History' },
+              { key: 'info', label: 'AI Interview Info' },
+            ] as const).map((t) => {
+              const isActive = activeTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  className={`py-3 sm:py-4 px-2 sm:px-0 min-h-[44px] text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-gray-900 text-gray-900 font-semibold'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 font-medium'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
