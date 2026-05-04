@@ -102,29 +102,29 @@ function DroppableFolderCard({
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`bg-white border rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${
+      className={`bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
         isDropTarget
-          ? 'border-blue-500 border-2 border-dashed bg-blue-50'
+          ? 'border-brand-blue border-2 border-dashed bg-brand-blue/5'
           : isArchived
-            ? 'border-amber-200 hover:border-amber-400'
+            ? 'border-brand-orange/20 hover:border-brand-orange/40'
             : isRoot
               ? 'border-green-200 hover:border-green-400'
-              : 'border-gray-200 hover:border-blue-300'
+              : 'border-gray-100 hover:border-brand-blue/30 hover:-translate-y-0.5 duration-150'
       }`}
       onClick={() => onNavigate(folder.id)}
     >
       <div className="flex items-center gap-3 p-4">
-        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ring-1 ${
           isArchived
-            ? 'bg-amber-100'
+            ? 'bg-brand-orange/10 ring-brand-orange/15'
             : isRoot
-              ? 'bg-green-100'
-              : 'bg-blue-100'
+              ? 'bg-green-100 ring-green-200/60'
+              : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-brand-blue/15'
         }`}>
           {isArchived ? (
-            <Archive className="w-6 h-6 text-amber-600" />
+            <Archive className="w-6 h-6 text-brand-orange-deep" />
           ) : (
-            <Folder className={`w-6 h-6 ${isRoot ? 'text-green-600' : 'text-blue-600'}`} />
+            <Folder className={`w-6 h-6 ${isRoot ? 'text-green-600' : 'text-brand-blue'}`} />
           )}
         </div>
         <div className="flex-1">
@@ -176,9 +176,9 @@ function DraggableCardResumeRow({
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center min-w-[1200px] ${
+      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-brand-blue/[0.03] cursor-pointer group transition-colors items-center min-w-[1200px] ${
         !isLast ? 'border-b border-gray-100' : ''
-      } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''} ${isDragging ? 'opacity-50' : ''}`}
+      } ${selectedResumes.includes(resume.id) ? 'bg-brand-blue/5' : ''} ${isDragging ? 'opacity-50' : ''}`}
       onClick={() => onViewDetails(resume)}
     >
       {/* Drag Handle */}
@@ -199,12 +199,12 @@ function DraggableCardResumeRow({
             onSelect(resume.id);
           }}
           onClick={(e) => e.stopPropagation()}
-          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+          className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
         />
       </div>
       {/* Candidate Name */}
       <div className="flex items-center min-w-0">
-        <span className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm truncate cursor-pointer">{resume.name}</span>
+        <span className="font-medium text-brand-blue hover:text-brand-blue-2 hover:underline text-sm truncate cursor-pointer">{resume.name}</span>
       </div>
       {/* Email */}
       <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
@@ -217,7 +217,7 @@ function DraggableCardResumeRow({
             {resume.skills.slice(0, 3).map((skill, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-[90px]"
+                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-blue/10 text-brand-blue border border-brand-blue/20 truncate max-w-[90px]"
                 title={skill}
               >
                 {skill}
@@ -242,7 +242,7 @@ function DraggableCardResumeRow({
       <div>
         <span className={`px-2 py-1 rounded text-xs font-medium ${
           resume.source === 'TalentFlow'
-            ? 'bg-purple-100 text-purple-700'
+            ? 'bg-brand-blue-2/10 text-brand-blue-2 border border-brand-blue-2/20'
             : 'bg-gray-100 text-gray-700'
         }`}>
           {resume.source || 'Manual'}
@@ -266,7 +266,7 @@ function DraggableCardResumeRow({
             e.stopPropagation();
             onQuickView(resume);
           }}
-          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+          className="p-1.5 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded"
           title="Quick View"
         >
           <Eye className="w-4 h-4" />
@@ -2279,8 +2279,8 @@ export default function MyResumesPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading resumes...</span>
       </div>
     );
@@ -2289,30 +2289,35 @@ export default function MyResumesPage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-4 sm:p-6 md:p-8 bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 md:p-8 bg-slate-50">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <div className="w-full sm:w-auto">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">My Resume Database</h1>
-            <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-blue-100 text-blue-700">
-              {totalItems} Resumes
-            </span>
+        <div className="w-full sm:w-auto flex items-start gap-3">
+          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+            <FileText className="h-5 w-5 text-brand-blue" />
           </div>
-          <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">My Resume Database</h1>
+              <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                {totalItems} Resumes
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
+          </div>
         </div>
         <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
           {canViewMyResumes && (
             <button
               onClick={openUploadHistoryModal}
-              className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
+              className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
             >
               <History className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Upload History</span>
               <span className="sm:hidden">History</span>
               {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-5 w-5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 text-white text-xs items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan/60 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-5 w-5 bg-brand-cyan text-white text-xs items-center justify-center">
                     {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
                   </span>
                 </span>
@@ -2322,7 +2327,7 @@ export default function MyResumesPage() {
           {canUploadMyResumes && (
             <button
               onClick={() => setIsUploadModalOpen(true)}
-              className="flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial bg-gray-800 text-white hover:bg-gray-900 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-all text-xs sm:text-sm flex-1 sm:flex-initial bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Upload Resume</span>
@@ -2332,7 +2337,7 @@ export default function MyResumesPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
         {selectedResumes.length > 0 && (
           <BulkActionsBar
@@ -2363,28 +2368,30 @@ export default function MyResumesPage() {
           {/* View Toggle */}
           <div className="flex items-center justify-center gap-1 px-3 sm:px-4 py-2 sm:py-3">
             <span className="text-xs text-gray-500 mr-1 sm:mr-2">View:</span>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-gray-800 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="List View"
-            >
-              <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('card')}
-              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
-                viewMode === 'card'
-                  ? 'bg-gray-800 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="Card View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
+            <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 sm:p-2 rounded transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                    : 'text-gray-600 hover:text-brand-blue'
+                }`}
+                title="List View"
+              >
+                <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('card')}
+                className={`p-1.5 sm:p-2 rounded transition-all ${
+                  viewMode === 'card'
+                    ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                    : 'text-gray-600 hover:text-brand-blue'
+                }`}
+                title="Card View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2396,7 +2403,7 @@ export default function MyResumesPage() {
               <span className="text-sm text-gray-700">
                 Found <span className="font-semibold">{totalItems}</span> matching resume{totalItems !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
-                  <span> for "<span className="font-medium text-blue-600">{appliedSearchQuery}</span>"</span>
+                  <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
                 )}
               </span>
             </div>
@@ -2441,7 +2448,7 @@ export default function MyResumesPage() {
                 <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
                   <button
                     onClick={() => setSelectedFolder('all')}
-                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    className="flex items-center gap-1 text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
                   >
                     <LayoutGrid className="w-4 h-4" />
                     <span>All Resumes</span>
@@ -2454,7 +2461,7 @@ export default function MyResumesPage() {
                       ) : (
                         <button
                           onClick={() => setSelectedFolder(item.id)}
-                          className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                          className="text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
                         >
                           {item.name}
                         </button>
@@ -2468,7 +2475,7 @@ export default function MyResumesPage() {
               <div className="relative">
                 {isPaginating && (
                   <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                   </div>
                 )}
                 <ResumeTable
@@ -2567,7 +2574,7 @@ export default function MyResumesPage() {
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-4 sm:mb-6 text-xs sm:text-sm">
                       <button
                         onClick={() => navigateToFolder(null)}
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                        className="flex items-center gap-1 text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
                       >
                         <LayoutGrid className="w-4 h-4" />
                         <span>All Folders</span>
@@ -2580,7 +2587,7 @@ export default function MyResumesPage() {
                           ) : (
                             <button
                               onClick={() => navigateToFolder(item.id)}
-                              className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                              className="text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
                             >
                               {item.name}
                             </button>
@@ -2605,20 +2612,20 @@ export default function MyResumesPage() {
                   {/* Current Folder Header (when inside a folder) */}
                   {cardViewFolder !== null && cardViewFolder !== 'uncategorized' && cardViewFolder !== 'all' && currentFolderData && (
                     <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
                         currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
-                          ? 'bg-amber-100'
+                          ? 'bg-brand-orange/10 ring-brand-orange/15'
                           : currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
-                            ? 'bg-green-100'
-                            : 'bg-blue-100'
+                            ? 'bg-green-100 ring-green-200/60'
+                            : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-brand-blue/15'
                       }`}>
                         {currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId ? (
-                          <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
+                          <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
                         ) : (
                           <FolderOpen className={`w-5 h-5 sm:w-6 sm:h-6 ${
                             currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                               ? 'text-green-600'
-                              : 'text-blue-600'
+                              : 'text-brand-blue'
                           }`} />
                         )}
                       </div>
@@ -2641,8 +2648,8 @@ export default function MyResumesPage() {
                   {/* All Resumes Header */}
                   {cardViewFolder === 'all' && (
                     <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
                         <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
@@ -2674,15 +2681,15 @@ export default function MyResumesPage() {
                         {/* All Resumes card at root level */}
                         {cardViewFolder === null && (
                           <div
-                            className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-400 transition-all"
+                            className="bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
                             onClick={() => {
                               setCardViewFolder('all');
                               setBreadcrumbPath([]);
                             }}
                           >
                             <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">All Resumes</h3>
@@ -2717,7 +2724,7 @@ export default function MyResumesPage() {
                         {/* Uncategorized card at root level */}
                         {cardViewFolder === null && unfolderedResumes.length > 0 && (
                           <div
-                            className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-400 transition-all"
+                            className="bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all duration-150"
                             onClick={() => {
                               setCardViewFolder('uncategorized');
                               setBreadcrumbPath([]);
@@ -2742,8 +2749,10 @@ export default function MyResumesPage() {
                   {/* Empty state for root level */}
                   {cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
                     <div className="text-center py-12">
-                      <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No folders found</h3>
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                        <Folder className="w-8 h-8 text-brand-blue" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No folders found</h3>
                       <p className="text-gray-500">Create folders to organize your resumes</p>
                     </div>
                   )}
@@ -2757,7 +2766,7 @@ export default function MyResumesPage() {
                             <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
                           )}
                           {/* Resumes Table - Desktop */}
-                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl overflow-hidden">
                         {/* Desktop Table View */}
                         <div className="hidden md:block overflow-x-auto">
                         {/* Table Header */}
@@ -2774,7 +2783,7 @@ export default function MyResumesPage() {
                                   setSelectedResumes(prev => prev.filter(id => !folderResumes.find(r => r.id === id)));
                                 }
                               }}
-                              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                              className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
                             />
                           </div>
                           <div>Candidate Name</div>
@@ -2812,8 +2821,8 @@ export default function MyResumesPage() {
                           {folderResumes.map((resume) => (
                             <div
                               key={resume.id}
-                              className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
-                                selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                              className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 transition-all ${
+                                selectedResumes.includes(resume.id) ? 'border-brand-blue/50 bg-brand-blue/5 ring-1 ring-brand-blue/30' : 'border-gray-200'
                               }`}
                               onClick={() => {
                                 sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
@@ -2830,7 +2839,7 @@ export default function MyResumesPage() {
                                     handleSelectResume(resume.id);
                                   }}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600 mt-1"
+                                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 mt-1"
                                 />
                                 <div className="flex-1 min-w-0">
                                   <div className="font-medium text-gray-900 truncate">{resume.name}</div>
@@ -2847,7 +2856,7 @@ export default function MyResumesPage() {
                                 {resume.skills && resume.skills.length > 0 && (
                                   <div className="flex flex-wrap gap-1">
                                     {resume.skills.slice(0, 3).map((skill, i) => (
-                                      <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs border border-blue-200">{skill}</span>
+                                      <span key={i} className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs border border-brand-blue/20">{skill}</span>
                                     ))}
                                     {resume.skills.length > 3 && (
                                       <span className="px-2 py-0.5 text-gray-500 text-xs">+{resume.skills.length - 3}</span>
@@ -2858,7 +2867,7 @@ export default function MyResumesPage() {
                               <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setQuickViewResume(resume); }}
-                                  className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1"
+                                  className="flex-1 px-3 py-2 text-sm text-gray-700 bg-brand-blue/5 hover:bg-brand-blue/10 hover:text-brand-blue ring-1 ring-brand-blue/10 rounded-lg flex items-center justify-center gap-1 transition-colors"
                                 >
                                   <Eye className="w-4 h-4" />
                                   View
@@ -2881,9 +2890,11 @@ export default function MyResumesPage() {
 
                       {/* Empty state when no resumes and no subfolders */}
                       {folderResumes.length === 0 && foldersToDisplay.length === 0 && (
-                        <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
-                          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
+                        <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                            <FileText className="w-8 h-8 text-brand-blue" />
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No resumes in this folder</h3>
                           <p className="text-gray-500">Upload resumes to this folder to get started</p>
                         </div>
                       )}
@@ -2960,8 +2971,8 @@ export default function MyResumesPage() {
       {/* Loading overlay for version fetch */}
       {isLoadingVersions && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 flex items-center gap-3">
-            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+          <div className="bg-white rounded-lg p-6 flex items-center gap-3 shadow-2xl shadow-brand-blue/10">
+            <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
             <span className="text-gray-700">Loading versions...</span>
           </div>
         </div>
@@ -3103,11 +3114,11 @@ export default function MyResumesPage() {
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-center gap-4 p-6 border-b border-gray-200">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Archive className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                  <Archive className="w-6 h-6 text-brand-blue" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Download as ZIP</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Download as ZIP</h3>
                   <p className="text-sm text-gray-500">Multiple files selected</p>
                 </div>
               </div>
@@ -3134,7 +3145,7 @@ export default function MyResumesPage() {
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
-                  className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDownloadingZip ? (
                     <>
@@ -3162,17 +3173,17 @@ export default function MyResumesPage() {
             setIsUploadHistoryMinimized(false);
             setIsUploadHistoryModalOpen(true);
           }}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-blue-600 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
         >
           <div className="relative">
             <History className="w-5 h-5" />
             {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-brand-orange rounded-full animate-pulse" />
             )}
           </div>
           <div>
             <p className="text-sm font-medium">Upload History</p>
-            <p className="text-xs text-blue-200">
+            <p className="text-xs text-blue-100">
               {(() => {
                 const processing = uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length;
                 return processing > 0 ? `${processing} processing...` : 'Click to expand';
@@ -3197,10 +3208,10 @@ export default function MyResumesPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
+              <div className="bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <h2 className="text-base sm:text-xl font-semibold text-gray-900">Upload History</h2>
+                    <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">Upload History</h2>
                     <p className="text-xs sm:text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -3226,7 +3237,7 @@ export default function MyResumesPage() {
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-gray-50">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-slate-50">
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
                   const isActive = (r: any) => r.status === 'processing' || r.pending > 0;
@@ -3248,20 +3259,20 @@ export default function MyResumesPage() {
                   return (
                     <>
                       {/* Tabs */}
-                      <div className="inline-flex items-center bg-white border border-gray-200 rounded-lg p-1 mb-4 sm:mb-6 shadow-sm">
+                      <div className="inline-flex items-center bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-1 mb-4 sm:mb-6 shadow-sm shadow-brand-blue/5">
                         <button
                           onClick={() => setUploadHistoryTab('current')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                             uploadHistoryTab === 'current'
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-gray-600 hover:bg-gray-50'
+                              ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                              : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                           }`}
                         >
-                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-blue-500 animate-spin' : ''}`} />
+                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-brand-blue animate-spin' : ''}`} />
                           Currently Processing
                           {activeRecords.length > 0 && (
                             <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
-                              uploadHistoryTab === 'current' ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'
+                              uploadHistoryTab === 'current' ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
                             }`}>
                               {activeRecords.length}
                             </span>
@@ -3269,17 +3280,17 @@ export default function MyResumesPage() {
                         </button>
                         <button
                           onClick={() => setUploadHistoryTab('completed')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                             uploadHistoryTab === 'completed'
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-gray-600 hover:bg-gray-50'
+                              ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                              : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                           }`}
                         >
                           <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Completed
                           {completedRecords.length > 0 && (
                             <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
-                              uploadHistoryTab === 'completed' ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-700'
+                              uploadHistoryTab === 'completed' ? 'bg-white text-brand-blue' : 'bg-gray-100 text-gray-700'
                             }`}>
                               {completedRecords.length}
                             </span>
@@ -3325,17 +3336,17 @@ export default function MyResumesPage() {
                         {/* Versioned */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'versioned' ? null : 'versioned')}
-                          className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'versioned' ? 'border-purple-500 ring-2 ring-purple-300 shadow-md' : 'border-purple-200'
+                          className={`bg-gradient-to-br from-brand-blue-2/[0.07] to-brand-blue-2/[0.03] border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'versioned' ? 'border-brand-blue-2/50 ring-2 ring-brand-blue-2/30 shadow-md' : 'border-brand-blue-2/20'
                           }`}
                         >
                           <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0">
                               <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
                             <span className="text-[10px] sm:text-xs text-gray-700 truncate">Versioned</span>
                           </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-purple-700">{versionedCount}</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-blue-2 tracking-tight">{versionedCount}</div>
                         </div>
 
                         {/* Failed */}
@@ -3371,14 +3382,14 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Success Rate */}
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                        <div className="bg-gradient-to-br from-brand-cyan/[0.08] to-brand-cyan/[0.03] border border-brand-cyan/20 rounded-xl p-2.5 sm:p-3 lg:p-4">
                           <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                               <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
                             <span className="text-[10px] sm:text-xs text-gray-700 truncate">Success Rate</span>
                           </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-700">{successRate}%</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                         </div>
                       </div>
 
@@ -3388,8 +3399,8 @@ export default function MyResumesPage() {
                           <span className="text-xs text-gray-500">Filtering by:</span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                             uploadHistoryFilter === 'completed' ? 'bg-green-100 text-green-700' :
-                            uploadHistoryFilter === 'duplicated' ? 'bg-yellow-100 text-yellow-700' :
-                            uploadHistoryFilter === 'versioned' ? 'bg-purple-100 text-purple-700' :
+                            uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
+                            uploadHistoryFilter === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
                             uploadHistoryFilter === 'error' ? 'bg-red-100 text-red-700' :
                             'bg-gray-100 text-gray-700'
                           }`}>
@@ -3420,9 +3431,9 @@ export default function MyResumesPage() {
                         const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
                         if (totalProcessed <= 0) {
                           return (
-                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-50 border border-blue-200 rounded-xl animate-pulse">
-                              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 animate-spin flex-shrink-0" />
-                              <span className="text-xs sm:text-sm text-blue-700">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
+                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/10 border border-brand-blue/20 rounded-xl animate-pulse">
+                              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue animate-spin flex-shrink-0" />
+                              <span className="text-xs sm:text-sm text-brand-blue">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
                             </div>
                           );
                         }
@@ -3438,12 +3449,12 @@ export default function MyResumesPage() {
                           ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                           : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
                         return (
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/10 border border-brand-blue/20 rounded-xl">
                             <div className="flex items-center gap-2">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
-                              <span className="text-xs sm:text-sm font-medium text-blue-700">{etaText}</span>
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
+                              <span className="text-xs sm:text-sm font-medium text-brand-blue">{etaText}</span>
                             </div>
-                            <span className="text-[10px] sm:text-xs text-blue-400 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
+                            <span className="text-[10px] sm:text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
                           </div>
                         );
                       })()}
@@ -3458,13 +3469,13 @@ export default function MyResumesPage() {
 
                       {displayRecords.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center py-8 sm:py-12">
-                          <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-3 sm:mb-4 ${
-                            uploadHistoryTab === 'current' ? 'bg-green-100' : 'bg-blue-100'
+                          <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-3 sm:mb-4 ring-1 ${
+                            uploadHistoryTab === 'current' ? 'bg-green-100 ring-green-200/60' : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-brand-blue/15'
                           }`}>
                             {uploadHistoryTab === 'current' ? (
                               <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
                             ) : (
-                              <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
+                              <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
                             )}
                           </div>
                           <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">
@@ -3496,13 +3507,13 @@ export default function MyResumesPage() {
                               return (
                                 <div
                                   key={record.id}
-                                  className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4 lg:p-5 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer"
+                                  className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-4 lg:p-5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer"
                                 >
                                   {/* Header Row */}
                                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-3">
                                     <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                                       </div>
                                       <div className="min-w-0">
                                         <span className="font-medium text-gray-900 text-xs sm:text-sm block truncate">{record.fileName}</span>
@@ -3540,7 +3551,7 @@ export default function MyResumesPage() {
                                     </div>
                                     <div className="flex items-center gap-2 sm:gap-3 ml-10 sm:ml-0">
                                       {isUploading && (
-                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-700 text-[10px] sm:text-xs rounded-full border border-blue-200 animate-pulse">
+                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue text-[10px] sm:text-xs rounded-full border border-brand-blue/20 animate-pulse">
                                           <Loader2 className="w-3 h-3 animate-spin" />
                                           Uploading...
                                         </span>
@@ -3554,10 +3565,10 @@ export default function MyResumesPage() {
                                       )}
                                       {!isUploading && (
                                         <div className="text-right">
-                                          <div className={`text-base sm:text-xl font-bold ${
+                                          <div className={`text-base sm:text-xl font-bold tracking-tight ${
                                             percentage === 100 ? 'text-green-600' :
-                                            percentage >= 90 ? 'text-blue-600' :
-                                            percentage >= 70 ? 'text-yellow-600' :
+                                            percentage >= 90 ? 'text-brand-blue' :
+                                            percentage >= 70 ? 'text-brand-orange-deep' :
                                             'text-red-600'
                                           }`}>
                                             {percentage}%
@@ -3579,16 +3590,16 @@ export default function MyResumesPage() {
                                       <div className="text-xs sm:text-sm font-semibold text-yellow-700">{record.duplicated}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Duplicates</div>
                                     </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-purple-50 rounded-lg border border-purple-100">
-                                      <div className="text-xs sm:text-sm font-semibold text-purple-700">{record.versioned || 0}</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-brand-blue-2/[0.07] rounded-lg border border-brand-blue-2/20">
+                                      <div className="text-xs sm:text-sm font-semibold text-brand-blue-2">{record.versioned || 0}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Version</div>
                                     </div>
                                     <div className="text-center p-1.5 sm:p-2 bg-red-50 rounded-lg border border-red-100">
                                       <div className="text-xs sm:text-sm font-semibold text-red-700">{record.errors}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Failed</div>
                                     </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-lg border border-blue-100">
-                                      <div className="text-xs sm:text-sm font-semibold text-blue-700">{record.pending}</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-brand-cyan/[0.08] rounded-lg border border-brand-cyan/20">
+                                      <div className="text-xs sm:text-sm font-semibold text-brand-cyan">{record.pending}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Pending</div>
                                     </div>
                                   </div>
@@ -3603,8 +3614,8 @@ export default function MyResumesPage() {
                                       <div
                                         className={`h-full transition-all ${
                                           percentage === 100 ? 'bg-green-500' :
-                                          percentage >= 90 ? 'bg-blue-500' :
-                                          percentage >= 70 ? 'bg-yellow-500' :
+                                          percentage >= 90 ? 'bg-brand-blue' :
+                                          percentage >= 70 ? 'bg-brand-orange' :
                                           'bg-red-500'
                                         }`}
                                         style={{ width: `${Math.min((processed / record.totalFiles) * 100, 100)}%` }}
@@ -3656,7 +3667,7 @@ export default function MyResumesPage() {
                                           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                                             retryingBatches.has(record.id)
                                               ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                              : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                              : 'bg-brand-blue/10 text-brand-blue border-brand-blue/20 hover:bg-brand-blue/15'
                                           }`}
                                         >
                                           <RefreshCw className={`w-3 h-3 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
@@ -3724,13 +3735,13 @@ export default function MyResumesPage() {
                                                   }
                                                   setSelectedVersionedItems(newSelected);
                                                 }}
-                                                className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors"
+                                                className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-brand-blue-2 bg-brand-blue-2/10 border border-brand-blue-2/20 rounded-md hover:bg-brand-blue-2/15 transition-colors"
                                               >
                                                 <input
                                                   type="checkbox"
                                                   checked={allSelected}
                                                   readOnly
-                                                  className="w-3 h-3 rounded border-purple-400 text-purple-600 pointer-events-none"
+                                                  className="w-3 h-3 rounded border-brand-blue-2/40 text-brand-blue-2 pointer-events-none"
                                                 />
                                                 Select All
                                               </button>
@@ -3788,11 +3799,11 @@ export default function MyResumesPage() {
                                               }
                                             }}
                                             className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-lg border transition-all ${
-                                              isVersioned && isSelected ? 'bg-purple-100 border-purple-400 ring-1 ring-purple-300' :
+                                              isVersioned && isSelected ? 'bg-brand-blue-2/15 border-brand-blue-2/40 ring-1 ring-brand-blue-2/30' :
                                               file.status === 'completed' ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' :
-                                              file.status === 'versioned' ? 'bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300' :
-                                              file.status === 'processing' ? 'bg-blue-50 border-blue-200' :
-                                              file.status === 'duplicate' ? 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100 hover:border-yellow-300' :
+                                              file.status === 'versioned' ? 'bg-brand-blue-2/[0.07] border-brand-blue-2/20 hover:bg-brand-blue-2/[0.12] hover:border-brand-blue-2/30' :
+                                              file.status === 'processing' ? 'bg-brand-blue/5 border-brand-blue/20' :
+                                              file.status === 'duplicate' ? 'bg-brand-orange/[0.07] border-brand-orange/20 hover:bg-brand-orange/10 hover:border-brand-orange/30' :
                                               file.status === 'error' ? 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300' :
                                               'bg-gray-50 border-gray-200'
                                             } ${isClickable ? 'cursor-pointer' : ''}`}
@@ -3818,15 +3829,15 @@ export default function MyResumesPage() {
                                                   }
                                                   setSelectedVersionedItems(newSelected);
                                                 }}
-                                                className="w-4 h-4 rounded border-purple-400 text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0"
+                                                className="w-4 h-4 rounded border-brand-blue-2/40 text-brand-blue-2 focus:ring-brand-blue-2/40 cursor-pointer flex-shrink-0"
                                               />
                                             )}
                                             {/* Status Icon */}
                                             <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                                               file.status === 'completed' ? 'bg-green-500' :
-                                              file.status === 'versioned' ? 'bg-purple-500' :
-                                              file.status === 'processing' ? 'bg-blue-500' :
-                                              file.status === 'duplicate' ? 'bg-yellow-500' :
+                                              file.status === 'versioned' ? 'bg-brand-blue-2' :
+                                              file.status === 'processing' ? 'bg-brand-blue' :
+                                              file.status === 'duplicate' ? 'bg-brand-orange' :
                                               file.status === 'error' ? 'bg-red-500' :
                                               'bg-gray-400'
                                             }`}>
@@ -3852,9 +3863,9 @@ export default function MyResumesPage() {
                                             {/* Status Badge */}
                                             <span className={`hidden sm:inline px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 ${
                                               file.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                              file.status === 'versioned' ? 'bg-purple-100 text-purple-700' :
-                                              file.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                                              file.status === 'duplicate' ? 'bg-yellow-100 text-yellow-700' :
+                                              file.status === 'versioned' ? 'bg-brand-blue-2/15 text-brand-blue-2' :
+                                              file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
+                                              file.status === 'duplicate' ? 'bg-brand-orange/15 text-brand-orange-deep' :
                                               file.status === 'error' ? 'bg-red-100 text-red-700' :
                                               'bg-gray-100 text-gray-600'
                                             }`}>
@@ -3871,7 +3882,7 @@ export default function MyResumesPage() {
                                                 <button
                                                   disabled={retryingItems.has(file.id)}
                                                   onClick={(e) => handleRetryItem(record.id, file.id, e)}
-                                                  className={`p-1 rounded text-[10px] font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+                                                  className={`p-1 rounded text-[10px] font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-blue hover:bg-brand-blue/10'}`}
                                                   title="Retry this file"
                                                 >
                                                   <RefreshCw className={`w-3 h-3 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
@@ -3917,16 +3928,16 @@ export default function MyResumesPage() {
 
               {/* Floating Resolve Selected Bar */}
               {selectedVersionedItems.size > 0 && (
-                <div className="border-t border-purple-200 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-50 to-violet-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
+                <div className="border-t border-brand-blue-2/20 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue-2/[0.07] to-brand-blue/[0.04] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10">
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <span className="text-xs sm:text-sm font-semibold text-purple-900">
+                      <span className="text-xs sm:text-sm font-semibold text-brand-blue-2">
                         {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
                       </span>
-                      <p className="text-[10px] sm:text-xs text-purple-600">Choose how to resolve these version conflicts</p>
+                      <p className="text-[10px] sm:text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3938,7 +3949,7 @@ export default function MyResumesPage() {
                     </button>
                     <button
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 sm:gap-2"
+                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-brand-blue-2 to-brand-blue hover:from-brand-blue hover:to-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
                     >
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Resolve ({selectedVersionedItems.size})
@@ -3951,7 +3962,7 @@ export default function MyResumesPage() {
               <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-b-2xl">
                 <button
                   onClick={handleCloseUploadHistory}
-                  className="w-full px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm text-sm sm:text-base"
+                  className="w-full px-4 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base"
                 >
                   Close
                 </button>
@@ -3999,12 +4010,12 @@ export default function MyResumesPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex items-center gap-4 p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center">
+              <div className="flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
+                <div className="w-12 h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                   <ClipboardCheck className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">Invite to Assessment</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Invite to Assessment</h3>
                   <p className="text-sm text-gray-500">
                     {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
                   </p>
@@ -4066,7 +4077,7 @@ export default function MyResumesPage() {
                             setSelectedAssessments(filteredAssessments);
                           }
                         }}
-                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
                       >
                         {selectedAssessments.length === activeAssessments.filter(assessment => {
                           if (!assessmentSearchQuery.trim()) return true;
@@ -4091,7 +4102,7 @@ export default function MyResumesPage() {
                         value={assessmentSearchQuery}
                         onChange={(e) => setAssessmentSearchQuery(e.target.value)}
                         placeholder="Search by Assessment ID, Name, JD ID, or JD Name..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                       />
                     </div>
                   </div>
@@ -4129,8 +4140,8 @@ export default function MyResumesPage() {
                               onClick={() => toggleAssessmentSelection(assessment)}
                               className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                                 isSelected
-                                  ? 'border-blue-500 bg-blue-50'
-                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                                  : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5'
                               }`}
                             >
                               <div className="flex items-start gap-3">
@@ -4138,7 +4149,7 @@ export default function MyResumesPage() {
                                 <div className="flex-shrink-0 mt-1">
                                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                     isSelected
-                                      ? 'bg-blue-500 border-blue-500'
+                                      ? 'bg-brand-blue border-brand-blue'
                                       : 'bg-white border-gray-300'
                                   }`}>
                                     {isSelected && (
@@ -4151,7 +4162,7 @@ export default function MyResumesPage() {
                                   {/* Assessment ID and Title */}
                                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                     {assessment.short_id && (
-                                      <span className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded font-semibold">
+                                      <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                                         {assessment.short_id}
                                       </span>
                                     )}
@@ -4256,7 +4267,7 @@ export default function MyResumesPage() {
                       setIsShareAssessmentModalOpen(true);
                     }}
                     disabled={selectedAssessments.length === 0}
-                    className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Mail className="w-4 h-4" />
                     Proceed to Send Invitations
@@ -4463,8 +4474,8 @@ export default function MyResumesPage() {
                                     <label
                                       className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                                         deleteFolderConfirm.contentAction === 'move-parent'
-                                          ? 'border-blue-500 bg-blue-50'
-                                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                                          ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                                          : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5 bg-white'
                                       }`}
                                     >
                                       <input
@@ -4473,7 +4484,7 @@ export default function MyResumesPage() {
                                         value="move-parent"
                                         checked={deleteFolderConfirm.contentAction === 'move-parent'}
                                         onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
-                                        className="w-4 h-4 text-blue-600"
+                                        className="w-4 h-4 text-brand-blue"
                                       />
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
@@ -4493,8 +4504,8 @@ export default function MyResumesPage() {
                                       <label
                                         className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                                           deleteFolderConfirm.contentAction === 'move-root'
-                                            ? 'border-blue-500 bg-blue-50'
-                                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                                            ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                                            : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5 bg-white'
                                         }`}
                                       >
                                         <input
@@ -4503,7 +4514,7 @@ export default function MyResumesPage() {
                                           value="move-root"
                                           checked={deleteFolderConfirm.contentAction === 'move-root'}
                                           onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
-                                          className="w-4 h-4 text-blue-600"
+                                          className="w-4 h-4 text-brand-blue"
                                         />
                                         <div className="flex-1">
                                           <div className="flex items-center gap-2">

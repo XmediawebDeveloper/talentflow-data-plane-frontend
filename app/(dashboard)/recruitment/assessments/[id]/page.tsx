@@ -135,19 +135,19 @@ export default function AssessmentDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="flex items-center justify-center h-64 bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
       </div>
     );
   }
 
   if (error || !assessment) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+      <div className="flex flex-col items-center justify-center h-64 space-y-4 bg-slate-50">
         <div className="text-red-500 text-lg">{error || 'Assessment not found'}</div>
         <button
           onClick={handleBack}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+          className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
         >
           Back to Assessments
         </button>

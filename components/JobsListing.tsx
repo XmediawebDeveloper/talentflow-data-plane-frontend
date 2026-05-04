@@ -386,17 +386,17 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         };
       case 'Republished':
         return {
-          bg: 'bg-blue-50',
-          text: 'text-blue-700',
-          border: 'border-blue-200',
-          dot: 'bg-blue-500'
+          bg: 'bg-brand-blue/10',
+          text: 'text-brand-blue',
+          border: 'border-brand-blue/20',
+          dot: 'bg-brand-blue'
         };
       case 'Draft':
         return {
-          bg: 'bg-yellow-50',
-          text: 'text-yellow-700',
-          border: 'border-yellow-200',
-          dot: 'bg-yellow-500'
+          bg: 'bg-brand-orange/10',
+          text: 'text-brand-orange-deep',
+          border: 'border-brand-orange/20',
+          dot: 'bg-brand-orange'
         };
       case 'Closed':
         return {
@@ -432,18 +432,18 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const getCreationMethodConfig = (method: string | undefined) => {
     if (method === 'ai_generated') {
       return {
-        bg: 'bg-purple-50',
-        text: 'text-purple-700',
-        border: 'border-purple-200',
-        dot: 'bg-purple-500',
+        bg: 'bg-brand-blue-2/10',
+        text: 'text-brand-blue-2',
+        border: 'border-brand-blue-2/20',
+        dot: 'bg-brand-blue-2',
         label: 'AI'
       };
     }
     return {
-      bg: 'bg-blue-50',
-      text: 'text-blue-700',
-      border: 'border-blue-200',
-      dot: 'bg-blue-500',
+      bg: 'bg-brand-cyan/10',
+      text: 'text-brand-cyan',
+      border: 'border-brand-cyan/20',
+      dot: 'bg-brand-cyan',
       label: 'Manual'
     };
   };
@@ -542,14 +542,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   };
 
   return (
-    <main className="flex-1 overflow-y-auto bg-gray-50">
+    <main className="flex-1 overflow-y-auto bg-slate-50">
       <div className="p-4 sm:p-6 lg:p-8">
-        {/* Simple Header */}
+        {/* SaaS Header */}
         <div className="mb-6 lg:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 lg:mb-8">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-1 sm:mb-2">Job Openings</h1>
-              <p className="text-sm sm:text-base text-gray-600">Create and manage your job postings</p>
+            <div className="flex items-start gap-3">
+              <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                <Briefcase className="h-5 w-5 text-brand-blue" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-1 sm:mb-2 tracking-tight">Job Openings</h1>
+                <p className="text-sm sm:text-base text-gray-600">Create and manage your job postings</p>
+              </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
               {/* Quota limit warning */}
@@ -568,7 +573,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     }
                     onCreateNew();
                   }}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-3 sm:py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center justify-center gap-2 text-sm sm:text-base font-medium"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-3 sm:py-3.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm sm:text-base font-medium"
                 >
                   <Plus className="w-5 h-5" />
                   <span>Create New Job</span>
@@ -577,83 +582,83 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             </div>
           </div>
 
-          {/* Simple Stats Cards */}
+          {/* SaaS Stats Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6">
-            <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+            <div className="group bg-gradient-to-br from-white to-brand-blue/[0.03] rounded-xl p-4 sm:p-6 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all">
               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+                  <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                 </div>
                 <span className="text-sm sm:text-base text-gray-600">Total Jobs</span>
               </div>
-              <div className="text-2xl sm:text-4xl font-semibold text-gray-900">{stats.total}</div>
+              <div className="text-2xl sm:text-4xl font-semibold text-gray-900 tracking-tight">{stats.total}</div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+            <div className="group bg-gradient-to-br from-white to-green-50/40 rounded-xl p-4 sm:p-6 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-green-300 hover:shadow-md hover:shadow-green-100 transition-all">
               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 ring-1 ring-green-200/60 rounded-lg flex items-center justify-center">
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                 </div>
                 <span className="text-sm sm:text-base text-gray-600">Active</span>
               </div>
-              <div className="text-2xl sm:text-4xl font-semibold text-gray-900">{stats.published}</div>
+              <div className="text-2xl sm:text-4xl font-semibold text-gray-900 tracking-tight">{stats.published}</div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+            <div className="group bg-gradient-to-br from-white to-brand-orange/[0.05] rounded-xl p-4 sm:p-6 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all">
               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-orange/15 ring-1 ring-brand-orange/20 rounded-lg flex items-center justify-center">
+                  <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
                 </div>
                 <span className="text-sm sm:text-base text-gray-600">Drafts</span>
               </div>
-              <div className="text-2xl sm:text-4xl font-semibold text-gray-900">{stats.draft}</div>
+              <div className="text-2xl sm:text-4xl font-semibold text-gray-900 tracking-tight">{stats.draft}</div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+            <div className="group bg-gradient-to-br from-white to-brand-cyan/[0.04] rounded-xl p-4 sm:p-6 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 transition-all">
               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-cyan/10 ring-1 ring-brand-cyan/15 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
                 </div>
                 <span className="text-sm sm:text-base text-gray-600">Applicants</span>
               </div>
-              <div className="text-2xl sm:text-4xl font-semibold text-gray-900">{stats.totalApplicants}</div>
+              <div className="text-2xl sm:text-4xl font-semibold text-gray-900 tracking-tight">{stats.totalApplicants}</div>
             </div>
           </div>
 
-          {/* Simple Search and Filters */}
-          <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+          {/* SaaS Search and Filters */}
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-5">
               {/* Search */}
               <div className="flex-1 relative">
-                <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-brand-blue/60" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search jobs..."
-                  className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 text-sm sm:text-base text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 text-sm sm:text-base text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                 />
               </div>
 
               <div className="flex items-center gap-2 sm:gap-4">
                 {/* View Toggle */}
-                <div className="flex items-center gap-1 bg-gray-100 p-1 sm:p-1.5 rounded-lg">
+                <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 sm:p-1.5 rounded-lg">
                   <button
                     onClick={() => setViewMode('grid')}
-                    className={`p-2 sm:p-2.5 rounded ${
+                    className={`p-2 sm:p-2.5 rounded transition-all ${
                       viewMode === 'grid'
-                        ? 'bg-white text-gray-800 shadow-sm'
-                        : 'text-gray-600'
+                        ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                        : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-2 sm:p-2.5 rounded ${
+                    className={`p-2 sm:p-2.5 rounded transition-all ${
                       viewMode === 'list'
-                        ? 'bg-white text-gray-800 shadow-sm'
-                        : 'text-gray-600'
+                        ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                        : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     <List className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -665,15 +670,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                   className={`px-3 sm:px-5 py-2.5 sm:py-3 rounded-lg font-medium transition-all flex items-center gap-2 text-sm sm:text-base ${
                     activeFiltersCount > 0 || showAdvancedFilters
-                      ? 'bg-gray-100 text-gray-800 border border-gray-300'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
+                      : 'bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
                   }`}
                 >
                   <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="hidden sm:inline">More Filters</span>
                   <span className="sm:hidden">Filters</span>
                   {activeFiltersCount > 0 && (
-                    <span className="px-1.5 sm:px-2 py-0.5 bg-gray-800 text-white rounded text-xs sm:text-sm">
+                    <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue text-white rounded text-xs sm:text-sm">
                       {activeFiltersCount}
                     </span>
                   )}
@@ -690,8 +695,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   onClick={() => setStatusFilter(status.toLowerCase())}
                   className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base transition-all ${
                     statusFilter.toLowerCase() === status.toLowerCase()
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                      : 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue'
                   }`}
                 >
                   {status === 'all' ? 'All Jobs' : status}
@@ -699,14 +704,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               ))}
 
               {/* Creation Method Toggle - AI vs Manual */}
-              <div className="flex items-center gap-2 sm:ml-4 sm:border-l sm:border-gray-300 sm:pl-4">
-                <div className="flex items-center bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center gap-2 sm:ml-4 sm:border-l sm:border-gray-200 sm:pl-4">
+                <div className="flex items-center bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
                   <button
                     onClick={() => setCreationMethodFilter(creationMethodFilter === 'ai' ? null : 'ai')}
                     className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 ${
                       creationMethodFilter === 'ai'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
+                        : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -717,8 +722,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     onClick={() => setCreationMethodFilter(creationMethodFilter === 'manual' ? null : 'manual')}
                     className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 ${
                       creationMethodFilter === 'manual'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
+                        : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -754,7 +759,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
             {/* More Filters Panel */}
             {showAdvancedFilters && (
-              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
+              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-brand-blue/10">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
                   {/* Location */}
                   {uniqueLocations.length > 1 && (
@@ -763,7 +768,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       <select
                         value={locationFilter}
                         onChange={(e) => setLocationFilter(e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Locations</option>
                         {uniqueLocations.map(loc => (
@@ -780,7 +785,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       <select
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Departments</option>
                         {uniqueDepartments.map(dept => (
@@ -797,7 +802,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       <select
                         value={employmentTypeFilter}
                         onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
@@ -814,7 +819,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       <select
                         value={industryFilter}
                         onChange={(e) => setIndustryFilter(e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Industries</option>
                         {uniqueIndustries.map(industry => (
@@ -830,7 +835,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     <select
                       value={experienceFilter}
                       onChange={(e) => setExperienceFilter(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                     >
                       <option value="all">All Levels</option>
                       <option value="entry">Entry Level (0-2 years)</option>
@@ -849,7 +854,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       type="date"
                       value={datePostedFromFilter}
                       onChange={(e) => setDatePostedFromFilter(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                     />
                   </div>
 
@@ -860,7 +865,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       type="date"
                       value={datePostedToFilter}
                       onChange={(e) => setDatePostedToFilter(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                     />
                   </div>
                 </div>
@@ -879,7 +884,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Sort and Bulk Actions Bar */}
         {sortedJobs.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mb-4 sm:mb-5">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-5 mb-4 sm:mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Bulk Selection */}
               <div className="flex items-center gap-3 sm:gap-5">
@@ -888,7 +893,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   className="flex items-center gap-2 text-sm sm:text-base text-gray-700 hover:text-gray-900"
                 >
                   {selectedJobs.size === sortedJobs.length && sortedJobs.length > 0 ? (
-                    <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
+                    <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                   ) : (
                     <Square className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
                   )}
@@ -904,7 +909,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <div className="relative">
                     <button
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="px-3 sm:px-5 py-2 sm:py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-sm sm:text-base"
+                      className="px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-2 text-sm sm:text-base"
                     >
                       <span>Bulk Actions</span>
                       <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -974,7 +979,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     console.log('Sort by changed to:', value);
                     setSortBy(value);
                   }}
-                  className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base  text-black cursor-pointer"
+                  className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black cursor-pointer"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
@@ -989,7 +994,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     console.log('Sort order button clicked! Current order:', sortOrder, 'Switching to:', sortOrder === 'asc' ? 'desc' : 'asc');
                     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                   }}
-                  className="p-2 sm:p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-black cursor-pointer"
+                  className="p-2 sm:p-2.5 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-gray-700 cursor-pointer"
                   title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                 >
                   <ArrowUpDown className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
@@ -1012,7 +1017,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer ${selectedJobs.has(job.id) ? 'border-[var(--primary)] shadow-md ring-1 ring-[var(--primary)]/30' : 'border-gray-200 hover:border-[var(--border-dark)] hover:shadow-md hover:-translate-y-0.5'}`}
+                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -1026,12 +1031,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                           >
                             {selectedJobs.has(job.id)
-                              ? <CheckSquare className="w-5 h-5 text-gray-800" />
-                              : <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                              ? <CheckSquare className="w-5 h-5 text-brand-blue" />
+                              : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />
                             }
                           </button>
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
@@ -1053,7 +1058,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         {job.job_id && (
-                          <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-bold font-mono border border-blue-200">
+                          <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue rounded-md text-xs sm:text-sm font-bold font-mono border border-brand-blue/20">
                             {job.job_id}
                           </span>
                         )}
@@ -1283,7 +1288,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 sm:p-6 ${selectedJobs.has(job.id) ? 'border-[var(--primary)] shadow-md ring-1 ring-[var(--primary)]/30' : 'border-gray-200 hover:border-[var(--border-dark)] hover:shadow-md hover:-translate-y-0.5'}`}
+                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 sm:p-6 ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-5">
@@ -1294,12 +1299,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                         >
                           {selectedJobs.has(job.id)
-                            ? <CheckSquare className="w-5 h-5 text-gray-800" />
-                            : <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                            ? <CheckSquare className="w-5 h-5 text-brand-blue" />
+                            : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />
                           }
                         </button>
-                        <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <Briefcase className="w-7 h-7 text-gray-700" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+                          <Briefcase className="w-7 h-7 text-brand-blue" />
                         </div>
                       </div>
 
@@ -1307,7 +1312,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-2 sm:mb-3">
                           {job.job_id && (
-                            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-bold font-mono border border-blue-200 flex-shrink-0">
+                            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue rounded-md text-xs sm:text-sm font-bold font-mono border border-brand-blue/20 flex-shrink-0">
                               {job.job_id}
                             </span>
                           )}
@@ -1538,19 +1543,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           )
         ) : (
           // Empty State
-          <div className="bg-card rounded-xl border border-border shadow-sm p-8 sm:p-12 md:p-16 text-center">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-12 md:p-16 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 bg-muted/50 border border-border rounded-full flex items-center justify-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                 {searchQuery || activeFiltersCount > 0 ? (
-                  <Search className="w-7 h-7 sm:w-9 sm:h-9 text-muted-foreground" />
+                  <Search className="w-7 h-7 sm:w-9 sm:h-9 text-brand-blue" />
                 ) : (
-                  <Briefcase className="w-7 h-7 sm:w-9 sm:h-9 text-muted-foreground" />
+                  <Briefcase className="w-7 h-7 sm:w-9 sm:h-9 text-brand-blue" />
                 )}
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2 tracking-tight">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 tracking-tight">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6 leading-relaxed">
+              <p className="text-sm sm:text-base text-gray-600 mb-5 sm:mb-6 leading-relaxed">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -1566,10 +1571,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     setExperienceFilter('all');
                     setEmploymentTypeFilter('all');
                     setApplicantsFilter('all');
-                    setDatePostedFilter('all');
+                    setDatePostedFromFilter('');
+                    setDatePostedToFilter('');
                     setSalaryRangeFilter('all');
                   }}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--surface-hover)] transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
                 >
                   <XCircle className="w-4 h-4" />
                   Clear Filters
@@ -1583,7 +1589,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     }
                     onCreateNew();
                   }}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30 transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
                 >
                   <Plus className="w-4 h-4" />
                   Create Job
@@ -1595,7 +1601,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Pagination Controls */}
         {sortedJobs.length > 5 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mt-4 sm:mt-6">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-5 mt-4 sm:mt-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-5">
@@ -1604,7 +1610,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base text-black"
+                    className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm sm:text-base text-black"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -1631,7 +1637,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   className={`p-2 sm:p-2.5 rounded-lg border transition-all ${
                     currentPage === 1
                       ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      : 'border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                   title="Previous page"
                 >
@@ -1647,10 +1653,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       disabled={page === '...'}
                       className={`min-w-[34px] sm:min-w-[42px] h-8 sm:h-10 px-2 sm:px-4 rounded-lg text-sm sm:text-base transition-all ${
                         page === currentPage
-                          ? 'bg-gray-800 text-white shadow-sm'
+                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
                           : page === '...'
                           ? 'text-gray-400 cursor-default'
-                          : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                          : 'border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                       }`}
                     >
                       {page}
@@ -1665,7 +1671,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   className={`p-2 sm:p-2.5 rounded-lg border transition-all ${
                     currentPage === totalPages
                       ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      : 'border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                   title="Next page"
                 >
@@ -1692,19 +1698,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-5 sm:p-6 max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="text-center">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-100 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" />
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 tracking-tight">Insufficient Units</h3>
               <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
                 You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-center">
                 <button
                   onClick={() => setShowQuotaModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-50 font-medium"
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-medium transition-all"
                 >
                   Cancel
                 </button>
@@ -1713,7 +1719,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     setShowQuotaModal(false);
                     window.location.href = '/subscription/current-plan';
                   }}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm sm:text-base font-medium"
+                  className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 text-sm sm:text-base font-medium transition-all"
                 >
                   Upgrade Plan
                 </button>

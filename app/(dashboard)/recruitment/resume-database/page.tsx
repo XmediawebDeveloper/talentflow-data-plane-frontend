@@ -823,8 +823,8 @@ export default function ResumeDatabasePage() {
 
   if (loading && resumes.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading resume database...</span>
       </div>
     );
@@ -833,18 +833,23 @@ export default function ResumeDatabasePage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-slate-50">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Internal Resume Database</h1>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
-              {resumes.length.toLocaleString()} Resumes
-            </span>
+        <div className="flex items-start gap-3">
+          <div className="hidden sm:flex w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
+            <Search className="w-5 h-5 text-brand-blue" />
           </div>
-          <p className="text-sm text-gray-600">
-            Search and filter resumes from your organization's database
-          </p>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Internal Resume Database</h1>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                {resumes.length.toLocaleString()} Resumes
+              </span>
+            </div>
+            <p className="text-sm text-gray-600">
+              Search and filter resumes from your organization's database
+            </p>
+          </div>
         </div>
       </div>
 
@@ -862,7 +867,7 @@ export default function ResumeDatabasePage() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
         <SearchFilterBarCompact
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
@@ -874,21 +879,21 @@ export default function ResumeDatabasePage() {
 
         {/* Loading indicator for filter changes */}
         {loading && (
-          <div className="flex items-center justify-center py-4 border-b border-gray-200 bg-blue-50">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-600 mr-2" />
-            <span className="text-sm text-blue-600">Searching...</span>
+          <div className="flex items-center justify-center py-4 border-b border-gray-100 bg-brand-blue/5">
+            <Loader2 className="w-5 h-5 animate-spin text-brand-blue mr-2" />
+            <span className="text-sm text-brand-blue">Searching...</span>
           </div>
         )}
 
         {/* Search Results Summary */}
         {(appliedSearchQuery || activeFilterCount > 0) && !loading && (
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <div className="px-4 py-3 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-gray-500" />
+              <Search className="w-4 h-4 text-brand-blue" />
               <span className="text-sm text-gray-700">
                 Found <span className="font-semibold">{filteredAndSortedResumes.length.toLocaleString()}</span> matching resume{filteredAndSortedResumes.length !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
-                  <span> for "<span className="font-medium text-blue-600">{appliedSearchQuery}</span>"</span>
+                  <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
                 )}
               </span>
             </div>
@@ -926,7 +931,7 @@ export default function ResumeDatabasePage() {
 
         {/* Pagination */}
         {calculatedTotalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-slate-50">
             <div className="text-sm text-gray-600">
               Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
@@ -934,7 +939,7 @@ export default function ResumeDatabasePage() {
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-md border border-gray-200 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -944,10 +949,10 @@ export default function ResumeDatabasePage() {
                   <button
                     key={index}
                     onClick={() => handlePageChange(page)}
-                    className={`px-3 py-1 rounded-md text-sm ${
+                    className={`px-3 py-1 rounded-md text-sm transition-all ${
                       currentPage === page
-                        ? 'bg-blue-600 text-white'
-                        : 'border border-gray-300 hover:bg-gray-100'
+                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                        : 'border border-gray-200 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30'
                     }`}
                   >
                     {page}
@@ -960,7 +965,7 @@ export default function ResumeDatabasePage() {
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === calculatedTotalPages}
-                className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-md border border-gray-200 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

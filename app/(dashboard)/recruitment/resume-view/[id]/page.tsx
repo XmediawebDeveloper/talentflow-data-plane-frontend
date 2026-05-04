@@ -718,8 +718,8 @@ Best regards`);
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-100 min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+      <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading resume...</span>
       </div>
     );
@@ -727,11 +727,11 @@ Best regards`);
 
   if (error || !resume) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 min-h-screen">
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 min-h-screen">
         <p className="text-gray-600 mb-4">{error || 'Resume not found'}</p>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
+          className="flex items-center gap-2 text-brand-blue hover:text-brand-blue-2"
         >
           <ArrowLeft className="w-4 h-4" />
           Go Back
@@ -762,23 +762,23 @@ Best regards`);
 
   return (
     <FeatureGate feature="resume_upload">
-    <div className="flex-1 bg-gray-100 min-h-screen">
+    <div className="flex-1 bg-slate-50 min-h-screen">
       {/* Header */}
-      <div className="bg-gray-200 border-b border-gray-300 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0">
             <button
               onClick={() => router.back()}
-              className="text-gray-700 hover:bg-gray-300 p-2 rounded-lg transition-colors flex-shrink-0"
+              className="text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-400 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-800 tracking-tight truncate">Resume Details</h1>
+                <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 tracking-tight truncate">Resume Details</h1>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">{resume.name}</p>
               </div>
             </div>
@@ -788,7 +788,7 @@ Best regards`);
               <button
                 onClick={() => prevId && router.replace(`/recruitment/resume-view/${prevId}`)}
                 disabled={!prevId}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Previous
@@ -799,7 +799,7 @@ Best regards`);
               <button
                 onClick={() => nextId && router.replace(`/recruitment/resume-view/${nextId}`)}
                 disabled={!nextId}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Next
                 <ChevronRight className="w-4 h-4" />
@@ -810,19 +810,19 @@ Best regards`);
       </div>
 
       {/* Action Bar */}
-      <div className="bg-gray-50 border-b border-gray-300 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 sticky top-0 z-10 overflow-x-auto scrollbar-hide">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 sticky top-0 z-10 overflow-x-auto scrollbar-hide shadow-sm shadow-brand-blue/5">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 min-w-max sm:min-w-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
             >
               <Eye className="w-4 h-4" />
               View
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
             >
               <Download className="w-4 h-4" />
               Download
@@ -830,7 +830,7 @@ Best regards`);
             {canShareResume && (
               <button
                 onClick={handleShare}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
               >
                 <Share2 className="w-4 h-4" />
                 Share
@@ -839,7 +839,7 @@ Best regards`);
             {canDeleteResume && (
               <button
                 onClick={handleDelete}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-400 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
@@ -849,7 +849,7 @@ Best regards`);
           {canApplyResumeToJob && (
             <button
               onClick={handleApplyToJob}
-              className="flex items-center gap-2 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm shadow-sm"
+              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Send className="w-4 h-4" />
               Apply to Job
@@ -863,7 +863,7 @@ Best regards`);
         <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Personal Info Card */}
-          <div className="bg-gray-50 border border-gray-300 rounded-xl p-6 shadow-sm">
+          <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
             <div className="flex items-start">
               <div className="flex-1">
                 <div className="flex items-start justify-between mb-4">
@@ -915,10 +915,12 @@ Best regards`);
 
           {/* Professional Summary */}
           {detailedResume.summary && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Star className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Professional Summary</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
               </div>
               <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
             </div>
@@ -926,15 +928,17 @@ Best regards`);
 
           {/* Work Experience */}
           {detailedResume.experience.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Work Experience</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Briefcase className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
-                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-400 last:pb-0">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-500 border-2 border-gray-50"></div>
+                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-brand-blue/30 last:pb-0">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 border-2 border-white shadow-sm shadow-brand-blue/30"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -970,7 +974,7 @@ Best regards`);
                             .filter((point: string) => point.length > 0)
                             .map((point: string, pointIndex: number) => (
                               <div key={pointIndex} className="flex items-start gap-2 text-sm text-gray-700">
-                                <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                                <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                                 <span>{point}</span>
                               </div>
                             ))}
@@ -980,7 +984,7 @@ Best regards`);
                         <div className="space-y-1.5">
                           {exp.achievements.map((achievement, achIndex) => (
                             <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
-                              <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                              <ChevronRight className="w-4 h-4 text-brand-cyan flex-shrink-0 mt-0.5" />
                               <span>{achievement}</span>
                             </div>
                           ))}
@@ -995,14 +999,16 @@ Best regards`);
 
           {/* Education */}
           {detailedResume.education.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <GraduationCap className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Education</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <GraduationCap className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
               </div>
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
-                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                  <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <h4 className="font-semibold text-gray-800 mb-1">
                       {edu.degree}
                       {edu.field && ` in ${edu.field}`}
@@ -1026,7 +1032,7 @@ Best regards`);
                         <span className="text-gray-700">GPA: {edu.gpa}</span>
                       )}
                       {edu.honors && (
-                        <span className="px-2 py-0.5 bg-gray-500 text-white rounded text-xs">
+                        <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded text-xs shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                           {edu.honors}
                         </span>
                       )}
@@ -1039,10 +1045,12 @@ Best regards`);
 
           {/* Skills */}
           {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Code className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Skills</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Code className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
               </div>
 
               {/* Technical Skills */}
@@ -1051,7 +1059,7 @@ Best regards`);
                   <h4 className="font-medium text-gray-900 mb-4">Technical Skills</h4>
                   <div className="flex flex-wrap gap-2">
                     {detailedResume.skills.technical.map((skill, index) => (
-                      <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                      <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
                         {skill}
                       </span>
                     ))}
@@ -1065,7 +1073,7 @@ Best regards`);
                   <h4 className="font-medium text-gray-900 mb-4">Soft Skills</h4>
                   <div className="flex flex-wrap gap-2">
                     {detailedResume.skills.soft.map((skill, index) => (
-                      <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                      <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
                         {skill}
                       </span>
                     ))}
@@ -1077,17 +1085,19 @@ Best regards`);
 
           {/* Certifications */}
           {detailedResume.certifications.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Award className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Certifications</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+                  <Award className="w-4 h-4 text-brand-orange" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
               </div>
               <div className="space-y-4">
                 {detailedResume.certifications.map((cert, index) => (
-                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                  <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="font-semibold text-gray-800 mb-1">{cert.name}</h4>
+                        <h4 className="font-semibold text-gray-900 mb-1">{cert.name}</h4>
                         {cert.issuer && <div className="text-sm text-gray-700 mb-1">{cert.issuer}</div>}
                         <div className="flex items-center gap-4 text-xs text-gray-600">
                           {cert.date && (
@@ -1099,7 +1109,7 @@ Best regards`);
                           {cert.credentialId && <span>ID: {cert.credentialId}</span>}
                         </div>
                       </div>
-                      <Award className="w-6 h-6 text-gray-500" />
+                      <Award className="w-6 h-6 text-brand-orange" />
                     </div>
                   </div>
                 ))}
@@ -1109,15 +1119,17 @@ Best regards`);
 
           {/* Languages */}
           {detailedResume.languages.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Languages className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Languages</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                  <Languages className="w-4 h-4 text-brand-cyan" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 {detailedResume.languages.map((lang, index) => (
-                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg text-center">
-                    <div className="font-medium text-gray-800 mb-1">{lang.name}</div>
+                  <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center">
+                    <div className="font-medium text-gray-900 mb-1">{lang.name}</div>
                     <div className="text-sm text-gray-600">{lang.proficiency}</div>
                   </div>
                 ))}
@@ -1127,18 +1139,20 @@ Best regards`);
 
           {/* Projects */}
           {resume.projects && resume.projects.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Code className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Projects</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Code className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
               </div>
               <div className="space-y-4">
                 {resume.projects.map((project: any, index: number) => (
-                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                  <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-gray-800">{project.name}</h4>
+                      <h4 className="font-semibold text-gray-900">{project.name}</h4>
                       {project.url && (
-                        <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                        <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       )}
@@ -1154,7 +1168,7 @@ Best regards`);
                         </span>
                       )}
                       {project.technologies && (
-                        <span className="px-2 py-0.5 bg-gray-200 rounded">{project.technologies}</span>
+                        <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded ring-1 ring-brand-blue/20">{project.technologies}</span>
                       )}
                     </div>
                   </div>
@@ -1165,17 +1179,19 @@ Best regards`);
 
           {/* Awards */}
           {resume.awards && resume.awards.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Award className="w-5 h-5 text-yellow-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Awards & Honors</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+                  <Award className="w-4 h-4 text-brand-orange" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
               </div>
               <div className="space-y-4">
                 {resume.awards.map((award: any, index: number) => (
-                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                  <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="font-semibold text-gray-800 mb-1">{award.name}</h4>
+                        <h4 className="font-semibold text-gray-900 mb-1">{award.name}</h4>
                         {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
                         {award.date && (
                           <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
@@ -1187,7 +1203,7 @@ Best regards`);
                           <p className="text-sm text-gray-600 mt-2">{award.description}</p>
                         )}
                       </div>
-                      <Award className="w-6 h-6 text-yellow-500" />
+                      <Award className="w-6 h-6 text-brand-orange" />
                     </div>
                   </div>
                 ))}
@@ -1197,15 +1213,17 @@ Best regards`);
 
           {/* Achievements */}
           {resume.achievements && resume.achievements.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Star className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Achievements</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
               </div>
               <div className="space-y-2">
                 {resume.achievements.map((achievement: string, index: number) => (
                   <div key={index} className="flex items-start gap-2 text-gray-700">
-                    <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                    <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                     <span>{typeof achievement === 'string' ? achievement : achievement.description || achievement.name}</span>
                   </div>
                 ))}
@@ -1215,15 +1233,17 @@ Best regards`);
 
           {/* Volunteer Experience */}
           {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Volunteer Experience</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                  <User className="w-4 h-4 text-brand-cyan" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
               </div>
               <div className="space-y-4">
                 {resume.volunteerExperience.map((vol: any, index: number) => (
-                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
-                    <h4 className="font-semibold text-gray-800 mb-1">{vol.role || vol.title}</h4>
+                  <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
+                    <h4 className="font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
                     {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
                     {vol.duration && (
                       <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
@@ -1240,14 +1260,16 @@ Best regards`);
 
           {/* Hobbies & Interests */}
           {resume.hobbies && resume.hobbies.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Star className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Hobbies & Interests</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-brand-orange" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {resume.hobbies.map((hobby: string, index: number) => (
-                  <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                  <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
                     {typeof hobby === 'string' ? hobby : hobby.name || hobby}
                   </span>
                 ))}
@@ -1257,23 +1279,25 @@ Best regards`);
 
           {/* Social Links */}
           {(resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl) && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Globe className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Social & Portfolio Links</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Social & Portfolio Links</h3>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 {resume.linkedinUrl && (
                   <a href={resume.linkedinUrl} target="_blank" rel="noopener noreferrer"
-                     className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
-                    <Linkedin className="w-5 h-5 text-blue-600" />
-                    <span className="text-blue-700 text-sm font-medium">LinkedIn</span>
-                    <ExternalLink className="w-3 h-3 text-blue-500 ml-auto" />
+                     className="flex items-center gap-2 p-4 bg-brand-blue/5 border border-brand-blue/20 rounded-lg hover:bg-brand-blue/10 hover:border-brand-blue/30 transition-colors">
+                    <Linkedin className="w-5 h-5 text-brand-blue" />
+                    <span className="text-brand-blue text-sm font-medium">LinkedIn</span>
+                    <ExternalLink className="w-3 h-3 text-brand-blue ml-auto" />
                   </a>
                 )}
                 {resume.githubUrl && (
                   <a href={resume.githubUrl} target="_blank" rel="noopener noreferrer"
-                     className="flex items-center gap-2 p-4 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors">
+                     className="flex items-center gap-2 p-4 bg-slate-50 border border-gray-200 rounded-lg hover:bg-slate-100 transition-colors">
                     <Code className="w-5 h-5 text-gray-700" />
                     <span className="text-gray-700 text-sm font-medium">GitHub</span>
                     <ExternalLink className="w-3 h-3 text-gray-500 ml-auto" />
@@ -1281,10 +1305,10 @@ Best regards`);
                 )}
                 {resume.portfolioUrl && (
                   <a href={resume.portfolioUrl} target="_blank" rel="noopener noreferrer"
-                     className="flex items-center gap-2 p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
-                    <Globe className="w-5 h-5 text-purple-600" />
-                    <span className="text-purple-700 text-sm font-medium">Portfolio</span>
-                    <ExternalLink className="w-3 h-3 text-purple-500 ml-auto" />
+                     className="flex items-center gap-2 p-4 bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg hover:bg-brand-cyan/10 hover:border-brand-cyan/30 transition-colors">
+                    <Globe className="w-5 h-5 text-brand-cyan" />
+                    <span className="text-brand-cyan text-sm font-medium">Portfolio</span>
+                    <ExternalLink className="w-3 h-3 text-brand-cyan ml-auto" />
                   </a>
                 )}
               </div>
@@ -1293,10 +1317,12 @@ Best regards`);
 
           {/* Objective (if different from summary) */}
           {resume.objective && resume.objective !== resume.professionalSummary && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Career Objective</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
               </div>
               <p className="text-gray-700 leading-relaxed">{resume.objective}</p>
             </div>
@@ -1304,10 +1330,12 @@ Best regards`);
 
           {/* Additional Information */}
           {resume.additionalInfo && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Additional Information</h3>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
               </div>
               <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
             </div>
@@ -1320,21 +1348,23 @@ Best regards`);
 
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <History className="w-5 h-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-800">Version History</h3>
-                <span className="px-2.5 py-0.5 bg-gray-300 text-gray-700 rounded-full text-xs">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <History className="w-4 h-4 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Version History</h3>
+                <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
                 {resume.versions.length > 1 && (
                   <button
                     onClick={openCompareModal}
                     disabled={compareChecked.length !== 2}
-                    className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       compareChecked.length === 2
-                        ? 'bg-gray-800 text-white hover:bg-gray-900'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                        : 'bg-slate-100 text-gray-400 cursor-not-allowed'
                     }`}
                   >
                     {compareChecked.length === 2
@@ -1357,8 +1387,8 @@ Best regards`);
                     return (
                       <div key={version.id} className={`rounded-lg border transition-all ${
                         isLatest
-                          ? 'bg-blue-50 border-blue-300'
-                          : 'bg-gray-100 border-gray-300'
+                          ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/10'
+                          : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02]'
                       }`}>
                         <div className="p-4">
                           <div className="flex items-center justify-between">
@@ -1370,24 +1400,24 @@ Best regards`);
                                     type="checkbox"
                                     checked={compareChecked.includes(version.id)}
                                     onChange={() => handleCompareCheck(version.id)}
-                                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer"
+                                    className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 cursor-pointer"
                                   />
                                 </label>
                               )}
                               <div className={`p-2 rounded-lg ${
-                                isLatest ? 'bg-blue-100' : 'bg-gray-200'
+                                isLatest ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-white ring-1 ring-gray-200'
                               }`}>
                                 <FileText className={`w-4 h-4 ${
-                                  isLatest ? 'text-blue-600' : 'text-gray-600'
+                                  isLatest ? 'text-brand-blue' : 'text-gray-600'
                                 }`} />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-sm font-semibold ${isLatest ? 'text-blue-800' : 'text-gray-800'}`}>
+                                  <span className={`text-sm font-semibold ${isLatest ? 'text-brand-blue' : 'text-gray-900'}`}>
                                     Version {versionNumber}
                                   </span>
                                   {isLatest && (
-                                    <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs flex-shrink-0">
+                                    <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                                       Latest
                                     </span>
                                   )}
@@ -1413,7 +1443,7 @@ Best regards`);
                               {previousVersion && (
                                 <button
                                   onClick={() => openCompareModal(previousVersion.id, version.id)}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue"
                                 >
                                   <History className="w-3 h-3" />
                                   View Changes
@@ -1427,8 +1457,8 @@ Best regards`);
                                 onClick={() => handleVersionPreview(version.id, `Version ${versionNumber}`)}
                                 className={`p-2 rounded-md transition-colors ${
                                   isLatest
-                                    ? 'text-blue-600 hover:bg-blue-100'
-                                    : 'text-gray-600 hover:bg-gray-300'
+                                    ? 'text-brand-blue hover:bg-brand-blue/10'
+                                    : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                                 }`}
                                 title="View resume"
                               >
@@ -1453,8 +1483,8 @@ Best regards`);
                                 }}
                                 className={`p-2 rounded-md transition-colors ${
                                   isLatest
-                                    ? 'text-blue-600 hover:bg-blue-100'
-                                    : 'text-gray-600 hover:bg-gray-300'
+                                    ? 'text-brand-blue hover:bg-brand-blue/10'
+                                    : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                                 }`}
                                 title="Download this version"
                               >
@@ -1472,16 +1502,18 @@ Best regards`);
           )}
 
           {/* File Properties */}
-          <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+          <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-6">
-              <File className="w-5 h-5 text-gray-500" />
-              <h3 className="text-lg font-semibold text-gray-800">File Properties</h3>
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <File className="w-4 h-4 text-brand-blue" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 tracking-tight">File Properties</h3>
             </div>
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <FileText className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <FileText className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">File Name</div>
@@ -1489,8 +1521,8 @@ Best regards`);
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <HardDrive className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <HardDrive className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">File Size</div>
@@ -1503,8 +1535,8 @@ Best regards`);
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <File className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <File className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">File Type</div>
@@ -1512,8 +1544,8 @@ Best regards`);
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <Calendar className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <Calendar className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Upload Date</div>
@@ -1525,8 +1557,8 @@ Best regards`);
               </div>
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <Clock className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <Clock className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Last Modified</div>
@@ -1538,8 +1570,8 @@ Best regards`);
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <User className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <User className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
@@ -1549,8 +1581,8 @@ Best regards`);
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <FileText className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <FileText className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
@@ -1560,8 +1592,8 @@ Best regards`);
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <History className="w-4 h-4 text-gray-600" />
+                  <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
+                    <History className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Version Count</div>
@@ -1682,13 +1714,13 @@ Best regards`);
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className={`bg-white rounded-2xl shadow-2xl w-full ${compareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85vh] flex flex-col overflow-hidden transition-all duration-300`}>
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <History className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
+                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight">
                       Version Comparison
                     </h2>
                     <p className="text-sm text-gray-500">
@@ -1698,13 +1730,13 @@ Best regards`);
                 </div>
                 <div className="flex items-center gap-3">
                   {/* View mode toggle */}
-                  <div className="flex bg-gray-100 rounded-lg p-0.5">
+                  <div className="flex bg-slate-100 rounded-lg p-0.5">
                     <button
                       onClick={() => setCompareViewMode('side-by-side')}
                       className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
                         compareViewMode === 'side-by-side'
-                          ? 'bg-white text-gray-800 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
+                          ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
+                          : 'text-gray-500 hover:text-brand-blue'
                       }`}
                     >
                       Side by Side
@@ -1713,8 +1745,8 @@ Best regards`);
                       onClick={() => setCompareViewMode('unified')}
                       className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
                         compareViewMode === 'unified'
-                          ? 'bg-white text-gray-800 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
+                          ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
+                          : 'text-gray-500 hover:text-brand-blue'
                       }`}
                     >
                       Unified
@@ -1844,13 +1876,13 @@ Best regards`);
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end px-6 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center justify-end px-6 py-3 border-t border-gray-100 bg-slate-50 flex-shrink-0">
                 <button
                   onClick={() => {
                     setShowCompareModal(false);
                     setCompareChecked([]);
                   }}
-                  className="px-5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
+                  className="px-5 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Close
                 </button>
@@ -1864,8 +1896,8 @@ Best regards`);
       {/* Loading overlay for preview fetch */}
       {previewLoading && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 flex items-center gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+          <div className="bg-white rounded-xl p-8 flex items-center gap-3 shadow-2xl shadow-brand-blue/20 ring-1 ring-brand-blue/10">
+            <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
             <span className="text-gray-700">Loading preview...</span>
           </div>
         </div>
@@ -1893,13 +1925,13 @@ Best regards`);
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Eye className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{versionPreviewLabel}</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight">{versionPreviewLabel}</h2>
                     <p className="text-sm text-gray-500">{previewVersion?.name || resume?.fileName}</p>
                   </div>
                 </div>
@@ -1966,13 +1998,13 @@ Best regards`);
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <History className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Select Resume Version</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Select Resume Version</h2>
                   <p className="text-sm text-gray-600">Choose which version to apply for the job</p>
                 </div>
               </div>
@@ -1991,8 +2023,8 @@ Best regards`);
                 <label
                   className={`block p-4 rounded-lg border-2 cursor-pointer transition-all ${
                     selectedVersionForApply === resumeId
-                      ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20'
+                      : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02]'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -2001,7 +2033,7 @@ Best regards`);
                       name="version"
                       checked={selectedVersionForApply === resumeId}
                       onChange={() => setSelectedVersionForApply(resumeId)}
-                      className="w-4 h-4 text-gray-800 border-gray-300 focus:ring-gray-500"
+                      className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -2035,8 +2067,8 @@ Best regards`);
                     key={version.id}
                     className={`block p-4 rounded-lg border-2 cursor-pointer transition-all ${
                       selectedVersionForApply === version.id
-                        ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20'
+                        : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -2045,7 +2077,7 @@ Best regards`);
                         name="version"
                         checked={selectedVersionForApply === version.id}
                         onChange={() => setSelectedVersionForApply(version.id)}
-                        className="w-4 h-4 text-gray-800 border-gray-300 focus:ring-gray-500"
+                        className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -2077,17 +2109,17 @@ Best regards`);
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-slate-50">
               <button
                 onClick={() => setShowVersionSelectModal(false)}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-200 bg-white rounded-lg hover:bg-slate-100 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
                 disabled={!selectedVersionForApply}
-                className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Send className="w-4 h-4" />
                 Continue to Job Selection
@@ -2117,11 +2149,11 @@ Best regards`);
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Mail className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Share Resume</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
                     <p className="text-sm text-gray-500">Send resume via email</p>
                   </div>
                 </div>
@@ -2147,7 +2179,7 @@ Best regards`);
                     value={shareEmail}
                     onChange={(e) => setShareEmail(e.target.value)}
                     placeholder="Enter email address"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
                   />
                 </div>
 
@@ -2161,7 +2193,7 @@ Best regards`);
                     value={shareSubject}
                     onChange={(e) => setShareSubject(e.target.value)}
                     placeholder="Email subject"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
                   />
                 </div>
 
@@ -2175,26 +2207,26 @@ Best regards`);
                     onChange={(e) => setShareMessage(e.target.value)}
                     placeholder="Enter your message"
                     rows={8}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all resize-none"
                   />
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                 <button
                   onClick={() => {
                     setIsShareModalOpen(false);
                     setShareEmail('');
                   }}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSendEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   {isSendingEmail ? (
                     <>

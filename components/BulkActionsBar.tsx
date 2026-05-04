@@ -37,13 +37,13 @@ export default function BulkActionsBar({
   const actionBtn = "inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg transition-all text-xs sm:text-sm font-medium border border-white/15 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
 
   return (
-    <div className="sticky top-0 z-50 bg-[var(--primary)] shadow-lg border-b border-white/10 animate-fadeIn">
+    <div className="sticky top-0 z-50 bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-lg shadow-brand-blue/25 border-b border-white/10 ring-1 ring-white/10 animate-fadeIn rounded-xl">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 gap-2 sm:gap-4">
         {/* Left: Selected count + Clear */}
         <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-start">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--primary)]" />
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
             </div>
             <div className="text-white text-xs sm:text-sm font-medium">
               <span className="font-semibold">{selectedCount}</span> resume{selectedCount !== 1 ? 's' : ''} selected

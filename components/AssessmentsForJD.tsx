@@ -155,15 +155,15 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
   };
 
   const getStatusBadge = (status: string) => {
-    const configs: Record<string, { bg: string; text: string; label: string }> = {
-      published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
-      draft: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Draft' },
-      closed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Closed' },
-      archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
+    const configs: Record<string, { bg: string; text: string; label: string; ring: string }> = {
+      published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published', ring: 'ring-green-200' },
+      draft: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', label: 'Draft', ring: 'ring-brand-orange/20' },
+      closed: { bg: 'bg-brand-blue/10', text: 'text-brand-blue', label: 'Closed', ring: 'ring-brand-blue/20' },
+      archived: { bg: 'bg-slate-100', text: 'text-gray-500', label: 'Archived', ring: 'ring-gray-200' },
     };
     const config = configs[status] || configs.draft;
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ring-1 ${config.bg} ${config.text} ${config.ring}`}>
         {config.label}
       </span>
     );
@@ -187,7 +187,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading assessments...</span>
       </div>
     );
@@ -197,19 +197,24 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Assessment Results</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {jdTitle ? `Assessments for "${jdTitle}"` : 'Assessments for this job'}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+            <ClipboardList className="w-5 h-5 text-brand-blue" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Assessment Results</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {jdTitle ? `Assessments for "${jdTitle}"` : 'Assessments for this job'}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
             <button
               onClick={() => setViewMode('list')}
               className={`p-2 rounded transition-colors ${
-                viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-gray-50'
+                viewMode === 'list' ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15' : 'hover:text-brand-blue'
               }`}
               title="List View"
             >
@@ -218,7 +223,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
             <button
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded transition-colors ${
-                viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-gray-50'
+                viewMode === 'grid' ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15' : 'hover:text-brand-blue'
               }`}
               title="Grid View"
             >
@@ -230,7 +235,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && assessmentAvailable && (
             <button
               onClick={handleCreateAssessment}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-4 h-4" />
               Create Assessment
@@ -240,7 +245,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-gray-200">
+      <div className="flex items-center gap-1 border-b border-gray-100">
         {[
           { id: 'all', label: 'All', count: stats.total },
           { id: 'active', label: 'Active', count: stats.active },
@@ -252,12 +257,16 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
             onClick={() => setActiveTab(tab.id as any)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.id
-                ? 'text-gray-800 border-gray-800'
-                : 'text-gray-600 border-transparent hover:text-gray-900'
+                ? 'text-brand-blue border-brand-blue'
+                : 'text-gray-600 border-transparent hover:text-brand-blue'
             }`}
           >
             {tab.label}
-            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">
+            <span className={`px-2 py-0.5 rounded-full text-xs ring-1 ${
+              activeTab === tab.id
+                ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                : 'bg-slate-100 text-gray-600 ring-gray-200'
+            }`}>
               {tab.count}
             </span>
           </button>
@@ -266,9 +275,11 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
 
       {/* Empty State */}
       {filteredAssessments.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+            <ClipboardList className="w-10 h-10 text-brand-blue" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">
             {activeTab === 'all' ? 'No assessments yet' : `No ${activeTab} assessments`}
           </h3>
           <p className="text-gray-500 mb-4">
@@ -279,7 +290,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && assessmentAvailable && activeTab !== 'archived' && (
             <button
               onClick={handleCreateAssessment}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-4 h-4" />
               Create Assessment
@@ -292,9 +303,9 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       {filteredAssessments.length > 0 && (
         <>
           {viewMode === 'list' ? (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-50 border-b border-gray-100">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Assessment
@@ -319,13 +330,13 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-100">
                   {filteredAssessments.map((assessment) => (
-                    <tr key={assessment.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={assessment.id} className="hover:bg-brand-blue/5 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <ClipboardList className="w-5 h-5 text-gray-800" />
+                          <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center">
+                            <ClipboardList className="w-5 h-5 text-brand-blue" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -381,7 +392,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleViewResults(assessment)}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="p-2 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                             title="View Results"
                           >
                             <Eye className="w-4 h-4" />
@@ -389,7 +400,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                           <div className="relative">
                             <button
                               onClick={() => setOpenMenuId(openMenuId === assessment.id ? null : assessment.id)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              className="p-2 text-gray-600 hover:bg-slate-100 rounded-lg transition-colors"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
@@ -399,13 +410,13 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                   className="fixed inset-0 z-10"
                                   onClick={() => setOpenMenuId(null)}
                                 />
-                                <div className="absolute right-0 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 max-h-[70vh] overflow-y-auto">
+                                <div className="absolute right-0 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 z-20 max-h-[70vh] overflow-y-auto">
                                   <button
                                     onClick={() => {
                                       handleViewDetails(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                   >
                                     <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     View Details
@@ -416,7 +427,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         handlePublish(assessment);
                                         setOpenMenuId(null);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                     >
                                       <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                       Publish
@@ -427,7 +438,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                       handleEdit(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                   >
                                     <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Edit
@@ -438,7 +449,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         handleArchive(assessment);
                                         setOpenMenuId(null);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                     >
                                       <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                       Archive
@@ -486,7 +497,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
               {filteredAssessments.map((assessment) => (
                 <div
                   key={assessment.id}
-                  className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow"
+                  className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all shadow-sm shadow-brand-blue/5"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1 min-w-0">
@@ -504,21 +515,21 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-gray-400" />
+                      <Users className="w-4 h-4 text-brand-blue" />
                       <div>
                         <p className="text-xs text-gray-500">Candidates</p>
                         <p className="text-sm font-semibold text-gray-900">{assessment.candidates}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-gray-400" />
+                      <CheckCircle className="w-4 h-4 text-green-600" />
                       <div>
                         <p className="text-xs text-gray-500">Completed</p>
                         <p className="text-sm font-semibold text-gray-900">{assessment.completed}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Target className="w-4 h-4 text-gray-400" />
+                      <Target className="w-4 h-4 text-brand-cyan" />
                       <div>
                         <p className="text-xs text-gray-500">Pass Rate</p>
                         <p className="text-sm font-semibold text-gray-900">
@@ -529,7 +540,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                      <TrendingUp className="w-4 h-4 text-brand-orange" />
                       <div>
                         <p className="text-xs text-gray-500">Avg Score</p>
                         <p className="text-sm font-semibold text-gray-900">
@@ -545,7 +556,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                   <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
                     <button
                       onClick={() => handleViewResults(assessment)}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Eye className="w-4 h-4" />
                       View Results
@@ -563,13 +574,13 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                             className="fixed inset-0 z-10"
                             onClick={() => setOpenMenuId(null)}
                           />
-                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 z-20">
                             <button
                               onClick={() => {
                                 handleEdit(assessment);
                                 setOpenMenuId(null);
                               }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                               Edit
@@ -580,7 +591,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                   handleArchive(assessment);
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                               >
                                 <Archive className="w-4 h-4" />
                                 Archive
