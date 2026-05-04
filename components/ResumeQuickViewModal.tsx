@@ -91,23 +91,28 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-5xl h-[calc(100dvh-2rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl text-gray-900">{resume.name}</h2>
-            <p className="text-sm text-gray-500">{resume.title}</p>
+      <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-5xl h-[calc(100dvh-2rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <FileText className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl text-gray-900 tracking-tight">{resume.name}</h2>
+              <p className="text-sm text-gray-500">{resume.title}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-black"
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 bg-white rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-gray-700"
             >
               <Download className="w-4 h-4" />
               Download
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100"
+              className="p-2 text-gray-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5"
             >
               <X className="w-5 h-5" />
             </button>
@@ -115,11 +120,11 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
         </div>
 
         {/* Preview Content */}
-        <div className="flex-1 overflow-hidden p-4">
+        <div className="flex-1 overflow-hidden p-4 bg-slate-50">
           {loading ? (
-            <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+            <div className="flex items-center justify-center h-full bg-white rounded-lg ring-1 ring-black/[0.02]">
               <div className="text-center">
-                <Loader2 className="w-8 h-8 mx-auto mb-4 text-gray-600 animate-spin" />
+                <Loader2 className="w-8 h-8 mx-auto mb-4 text-brand-blue animate-spin" />
                 <p className="text-gray-600">Loading preview...</p>
               </div>
             </div>
@@ -130,8 +135,8 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
               title="Resume Preview"
             />
           ) : extractedText ? (
-            <div className="h-full overflow-y-auto bg-gray-100 rounded-lg p-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
+            <div className="h-full overflow-y-auto bg-white rounded-lg ring-1 ring-black/[0.02] p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 max-w-3xl mx-auto">
                 {extractedText.split('\n').map((line, idx, lines) => {
                   const trimmed = line.trim();
                   if (!trimmed) return <div key={idx} className="h-3" />;
@@ -163,13 +168,13 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+            <div className="flex items-center justify-center h-full bg-white rounded-lg ring-1 ring-black/[0.02]">
               <div className="text-center">
-                <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <FileText className="w-16 h-16 mx-auto mb-4 text-brand-blue/40" />
                 <p className="text-gray-600">Preview not available</p>
                 <button
                   onClick={handleDownload}
-                  className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                  className="mt-4 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Download Instead
                 </button>

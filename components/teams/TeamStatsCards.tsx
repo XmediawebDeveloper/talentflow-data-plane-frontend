@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, UserCheck } from 'lucide-react';
+import { Users, UserCheck, Layers3 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface TeamStats {
@@ -19,7 +19,7 @@ export default function TeamStatsCards({ stats, isLoading }: TeamStatsCardsProps
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div key={i} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <div className="flex items-center justify-between mb-3">
               <Skeleton className="w-12 h-12 rounded-xl" />
             </div>
@@ -33,33 +33,33 @@ export default function TeamStatsCards({ stats, isLoading }: TeamStatsCardsProps
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between mb-3">
-          <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center">
-            <Users className="w-6 h-6 text-white" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <Users className="w-6 h-6 text-brand-blue" />
           </div>
         </div>
-        <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{stats.total_teams}</p>
+        <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 mb-1">{stats.total_teams}</p>
         <p className="text-sm text-gray-600">Total Teams</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between mb-3">
-          <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
-            <UserCheck className="w-6 h-6 text-white" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
+            <UserCheck className="w-6 h-6 text-brand-cyan" />
           </div>
         </div>
-        <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{stats.total_members}</p>
+        <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 mb-1">{stats.total_members}</p>
         <p className="text-sm text-gray-600">Team Members</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between mb-3">
-          <div className="w-12 h-12 bg-gray-600 rounded-xl flex items-center justify-center">
-            <Users className="w-6 h-6 text-white" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+            <Layers3 className="w-6 h-6 text-brand-teal" />
           </div>
         </div>
-        <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
+        <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 mb-1">
           {stats.avg_members_per_team.toFixed(1)}
         </p>
         <p className="text-sm text-gray-600">Avg Members/Team</p>

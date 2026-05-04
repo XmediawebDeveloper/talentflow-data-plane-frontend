@@ -29,16 +29,16 @@ export default function DeleteConfirmDialog({
 }: DeleteConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md">
+      <AlertDialogContent className="max-w-md rounded-3xl border border-gray-100 bg-white shadow-2xl">
         <AlertDialogHeader>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/[0.12] ring-1 ring-brand-orange/20">
+              <AlertTriangle className="w-5 h-5 text-brand-orange-deep" />
             </div>
             <AlertDialogTitle>Delete Team</AlertDialogTitle>
           </div>
           <AlertDialogDescription className="text-left">
-            Are you sure you want to delete <span className="font-semibold text-gray-900">"{teamName}"</span>?
+            Are you sure you want to delete <span className="font-semibold text-gray-900">&quot;{teamName}&quot;</span>?
             This action cannot be undone. All team data will be permanently removed.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -47,7 +47,7 @@ export default function DeleteConfirmDialog({
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isDeleting}
-            className="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+            className="bg-brand-orange-deep hover:bg-brand-orange focus:ring-brand-orange"
           >
             {isDeleting ? (
               <>

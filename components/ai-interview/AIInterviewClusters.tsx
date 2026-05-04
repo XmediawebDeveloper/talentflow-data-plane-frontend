@@ -145,9 +145,9 @@ function PriorityBadge({ p }: { p: number }) {
 
 /* ── Skill Weight Panel ── */
 const WEIGHT_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; activeCls: string }[] = [
-  { value: 'high',   label: 'High', activeCls: 'bg-red-100 text-red-700 border-red-300' },
-  { value: 'medium', label: 'Med',  activeCls: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
-  { value: 'low',    label: 'Low',  activeCls: 'bg-gray-100 text-gray-600 border-gray-300' },
+  { value: 'high',   label: 'High', activeCls: 'bg-red-100 text-red-700 border-red-200 ring-1 ring-red-200' },
+  { value: 'medium', label: 'Med',  activeCls: 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20 ring-1 ring-brand-orange/20' },
+  { value: 'low',    label: 'Low',  activeCls: 'bg-green-100 text-green-700 border-green-200 ring-1 ring-green-200' },
 ];
 
 function SkillWeightRow({
@@ -168,10 +168,10 @@ function SkillWeightRow({
           <button
             key={opt.value}
             onClick={() => onWeightChange(skill.name, opt.value)}
-            className={`px-2 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+            className={`px-2 py-0.5 text-[10px] font-medium rounded border transition-all ${
               current === opt.value
                 ? opt.activeCls
-                : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                : 'bg-white text-gray-400 border-gray-200 hover:border-brand-blue/30 hover:text-brand-blue'
             }`}
           >
             {opt.label}
@@ -194,22 +194,24 @@ function SkillWeightPanel({
   onWeightChange: (skill: string, w: 'high' | 'medium' | 'low') => void;
 }) {
   return (
-    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
-        <SlidersHorizontal className="w-4 h-4 text-gray-500" />
-        <span className="text-sm font-semibold text-gray-800">Skill Importance</span>
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-brand-blue" />
+        </div>
+        <span className="text-sm font-semibold text-gray-900 tracking-tight">Skill Importance</span>
         <span className="text-xs text-gray-400 ml-1">— guides AI cluster generation</span>
       </div>
       <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8">
         {mthSkills.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Must-To-Have</p>
+            <p className="text-[10px] font-semibold text-brand-blue uppercase tracking-wide mb-2">Must-To-Have</p>
             {mthSkills.map(s => <SkillWeightRow key={s.name} skill={s} weights={weights} onWeightChange={onWeightChange} />)}
           </div>
         )}
         {nthSkills.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Nice-To-Have</p>
+            <p className="text-[10px] font-semibold text-brand-cyan uppercase tracking-wide mb-2">Nice-To-Have</p>
             {nthSkills.map(s => <SkillWeightRow key={s.name} skill={s} weights={weights} onWeightChange={onWeightChange} />)}
           </div>
         )}
@@ -251,10 +253,12 @@ function TimeAllocationSummary({
   }));
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
-        <Clock className="w-4 h-4 text-gray-500" />
-        <span className="text-sm font-semibold text-gray-800">Estimated Time per Cluster</span>
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <Clock className="w-3.5 h-3.5 text-brand-blue" />
+        </div>
+        <span className="text-sm font-semibold text-gray-900 tracking-tight">Estimated Time per Cluster</span>
         <span className="text-xs text-gray-400 ml-1">— based on priority</span>
       </div>
       <div className="px-5 py-3 space-y-2">
@@ -262,15 +266,15 @@ function TimeAllocationSummary({
           <div key={i} className="flex items-center gap-3">
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
               r.category === 'MTH'
-                ? 'bg-red-50 text-red-600 border-red-200'
-                : 'bg-amber-50 text-amber-600 border-amber-200'
+                ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                : 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20'
             }`}>{r.category}</span>
             <span className="text-xs text-gray-700 flex-1 truncate">{r.name}</span>
             <PriorityBadge p={r.priority} />
-            <span className="text-xs font-semibold text-gray-900 w-14 text-right">~{r.mins} min</span>
+            <span className="text-xs font-semibold text-brand-blue w-14 text-right">~{r.mins} min</span>
             <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gray-600 rounded-full"
+                className="h-full bg-gradient-to-r from-brand-blue to-brand-cyan rounded-full"
                 style={{ width: `${Math.min(100, (r.priority / 3) * 100)}%` }}
               />
             </div>
@@ -305,9 +309,9 @@ function DraggableClusterSkill({
   return (
     <span
       ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-opacity ${
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-all ${
         isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-40' : 'opacity-100'} bg-white border-gray-200 text-gray-700`}
+      } ${isDragging ? 'opacity-40' : 'opacity-100'} bg-slate-100 border-gray-200 text-gray-700 ring-1 ring-gray-200 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/30 hover:ring-brand-blue/20`}
     >
       {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 text-gray-300" />}
       {skillName}
@@ -393,14 +397,15 @@ function ClusterRow({
   return (
     <div
       ref={combinedRef}
-      className={`border border-gray-200 rounded-lg transition-all ${
+      className={`border rounded-lg transition-all ${
         isDragging ? 'opacity-40' : ''
-      } ${isOver ? 'border-purple-400 bg-purple-50/30' : ''
-      } ${isSkillOver ? 'ring-2 ring-purple-300 bg-purple-50/20' : ''}`}
+      } ${expanded ? 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/10' : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10'
+      } ${isOver ? 'border-brand-blue bg-brand-blue/5' : ''
+      } ${isSkillOver ? 'ring-2 ring-brand-blue/40 bg-brand-blue/10' : ''}`}
     >
       {/* Collapsed header */}
       <div
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
+        className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors ${expanded ? 'hover:bg-brand-blue/10' : 'hover:bg-brand-blue/5'}`}
         onClick={() => onToggleExpand(cluster.id)}
       >
         {/* Hide drag handle when read-only (flexible finalized) */}
@@ -411,18 +416,18 @@ function ClusterRow({
         )}
         <PriorityBadge p={cluster.priority} />
         {cluster.skills.length === 0 && (
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-600 border border-red-200 flex-shrink-0">
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-700 border border-red-200 ring-1 ring-red-200 flex-shrink-0">
             <AlertTriangle className="w-2.5 h-2.5" /> Empty
           </span>
         )}
-        <span className="text-sm font-medium text-gray-800 flex-1 truncate">
+        <span className="text-sm font-medium text-gray-900 flex-1 truncate">
           {cluster.name || 'Unnamed Cluster'}
         </span>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-500">
           {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
         </span>
         {expanded ? (
-          <ChevronUp className="w-4 h-4 text-gray-400" />
+          <ChevronUp className="w-4 h-4 text-brand-blue" />
         ) : (
           <ChevronDown className="w-4 h-4 text-gray-400" />
         )}
@@ -439,7 +444,7 @@ function ClusterRow({
               value={cluster.name}
               onChange={(e) => onUpdate(cluster.id, { name: e.target.value })}
               disabled={isReadOnly}
-              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
               placeholder="e.g. Core Backend Skills"
             />
           </div>
@@ -451,7 +456,7 @@ function ClusterRow({
               value={cluster.priority}
               onChange={(e) => onUpdate(cluster.id, { priority: Number(e.target.value) as Cluster['priority'] })}
               disabled={isReadOnly}
-              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 bg-white ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
+              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
             >
               {[3, 2, 1].map(p => (
                 <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
@@ -467,7 +472,7 @@ function ClusterRow({
               onChange={(e) => onUpdate(cluster.id, { reason: e.target.value })}
               disabled={isReadOnly}
               rows={2}
-              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 resize-none ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
               placeholder="Why is this cluster important?"
             />
           </div>
@@ -501,7 +506,7 @@ function ClusterRow({
             <div className="flex justify-end pt-1">
               <button
                 onClick={() => onRemove(cluster.id)}
-                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-md transition-colors"
               >
                 <Trash2 className="w-3 h-3" />
                 Remove Cluster
@@ -579,14 +584,14 @@ function CategorySection({
   const atLimit = maxClusters > 0 && clusters.length >= maxClusters;
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-white">
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
         <div className="flex items-center gap-2.5">
           {icon}
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-base font-semibold text-gray-900 tracking-tight">{title}</h2>
           {timeMin > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
               <Clock className="w-3 h-3" />
               {timeMin} min
             </span>
@@ -594,8 +599,8 @@ function CategorySection({
           {maxClusters > 0 && (
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
               atLimit
-                ? 'bg-red-50 text-red-600 border-red-200'
-                : 'bg-gray-50 text-gray-500 border-gray-200'
+                ? 'bg-red-50 text-red-700 border-red-200 ring-1 ring-red-200'
+                : 'bg-slate-50 text-gray-600 border-gray-200'
             }`}>
               {clusters.length}/{maxClusters} clusters
             </span>
@@ -607,10 +612,10 @@ function CategorySection({
             onClick={() => onAddCluster(category)}
             disabled={atLimit}
             title={atLimit ? `Maximum ${maxClusters} clusters allowed` : undefined}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium border rounded-lg transition-colors ${
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
               atLimit
-                ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50'
-                : 'text-purple-700 border-purple-200 hover:bg-purple-50'
+                ? 'text-gray-400 border border-gray-200 cursor-not-allowed bg-gray-50'
+                : 'text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -635,13 +640,13 @@ function CategorySection({
                 key={name}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
                   isMain
-                    ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200'
-                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                    ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/30 ring-1 ring-brand-orange/20'
+                    : 'bg-brand-blue/10 text-brand-blue border-brand-blue/20 ring-1 ring-brand-blue/20'
                 }`}
                 title={isMain ? 'Main skill (added by recruiter)' : undefined}
               >
                 {isMain && (
-                  <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-200 text-amber-900 px-1 py-px rounded leading-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wide bg-brand-orange/30 text-brand-orange-deep px-1 py-px rounded leading-none">
                     Main
                   </span>
                 )}
@@ -697,7 +702,7 @@ function CategorySection({
                         )}
                       </div>
                       {subs.length > 0 && (
-                        <div className="ml-4 pl-3 border-l-2 border-amber-200 flex flex-wrap gap-1.5">
+                        <div className="ml-4 pl-3 border-l-2 border-brand-orange/30 flex flex-wrap gap-1.5">
                           {subs.map(s => renderChip(s, { isMain: false }))}
                         </div>
                       )}
@@ -742,8 +747,8 @@ function CategorySection({
                 onChange={e => { setNewSkillInput(e.target.value); if (skillInputError) setSkillInputError(''); }}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSkill(); } }}
                 placeholder={`Add a ${category === 'mth' ? 'must-have' : 'nice-to-have'} skill`}
-                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
-                  skillInputError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
+                  skillInputError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {skillInputError && <p className="mt-1 text-[11px] text-red-500">{skillInputError}</p>}
@@ -751,7 +756,7 @@ function CategorySection({
             <button
               type="button"
               onClick={handleAddSkill}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
             >
               <Plus className="w-3.5 h-3.5" />
               Add
@@ -763,10 +768,12 @@ function CategorySection({
       {/* Cluster list */}
       <div className="p-4 space-y-2.5">
         {clusters.length === 0 ? (
-          <div className="py-10 text-center border-2 border-dashed border-gray-200 rounded-xl">
-            <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">
-              No clusters yet. Click <strong>&quot;Regenerate with AI&quot;</strong> or add manually.
+          <div className="py-10 text-center border-2 border-dashed border-brand-blue/20 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
+              <Layers className="w-7 h-7 text-brand-blue" />
+            </div>
+            <p className="text-sm text-gray-600">
+              No clusters yet. Click <strong className="text-brand-blue">&quot;Regenerate with AI&quot;</strong> or add manually.
             </p>
           </div>
         ) : (
@@ -1690,9 +1697,9 @@ export default function AIInterviewClusters() {
   /* ── Loading state ── */
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
           <p className="text-sm text-gray-500">Loading cluster configuration...</p>
         </div>
       </div>
@@ -1701,12 +1708,12 @@ export default function AIInterviewClusters() {
 
   if (!config) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="text-center">
           <p className="text-sm text-gray-500">No interview configuration found.</p>
           <button
             onClick={() => router.back()}
-            className="mt-3 text-sm text-purple-600 hover:text-purple-700 underline"
+            className="mt-3 text-sm text-brand-blue hover:text-brand-blue-2 underline"
           >
             Go back
           </button>
@@ -1717,7 +1724,7 @@ export default function AIInterviewClusters() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
         <div className="w-full">
           {/* Header */}
           <div className="mb-6">
@@ -1731,15 +1738,15 @@ export default function AIInterviewClusters() {
                   <React.Fragment key={label}>
                     {isCompleted ? (
                       <>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
                           <CheckCircle2 className="w-4 h-4 text-green-600" />
                         </div>
-                        <span className="text-sm text-gray-400">{label}</span>
+                        <span className="text-sm text-gray-500">{label}</span>
                       </>
                     ) : isCurrent ? (
                       <>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-900 text-white text-sm font-medium">{stepNum}</div>
-                        <span className="text-sm text-gray-900 font-medium">{label}</span>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
+                        <span className="text-sm text-brand-blue font-medium">{label}</span>
                       </>
                     ) : (
                       <>
@@ -1759,12 +1766,15 @@ export default function AIInterviewClusters() {
                 <button
                   onClick={handleBack}
                   disabled={saving}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+                  className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Layers className="w-5 h-5 text-brand-blue" />
+                </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">Skill Clusters</h1>
+                  <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Organize skills into weighted clusters for focused interview coverage
                   </p>
@@ -1775,8 +1785,8 @@ export default function AIInterviewClusters() {
                   onClick={() => setShowWeightPanel(v => !v)}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
                     showWeightPanel
-                      ? 'bg-gray-100 border-gray-300 text-gray-900'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue ring-1 ring-brand-blue/20'
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   <SlidersHorizontal className="w-4 h-4" />
@@ -1787,7 +1797,7 @@ export default function AIInterviewClusters() {
                   <button
                     onClick={handleGenerateClusters}
                     disabled={generating || saving}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {generating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1817,17 +1827,17 @@ export default function AIInterviewClusters() {
 
           {/* Flexible mode: finalized lock banner */}
           {isFlexible && isFinalized && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/10 rounded-xl">
               <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                <p className="text-xs font-semibold text-amber-800">
+                <Lock className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
+                <p className="text-xs font-semibold text-brand-orange-deep">
                   Clusters are finalized and locked for editing.
                 </p>
               </div>
               <button
                 onClick={handleReopenClusters}
                 disabled={saving}
-                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap disabled:opacity-50"
+                className="text-xs font-medium text-brand-orange-deep hover:text-brand-orange underline whitespace-nowrap disabled:opacity-50"
               >
                 Re-open for editing
               </button>
@@ -1836,23 +1846,23 @@ export default function AIInterviewClusters() {
 
           {/* Validation warning banner */}
           {!generating && hasIssues && hasClusters && (
-            <div className="flex items-start gap-3 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl">
-              <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 px-4 py-3 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/10 rounded-xl">
+              <AlertTriangle className="w-4 h-4 text-brand-orange-deep flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-yellow-800">Attention needed</p>
+                <p className="text-xs font-semibold text-brand-orange-deep">Attention needed</p>
                 <div className="flex flex-wrap gap-x-4 mt-0.5">
                   {emptyClusters.length > 0 && (
-                    <span className="text-xs text-yellow-700">
+                    <span className="text-xs text-brand-orange-deep/90">
                       {emptyClusters.length} empty cluster{emptyClusters.length > 1 ? 's' : ''}
                     </span>
                   )}
                   {unassignedMth.length > 0 && (
-                    <span className="text-xs text-yellow-700">
+                    <span className="text-xs text-brand-orange-deep/90">
                       {unassignedMth.length} unassigned MTH skill{unassignedMth.length > 1 ? 's' : ''}
                     </span>
                   )}
                   {unassignedNth.length > 0 && (
-                    <span className="text-xs text-yellow-700">
+                    <span className="text-xs text-brand-orange-deep/90">
                       {unassignedNth.length} unassigned NTH skill{unassignedNth.length > 1 ? 's' : ''}
                     </span>
                   )}
@@ -1865,7 +1875,7 @@ export default function AIInterviewClusters() {
           {generating && (
             <div className="flex items-center justify-center py-16">
               <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+                <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
                 <p className="text-sm text-gray-500">AI is analyzing skills and generating clusters...</p>
               </div>
             </div>
@@ -1900,7 +1910,11 @@ export default function AIInterviewClusters() {
               {/* Must-To-Have Section */}
               <CategorySection
                 title="Must-To-Have Skills"
-                icon={<Shield className="w-5 h-5 text-red-500" />}
+                icon={(
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-brand-blue" />
+                  </div>
+                )}
                 category="mth"
                 clusters={mthClusters}
                 timeMin={fixedMthMin}
@@ -1925,7 +1939,11 @@ export default function AIInterviewClusters() {
               {nthEnabled && (
                 <CategorySection
                   title="Nice-To-Have Skills"
-                  icon={<Star className="w-5 h-5 text-amber-500" />}
+                  icon={(
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                      <Star className="w-4 h-4 text-brand-cyan" />
+                    </div>
+                  )}
                   category="nth"
                   clusters={nthClusters}
                   timeMin={fixedNthMin}
@@ -1964,14 +1982,14 @@ export default function AIInterviewClusters() {
 
           {/* ── Configuration Summary sidebar ── */}
           <div className="hidden lg:block w-64 xl:w-72 flex-shrink-0">
-            <div className="bg-white border border-gray-200 rounded-lg p-4 sticky top-6">
-              <h3 className="font-semibold text-gray-900 text-sm mb-4">Configuration Summary</h3>
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sticky top-6">
+              <h3 className="font-semibold text-gray-900 text-sm mb-4 tracking-tight">Configuration Summary</h3>
 
               {/* Job Details */}
               {config && (
                 <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                    <span className="text-xs font-medium text-gray-500">Job Details</span>
+                  <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+                    <span className="text-xs font-medium text-brand-blue">Job Details</span>
                   </div>
                   <div className="divide-y divide-gray-50">
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
@@ -1997,9 +2015,9 @@ export default function AIInterviewClusters() {
               {/* Question Budget + Clusters */}
               {isFixed && (
                 <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
-                    <span className="text-xs text-gray-400">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
+                  <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
+                    <span className="text-xs text-gray-500">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
                   <table className="w-full text-xs">
                     <thead>
@@ -2040,8 +2058,8 @@ export default function AIInterviewClusters() {
 
               {/* Cluster progress */}
               <div className="border border-gray-100 rounded-lg overflow-hidden">
-                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                  <span className="text-xs font-medium text-gray-500">Cluster Progress</span>
+                <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+                  <span className="text-xs font-medium text-brand-blue">Cluster Progress</span>
                 </div>
                 <div className="divide-y divide-gray-50">
                   <div className="px-3 py-2 flex items-center justify-between">
@@ -2068,13 +2086,13 @@ export default function AIInterviewClusters() {
       </div>{/* closes flex-1 p-4 */}
 
       {/* ── Sticky footer ── */}
-      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-200 z-10">
+      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-10">
         <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={handleBack}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Configure
@@ -2092,7 +2110,7 @@ export default function AIInterviewClusters() {
             <button
               onClick={handleSaveAsDraft}
               disabled={saving || generating}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Save as Draft
@@ -2100,7 +2118,7 @@ export default function AIInterviewClusters() {
             <button
               onClick={handleContinue}
               disabled={saving || generating}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {saving ? 'Saving...' : 'Continue to Preview'}

@@ -1,18 +1,18 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
 const PAGE_SIZE = 20;
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-  TEAM_CREATED:   { label: 'Team Created',   icon: Users,      color: 'text-green-700',  bg: 'bg-green-100'  },
-  TEAM_UPDATED:   { label: 'Team Updated',   icon: Pencil,     color: 'text-blue-700',   bg: 'bg-blue-100'   },
-  TEAM_DELETED:   { label: 'Team Deleted',   icon: Trash2,     color: 'text-red-700',    bg: 'bg-red-100'    },
-  MEMBER_ADDED:   { label: 'Member Added',   icon: UserPlus,   color: 'text-purple-700', bg: 'bg-purple-100' },
-  MEMBER_REMOVED: { label: 'Member Removed', icon: UserMinus,  color: 'text-orange-700', bg: 'bg-orange-100' },
+  TEAM_CREATED: { label: 'Team Created', icon: Users, color: 'text-brand-teal', bg: 'bg-brand-teal/10' },
+  TEAM_UPDATED: { label: 'Team Updated', icon: Pencil, color: 'text-brand-blue', bg: 'bg-brand-blue/10' },
+  TEAM_DELETED: { label: 'Team Deleted', icon: Trash2, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10' },
+  MEMBER_ADDED: { label: 'Member Added', icon: UserPlus, color: 'text-brand-cyan', bg: 'bg-brand-cyan/10' },
+  MEMBER_REMOVED: { label: 'Member Removed', icon: UserMinus, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10' },
 };
 
 function formatDate(iso: string) {
@@ -21,7 +21,12 @@ function formatDate(iso: string) {
 
 function getInitials(name?: string) {
   if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export default function TeamHistory() {
@@ -38,9 +43,9 @@ export default function TeamHistory() {
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await teamService.getTeamsHistory(PAGE_SIZE, (page - 1) * PAGE_SIZE, filter);
-      setItems(res.items);
-      setTotal(res.total);
+      const result = await teamService.getTeamsHistory(PAGE_SIZE, (page - 1) * PAGE_SIZE, filter);
+      setItems(result.items);
+      setTotal(result.total);
     } catch {
       setItems([]);
       setTotal(0);
@@ -49,163 +54,192 @@ export default function TeamHistory() {
     }
   }, [page, filter]);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
 
-  // Reset to page 1 when filter changes
-  const handleFilterChange = (f: string) => {
-    setFilter(f);
+  const handleFilterChange = (nextFilter: string) => {
+    setFilter(nextFilter);
     setPage(1);
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-blue/[0.06] px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
+            <History className="h-3.5 w-3.5" />
+            Audit trail
+          </div>
           <h2 className="text-lg font-semibold text-gray-900">Teams History</h2>
           <p className="text-sm text-gray-500">
-            {loading ? '…' : `${total} ${total === 1 ? 'activity' : 'activities'} recorded`}
+            {loading ? 'Loading activities...' : `${total} ${total === 1 ? 'activity' : 'activities'} recorded`}
           </p>
         </div>
-        {/* Filter chips */}
+
         <div className="flex flex-wrap gap-2">
-          {(['ALL', 'TEAM_CREATED', 'TEAM_UPDATED', 'TEAM_DELETED', 'MEMBER_ADDED', 'MEMBER_REMOVED'] as const).map(f => (
+          {(['ALL', 'TEAM_CREATED', 'TEAM_UPDATED', 'TEAM_DELETED', 'MEMBER_ADDED', 'MEMBER_REMOVED'] as const).map((entryFilter) => (
             <button
-              key={f}
-              onClick={() => handleFilterChange(f)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                filter === f
-                  ? 'bg-gray-800 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              key={entryFilter}
+              onClick={() => handleFilterChange(entryFilter)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                filter === entryFilter
+                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/20'
+                  : 'bg-gray-50 text-gray-600 ring-1 ring-gray-200 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
-              {f === 'ALL' ? 'All' : (EVENT_CONFIG[f]?.label ?? f)}
+              {entryFilter === 'ALL' ? 'All' : EVENT_CONFIG[entryFilter]?.label ?? entryFilter}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800" />
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-blue" />
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <Clock className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center text-gray-400">
+          <Clock className="mx-auto mb-3 h-10 w-10 opacity-40" />
           <p className="text-sm">No activity recorded yet</p>
         </div>
       ) : (
         <>
           <div className="space-y-3">
-            {items.map(entry => {
-              const cfg = EVENT_CONFIG[entry.event_type] ?? {
-                label: entry.event_type, icon: Clock, color: 'text-gray-700', bg: 'bg-gray-100',
+            {items.map((entry) => {
+              const config = EVENT_CONFIG[entry.event_type] ?? {
+                label: entry.event_type,
+                icon: Clock,
+                color: 'text-gray-700',
+                bg: 'bg-gray-100',
               };
-              const Icon = cfg.icon;
+              const Icon = config.icon;
+
               return (
-                <div key={entry.id} className="flex items-start gap-4 p-4 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                  <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${cfg.bg}`}>
-                    <Icon className={`w-4 h-4 ${cfg.color}`} />
+                <div
+                  key={entry.id}
+                  className="flex items-start gap-4 rounded-2xl border border-gray-100 bg-gradient-to-r from-white to-brand-blue/[0.02] p-4 transition-colors hover:border-brand-blue/15"
+                >
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${config.bg}`}>
+                    <Icon className={`h-4 w-4 ${config.color}`} />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
-                        {cfg.label}
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${config.bg} ${config.color}`}>
+                        {config.label}
                       </span>
-                      <span className="text-sm font-medium text-gray-900 truncate">{entry.team_name}</span>
+                      <span className="truncate text-sm font-medium text-gray-900">{entry.team_name}</span>
                     </div>
                     <div className="mt-1 text-sm text-gray-600">
                       {entry.event_type === 'MEMBER_ADDED' && (
                         <span>
                           <span className="font-medium">{entry.target_user_name || 'Unknown'}</span> was added
-                          {entry.actor_name && <> by <span className="font-medium">{entry.actor_name}</span></>}
+                          {entry.actor_name && (
+                            <>
+                              {' '}by <span className="font-medium">{entry.actor_name}</span>
+                            </>
+                          )}
                         </span>
                       )}
                       {entry.event_type === 'MEMBER_REMOVED' && (
                         <span>
                           <span className="font-medium">{entry.target_user_name || 'Unknown'}</span> was removed
-                          {entry.actor_name && <> by <span className="font-medium">{entry.actor_name}</span></>}
+                          {entry.actor_name && (
+                            <>
+                              {' '}by <span className="font-medium">{entry.actor_name}</span>
+                            </>
+                          )}
                         </span>
                       )}
-                      {(entry.event_type === 'TEAM_CREATED' || entry.event_type === 'TEAM_UPDATED' || entry.event_type === 'TEAM_DELETED') && (
+                      {(entry.event_type === 'TEAM_CREATED' ||
+                        entry.event_type === 'TEAM_UPDATED' ||
+                        entry.event_type === 'TEAM_DELETED') && (
                         <span>
                           {entry.event_type === 'TEAM_CREATED' && 'Created'}
                           {entry.event_type === 'TEAM_UPDATED' && 'Updated'}
                           {entry.event_type === 'TEAM_DELETED' && 'Deleted'}
-                          {entry.actor_name && <> by <span className="font-medium">{entry.actor_name}</span></>}
+                          {entry.actor_name && (
+                            <>
+                              {' '}by <span className="font-medium">{entry.actor_name}</span>
+                            </>
+                          )}
                           {entry.event_type === 'TEAM_CREATED' && entry.details?.member_count != null && (
-                            <span className="text-gray-400"> · {entry.details.member_count} initial member{entry.details.member_count !== 1 ? 's' : ''}</span>
+                            <span className="text-gray-400">
+                              {' '}· {entry.details.member_count} initial member{entry.details.member_count !== 1 ? 's' : ''}
+                            </span>
                           )}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                  <div className="flex shrink-0 flex-col items-end gap-1">
                     {entry.actor_name && (
-                      <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-xs font-semibold text-white">
                         {getInitials(entry.actor_name)}
                       </div>
                     )}
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(entry.event_at)}</span>
+                    <span className="whitespace-nowrap text-xs text-gray-400">{formatDate(entry.event_at)}</span>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
+            <div className="mt-6 flex flex-col gap-4 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-gray-500">
-                Showing <span className="font-medium">{from}–{to}</span> of <span className="font-medium">{total}</span> {filter !== 'ALL' ? `${EVENT_CONFIG[filter]?.label ?? filter} ` : ''}activities
+                Showing <span className="font-medium">{from}-{to}</span> of <span className="font-medium">{total}</span>{' '}
+                {filter !== 'ALL' ? `${EVENT_CONFIG[filter]?.label ?? filter} ` : ''}activities
               </p>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
                   disabled={page === 1}
-                  className="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
                 <div className="flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                    .reduce<(number | '…')[]>((acc, p, i, arr) => {
-                      if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('…');
-                      acc.push(p);
-                      return acc;
+                  {Array.from({ length: totalPages }, (_, index) => index + 1)
+                    .filter((pageNumber) => pageNumber === 1 || pageNumber === totalPages || Math.abs(pageNumber - page) <= 1)
+                    .reduce<(number | '...')[]>((accumulator, pageNumber, index, pages) => {
+                      if (index > 0 && pageNumber - (pages[index - 1] as number) > 1) accumulator.push('...');
+                      accumulator.push(pageNumber);
+                      return accumulator;
                     }, [])
-                    .map((p, i) =>
-                      p === '…' ? (
-                        <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-sm text-gray-400">…</span>
+                    .map((pageNumber, index) =>
+                      pageNumber === '...' ? (
+                        <span key={`ellipsis-${index}`} className="flex h-9 w-9 items-center justify-center text-sm text-gray-400">
+                          ...
+                        </span>
                       ) : (
                         <button
-                          key={p}
-                          onClick={() => setPage(p as number)}
-                          className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
-                            page === p ? 'bg-gray-800 text-white' : 'hover:bg-gray-100 text-gray-700'
+                          key={pageNumber}
+                          onClick={() => setPage(pageNumber as number)}
+                          className={`h-9 w-9 rounded-xl text-sm font-medium transition-all ${
+                            page === pageNumber
+                              ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/20'
+                              : 'text-gray-700 hover:bg-brand-blue/[0.04]'
                           }`}
                         >
-                          {p}
+                          {pageNumber}
                         </button>
                       )
                     )}
                 </div>
                 <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                   disabled={page === totalPages}
-                  className="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* Show count when only 1 page */}
           {totalPages <= 1 && total > 0 && (
-            <p className="text-sm text-gray-500 mt-4 pt-4 border-t border-gray-100">
+            <p className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-500">
               Showing all <span className="font-medium">{total}</span> {filter !== 'ALL' ? `${EVENT_CONFIG[filter]?.label ?? filter} ` : ''}activities
             </p>
           )}

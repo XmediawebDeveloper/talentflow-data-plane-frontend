@@ -304,15 +304,18 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 p-8 overflow-y-auto bg-slate-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={onBack} className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+            <Brain className="w-5 h-5 text-brand-blue" />
+          </div>
           <div>
-            <h1 className="text-gray-900 text-xl font-semibold">AI Interview Configuration</h1>
+            <h1 className="text-gray-900 text-xl font-semibold tracking-tight">AI Interview Configuration</h1>
             <p className="text-sm text-gray-500">
               {step === 'select-jd' && 'Step 1: Select a published Job Description'}
               {step === 'configure' && 'Step 2: Configure interview rounds'}
@@ -325,9 +328,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
           {['select-jd', 'configure'].map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step === s ? 'bg-gray-900 text-white' :
+                step === s ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' :
                 ['select-jd', 'configure'].indexOf(step) > i ? 'bg-green-100 text-green-700' :
-                'bg-gray-100 text-gray-400'
+                'bg-slate-100 text-gray-400'
               }`}>
                 {['select-jd', 'configure'].indexOf(step) > i ? (
                   <CheckCircle2 className="w-4 h-4" />
@@ -335,7 +338,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   i + 1
                 )}
               </div>
-              <span className={`text-sm ${step === s ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
+              <span className={`text-sm ${step === s ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
                 {s === 'select-jd' ? 'Select JD' : 'Configure & Publish'}
               </span>
               {i < 1 && <div className="w-12 h-px bg-gray-200 mx-1" />}
@@ -352,11 +355,11 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 placeholder="Search job descriptions..."
                 value={jdSearch}
                 onChange={e => setJdSearch(e.target.value)}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
               />
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors whitespace-nowrap"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
                 Create New JD
@@ -365,17 +368,17 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
 
             {loadingJds ? (
               <div className="flex items-center justify-center py-16">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 <span className="ml-2 text-sm text-gray-500">Loading job descriptions...</span>
               </div>
             ) : filteredJds.length === 0 ? (
-              <div className="text-center py-16 bg-white border border-gray-200 rounded-lg">
+              <div className="text-center py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                 <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p className="text-gray-500 mb-2">No published job descriptions found</p>
                 <p className="text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
                 <button
                   onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   Create Job Description
@@ -387,12 +390,12 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   <button
                     key={jd.id}
                     onClick={() => handleSelectJd(jd)}
-                    className="w-full text-left p-5 bg-white border border-gray-200 rounded-lg hover:border-gray-400 hover:shadow-md transition-all"
+                    className="w-full text-left p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/40 hover:ring-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-gray-900">{jd.title}</h3>
+                          <h3 className="font-semibold tracking-tight text-gray-900">{jd.title}</h3>
                           <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">Published</span>
                         </div>
                         <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
@@ -408,7 +411,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                         {jd.must_have_skills.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {jd.must_have_skills.slice(0, 6).map(skill => (
-                              <span key={skill} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+                              <span key={skill} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue text-xs rounded-full ring-1 ring-brand-blue/20">
                                 {skill}
                               </span>
                             ))}
@@ -433,20 +436,20 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             {/* Left column: Round configuration */}
             <div className="col-span-2 space-y-4">
               {/* Selected JD info */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Selected Job Description</div>
-                    <div className="font-medium text-gray-900">{selectedJd.title}</div>
+                    <div className="font-semibold tracking-tight text-gray-900">{selectedJd.title}</div>
                     {selectedJd.must_have_skills.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {selectedJd.must_have_skills.slice(0, 5).map(s => (
-                          <span key={s} className="px-2 py-0.5 bg-white text-gray-600 text-xs rounded-full border border-gray-200">{s}</span>
+                          <span key={s} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue text-xs rounded-full ring-1 ring-brand-blue/20">{s}</span>
                         ))}
                       </div>
                     )}
                   </div>
-                  <button onClick={() => { setStep('select-jd'); setSelectedJd(null); }} className="text-sm text-gray-500 hover:text-gray-700">
+                  <button onClick={() => { setStep('select-jd'); setSelectedJd(null); }} className="text-sm text-brand-blue hover:text-brand-blue-2">
                     Change
                   </button>
                 </div>
@@ -460,8 +463,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     const info = getRoundInfo(round.type);
                     const Icon = info?.icon || Brain;
                     return (
-                      <div key={round.type} className={`border rounded-lg transition-all ${
-                        round.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'
+                      <div key={round.type} className={`rounded-xl ring-1 transition-all ${
+                        round.enabled ? 'border border-gray-100 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5' : 'border border-gray-100 ring-black/[0.02] bg-slate-50 opacity-60'
                       }`}>
                         <div className="p-4">
                           {/* Round header */}
@@ -474,7 +477,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                   onChange={() => handleToggleRound(index)}
                                   className="sr-only peer"
                                 />
-                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-gray-800 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
                               </label>
                               <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${info?.color || 'bg-gray-100 text-gray-700'}`}>
                                 <Icon className="w-4 h-4" />
@@ -508,7 +511,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                     step={5}
                                     value={round.percentage}
                                     onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
-                                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
                                   />
                                   <span className={`text-sm font-medium w-10 text-right ${roundWeightErrors[index] ? 'text-red-500' : 'text-gray-900'}`}>{round.percentage}%</span>
                                 </div>
@@ -538,7 +541,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                     <button
                                       onClick={() => handleSuggestTopics(index)}
                                       disabled={suggestingTopics === round.type}
-                                      className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+                                      className="flex items-center gap-1 text-xs text-brand-blue hover:text-brand-blue-2 transition-colors"
                                     >
                                       {suggestingTopics === round.type ? (
                                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -574,7 +577,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                                 value={skillWeight}
                                                 onChange={e => handleTopicWeight(index, topic, parseInt(e.target.value) || 0)}
                                                 className={`w-12 px-1.5 py-0.5 text-xs text-center border rounded focus:outline-none focus:ring-1 ${
-                                                  hasTopicWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                                                  hasTopicWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                                                 }`}
                                               />
                                               <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-red-500' : 'text-gray-400'}`}>%</span>
@@ -582,7 +585,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                               <button
                                                 onClick={() => toggleComment(round.type, topic)}
                                                 className={`p-0.5 rounded transition-colors ${
-                                                  round.topicComments[topic] ? 'text-blue-500' : 'text-gray-300 hover:text-gray-500'
+                                                  round.topicComments[topic] ? 'text-brand-blue' : 'text-gray-300 hover:text-gray-500'
                                                 }`}
                                                 title="Add comment"
                                               >
@@ -606,7 +609,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                                 placeholder="Add a note or guidance for this skill..."
                                                 value={round.topicComments[topic] || ''}
                                                 onChange={e => handleTopicComment(index, topic, e.target.value)}
-                                                className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300 bg-blue-50/30"
+                                                className="w-full px-2.5 py-1 text-xs border border-brand-blue/20 rounded focus:outline-none focus:ring-1 focus:ring-brand-blue/40 focus:border-brand-blue bg-brand-blue/5"
                                               />
                                             </div>
                                           )}
@@ -627,7 +630,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                           <button
                                             key={st}
                                             onClick={() => handleAddTopic(index, st)}
-                                            className="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-200"
+                                            className="px-2 py-0.5 text-xs bg-brand-blue/5 text-brand-blue rounded-full hover:bg-brand-blue/10 transition-colors ring-1 ring-brand-blue/20"
                                           >
                                             + {st}
                                           </button>
@@ -640,7 +643,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 <input
                                   type="text"
                                   placeholder="Type a skill name and press Enter to add..."
-                                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                   onKeyDown={e => {
                                     if (e.key === 'Enter') {
                                       handleAddTopic(index, (e.target as HTMLInputElement).value);
@@ -668,7 +671,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                           <button
                             key={rt.value}
                             onClick={() => handleAddRound(rt.value)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-dashed border-brand-blue/30 rounded-lg text-brand-blue hover:border-brand-blue hover:bg-brand-blue/5 transition-colors"
                           >
                             <Plus className="w-3 h-3" />
                             <Icon className="w-3 h-3" />
@@ -689,7 +692,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   placeholder="e.g., Focus on system design skills. Candidate has 5 years of experience in microservices."
                   value={specialInstructions}
                   onChange={e => setSpecialInstructions(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none"
                 />
               </div>
 
@@ -699,7 +702,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   type="checkbox"
                   checked={recordingEnabled}
                   onChange={e => setRecordingEnabled(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                  className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                 />
                 <span className="text-sm text-gray-700">Auto-record interview</span>
               </label>
@@ -714,8 +717,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   </div>
                 </label>
                 {introVideoFile || introVideoUrl ? (
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <Video className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                  <div className="flex items-center gap-3 p-3 bg-brand-blue/5 border border-brand-blue/20 ring-1 ring-brand-blue/20 rounded-lg">
+                    <Video className="w-5 h-5 text-brand-blue flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
                       {introVideoFile && (
@@ -723,7 +726,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                       )}
                     </div>
                     {uploadingVideo ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     ) : (
                       <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
                         <X className="w-4 h-4" />
@@ -731,9 +734,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     )}
                   </div>
                 ) : (
-                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
-                    <Upload className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-500">Click to upload an introduction video</span>
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-brand-blue/30 rounded-lg cursor-pointer hover:border-brand-blue hover:bg-brand-blue/5 transition-colors">
+                    <Upload className="w-4 h-4 text-brand-blue" />
+                    <span className="text-sm text-gray-600">Click to upload an introduction video</span>
                     <input
                       type="file"
                       accept="video/*"
@@ -754,10 +757,10 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             {/* Right column: Summary sidebar */}
             <div className="space-y-4">
               {/* Interview Duration - Slider */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Clock className="w-4 h-4 text-gray-700" />
-                  <h3 className="font-medium text-gray-900">Interview Duration</h3>
+                  <Clock className="w-4 h-4 text-brand-blue" />
+                  <h3 className="font-semibold tracking-tight text-gray-900">Interview Duration</h3>
                 </div>
                 <div className="flex items-center gap-3">
                   <input
@@ -767,7 +770,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     step="5"
                     value={totalDuration}
                     onChange={e => setTotalDuration(parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
                   />
                   <div className="flex items-center gap-1.5">
                     <input
@@ -780,7 +783,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                         const v = parseInt(e.target.value);
                         if (v >= 15 && v <= 90) setTotalDuration(v);
                       }}
-                      className="w-14 px-2 py-1.5 border border-gray-300 rounded-lg text-center text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-center text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     />
                     <span className="text-sm text-gray-500">min</span>
                   </div>
@@ -789,8 +792,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
               </div>
 
               {/* Summary */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sticky top-8">
-                <h3 className="font-medium text-gray-900 mb-3">Interview Summary</h3>
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sticky top-8">
+                <h3 className="font-semibold tracking-tight text-gray-900 mb-3">Interview Summary</h3>
 
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
@@ -859,7 +862,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     disabled={!percentageValid || enabledRounds.length === 0 || publishing}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       percentageValid && enabledRounds.length > 0 && !publishing
-                        ? 'bg-gray-800 text-white hover:bg-gray-900'
+                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -873,9 +876,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   <button
                     onClick={handleSaveAsDraft}
                     disabled={!percentageValid || enabledRounds.length === 0 || savingDraft}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors border ${
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors border bg-white ${
                       percentageValid && enabledRounds.length > 0 && !savingDraft
-                        ? 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        ? 'border-gray-200 text-gray-700 hover:bg-slate-100'
                         : 'border-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >

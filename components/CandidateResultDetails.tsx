@@ -329,22 +329,21 @@ export default function CandidateResultDetails({
 
   // Helper functions
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-gray-800';
-    if (score >= 40) return 'text-yellow-600';
+    if (score >= 70) return 'text-green-600';
+    if (score >= 40) return 'text-brand-orange-deep';
     return 'text-red-600';
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Completed':
-        return 'bg-green-50 text-green-700 border-green-300';
+        return 'bg-green-100 text-green-700 ring-1 ring-green-200';
       case 'In Progress':
-        return 'bg-blue-50 text-blue-700 border-blue-300';
+        return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
       case 'Pending':
-        return 'bg-gray-50 text-gray-700 border-gray-300';
+        return 'bg-slate-100 text-slate-700 ring-1 ring-slate-200';
       default:
-        return 'bg-yellow-50 text-yellow-700 border-yellow-300';
+        return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
     }
   };
 
@@ -378,9 +377,9 @@ export default function CandidateResultDetails({
 
   if (isLoadingDetails) {
     return (
-      <div className="flex-1 bg-gray-50 flex items-center justify-center">
+      <div className="flex-1 bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-spin" />
+          <Loader2 className="w-12 h-12 text-brand-blue mx-auto mb-4 animate-spin" />
           <p className="text-gray-600">Loading detailed results...</p>
         </div>
       </div>
@@ -389,13 +388,13 @@ export default function CandidateResultDetails({
 
   if (detailsError) {
     return (
-      <div className="flex-1 bg-gray-50 flex items-center justify-center">
+      <div className="flex-1 bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <p className="text-red-600 mb-4">{detailsError}</p>
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+            className="px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg text-sm transition-colors"
           >
             Back to Results
           </button>
@@ -405,102 +404,102 @@ export default function CandidateResultDetails({
   }
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto">
-      {/* Sticky Header - Assessment & JD Title */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
+    <div className="flex-1 bg-slate-50 overflow-y-auto">
+      {/* Sticky Header — Back + Title + Prev/Next + Export Results, all in one
+          gradient bar so the inner Question-Analysis tab nav (z-20) can no
+          longer climb on top of it during scroll. */}
+      <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center flex-shrink-0">
+              <button
+                onClick={onBack}
+                className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white ring-1 ring-white/25 transition-colors flex-shrink-0"
+                title="Back to Results"
+                aria-label="Back to Results"
+              >
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/20">
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div className="min-w-0">
                 <div className="text-white/80 text-xs mb-0.5 sm:mb-1">Assessment</div>
-                <h1 className="text-white text-base sm:text-xl truncate">{assessmentTitle}</h1>
+                <h1 className="text-white text-base sm:text-xl truncate tracking-tight">{assessmentTitle}</h1>
                 {jdTitle && (
                   <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
-                    <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-200 flex-shrink-0" />
-                    <span className="text-gray-100 text-xs sm:text-sm truncate">Linked to: {jdTitle}</span>
+                    <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white/80 flex-shrink-0" />
+                    <span className="text-white/90 text-xs sm:text-sm truncate">Linked to: {jdTitle}</span>
                   </div>
                 )}
               </div>
             </div>
-            <button
-              onClick={async () => {
-                try {
-                  const blob = await assessmentService.exportResults(assessmentId, 'excel', true);
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results_detailed.xlsx`;
-                  document.body.appendChild(a);
-                  a.click();
-                  window.URL.revokeObjectURL(url);
-                  document.body.removeChild(a);
-                } catch (error) {
-                  console.error('Failed to export results:', error);
-                  toast.error('Failed to export results. Please try again.');
-                }
-              }}
-              className="px-3 sm:px-6 py-2 sm:py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 border border-white/30 text-xs sm:text-sm self-start sm:self-auto whitespace-nowrap"
-            >
-              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-              Export Results
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Sticky navigation strip */}
-      <div className="sticky top-[72px] sm:top-[88px] z-20 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
-        <div className="px-4 sm:px-6 md:px-8 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              Back to Results Overview
-            </button>
-            {totalCount != null && totalCount > 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onPrev}
-                  disabled={!onPrev || currentIndex === 0}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600 font-medium px-1">
-                  {(currentIndex ?? 0) + 1} / {totalCount}
-                </span>
-                <button
-                  onClick={onNext}
-                  disabled={!onNext || currentIndex === totalCount - 1}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
+              {totalCount != null && totalCount > 0 && (
+                <>
+                  <button
+                    onClick={onPrev}
+                    disabled={!onPrev || currentIndex === 0}
+                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Previous candidate"
+                  >
+                    <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="hidden sm:inline">Previous</span>
+                  </button>
+                  <span className="text-xs sm:text-sm text-white font-medium px-1.5 sm:px-2 whitespace-nowrap">
+                    {(currentIndex ?? 0) + 1} / {totalCount}
+                  </span>
+                  <button
+                    onClick={onNext}
+                    disabled={!onNext || currentIndex === totalCount - 1}
+                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Next candidate"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={async () => {
+                  try {
+                    const blob = await assessmentService.exportResults(assessmentId, 'excel', true);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results_detailed.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                  } catch (error) {
+                    console.error('Failed to export results:', error);
+                    toast.error('Failed to export results. Please try again.');
+                  }
+                }}
+                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium"
+              >
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Export Results</span>
+                <span className="sm:hidden">Export</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10">
         <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 font-semibold">
                 {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="min-w-0">
-                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate">{candidateData?.name || 'Unknown'}</h1>
+                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
-                <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-mono font-medium mt-0.5">
+                <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium mt-0.5">
                   {candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`}
                 </span>
               </div>
@@ -517,7 +516,7 @@ export default function CandidateResultDetails({
                   displayStatus = 'Pending';
                 }
                 return (
-                  <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm border ${getStatusColor(displayStatus)}`}>
+                  <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${getStatusColor(displayStatus)}`}>
                     {displayStatus}
                   </span>
                 );
@@ -530,11 +529,11 @@ export default function CandidateResultDetails({
       {/* Content */}
       <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
         {/* Assessment Info */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">Assessment</div>
@@ -542,7 +541,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
                 <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
               <div>
@@ -551,8 +550,8 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
               </div>
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Time Taken</div>
@@ -560,30 +559,30 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">JD ID</div>
-                <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold font-mono">
+                <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-semibold font-mono">
                   {jdId || 'N/A'}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Clipboard className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                <Clipboard className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">Assessment ID</div>
-                <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold font-mono">
+                <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-semibold font-mono">
                   {assessmentShortId || `AS-${assessmentId}`}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Info className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <Info className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">Version</div>
@@ -593,8 +592,8 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-teal-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-teal" />
               </div>
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Start Time</div>
@@ -604,7 +603,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
                 <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
               <div>
@@ -625,16 +624,16 @@ export default function CandidateResultDetails({
 
           if (allQuestionsZero && sectionsHaveScores) {
             return (
-              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
+              <div className="bg-brand-orange/5 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl p-4 mb-6">
                 <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <Info className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="text-sm font-medium text-yellow-900 mb-2">Score Calculation Note</h3>
-                    <p className="text-sm text-yellow-800 mb-3">
+                    <h3 className="text-sm font-medium text-brand-orange-deep mb-2">Score Calculation Note</h3>
+                    <p className="text-sm text-gray-700 mb-3">
                       The assessment score is calculated using weighted section scores.
                       Individual section scores may show 0% if questions are not yet scored or if there's a scoring status mismatch.
                     </p>
-                    <div className="text-xs text-yellow-700 space-y-1">
+                    <div className="text-xs text-gray-600 space-y-1">
                       <div><strong>Scoring Status:</strong> {detailedResult.scoring_status}</div>
                       <div className="mt-2 mb-1"><strong>Score Breakdown:</strong></div>
                       {detailedResult.round_scores.map((round, idx) => (
@@ -642,7 +641,7 @@ export default function CandidateResultDetails({
                           • <strong className="capitalize">{round.round_type}:</strong> {round.raw_score}% raw score × {round.weightage_percent}% weight = <strong>{round.weighted_score}% contribution</strong>
                         </div>
                       ))}
-                      <div className="mt-2 text-yellow-800 bg-yellow-100 rounded p-2">
+                      <div className="mt-2 text-gray-700 bg-brand-orange/10 rounded p-2">
                         <strong>Note:</strong> Individual questions show 0 points because the backend hasn't populated the question-level scores,
                         but section scores ({detailedResult.round_scores.map(r => r.raw_score).join('%, ')}%) are calculated correctly.
                       </div>
@@ -656,8 +655,8 @@ export default function CandidateResultDetails({
         })()}
 
         {/* Section Scores */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Section-wise Performance</h2>
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4 tracking-tight font-semibold">Section-wise Performance</h2>
           <div className="space-y-4">
             {candidateData?.sections.map((section, idx) => {
               const isHR = section.name.toLowerCase().includes('hr');
@@ -689,10 +688,10 @@ export default function CandidateResultDetails({
               const unansweredPct = totalQ > 0 ? (unansweredQ / totalQ) * 100 : 0;
 
               return (
-                <div key={idx} className={`border rounded-lg p-4 ${
+                <div key={idx} className={`border rounded-xl p-4 ring-1 ${
                   isHR
-                    ? 'border-gray-200 bg-gray-50/30'
-                    : 'border-green-200 bg-green-50/30'
+                    ? 'border-gray-100 bg-slate-50/40 ring-black/[0.02]'
+                    : 'border-brand-blue/15 bg-brand-blue/5 ring-brand-blue/5'
                 }`}>
                   {/* Hide score / pct / bar until AI scoring is finished.
                       Mid-evaluation we'd otherwise render "0/10 correct, 0%"
@@ -707,15 +706,15 @@ export default function CandidateResultDetails({
                             <div className="flex items-center gap-2">
                               <span className="text-gray-900">{section.name}</span>
                               {isHR ? (
-                                <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 ring-1 ring-slate-200 rounded text-xs font-medium">
                                   Not Scored
                                 </span>
                               ) : scoringDone ? (
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                                <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">
                                   Scored (0-10)
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">
+                                <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-medium">
                                   Processing…
                                 </span>
                               )}
@@ -725,7 +724,7 @@ export default function CandidateResultDetails({
                                 <>
                                   {section.score}/{section.totalScore} correct
                                   {!isHR && (
-                                    <span className="text-gray-800 ml-2">• Weighted contribution: {Math.round(section.weightedScore)}%</span>
+                                    <span className="text-brand-blue ml-2">• Weighted contribution: {Math.round(section.weightedScore)}%</span>
                                   )}
                                 </>
                               ) : (
@@ -733,16 +732,16 @@ export default function CandidateResultDetails({
                               )}
                             </div>
                           </div>
-                          <div className={`text-2xl ${isHR || !scoringDone ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
+                          <div className={`text-2xl font-semibold ${isHR || !scoringDone ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
                             {isHR || !scoringDone ? '—' : `${section.percentage}%`}
                           </div>
                         </div>
 
                         {/* Score progress bar (non-HR, only after scoring done) */}
                         {!isHR && scoringDone && (
-                          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+                          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-3 ring-1 ring-black/[0.03]">
                             <div
-                              className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                              className={`h-3 rounded-full ${section.percentage >= 70 ? 'bg-gradient-to-r from-green-600 to-emerald-600' : section.percentage >= 40 ? 'bg-gradient-to-r from-brand-orange to-brand-orange-deep' : 'bg-gradient-to-r from-red-600 to-red-700'}`}
                               style={{ width: `${Math.min(section.percentage, 100)}%` }}
                             />
                           </div>
@@ -753,7 +752,7 @@ export default function CandidateResultDetails({
 
                   {/* Question Attendance Bar */}
                   {totalQ > 0 && (
-                    <div className={isHR ? '' : 'mt-1 pt-3 border-t border-gray-200'}>
+                    <div className={isHR ? '' : 'mt-1 pt-3 border-t border-brand-blue/10'}>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-600">Question Attendance</span>
                         <span className="text-xs text-gray-400">{totalQ} Total</span>
@@ -763,16 +762,16 @@ export default function CandidateResultDetails({
                           recruiters; the system already tracks "answered" vs
                           "no answer" cleanly. Skipped questions roll into
                           Unanswered so the bar always sums to total. */}
-                      <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-gray-100 mb-2">
+                      <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-slate-100 mb-2 ring-1 ring-black/[0.03]">
                         {submittedQ > 0 && (
                           <div
-                            className="h-full bg-green-500 transition-all"
+                            className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all"
                             style={{ width: `${submittedPct}%` }}
                           />
                         )}
                         {(unansweredQ + skippedQ) > 0 && (
                           <div
-                            className="h-full bg-red-400 transition-all"
+                            className="h-full bg-gradient-to-r from-red-400 to-red-500 transition-all"
                             style={{ width: `${unansweredPct + skippedPct}%` }}
                           />
                         )}
@@ -910,20 +909,24 @@ export default function CandidateResultDetails({
 
         {/* Candidate Insights - AI Generated Analysis */}
         {detailedResult && detailedResult.scoring_status === 'completed' && (
-          <div className="bg-white rounded-lg border-2 border-blue-200 overflow-hidden shadow-lg mb-6">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div>
-                <h2 className="text-white flex items-center gap-2 text-sm sm:text-base">
-                  <Award className="w-4 h-4 sm:w-5 sm:h-5" />
-                  AI-Generated Candidate Insights
-                </h2>
-                <p className="text-blue-100 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/20 shadow-md shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
+                  <Award className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-gray-900 flex items-center gap-2 text-sm sm:text-base tracking-tight font-semibold">
+                    AI-Generated Candidate Insights
+                  </h2>
+                  <p className="text-gray-600 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                </div>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
                 <button
                   onClick={handleGenerateInsights}
                   disabled={isGeneratingInsights}
-                  className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isGeneratingInsights ? (
                     <>
@@ -944,7 +947,7 @@ export default function CandidateResultDetails({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <div className="bg-green-50 rounded-xl p-4 border border-green-200 ring-1 ring-green-100">
                     <h3 className="text-green-800 font-medium mb-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       Interview Strength
@@ -957,12 +960,12 @@ export default function CandidateResultDetails({
 
                 {/* Interview Weakness */}
                 {detailedResult.candidate_insights.interview_weakness && (
-                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                    <h3 className="text-orange-800 font-medium mb-3 flex items-center gap-2">
+                  <div className="bg-brand-orange/5 rounded-xl p-4 border border-brand-orange/30 ring-1 ring-brand-orange/15">
+                    <h3 className="text-brand-orange-deep font-medium mb-3 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
                       Interview Weakness
                     </h3>
-                    <p className="text-sm text-orange-700">
+                    <p className="text-sm text-gray-700">
                       {detailedResult.candidate_insights.interview_weakness}
                     </p>
                   </div>
@@ -970,12 +973,12 @@ export default function CandidateResultDetails({
 
                 {/* Interview Training Modules */}
                 {detailedResult.candidate_insights.interview_training_modules && (
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <h3 className="text-blue-800 font-medium mb-3 flex items-center gap-2">
+                  <div className="bg-brand-blue/5 rounded-xl p-4 border border-brand-blue/20 ring-1 ring-brand-blue/10">
+                    <h3 className="text-brand-blue font-medium mb-3 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
                       Interview Training Modules
                     </h3>
-                    <p className="text-sm text-blue-700">
+                    <p className="text-sm text-gray-700">
                       {detailedResult.candidate_insights.interview_training_modules}
                     </p>
                   </div>
@@ -983,12 +986,12 @@ export default function CandidateResultDetails({
 
                 {/* Interview Training Suggestion */}
                 {detailedResult.candidate_insights.interview_training_suggestion && (
-                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                    <h3 className="text-purple-800 font-medium mb-3 flex items-center gap-2">
+                  <div className="bg-brand-cyan/5 rounded-xl p-4 border border-brand-cyan/30 ring-1 ring-brand-cyan/15">
+                    <h3 className="text-brand-cyan font-medium mb-3 flex items-center gap-2">
                       <Briefcase className="w-4 h-4" />
                       Interview Training Suggestion
                     </h3>
-                    <p className="text-sm text-purple-700">
+                    <p className="text-sm text-gray-700">
                       {detailedResult.candidate_insights.interview_training_suggestion}
                     </p>
                   </div>
@@ -996,15 +999,15 @@ export default function CandidateResultDetails({
               </div>
               ) : (
                 <div className="text-center py-12">
-                  <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg text-gray-700 mb-2">No AI Insights Generated Yet</h3>
+                  <Award className="w-16 h-16 text-brand-blue/30 mx-auto mb-4" />
+                  <h3 className="text-lg text-gray-700 mb-2 tracking-tight font-semibold">No AI Insights Generated Yet</h3>
                   <p className="text-gray-600 mb-4">
                     Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
                   </p>
                   <button
                     onClick={handleGenerateInsights}
                     disabled={isGeneratingInsights}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
                     {isGeneratingInsights ? (
                       <>
@@ -1025,23 +1028,23 @@ export default function CandidateResultDetails({
         )}
 
         {/* Detailed Answers */}
-        <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-4 sm:px-6 py-4 sm:py-5">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+          <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 sm:px-6 py-4 sm:py-5 ring-1 ring-white/10">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-white text-sm sm:text-base">Detailed Question Analysis</h2>
-                <p className="text-gray-100 text-xs sm:text-sm mt-1">Review questions and answers for each section</p>
+                <h2 className="text-white text-sm sm:text-base tracking-tight font-semibold">Detailed Question Analysis</h2>
+                <p className="text-white/80 text-xs sm:text-sm mt-1">Review questions and answers for each section</p>
               </div>
               {/* Agent Status Badge */}
               {detailedResult && (
-                <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+                <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ring-1 ${
                   detailedResult.scoring_status === 'completed'
-                    ? 'bg-green-500/20 text-green-100 border border-green-400/30'
+                    ? 'bg-green-500/20 text-green-100 ring-green-400/30'
                     : detailedResult.scoring_status === 'processing'
-                    ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                    ? 'bg-brand-orange/20 text-white ring-brand-orange/40'
                     : detailedResult.scoring_status === 'error'
-                    ? 'bg-red-500/20 text-red-100 border border-red-400/30'
-                    : 'bg-gray-500/20 text-gray-100 border border-gray-400/30'
+                    ? 'bg-red-500/20 text-red-100 ring-red-400/30'
+                    : 'bg-white/10 text-white ring-white/20'
                 }`}>
                   {detailedResult.scoring_status === 'processing' && (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1069,16 +1072,16 @@ export default function CandidateResultDetails({
           {/* Agent Processing State */}
           {detailedResult && detailedResult.scoring_status === 'processing' && (
             <div className="p-8">
-              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-xl p-8 text-center">
-                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Loader2 className="w-10 h-10 text-yellow-600 animate-spin" />
+              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-8 text-center shadow-sm shadow-brand-blue/10">
+                <div className="w-20 h-20 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md shadow-brand-blue/25 ring-1 ring-white/20">
+                  <Loader2 className="w-10 h-10 text-white animate-spin" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Processing Results</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2 tracking-tight">Processing Results</h3>
                 <p className="text-gray-600 mb-4">
                   We're analyzing the candidate's responses. This usually takes 1–2 minutes.
                 </p>
-                <div className="flex items-center justify-center gap-2 text-sm text-yellow-700">
-                  <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                <div className="flex items-center justify-center gap-2 text-sm text-brand-blue">
+                  <span className="inline-block w-2 h-2 bg-brand-blue rounded-full animate-pulse"></span>
                   <span>Processing in progress...</span>
                 </div>
               </div>
@@ -1091,8 +1094,10 @@ export default function CandidateResultDetails({
               {/* Tab Navigation — sticky so the candidate viewer can switch
                   between HR / Technical / Coding / Violations without
                   scrolling all the way back up on long question lists.
-                  z-30 keeps it above the question cards but below any modals. */}
-              <div className="sticky top-0 z-30 border-b border-gray-200 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 shadow-sm">
+                  z-20 keeps it above question cards but BELOW the page-level
+                  brand header (z-40), so it can never overlap the title /
+                  Prev/Next / Export Results bar during scroll. */}
+              <div className="sticky top-[64px] sm:top-[80px] z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
                 <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
@@ -1106,13 +1111,13 @@ export default function CandidateResultDetails({
                         onClick={() => setActiveTab(round.round_type)}
                         className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                           isActive
-                            ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-white text-brand-blue border-t-2 border-x border-brand-blue font-medium shadow-sm'
+                            : 'bg-white/60 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                         }`}
                       >
                         <span className="font-medium capitalize text-xs sm:text-sm">{round.round_type} Round</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${
-                          isActive ? 'bg-gray-100 text-gray-900' : 'bg-gray-200 text-gray-600'
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          isActive ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' : 'bg-slate-100 text-gray-600'
                         }`}>
                           {questionsForRound.length}
                         </span>
@@ -1125,18 +1130,18 @@ export default function CandidateResultDetails({
                     onClick={() => setActiveTab('violations')}
                     className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                       activeTab === 'violations'
-                        ? 'bg-white text-red-700 border-t-2 border-x border-red-500 shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-white text-red-700 border-t-2 border-x border-red-500 font-medium shadow-sm'
+                        : 'bg-white/60 text-gray-600 hover:bg-red-50 hover:text-red-700'
                     }`}
                   >
                     <ShieldAlert className="w-4 h-4" />
                     <span className="font-medium">Violations</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       activeTab === 'violations'
-                        ? 'bg-red-100 text-red-700'
+                        ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
                         : (detailedResult.proctoring_stats?.total_violations || 0) > 0
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-gray-200 text-gray-600'
+                          ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                          : 'bg-slate-100 text-gray-600'
                     }`}>
                       {detailedResult.proctoring_stats?.total_violations || 0}
                     </span>
@@ -1170,9 +1175,9 @@ export default function CandidateResultDetails({
                   return (
                     <div key={roundIdx} className="space-y-6">
                       {/* Section Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
                         <div>
-                          <h3 className="text-base sm:text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
+                          <h3 className="text-base sm:text-xl text-gray-900 capitalize tracking-tight font-semibold">{round.round_type} Round</h3>
                           {(() => {
                             // Per-type question count for this round so the
                             // header shows e.g. "13 questions (MCQ - 11, Text
@@ -1210,7 +1215,7 @@ export default function CandidateResultDetails({
                           <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                             {isHRRound ? 'Section Type' : 'Section Score'}
                           </div>
-                          <div className={`text-xl sm:text-3xl ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
+                          <div className={`text-xl sm:text-3xl font-bold tracking-tight ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
                             {isHRRound ? '—' : `${displayedSectionPercentage}%`}
                           </div>
                         </div>
@@ -1220,19 +1225,19 @@ export default function CandidateResultDetails({
                       {questionsForRound.length > 0 ? (
                         <div className="space-y-6">
                           {questionsForRound.map((q, qIdx) => (
-                            <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
+                            <div key={qIdx} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden hover:border-brand-blue/20 hover:ring-brand-blue/5 transition-colors shadow-sm shadow-brand-blue/5">
                               {(() => {
                                 const isTextQuestion = !['coding', 'mcq', 'single_choice', 'multiple_choice'].includes(q.question_type);
                                 return (
                                   <>
                               {/* Question Header */}
-                              <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 ${
-                                isTextQuestion ? 'bg-gray-50' : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
+                              <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 ${
+                                isTextQuestion ? 'bg-slate-50' : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                                      <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
+                                      <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-full text-xs font-medium shadow-sm shadow-brand-blue/20">
                                         Q{qIdx + 1}
                                       </span>
                                       {/* Question-type badge removed —
@@ -1243,9 +1248,9 @@ export default function CandidateResultDetails({
                                           (options grid for MCQ, code block
                                           for coding, free text otherwise). */}
                                       {!isTextQuestion && (q.is_correct ? (
-                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Correct</span>
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">Correct</span>
                                       ) : (
-                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Incorrect</span>
+                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded text-xs font-medium">Incorrect</span>
                                       ))}
                                     </div>
                                     {q.question_type === 'coding' ? (
@@ -1257,7 +1262,7 @@ export default function CandidateResultDetails({
                                       // Example Input / Expected Output blocks.
                                       <div className="space-y-4">
                                         <div>
-                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">
                                             {q.problem_title || 'Coding Problem'}
                                           </h3>
                                           <div className="prose prose-sm max-w-none text-gray-700">
@@ -1270,7 +1275,7 @@ export default function CandidateResultDetails({
                                         {q.input_format && (
                                           <div>
                                             <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Input Format</h4>
-                                            <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                                            <div className="text-sm text-gray-700 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
                                               {q.input_format}
                                             </div>
                                           </div>
@@ -1279,7 +1284,7 @@ export default function CandidateResultDetails({
                                         {q.output_format && (
                                           <div>
                                             <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Output Format</h4>
-                                            <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                                            <div className="text-sm text-gray-700 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
                                               {q.output_format}
                                             </div>
                                           </div>
@@ -1288,11 +1293,11 @@ export default function CandidateResultDetails({
                                         {Array.isArray(q.constraints) && q.constraints.length > 0 && (
                                           <div>
                                             <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Constraints</h4>
-                                            <ul className="text-sm text-gray-700 space-y-1 bg-gray-50 p-3 rounded-lg">
+                                            <ul className="text-sm text-gray-700 space-y-1 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg">
                                               {q.constraints.map((constraint: string, idx: number) => (
                                                 <li key={idx} className="flex items-start gap-2">
                                                   <span className="text-gray-400">-</span>
-                                                  <code className="text-xs bg-gray-200 px-1 rounded">{constraint}</code>
+                                                  <code className="text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-1 rounded">{constraint}</code>
                                                 </li>
                                               ))}
                                             </ul>
@@ -1343,11 +1348,11 @@ export default function CandidateResultDetails({
 
                                           return (
                                             <>
-                                              <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
+                                              <div className={`text-lg sm:text-2xl font-bold tracking-tight ${getScoreColor(percentage)}`}>
                                                 {Math.round(normalizedEarned)}
                                               </div>
                                               <div className="text-gray-400">/</div>
-                                              <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
+                                              <div className="text-base sm:text-xl text-gray-600 font-medium">{normalizedPossible}</div>
                                             </>
                                           );
                                         })()}
@@ -1360,7 +1365,7 @@ export default function CandidateResultDetails({
                               {/* Question Content */}
                               <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
                                 {q.question_type === 'coding' && getCodingEvaluationState(q).warning && (
-                                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                  <div className="rounded-lg border border-brand-orange/30 bg-brand-orange/5 ring-1 ring-brand-orange/15 p-3 text-sm text-brand-orange-deep">
                                     {getCodingEvaluationState(q).warning}
                                   </div>
                                 )}
@@ -1442,8 +1447,8 @@ export default function CandidateResultDetails({
                                     return (
                                       <div>
                                         <div className="flex items-center gap-2 mb-3">
-                                          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <User className="w-4 h-4 text-gray-800" />
+                                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                            <User className="w-4 h-4 text-brand-blue" />
                                           </div>
                                           <div className="text-sm font-medium text-gray-800">OPTIONS</div>
                                         </div>
@@ -1454,15 +1459,15 @@ export default function CandidateResultDetails({
                                             const isSelected = selectedSet.has(oid);
                                             const isWrongSelection = isSelected && !isCorrect;
                                             const wrap = isCorrect
-                                              ? 'bg-green-50 border-green-300 text-green-900'
+                                              ? 'bg-green-50 border-green-300 ring-1 ring-green-200 text-green-900'
                                               : isWrongSelection
-                                                ? 'bg-red-50 border-red-300 text-red-900'
-                                                : 'bg-gray-50 border-gray-200 text-gray-800';
+                                                ? 'bg-red-50 border-red-300 ring-1 ring-red-200 text-red-900'
+                                                : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02] text-gray-800';
                                             const badge = isCorrect
-                                              ? 'bg-green-600 text-white'
+                                              ? 'bg-gradient-to-br from-green-600 to-emerald-600 text-white shadow-sm shadow-green-600/25'
                                               : isWrongSelection
-                                                ? 'bg-red-600 text-white'
-                                                : 'bg-gray-200 text-gray-700';
+                                                ? 'bg-gradient-to-br from-red-600 to-red-700 text-white shadow-sm shadow-red-600/25'
+                                                : 'bg-slate-200 text-gray-700';
                                             return (
                                               <div
                                                 key={oid}
@@ -1500,15 +1505,15 @@ export default function CandidateResultDetails({
                                   return (
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                          <User className="w-4 h-4 text-gray-800" />
+                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                          <User className="w-4 h-4 text-brand-blue" />
                                         </div>
                                         <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
                                       </div>
                                       <div className={`rounded-lg p-4 ${
                                         q.question_type === 'coding'
-                                          ? 'bg-gray-900 text-green-400 font-mono text-sm overflow-x-auto'
-                                          : 'bg-gray-50 text-gray-800'
+                                          ? 'bg-slate-900 text-green-400 font-mono text-sm overflow-x-auto ring-1 ring-black/20'
+                                          : 'bg-slate-50 ring-1 ring-black/[0.03] text-gray-800'
                                       }`}>
                                         {q.question_type === 'coding' ? (
                                           <pre className="whitespace-pre-wrap">{q.candidate_code_submission || 'No code submitted'}</pre>
@@ -1533,24 +1538,24 @@ export default function CandidateResultDetails({
                                   <>
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                          <FileText className="w-4 h-4 text-yellow-700" />
+                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-brand-orange-deep" />
                                         </div>
-                                        <div className="text-sm font-medium text-yellow-200">CODE INPUT</div>
+                                        <div className="text-sm font-medium text-gray-800">CODE INPUT</div>
                                       </div>
-                                      <div className="bg-yellow-700 rounded-lg p-4 text-white font-mono text-sm overflow-x-auto border border-yellow-500">
+                                      <div className="bg-slate-900 rounded-lg p-4 text-brand-orange font-mono text-sm overflow-x-auto ring-1 ring-black/20">
                                         <pre className="whitespace-pre-wrap">{getCandidateCodingInput(q)}</pre>
                                       </div>
                                     </div>
 
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                          <FileText className="w-4 h-4 text-sky-700" />
+                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-brand-cyan" />
                                         </div>
-                                        <div className="text-sm font-medium text-sky-900">CANDIDATE OUTPUT</div>
+                                        <div className="text-sm font-medium text-gray-800">CANDIDATE OUTPUT</div>
                                       </div>
-                                    <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-sky-950 text-sky-100">
+                                    <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-slate-900 text-brand-cyan ring-1 ring-black/20">
                                       <pre className="whitespace-pre-wrap">
                                         {getCandidateCodingOutput(q)}
                                       </pre>
@@ -1560,12 +1565,12 @@ export default function CandidateResultDetails({
                                   {q.candidate_test_results?.marks_breakdown && (
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                          <Award className="w-4 h-4 text-indigo-700" />
+                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                          <Award className="w-4 h-4 text-brand-blue" />
                                         </div>
-                                        <div className="text-sm font-medium text-indigo-900">MARKS BREAKDOWN</div>
+                                        <div className="text-sm font-medium text-gray-800">MARKS BREAKDOWN</div>
                                       </div>
-                                      <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-2 text-sm text-indigo-950">
+                                      <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-4 space-y-2 text-sm text-gray-800">
                                         <div>
                                           Syntax: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.total)}
                                           {q.candidate_test_results.marks_breakdown.syntax?.reason ? ` - ${q.candidate_test_results.marks_breakdown.syntax.reason}` : ''}
@@ -1578,7 +1583,7 @@ export default function CandidateResultDetails({
                                           Output: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.total)}
                                           {q.candidate_test_results.marks_breakdown.output?.reason ? ` - ${q.candidate_test_results.marks_breakdown.output.reason}` : ''}
                                         </div>
-                                        <div className="font-semibold pt-2 border-t border-indigo-200">
+                                        <div className="font-semibold pt-2 border-t border-brand-blue/20 text-brand-blue">
                                           Final: {roundBreakdownMark(q.points_earned)}/{roundBreakdownMark(q.points_possible)} ({roundBreakdownMark(q.score)}%)
                                         </div>
                                       </div>
@@ -1588,23 +1593,23 @@ export default function CandidateResultDetails({
                                   {q.candidate_test_results?.details && q.candidate_test_results.details.length > 0 && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-3">
-                                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <FileText className="w-4 h-4 text-blue-700" />
+                                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                            <FileText className="w-4 h-4 text-brand-blue" />
                                           </div>
-                                          <div className="text-sm font-medium text-blue-900">TEST CASES</div>
+                                          <div className="text-sm font-medium text-gray-800">TEST CASES</div>
                                         </div>
                                         <div className="space-y-3">
                                           {q.candidate_test_results.details.map((testCase, testCaseIdx) => (
-                                            <div key={testCaseIdx} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                            <div key={testCaseIdx} className="rounded-xl border border-gray-100 bg-slate-50 ring-1 ring-black/[0.02] p-4">
                                               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                 <div className="text-sm font-medium text-gray-900">
                                                   Test Case {testCase.test_number}
                                                   {testCase.is_hidden ? ' (Hidden)' : ''}
                                                 </div>
-                                                <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ${
+                                                <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ring-1 ${
                                                   testCase.passed
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-red-100 text-red-700'
+                                                    ? 'bg-green-100 text-green-700 ring-green-200'
+                                                    : 'bg-red-100 text-red-700 ring-red-200'
                                                 }`}>
                                                   {testCase.passed ? 'Pass' : 'Fail'}
                                                 </span>
@@ -1615,7 +1620,7 @@ export default function CandidateResultDetails({
                                                   <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                     Test Case Input
                                                   </div>
-                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-100 ring-1 ring-black/[0.02]">
                                                     <pre className="whitespace-pre-wrap">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
                                                   </div>
                                                 </div>
@@ -1623,7 +1628,7 @@ export default function CandidateResultDetails({
                                                   <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                     Expected Output
                                                   </div>
-                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-100 ring-1 ring-black/[0.02]">
                                                     <pre className="whitespace-pre-wrap">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
                                                   </div>
                                                 </div>
@@ -1636,7 +1641,7 @@ export default function CandidateResultDetails({
                                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                         Why It Failed
                                                       </div>
-                                                      <div className="rounded border border-red-200 bg-red-50 p-3 font-mono text-sm text-red-800">
+                                                      <div className="rounded border border-red-200 ring-1 ring-red-100 bg-red-50 p-3 font-mono text-sm text-red-800">
                                                         <pre className="whitespace-pre-wrap">{testCase.error}</pre>
                                                       </div>
                                                     </div>
@@ -1649,7 +1654,7 @@ export default function CandidateResultDetails({
                                                   <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                     What To Improve
                                                   </div>
-                                                  <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                                  <div className="rounded border border-brand-orange/30 ring-1 ring-brand-orange/15 bg-brand-orange/5 p-3 text-sm text-brand-orange-deep">
                                                     {testCase.improvement_hint}
                                                   </div>
                                                 </div>
@@ -1661,7 +1666,7 @@ export default function CandidateResultDetails({
                                     )}
 
                                   {q.candidate_code_submission && (!q.candidate_test_results?.details || q.candidate_test_results.details.length === 0) && (
-                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                                    <div className="rounded-lg border border-red-200 ring-1 ring-red-100 bg-red-50 p-4 text-sm text-red-800">
                                       No judged test-case results were recorded for this coding submission. This result should be rescored.
                                     </div>
                                   )}
@@ -1677,12 +1682,12 @@ export default function CandidateResultDetails({
                                 {q.correct_answer && q.correct_answer.length > 0 && !(['single_choice', 'multiple_choice', 'mcq'].includes(String(q.question_type || '').toLowerCase())) && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
                                         <CheckCircle className="w-4 h-4 text-green-600" />
                                       </div>
-                                      <div className="text-sm font-medium text-green-900">CORRECT ANSWER</div>
+                                      <div className="text-sm font-medium text-gray-800">CORRECT ANSWER</div>
                                     </div>
-                                    <div className="bg-green-50 rounded-lg p-4">
+                                    <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
                                       {q.correct_answer.map((opt, i) => {
                                         const option = q.options?.find(o => o.id === opt);
                                         return (
@@ -1700,14 +1705,14 @@ export default function CandidateResultDetails({
                                 {!isHRRound && (q.feedback || q.question_type === 'coding') && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 text-gray-800" />
+                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="text-sm font-medium text-gray-800">
                                         {isTextQuestion ? 'WHY THIS SCORE WAS GIVEN' : 'AI FEEDBACK & EVALUATION'}
                                       </div>
                                     </div>
-                                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                    <div className="bg-slate-50 rounded-lg p-4 border border-gray-100 ring-1 ring-black/[0.02]">
                                       <div className="text-gray-800 leading-relaxed">
                                         {q.question_type === 'coding' ? getCodingEvaluationState(q).summary : q.feedback}
                                       </div>
@@ -1717,8 +1722,8 @@ export default function CandidateResultDetails({
 
                                 {/* Strengths */}
                                 {!isHRRound && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
-                                  <div className="pt-4 border-t border-gray-200">
-                                    <div className="bg-green-50 rounded-lg p-4">
+                                  <div className="pt-4 border-t border-gray-100">
+                                    <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
                                       <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
                                       <ul className="text-sm text-green-700 space-y-1">
                                         {(q.strengths && q.strengths.length > 0 ? q.strengths : (q.candidate_test_results?.strengths || [])).map((s, i) => (
@@ -1734,13 +1739,13 @@ export default function CandidateResultDetails({
 
                                 {/* Areas for Improvement */}
                                 {!isHRRound && ((q.areas_for_improvement && q.areas_for_improvement.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.improvements && q.candidate_test_results.improvements.length > 0)) && (
-                                  <div className="pt-4 border-t border-gray-200">
-                                    <div className="bg-amber-50 rounded-lg p-4">
-                                      <div className="text-sm font-medium text-amber-900 mb-2">What to Improve</div>
-                                      <ul className="text-sm text-amber-800 space-y-1">
+                                  <div className="pt-4 border-t border-gray-100">
+                                    <div className="bg-brand-orange/5 ring-1 ring-brand-orange/15 border border-brand-orange/20 rounded-lg p-4">
+                                      <div className="text-sm font-medium text-brand-orange-deep mb-2">What to Improve</div>
+                                      <ul className="text-sm text-gray-700 space-y-1">
                                         {(q.areas_for_improvement && q.areas_for_improvement.length > 0 ? q.areas_for_improvement : (q.candidate_test_results?.improvements || [])).map((item, i) => (
                                           <li key={i} className="flex items-start gap-2">
-                                            <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0" />
+                                            <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0 text-brand-orange-deep" />
                                             {item}
                                           </li>
                                         ))}
@@ -1756,8 +1761,8 @@ export default function CandidateResultDetails({
                           ))}
                         </div>
                       ) : (
-                        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-gray-200 ring-1 ring-black/[0.02]">
+                          <FileText className="w-12 h-12 text-brand-blue/30 mx-auto mb-3" />
                           <p className="text-gray-600">No questions available for this section</p>
                         </div>
                       )}
@@ -1769,21 +1774,21 @@ export default function CandidateResultDetails({
                 {activeTab === 'violations' && detailedResult.proctoring_stats && (
                   <div className="space-y-4 sm:space-y-6">
                     {/* Violations Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
                       <div>
-                        <h3 className="text-base sm:text-xl text-gray-900">Proctoring Violations</h3>
+                        <h3 className="text-base sm:text-xl text-gray-900 tracking-tight font-semibold">Proctoring Violations</h3>
                         <p className="text-sm text-gray-600 mt-1">
                           {detailedResult.proctoring_stats.total_violations} total violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's' : ''} detected during the assessment
                         </p>
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
-                        <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                        <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
-                            ? 'bg-green-100 text-green-800 border border-green-200'
+                            ? 'bg-green-100 text-green-800 ring-green-200'
                             : detailedResult.proctoring_stats.integrity_status === 'flagged'
-                            ? 'bg-red-100 text-red-800 border border-red-200'
-                            : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                            ? 'bg-red-100 text-red-800 ring-red-200'
+                            : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                         }`}>
                           {detailedResult.proctoring_stats.integrity_status === 'clean' && <CheckCircle className="w-4 h-4 mr-2" />}
                           {detailedResult.proctoring_stats.integrity_status === 'flagged' && <ShieldAlert className="w-4 h-4 mr-2" />}
@@ -1796,15 +1801,15 @@ export default function CandidateResultDetails({
                     {/* Violations Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                       {/* Mouse Movement */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
-                          ? 'bg-red-50 border-red-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.window_blur_count > 0
-                            ? 'bg-red-100'
-                            : 'bg-gray-100'
+                            ? 'bg-red-100 ring-red-200'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Eye className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.window_blur_count > 0
@@ -1813,7 +1818,7 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Mouse Movement</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           detailedResult.proctoring_stats.window_blur_count > 0
                             ? 'text-red-600'
                             : 'text-gray-400'
@@ -1824,26 +1829,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Tab Switch */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.tab_switch_count > 0
-                          ? 'bg-orange-50 border-orange-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.tab_switch_count > 0
-                            ? 'bg-orange-100'
-                            : 'bg-gray-100'
+                            ? 'bg-brand-orange/20 ring-brand-orange/30'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Monitor className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.tab_switch_count > 0
-                              ? 'text-orange-600'
+                              ? 'text-brand-orange-deep'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Tab Switch</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           detailedResult.proctoring_stats.tab_switch_count > 0
-                            ? 'text-orange-600'
+                            ? 'text-brand-orange-deep'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.tab_switch_count}
@@ -1852,26 +1857,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Copy Count */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.copy_count || 0) > 0
-                          ? 'bg-yellow-50 border-yellow-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.copy_count || 0) > 0
-                            ? 'bg-yellow-100'
-                            : 'bg-gray-100'
+                            ? 'bg-brand-orange/20 ring-brand-orange/30'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Clipboard className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.copy_count || 0) > 0
-                              ? 'text-yellow-600'
+                              ? 'text-brand-orange-deep'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Copy Attempts</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.copy_count || 0) > 0
-                            ? 'text-yellow-600'
+                            ? 'text-brand-orange-deep'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.copy_count || 0}
@@ -1880,26 +1885,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Paste Count */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.paste_count || 0) > 0
-                          ? 'bg-yellow-50 border-yellow-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.paste_count || 0) > 0
-                            ? 'bg-yellow-100'
-                            : 'bg-gray-100'
+                            ? 'bg-brand-orange/20 ring-brand-orange/30'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <MousePointer className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.paste_count || 0) > 0
-                              ? 'text-yellow-600'
+                              ? 'text-brand-orange-deep'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Paste Attempts</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.paste_count || 0) > 0
-                            ? 'text-yellow-600'
+                            ? 'text-brand-orange-deep'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.paste_count || 0}
@@ -1908,26 +1913,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Camera Obstructed */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                          ? 'bg-purple-50 border-purple-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                            ? 'bg-purple-100'
-                            : 'bg-gray-100'
+                            ? 'bg-red-100 ring-red-200'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Eye className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                              ? 'text-purple-600'
+                              ? 'text-red-600'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Camera Obstructed</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                            ? 'text-purple-600'
+                            ? 'text-red-600'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.camera_obstructed_count || 0}
@@ -1936,15 +1941,15 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Face Not Visible */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                          ? 'bg-red-50 border-red-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                            ? 'bg-red-100'
-                            : 'bg-gray-100'
+                            ? 'bg-red-100 ring-red-200'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <UserX className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
@@ -1953,7 +1958,7 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Face Not Visible</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                             ? 'text-red-600'
                             : 'text-gray-400'
@@ -1964,26 +1969,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Voice Violations */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.voice_violation_count > 0
-                          ? 'bg-pink-50 border-pink-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.voice_violation_count > 0
-                            ? 'bg-pink-100'
-                            : 'bg-gray-100'
+                            ? 'bg-brand-orange/20 ring-brand-orange/30'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Volume2 className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.voice_violation_count > 0
-                              ? 'text-pink-600'
+                              ? 'text-brand-orange-deep'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Voice Violations</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           detailedResult.proctoring_stats.voice_violation_count > 0
-                            ? 'text-pink-600'
+                            ? 'text-brand-orange-deep'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.voice_violation_count}
@@ -1992,26 +1997,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Multiple Faces */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                          ? 'bg-violet-50 border-violet-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                            ? 'bg-violet-100'
-                            : 'bg-gray-100'
+                            ? 'bg-red-100 ring-red-200'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <User className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                              ? 'text-violet-600'
+                              ? 'text-red-600'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Multiple Faces</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                            ? 'text-violet-600'
+                            ? 'text-red-600'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.multiple_faces_count || 0}
@@ -2020,26 +2025,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Fullscreen Exit */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                          ? 'bg-blue-50 border-blue-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-brand-blue/5 border-brand-blue/20 ring-brand-blue/10'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                            ? 'bg-blue-100'
-                            : 'bg-gray-100'
+                            ? 'bg-brand-blue/10 ring-brand-blue/20'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Maximize className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                              ? 'text-blue-600'
+                              ? 'text-brand-blue'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Fullscreen Exit</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                            ? 'text-blue-600'
+                            ? 'text-brand-blue'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
@@ -2048,26 +2053,26 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Screen Capture Attempts (screenshot + screen recording) */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                          ? 'bg-amber-50 border-amber-200'
-                          : 'bg-gray-50 border-gray-200'
+                          ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                            ? 'bg-amber-100'
-                            : 'bg-gray-100'
+                            ? 'bg-brand-orange/20 ring-brand-orange/30'
+                            : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Camera className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                              ? 'text-amber-600'
+                              ? 'text-brand-orange-deep'
                               : 'text-gray-400'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Screen Capture</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                            ? 'text-amber-600'
+                            ? 'text-brand-orange-deep'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.screen_capture_count || 0}
@@ -2090,15 +2095,15 @@ export default function CandidateResultDetails({
                       )} */}
 
                       {/* Total Violations */}
-                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.total_violations > 0
-                          ? 'bg-red-50 border-red-300'
-                          : 'bg-green-50 border-green-200'
+                          ? 'bg-red-50 border-red-300 ring-red-200'
+                          : 'bg-green-50 border-green-200 ring-green-100'
                       }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.total_violations > 0
-                            ? 'bg-red-100'
-                            : 'bg-green-100'
+                            ? 'bg-red-100 ring-red-200'
+                            : 'bg-green-100 ring-green-200'
                         }`}>
                           <ShieldAlert className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.total_violations > 0
@@ -2107,7 +2112,7 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Total Violations</div>
-                        <div className={`text-3xl font-bold ${
+                        <div className={`text-3xl font-bold tracking-tight ${
                           detailedResult.proctoring_stats.total_violations > 0
                             ? 'text-red-600'
                             : 'text-green-600'
@@ -2121,29 +2126,29 @@ export default function CandidateResultDetails({
                     {/* Event Log / Timeline */}
                     <div className="mt-2">
                       <div className="flex items-center gap-2 mb-4">
-                        <Activity className="w-5 h-5 text-gray-500" />
-                        <h4 className="text-base font-semibold text-gray-800">Event Log</h4>
+                        <Activity className="w-5 h-5 text-brand-blue" />
+                        <h4 className="text-base font-semibold text-gray-900 tracking-tight">Event Log</h4>
                         {!isLoadingEvents && proctoringEvents.length > 0 && (
-                          <span className="ml-auto text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                          <span className="ml-auto text-xs text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full font-medium">
                             {proctoringEvents.length} event{proctoringEvents.length !== 1 ? 's' : ''} · {groupedEvents.length} row{groupedEvents.length !== 1 ? 's' : ''}
                           </span>
                         )}
                       </div>
 
                       {isLoadingEvents ? (
-                        <div className="flex items-center justify-center py-10 text-gray-400">
-                          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                        <div className="flex items-center justify-center py-10 text-gray-500">
+                          <Loader2 className="w-6 h-6 animate-spin mr-2 text-brand-blue" />
                           <span className="text-sm">Loading events…</span>
                         </div>
                       ) : proctoringEvents.length === 0 ? (
-                        <div className="text-center py-8 text-gray-400 border border-dashed border-gray-200 rounded-lg">
-                          <ShieldAlert className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-xl bg-slate-50 ring-1 ring-black/[0.02]">
+                          <ShieldAlert className="w-8 h-8 mx-auto mb-2 text-brand-blue/30" />
                           <p className="text-sm">No individual events recorded</p>
                         </div>
                       ) : (
-                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden shadow-sm shadow-brand-blue/5">
                           {/* Table header */}
-                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-gray-50 border-b border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                             <span>S.No</span>
                             <span>Event</span>
                             <span>Timestamp</span>
@@ -2158,31 +2163,31 @@ export default function CandidateResultDetails({
 
                               const cfg = (() => {
                                 switch (row.event_type) {
-                                  case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-orange-600', bg: 'bg-orange-50',  severity: 'medium' };
-                                  case 'window_blur':              return { label: 'Mouse Movement',           icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
-                                  case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
-                                  case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
-                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
-                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-purple-600', bg: 'bg-purple-50',  severity: 'high'   };
-                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
-                                  case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'medium' };
-                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'high'   };
-                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-violet-600', bg: 'bg-violet-50',  severity: 'critical' };
-                                  case 'face_missing':             return { label: 'Face Not Visible',         icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
-                                  case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'high'   };
-                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'critical' };
-                                  case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'medium'   };
-                                  default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-gray-600', bg: 'bg-gray-50', severity: 'low' };
+                                  case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'window_blur':              return { label: 'Mouse Movement',           icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'critical' };
+                                  case 'face_missing':             return { label: 'Face Not Visible',         icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'critical' };
+                                  case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
+                                  default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }
                               })();
 
                               const severityBadge = (() => {
                                 switch (cfg.severity) {
-                                  case 'critical': return 'bg-red-100 text-red-700 border border-red-200';
-                                  case 'high':     return 'bg-orange-100 text-orange-700 border border-orange-200';
-                                  case 'medium':   return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
-                                  case 'low':      return 'bg-green-100 text-green-700 border border-green-200';
-                                  default:         return 'bg-gray-100 text-gray-600 border border-gray-200';
+                                  case 'critical': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+                                  case 'high':     return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+                                  case 'medium':   return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+                                  case 'low':      return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+                                  default:         return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
                                 }
                               })();
 
@@ -2214,10 +2219,10 @@ export default function CandidateResultDetails({
 
                                   {/* Count */}
                                   <div className="flex justify-center">
-                                    <span className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-bold ${
-                                      row.count >= 5 ? 'bg-red-100 text-red-700' :
-                                      row.count >= 3 ? 'bg-orange-100 text-orange-700' :
-                                      'bg-gray-100 text-gray-700'
+                                    <span className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-bold ring-1 ${
+                                      row.count >= 5 ? 'bg-red-100 text-red-700 ring-red-200' :
+                                      row.count >= 3 ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' :
+                                      'bg-slate-100 text-slate-700 ring-slate-200'
                                     }`}>
                                       {row.count}
                                     </span>
@@ -2229,7 +2234,7 @@ export default function CandidateResultDetails({
 
                           {/* Pagination footer */}
                           {eventsTotalPages > 1 && (
-                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+                            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-gray-100">
                               <span className="text-xs text-gray-500">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
@@ -2237,7 +2242,7 @@ export default function CandidateResultDetails({
                                 <button
                                   onClick={() => setEventsPage(p => Math.max(1, p - 1))}
                                   disabled={eventsPage === 1}
-                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 >
                                   ‹ Prev
                                 </button>
@@ -2255,8 +2260,8 @@ export default function CandidateResultDetails({
                                       onClick={() => setEventsPage(page)}
                                       className={`min-w-[28px] px-2 py-1 rounded text-xs font-medium border transition-colors ${
                                         page === eventsPage
-                                          ? 'bg-gray-800 text-white border-gray-800'
-                                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white border-brand-blue shadow-sm shadow-brand-blue/25'
+                                          : 'bg-white text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                                       }`}
                                     >
                                       {page}
@@ -2266,7 +2271,7 @@ export default function CandidateResultDetails({
                                 <button
                                   onClick={() => setEventsPage(p => Math.min(eventsTotalPages, p + 1))}
                                   disabled={eventsPage === eventsTotalPages}
-                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 >
                                   Next ›
                                 </button>
@@ -2279,20 +2284,20 @@ export default function CandidateResultDetails({
 
                     {/* Summary Note */}
                     {detailedResult.proctoring_stats.total_violations === 0 ? (
-                      <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                      <div className="bg-green-50 border border-green-200 ring-1 ring-green-100 rounded-xl p-6 text-center shadow-sm shadow-green-600/5">
                         <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                        <h4 className="text-lg font-medium text-green-800 mb-1">No Violations Detected</h4>
-                        <p className="text-sm text-green-600">
+                        <h4 className="text-lg font-medium text-green-800 mb-1 tracking-tight">No Violations Detected</h4>
+                        <p className="text-sm text-green-700">
                           This candidate completed the assessment without any proctoring violations.
                         </p>
                       </div>
                     ) : (
-                      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6">
+                      <div className="bg-brand-orange/5 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl p-6 shadow-sm shadow-brand-orange/5">
                         <div className="flex items-start gap-4">
-                          <AlertCircle className="w-8 h-8 text-yellow-600 flex-shrink-0" />
+                          <AlertCircle className="w-8 h-8 text-brand-orange-deep flex-shrink-0" />
                           <div>
-                            <h4 className="text-lg font-medium text-yellow-800 mb-1">Violations Summary</h4>
-                            <p className="text-sm text-yellow-700">
+                            <h4 className="text-lg font-medium text-brand-orange-deep mb-1 tracking-tight">Violations Summary</h4>
+                            <p className="text-sm text-gray-700">
                               {detailedResult.proctoring_stats.total_violations} violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's were' : ' was'} detected during this assessment.
                               Please review the candidate's responses and consider these violations when making your hiring decision.
                             </p>

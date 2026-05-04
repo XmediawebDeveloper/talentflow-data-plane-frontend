@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, Loader2, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { X, Loader2, Plus, Users, Layers3 } from 'lucide-react';
 import { ApiUser } from '@/lib/services/userService';
 import MemberSelector from './MemberSelector';
 
@@ -29,6 +29,9 @@ export interface TeamFormData {
   teamLeadId: string;
 }
 
+const fieldClassName =
+  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
+
 export default function TeamFormModal({
   isOpen,
   onClose,
@@ -40,30 +43,14 @@ export default function TeamFormModal({
   onDelete,
   isDeleting = false,
 }: TeamFormModalProps) {
-  const [teamName, setTeamName] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
-  const [teamLeadId, setTeamLeadId] = useState('');
-
-  // Reset form when modal opens/closes or initialData changes
-  useEffect(() => {
-    if (isOpen && initialData) {
-      setTeamName(initialData.name);
-      setDescription(initialData.description);
-      setSelectedMemberIds(initialData.memberIds);
-      setTeamLeadId(initialData.teamLeadId);
-    } else if (isOpen && !initialData) {
-      setTeamName('');
-      setDescription('');
-      setSelectedMemberIds([]);
-      setTeamLeadId('');
-    }
-  }, [isOpen, initialData]);
+  const [teamName, setTeamName] = useState(initialData?.name || '');
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(initialData?.memberIds || []);
+  const [teamLeadId, setTeamLeadId] = useState(initialData?.teamLeadId || '');
 
   const handleToggleMember = (userId: string) => {
     setSelectedMemberIds((prev) => {
       if (prev.includes(userId)) {
-        // If deselecting and this is the team lead, clear team lead
         if (teamLeadId === userId) {
           setTeamLeadId('');
         }
@@ -87,45 +74,68 @@ export default function TeamFormModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Modal Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-          <h2 className="text-2xl font-bold text-gray-900">
-            {mode === 'create' ? 'Create New Team' : 'Edit Team'}
-          </h2>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-            aria-label="Close modal"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+        <div className="sticky top-0 z-10 overflow-hidden border-b border-white/10 bg-gradient-to-r from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5 text-white">
+          <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                <Users className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/90 ring-1 ring-white/15">
+                  <Layers3 className="h-3 w-3 text-brand-orange" />
+                  {mode === 'create' ? 'New team setup' : 'Team configuration'}
+                </div>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  {mode === 'create' ? 'Create New Team' : 'Edit Team'}
+                </h2>
+                <p className="mt-1 text-sm text-white/80">
+                  Define the team profile, assign members, and optionally choose a lead.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15 disabled:opacity-50"
+              aria-label="Close modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 space-y-6">
-          {/* Team Name */}
-          <div>
-            <label htmlFor="team-name" className="block text-sm font-medium text-gray-700 mb-2">
-              Team Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="team-name"
-              type="text"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="e.g., Engineering Recruitment"
-              maxLength={255}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
-            />
-            <p className="text-xs text-gray-500 mt-1">{teamName.length}/255 characters</p>
+        <div className="space-y-6 p-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div>
+              <label htmlFor="team-name" className="mb-2 block text-sm font-medium text-gray-700">
+                Team Name <span className="text-brand-orange">*</span>
+              </label>
+              <input
+                id="team-name"
+                type="text"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="e.g., Engineering Recruitment"
+                maxLength={255}
+                className={fieldClassName}
+              />
+              <p className="mt-2 text-xs text-gray-500">{teamName.length}/255 characters</p>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] to-transparent p-4 ring-1 ring-black/[0.02]">
+              <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Selected Members</div>
+              <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{selectedMemberIds.length}</div>
+              <p className="mt-1 text-sm text-gray-500">
+                {teamLeadId ? 'Team lead assigned' : 'No lead assigned yet'}
+              </p>
+            </div>
           </div>
 
-          {/* Description */}
           <div>
-            <label htmlFor="team-description" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="team-description" className="mb-2 block text-sm font-medium text-gray-700">
               Description
             </label>
             <textarea
@@ -134,13 +144,12 @@ export default function TeamFormModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Briefly describe this team's purpose..."
               maxLength={1000}
-              rows={3}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none resize-none"
+              rows={4}
+              className={`${fieldClassName} resize-y`}
             />
-            <p className="text-xs text-gray-500 mt-1">{description.length}/1000 characters</p>
+            <p className="mt-2 text-xs text-gray-500">{description.length}/1000 characters</p>
           </div>
 
-          {/* Member Selector */}
           <MemberSelector
             availableUsers={availableUsers}
             selectedMemberIds={selectedMemberIds}
@@ -151,29 +160,28 @@ export default function TeamFormModal({
           />
         </div>
 
-        {/* Modal Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 space-y-3">
+        <div className="sticky bottom-0 space-y-3 border-t border-gray-100 bg-white/95 px-6 py-4 backdrop-blur-sm">
           <div className="flex gap-3">
             <button
               onClick={onClose}
               disabled={isSubmitting || isDeleting}
-              className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || isDeleting || !isValid}
-              className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   {mode === 'create' ? 'Creating...' : 'Saving...'}
                 </>
               ) : (
                 <>
-                  {mode === 'create' && <Plus className="w-4 h-4" />}
+                  {mode === 'create' && <Plus className="h-4 w-4" />}
                   {mode === 'create' ? 'Create Team' : 'Save Changes'}
                 </>
               )}
@@ -183,13 +191,13 @@ export default function TeamFormModal({
             <button
               onClick={onDelete}
               disabled={isSubmitting || isDeleting}
-              className="w-full px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full rounded-xl border border-brand-orange/20 bg-brand-orange/[0.08] px-4 py-2.5 text-sm font-medium text-brand-orange-deep transition-all hover:bg-brand-orange/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isDeleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Deleting...
-                </>
+                </span>
               ) : (
                 'Delete Team'
               )}

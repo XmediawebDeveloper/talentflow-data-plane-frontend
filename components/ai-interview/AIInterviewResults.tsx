@@ -30,12 +30,12 @@ const STATUS_OPTIONS = [
 
 function getStatusBadge(status: string) {
   switch (status) {
-    case 'completed': return 'bg-green-100 text-green-700';
-    case 'in_progress': return 'bg-yellow-100 text-yellow-700';
-    case 'invited': return 'bg-blue-100 text-blue-700';
-    case 'expired': return 'bg-gray-100 text-gray-600';
-    case 'cancelled': return 'bg-red-100 text-red-600';
-    default: return 'bg-gray-100 text-gray-600';
+    case 'completed': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+    case 'in_progress': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+    case 'invited': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+    case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+    case 'cancelled': return 'bg-red-100 text-red-600 ring-1 ring-red-200';
+    default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
   }
 }
 
@@ -53,8 +53,8 @@ function getStatusLabel(status: string) {
 function getStatusIcon(status: string) {
   switch (status) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
-    case 'in_progress': return <Clock className="w-4 h-4 text-yellow-500" />;
-    case 'invited': return <Mail className="w-4 h-4 text-blue-500" />;
+    case 'in_progress': return <Clock className="w-4 h-4 text-brand-orange-deep" />;
+    case 'invited': return <Mail className="w-4 h-4 text-brand-blue" />;
     case 'cancelled': return <XCircle className="w-4 h-4 text-red-500" />;
     case 'expired': return <XCircle className="w-4 h-4 text-gray-400" />;
     default: return <Mail className="w-4 h-4 text-gray-400" />;
@@ -65,19 +65,19 @@ function getProctoringRisk(session: AIInterviewResponse): { level: string; badge
   // Prefer server-computed risk_level (persisted at completion time, AIU-82)
   const stored = session.risk_level;
   if (stored) {
-    if (stored === 'high')   return { level: 'High',   badge: 'bg-red-100 text-red-700' };
-    if (stored === 'medium') return { level: 'Medium', badge: 'bg-yellow-100 text-yellow-700' };
-    if (stored === 'low')    return { level: 'Low',    badge: 'bg-blue-100 text-blue-700' };
-    return { level: 'None', badge: 'bg-green-100 text-green-700' };
+    if (stored === 'high')   return { level: 'High',   badge: 'bg-red-100 text-red-700 ring-1 ring-red-200' };
+    if (stored === 'medium') return { level: 'Medium', badge: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
+    if (stored === 'low')    return { level: 'Low',    badge: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
+    return { level: 'None', badge: 'bg-green-100 text-green-700 ring-1 ring-green-200' };
   }
   // Fallback: heuristic from raw violations (pre-AIU-82 sessions or incomplete data)
   const violations = session.proctoring_violations || [];
   const severe = violations.filter((v) => v.severity === 'high' || v.severity === 'critical').length;
   const medium = violations.filter((v) => v.severity === 'medium').length;
-  if (severe >= 3 || (severe >= 1 && medium >= 2)) return { level: 'High',   badge: 'bg-red-100 text-red-700' };
-  if (severe >= 1 || medium >= 2)                  return { level: 'Medium', badge: 'bg-yellow-100 text-yellow-700' };
-  if (violations.length > 0)                       return { level: 'Low',    badge: 'bg-blue-100 text-blue-700' };
-  return { level: 'None', badge: 'bg-green-100 text-green-700' };
+  if (severe >= 3 || (severe >= 1 && medium >= 2)) return { level: 'High',   badge: 'bg-red-100 text-red-700 ring-1 ring-red-200' };
+  if (severe >= 1 || medium >= 2)                  return { level: 'Medium', badge: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
+  if (violations.length > 0)                       return { level: 'Low',    badge: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
+  return { level: 'None', badge: 'bg-green-100 text-green-700 ring-1 ring-green-200' };
 }
 
 function formatDuration(session: AIInterviewResponse): string {
@@ -194,19 +194,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 p-8 overflow-y-auto bg-slate-50">
       {/* Header */}
       <div className="mb-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue px-3 py-1.5 rounded-lg transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to AI Interviews
         </button>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{configTitle || 'AI Interview'}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
             {jdTitle && <p className="text-sm text-gray-500 mt-1">{jdTitle}</p>}
           </div>
         </div>
@@ -214,55 +214,63 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Users className="w-4 h-4 text-gray-400" />
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <Users className="w-4 h-4 text-brand-blue" />
+            </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{totalSessions}</div>
+          <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <CheckCircle className="w-4 h-4 text-green-500" />
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+            </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{summary.completed}</div>
+          <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="w-4 h-4 text-yellow-500" />
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-brand-orange-deep" />
+            </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{summary.inProgress}</div>
+          <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <BarChart3 className="w-4 h-4 text-purple-500" />
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-brand-cyan" />
+            </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">
+          <div className="text-2xl font-bold text-gray-900 tracking-tight">
             {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
           </div>
         </div>
       </div>
 
       {/* Search + Filter bar */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue" />
             <input
               type="text"
               placeholder="Search by name, email, or CID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400"
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 bg-white"
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -272,20 +280,20 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
             onClick={() => setShowFilters((v) => !v)}
             className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors ${
               hasActiveFilters
-                ? 'border-purple-400 bg-purple-50 text-purple-700'
-                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                ? 'border-brand-blue/30 bg-brand-blue/5 text-brand-blue'
+                : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
             }`}
           >
             <Filter className="w-4 h-4" />
             Filters
             {hasActiveFilters && (
-              <span className="w-5 h-5 bg-purple-600 text-white rounded-full text-xs flex items-center justify-center">
+              <span className="w-5 h-5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-full text-xs flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 {[scoreMin || scoreMax ? 1 : 0, dateFrom || dateTo ? 1 : 0].reduce((a, b) => a + b, 0)}
               </span>
             )}
           </button>
           {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+            <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-gray-500 hover:text-brand-blue transition-colors">
               <X className="w-4 h-4" />
               Clear
             </button>
@@ -305,7 +313,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   max={100}
                   value={scoreMin}
                   onChange={(e) => setScoreMin(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
@@ -315,7 +323,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   max={100}
                   value={scoreMax}
                   onChange={(e) => setScoreMax(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
             </div>
@@ -326,14 +334,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
             </div>
@@ -342,19 +350,21 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-7 h-7 animate-spin text-gray-400" />
+            <Loader2 className="w-7 h-7 animate-spin text-brand-blue" />
           </div>
         ) : sessions.length === 0 ? (
           <div className="text-center py-16">
-            <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 font-medium">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+              <Users className="w-10 h-10 text-brand-blue" />
+            </div>
+            <p className="text-gray-700 font-medium">
               {totalSessions === 0 && !hasActiveFilters ? 'No candidates invited yet' : 'No results match your filters'}
             </p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-2 text-sm text-purple-600 hover:underline">
+              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
                 Clear filters
               </button>
             )}
@@ -363,7 +373,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-50 border-b border-gray-100">
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>
@@ -381,10 +391,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   {paginatedSessions.map((session) => {
                     const risk = getProctoringRisk(session);
                     return (
-                      <tr key={session.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={session.id} className="hover:bg-brand-blue/5 transition-colors">
                         <td className="px-4 py-3 whitespace-nowrap">
                           {session.candidate_cid ? (
-                            <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                            <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                               {session.candidate_cid}
                             </span>
                           ) : (
@@ -393,7 +403,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-semibold text-xs flex-shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
                               {(session.candidate_name || 'U')[0].toUpperCase()}
                             </div>
                             <span className="font-medium text-gray-900 truncate max-w-[160px]">
@@ -446,12 +456,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                                 <div
                                   className={`h-1.5 rounded-full ${
                                     session.score >= 70 ? 'bg-green-500' :
-                                    session.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                    session.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
                                   }`}
                                   style={{ width: `${Math.min(100, session.score)}%` }}
                                 />
                               </div>
-                              <span className="font-medium text-gray-900 text-xs">
+                              <span className={`font-medium text-xs ${
+                                session.score >= 70 ? 'text-green-600' :
+                                session.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                              }`}>
                                 {Math.round(session.score)}%
                               </span>
                             </div>
@@ -480,7 +493,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <button
                             onClick={() => handleViewDetails(session)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             View Details
@@ -495,7 +508,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-slate-50">
                 <div className="text-sm text-gray-500">
                   Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalSessions)} of {totalSessions}
                 </div>
@@ -503,17 +516,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-sm text-gray-700 font-medium px-2">
+                  <span className="text-sm text-brand-blue font-semibold px-2 tabular-nums">
                     {currentPage} / {totalPages}
                   </span>
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>

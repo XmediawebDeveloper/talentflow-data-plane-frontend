@@ -611,9 +611,9 @@ export default function AIInterview() {
   // Loading state
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center overflow-y-auto">
+      <div className="flex-1 flex items-center justify-center overflow-y-auto bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
           <p className="text-sm text-gray-500">Loading AI interviews...</p>
         </div>
       </div>
@@ -635,57 +635,62 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <div className="flex-1 p-3 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-gray-50/40">
+    <div className="flex-1 p-3 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 lg:gap-6 mb-5 sm:mb-8">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[10px] sm:text-[11px] font-medium tracking-wide">
-                <Sparkles className="w-3 h-3" />
-                AI Interview
-              </span>
-              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium uppercase tracking-wider">Platform</span>
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="hidden sm:flex w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
+              <Video className="w-5 h-5 text-brand-blue" />
             </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight break-words">
-              AI Interview Platform
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-xl">
-              Configure, launch, and analyze AI-powered interviews. Multi-round evaluations with real-time scoring and proctoring.
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white text-[10px] sm:text-[11px] font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <Sparkles className="w-3 h-3" />
+                  AI Interview
+                </span>
+                <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium uppercase tracking-wider">Platform</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight break-words">
+                AI Interview Platform
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-xl">
+                Configure, launch, and analyze AI-powered interviews. Multi-round evaluations with real-time scoring and proctoring.
+              </p>
+            </div>
           </div>
           <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
-              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-white shadow-sm transition-all ${
+              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all ${
                 quotaTone === 'danger'
-                  ? 'border-red-200 ring-1 ring-red-100'
+                  ? 'border-red-200 ring-red-100'
                   : quotaTone === 'warning'
-                  ? 'border-amber-200 ring-1 ring-amber-100'
-                  : 'border-gray-200'
+                  ? 'border-brand-orange/30 ring-brand-orange/10'
+                  : 'border-gray-100'
               }`}>
-                <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
                   quotaTone === 'danger'
-                    ? 'bg-red-50 text-red-600'
+                    ? 'bg-red-50 text-red-600 ring-red-200'
                     : quotaTone === 'warning'
-                    ? 'bg-amber-50 text-amber-600'
-                    : 'bg-gray-900 text-white'
+                    ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                    : 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white ring-white/10 shadow-sm shadow-brand-blue/25'
                 }`}>
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col min-w-[88px]">
                   <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold leading-none">Quota</span>
                   {isUnlimited ? (
-                    <span className="text-xs font-semibold text-gray-900 mt-0.5">Unlimited</span>
+                    <span className="text-xs font-semibold text-brand-blue mt-0.5">Unlimited</span>
                   ) : availableUnits !== null ? (
                     <>
                       <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className={`text-sm font-semibold tabular-nums leading-none ${
+                        <span className={`text-sm font-semibold tabular-nums leading-none tracking-tight ${
                           quotaTone === 'danger'
                             ? 'text-red-700'
                             : quotaTone === 'warning'
-                            ? 'text-amber-700'
-                            : 'text-gray-900'
+                            ? 'text-brand-orange-deep'
+                            : 'text-brand-blue'
                         }`}>{availableUnits}</span>
                         <span className="text-[10px] text-gray-400">/ {totalUnits}</span>
                       </div>
@@ -695,8 +700,8 @@ export default function AIInterview() {
                             quotaTone === 'danger'
                               ? 'bg-red-500'
                               : quotaTone === 'warning'
-                              ? 'bg-amber-500'
-                              : 'bg-gray-900'
+                              ? 'bg-brand-orange'
+                              : 'bg-gradient-to-r from-brand-blue to-brand-cyan'
                           }`}
                           style={{ width: `${quotaUsedPct}%` }}
                         />
@@ -711,7 +716,7 @@ export default function AIInterview() {
             {canCreateAIInterviews && (
               <button
                 onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                className="group inline-flex items-center gap-1.5 bg-gray-900 text-white px-3.5 py-2 rounded-lg hover:bg-black hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-sm ring-1 ring-gray-900/10"
+                className="group inline-flex items-center gap-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white px-3.5 py-2 rounded-lg hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 group-hover:rotate-90" />
                 <span>Create AI Interview</span>
@@ -721,16 +726,16 @@ export default function AIInterview() {
         </div>
 
         {/* AI-Powered Interviews Banner */}
-        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-gray-50 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm">
-          <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-gray-900/[0.03] blur-2xl" aria-hidden />
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-brand-blue/15 ring-1 ring-brand-blue/10 bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm shadow-brand-blue/10">
+          <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-brand-blue/5 blur-2xl" aria-hidden />
           <div className="relative flex items-start gap-3 sm:gap-4">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gray-900 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h3 className="text-sm font-semibold text-gray-900">AI-Powered Interviews</h3>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-100">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-semibold ring-1 ring-green-200">
                   LIVE
                 </span>
               </div>
@@ -776,22 +781,22 @@ export default function AIInterview() {
             },
           ].map(({ label, value, icon: Icon, tone, hint, trend }) => {
             const toneStyles: Record<string, string> = {
-              slate: 'bg-gray-100 text-gray-700',
-              emerald: 'bg-emerald-50 text-emerald-600',
-              blue: 'bg-blue-50 text-blue-600',
-              amber: 'bg-amber-50 text-amber-600',
+              slate: 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 text-brand-blue',
+              emerald: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 text-green-600',
+              blue: 'bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 text-brand-cyan',
+              amber: 'bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/15 text-brand-orange-deep',
             };
             return (
               <div
                 key={label}
-                className="group relative bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-3 sm:p-5 hover:shadow-md hover:-translate-y-0.5 hover:border-gray-300 transition-all duration-200 cursor-default min-w-0"
+                className="group relative bg-white rounded-xl sm:rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-5 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 hover:border-brand-blue/30 transition-all duration-200 cursor-default min-w-0"
               >
                 <div className="flex items-start justify-between mb-2.5 sm:mb-4 gap-2">
                   <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
                     <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   {trend === 'up' && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-100 flex-shrink-0">
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-semibold ring-1 ring-green-200 flex-shrink-0">
                       <ArrowUpRight className="w-3 h-3" />
                       Live
                     </span>
@@ -810,9 +815,9 @@ export default function AIInterview() {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
           {/* Tabs */}
-          <div className="border-b border-gray-200 px-3 sm:px-6 bg-gradient-to-b from-white to-gray-50/40">
+          <div className="border-b border-gray-100 px-3 sm:px-6 bg-gradient-to-b from-white to-slate-50/40">
             <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide -mb-px">
               {[
                 { key: 'all', label: 'All AI Interviews', count: configs.length },
@@ -832,16 +837,16 @@ export default function AIInterview() {
                     onClick={() => setActiveTab(tab.key as TabKey)}
                     className={`relative inline-flex items-center gap-1.5 sm:gap-2 py-3 sm:py-3.5 px-2.5 sm:px-3 min-h-[44px] text-xs sm:text-sm border-b-2 transition-all duration-200 whitespace-nowrap ${
                       isActive
-                        ? 'border-gray-900 text-gray-900 font-semibold'
-                        : 'border-transparent text-gray-500 hover:text-gray-900 font-medium'
+                        ? 'border-brand-blue text-brand-blue font-medium'
+                        : 'border-transparent text-gray-600 hover:text-brand-blue font-medium'
                     }`}
                   >
                     {tab.label}
                     {typeof tab.count === 'number' && (
                       <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums transition-colors ${
                         isActive
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                          ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+                          : 'bg-slate-100 text-gray-600 group-hover:bg-slate-200'
                       }`}>
                         {tab.count}
                       </span>
@@ -857,7 +862,7 @@ export default function AIInterview() {
             <div className="p-3 sm:p-6">
               {/* Filters bar: mode pills + search + sort */}
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 sm:gap-3 mb-4 sm:mb-5">
-                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-gray-100/80 border border-gray-200 self-start overflow-x-auto scrollbar-hide max-w-full">
+                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-gray-100 ring-1 ring-black/[0.02] self-start overflow-x-auto scrollbar-hide max-w-full">
                   {(['all', 'timed', 'conversational'] as const).map((m) => {
                     const isActive = modeFilter === m;
                     const Icon = m === 'timed' ? Clock : m === 'conversational' ? MessageSquare : Activity;
@@ -867,8 +872,8 @@ export default function AIInterview() {
                         onClick={() => setModeFilter(m)}
                         className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
                           isActive
-                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
-                            : 'text-gray-600 hover:text-gray-900'
+                            ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20'
+                            : 'text-gray-600 hover:text-brand-blue'
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -885,12 +890,12 @@ export default function AIInterview() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search title, ID, skill…"
-                      className="w-full pl-9 pr-9 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 placeholder:text-gray-400 transition-colors"
+                      className="w-full pl-9 pr-9 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue placeholder:text-gray-400 transition-colors"
                     />
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
                         aria-label="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -902,7 +907,7 @@ export default function AIInterview() {
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 cursor-pointer text-gray-700 font-medium transition-colors"
+                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 font-medium transition-colors"
                     >
                       <option value="newest">Newest</option>
                       <option value="oldest">Oldest</option>
@@ -916,16 +921,16 @@ export default function AIInterview() {
               {filteredConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-gray-100 to-gray-50 blur-xl scale-150" aria-hidden />
-                    <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-white to-gray-50 border border-gray-200 shadow-sm flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 blur-xl scale-150" aria-hidden />
+                    <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 flex items-center justify-center">
                       {searchQuery ? (
-                        <Search className="w-9 h-9 text-gray-300" strokeWidth={1.5} />
+                        <Search className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
                       ) : (
-                        <Video className="w-9 h-9 text-gray-300" strokeWidth={1.5} />
+                        <Video className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
                       )}
                     </div>
                   </div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-1.5">
+                  <h3 className="text-base font-semibold text-gray-900 mb-1.5 tracking-tight">
                     {searchQuery
                       ? 'No matches found'
                       : activeTab === 'archived'
@@ -942,7 +947,7 @@ export default function AIInterview() {
                   {!searchQuery && activeTab !== 'archived' && canCreateAIInterviews && (
                     <button
                       onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-gray-900 text-white rounded-xl hover:bg-black hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-sm"
+                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-xl hover:shadow-lg hover:shadow-brand-blue/20 hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
                       Create your first interview
@@ -951,7 +956,7 @@ export default function AIInterview() {
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                     >
                       Clear search
                     </button>
@@ -965,49 +970,49 @@ export default function AIInterview() {
                       : [];
                     const normalizedStatus = normalizeConfigStatus(config.status);
                     const statusStyles: Record<string, { dot: string; chip: string; label: string }> = {
-                      published: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Active' },
-                      draft: { dot: 'bg-gray-400', chip: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Draft' },
-                      completed: { dot: 'bg-blue-500', chip: 'bg-blue-50 text-blue-700 border-blue-200', label: 'Completed' },
-                      cancelled: { dot: 'bg-red-500', chip: 'bg-red-50 text-red-700 border-red-200', label: 'Cancelled' },
-                      archived: { dot: 'bg-orange-500', chip: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Archived' },
+                      published: { dot: 'bg-green-500', chip: 'bg-green-100 text-green-700 ring-1 ring-green-200', label: 'Active' },
+                      draft: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20', label: 'Draft' },
+                      completed: { dot: 'bg-brand-blue', chip: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20', label: 'Completed' },
+                      cancelled: { dot: 'bg-red-500', chip: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Cancelled' },
+                      archived: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20', label: 'Archived' },
                     };
-                    const statusStyle = statusStyles[normalizedStatus] || { dot: 'bg-gray-400', chip: 'bg-gray-100 text-gray-700 border-gray-200', label: getStatusLabel(config.status) };
+                    const statusStyle = statusStyles[normalizedStatus] || { dot: 'bg-gray-400', chip: 'bg-slate-100 text-gray-700 ring-1 ring-gray-200', label: getStatusLabel(config.status) };
 
                     return (
                       <div
                         key={config.id}
                         onClick={() => router.push(`/recruitment/ai-interviews/${config.id}`)}
-                        className="group relative flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-5 border border-gray-200 rounded-2xl bg-white hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer gap-4 overflow-hidden"
+                        className="group relative flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-2xl bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer gap-4 overflow-hidden"
                       >
                         {normalizedStatus === 'published' && (
-                          <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full bg-gradient-to-b from-emerald-400 to-emerald-500" aria-hidden />
+                          <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full bg-gradient-to-b from-brand-blue to-brand-cyan" aria-hidden />
                         )}
                         <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ring-1 ${
                             normalizedStatus === 'published'
-                              ? 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'
-                              : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                              ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 ring-green-200 group-hover:from-green-200'
+                              : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 text-brand-blue ring-brand-blue/15 group-hover:from-brand-blue/15'
                           }`}>
                             <Video className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1.5">
                               {config.display_id && (
-                                <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-gray-900 text-white rounded-md">
+                                <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                                   {config.display_id}
                                 </span>
                               )}
-                              <h3 className="font-semibold text-gray-900 text-[15px] truncate">
+                              <h3 className="font-semibold text-gray-900 text-[15px] truncate tracking-tight">
                                 {config.jd_title || config.position || 'Untitled'}
                               </h3>
                               {config.jd_version && (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-gray-500 rounded ring-1 ring-gray-200">
                                   v{config.jd_version}
                                 </span>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${statusStyle.chip}`}>
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusStyle.chip}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
                                 {statusStyle.label}
                               </span>
@@ -1020,21 +1025,21 @@ export default function AIInterview() {
                                 } catch {}
                                 if (mode === 'fixed') {
                                   return (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                                       <Clock className="w-3 h-3" />
                                       Timed
                                     </span>
                                   );
                                 }
                                 return (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                                     <MessageSquare className="w-3 h-3" />
                                     {hasBuffer ? 'Conversational + Buffer' : 'Conversational'}
                                   </span>
                                 );
                               })()}
                               {enabledRounds.length > 0 && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-200">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                                   <GitBranch className="w-3 h-3" />
                                   {enabledRounds.length} rounds
                                 </span>
@@ -1073,7 +1078,7 @@ export default function AIInterview() {
                               <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-gray-100">
                                 <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mr-0.5">Skills</span>
                                 {config.jd_must_have_skills.slice(0, 4).map((skill: string) => (
-                                  <span key={skill} className="px-2 py-0.5 bg-gray-50 text-gray-600 text-[11px] font-medium rounded-md border border-gray-200">
+                                  <span key={skill} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue text-[11px] font-medium rounded-md ring-1 ring-brand-blue/20">
                                     {skill}
                                   </span>
                                 ))}
@@ -1090,7 +1095,7 @@ export default function AIInterview() {
                           {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-black hover:shadow-sm transition-all duration-200 whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
                             >
                               <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="hidden sm:inline">Continue Editing</span>
@@ -1102,7 +1107,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-black hover:shadow-sm transition-all duration-200 whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
                               title="View interview results"
                             >
                               <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1114,7 +1119,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && canInviteAIInterviews && (
                             <button
                               onClick={() => handleViewInvitations(config)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
                               title="Track invitation status"
                             >
                               <Users className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1126,7 +1131,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && canShareAIInterviews && (
                             <button
                               onClick={() => setShareConfig(config)}
-                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 whitespace-nowrap"
+                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
                             >
                               <Send className="w-3.5 h-3.5 flex-shrink-0" />
                               Share
@@ -1137,16 +1142,16 @@ export default function AIInterview() {
                           <div className="relative flex-shrink-0" ref={openMenuId === config.id ? menuRef : undefined}>
                             <button
                               onClick={() => setOpenMenuId(openMenuId === config.id ? null : config.id)}
-                              className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                              className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors"
                               aria-label="More actions"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
                             {openMenuId === config.id && (
-                              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-gray-200 rounded-xl shadow-lg ring-1 ring-black/5 z-50 max-h-[70vh] overflow-y-auto p-1">
+                              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-gray-100 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 max-h-[70vh] overflow-y-auto p-1">
                                 <button
                                   onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
-                                  className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
+                                  className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                                 >
                                   <Eye className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                   View Details
@@ -1154,7 +1159,7 @@ export default function AIInterview() {
                                 {config.status === 'published' && canShareAIInterviews && (
                                   <button
                                     onClick={() => handleCopyLink(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                                   >
                                     <Copy className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Copy Link
@@ -1163,7 +1168,7 @@ export default function AIInterview() {
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                                   >
                                     <Send className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Share / Invite
@@ -1172,7 +1177,7 @@ export default function AIInterview() {
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => handleViewInvitations(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                                   >
                                     <Users className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     View Invitations
@@ -1184,7 +1189,7 @@ export default function AIInterview() {
                                 {config.status !== 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleArchiveConfig(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                                   >
                                     <Archive className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Archive
@@ -1193,7 +1198,7 @@ export default function AIInterview() {
                                 {config.status === 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleUnarchiveConfig(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
                                   >
                                     <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                     Unarchive
@@ -1240,20 +1245,20 @@ export default function AIInterview() {
             <div className="p-3 sm:p-6">
               {processingLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : processingSessions.length === 0 ? (
                 <div className="text-center py-12">
-                  <Play className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                  <Play className="w-10 h-10 mx-auto mb-3 text-brand-blue/30" />
                   <p className="text-gray-500 text-sm">No interviews currently in progress</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {paginatedProcessingSessions.map((session) => (
-                    <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg gap-2 sm:gap-3">
+                    <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white gap-2 sm:gap-3 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                          <Play className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center flex-shrink-0">
+                          <Play className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep" />
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-gray-900 text-sm sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
@@ -1267,7 +1272,7 @@ export default function AIInterview() {
                             Started {formatIST(session.started_at)}
                           </span>
                         )}
-                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-700">
+                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                           In Progress
                         </span>
                       </div>
@@ -1305,7 +1310,7 @@ export default function AIInterview() {
           {activeTab === 'settings' && (
             <div className="p-3 sm:p-6">
               {/* Settings Sub-tabs */}
-              <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-200">
+              <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100">
                 {[
                   { key: 'general', label: 'General' },
                   { key: 'proctoring', label: 'Proctoring' },
@@ -1315,8 +1320,8 @@ export default function AIInterview() {
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
                     className={`pb-2 sm:pb-3 text-xs sm:text-sm border-b-2 transition-colors ${
                       settingsSubTab === sub.key
-                        ? 'border-gray-800 text-gray-800 font-medium'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        ? 'border-brand-blue text-brand-blue font-medium'
+                        : 'border-transparent text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     {sub.label}
@@ -1338,7 +1343,7 @@ export default function AIInterview() {
                         <select
                           value={settingsDuration}
                           onChange={(e) => setSettingsDuration(parseInt(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white"
                         >
                           <option value="30">30 minutes</option>
                           <option value="45">45 minutes</option>
@@ -1353,7 +1358,7 @@ export default function AIInterview() {
                         <select
                           value={settingsLanguage}
                           onChange={(e) => setSettingsLanguage(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white"
                         >
                           <option>English (US)</option>
                           <option>English (UK)</option>
@@ -1368,7 +1373,7 @@ export default function AIInterview() {
                           id="auto-record"
                           checked={settingsAutoRecord}
                           onChange={(e) => setSettingsAutoRecord(e.target.checked)}
-                          className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
+                          className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                         <label htmlFor="auto-record" className="text-sm text-gray-700">
                           Automatically record all interviews
@@ -1381,7 +1386,7 @@ export default function AIInterview() {
                           id="send-reminders"
                           checked={settingsReminders}
                           onChange={(e) => setSettingsReminders(e.target.checked)}
-                          className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
+                          className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                         <label htmlFor="send-reminders" className="text-sm text-gray-700">
                           Send reminder emails to candidates
@@ -1394,7 +1399,7 @@ export default function AIInterview() {
                           id="ai-analysis"
                           checked={settingsSentiment}
                           onChange={(e) => setSettingsSentiment(e.target.checked)}
-                          className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
+                          className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                         <label htmlFor="ai-analysis" className="text-sm text-gray-700">
                           Enable AI-powered sentiment analysis
@@ -1403,10 +1408,10 @@ export default function AIInterview() {
                     </div>
                   </div>
 
-                  <div className="pt-6 border-t border-gray-200">
+                  <div className="pt-6 border-t border-gray-100">
                     <button
                       onClick={handleSaveSettings}
-                      className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                      className="px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                     >
                       Save Settings
                     </button>
@@ -1419,7 +1424,7 @@ export default function AIInterview() {
                 <div className="max-w-3xl space-y-6">
                   {proctoringLoading ? (
                     <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                     </div>
                   ) : (
                     <>
@@ -1440,7 +1445,7 @@ export default function AIInterview() {
                                 onChange={(e) => setProctoringEnabled(e.target.checked)}
                                 className="sr-only"
                               />
-                              <div className={`w-11 h-6 rounded-full transition-colors ${proctoringEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}>
+                              <div className={`w-11 h-6 rounded-full transition-colors ${proctoringEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}>
                                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${proctoringEnabled ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
                               </div>
                             </div>
@@ -1458,9 +1463,9 @@ export default function AIInterview() {
                               { key: 'browser_lockdown', label: 'Browser Lockdown', icon: Shield, desc: 'Lock browser to interview window only' },
                               { key: 'ai_cheating_prevention', label: 'AI Cheating Prevention', icon: Brain, desc: 'Detect AI-generated responses' },
                             ].map(({ key, label, icon: Icon, desc }) => (
-                              <div key={key} className="flex items-center justify-between p-2.5 sm:p-3 border border-gray-200 rounded-lg gap-2">
+                              <div key={key} className="flex items-center justify-between p-2.5 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white gap-2 hover:border-brand-blue/30 transition-colors">
                                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                  <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
+                                  <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                                   <div className="min-w-0">
                                     <div className="text-xs sm:text-sm font-medium text-gray-700">{label}</div>
                                     <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">{desc}</div>
@@ -1470,7 +1475,7 @@ export default function AIInterview() {
                                   type="checkbox"
                                   checked={(proctoringSettings as any)[key]}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, [key]: e.target.checked }))}
-                                  className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
+                                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                                 />
                               </div>
                             ))}
@@ -1483,7 +1488,7 @@ export default function AIInterview() {
                                   type="number"
                                   value={proctoringSettings.max_tab_switches}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, max_tab_switches: parseInt(e.target.value) || 3 }))}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                   min={1}
                                   max={20}
                                 />
@@ -1494,7 +1499,7 @@ export default function AIInterview() {
                                   type="number"
                                   value={proctoringSettings.max_violations}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, max_violations: parseInt(e.target.value) || 5 }))}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                   min={1}
                                   max={50}
                                 />
@@ -1505,7 +1510,7 @@ export default function AIInterview() {
                                   type="number"
                                   value={proctoringSettings.retention_days}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, retention_days: parseInt(e.target.value) || 90 }))}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                   min={7}
                                   max={365}
                                 />
@@ -1530,7 +1535,7 @@ export default function AIInterview() {
                                       violation_medium_threshold: Math.max(prev.violation_medium_threshold, val + 1),
                                     }));
                                   }}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                   min={1}
                                   max={proctoringSettings.violation_medium_threshold - 1}
                                 />
@@ -1546,7 +1551,7 @@ export default function AIInterview() {
                                     const val = Math.max(proctoringSettings.violation_low_threshold + 1, parseInt(e.target.value) || proctoringSettings.violation_low_threshold + 1);
                                     setProctoringSettings(prev => ({ ...prev, violation_medium_threshold: val }));
                                   }}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                   min={proctoringSettings.violation_low_threshold + 1}
                                 />
                               </div>
@@ -1559,10 +1564,10 @@ export default function AIInterview() {
                         )}
                       </div>
 
-                      <div className="pt-6 border-t border-gray-200">
+                      <div className="pt-6 border-t border-gray-100">
                         <button
                           onClick={handleSaveProctoringSettings}
-                          className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                          className="px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                         >
                           Save Proctoring Settings
                         </button>
@@ -1591,7 +1596,7 @@ export default function AIInterview() {
       {/* Candidate Detail Loading Overlay */}
       {candidateDetailLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
       )}
 
@@ -1626,76 +1631,78 @@ export default function AIInterview() {
 
         const getInvStatusBadge = (status: string) => {
           switch (status) {
-            case 'completed': return <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
-            case 'in_progress': return <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
-            case 'invited': return <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
-            case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
-            case 'expired': return <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
-            default: return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
+            case 'completed': return <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
+            case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
+            case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
+            case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
+            case 'expired': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
+            default: return <span className="px-2 py-0.5 bg-slate-100 text-gray-700 ring-1 ring-gray-200 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
           }
         };
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
-            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] lg:max-w-5xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+            <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] lg:max-w-5xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
               {/* Header */}
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Candidate Invitations</h2>
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</p>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate tracking-tight">Candidate Invitations</h2>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</p>
+                  </div>
                 </div>
-                <button onClick={() => setViewInvitationsConfig(null)} className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
+                <button onClick={() => setViewInvitationsConfig(null)} className="p-1.5 sm:p-2 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Stats Cards */}
-              <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 border-b border-gray-100 flex-shrink-0">
                 <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
-                  <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
+                  <div className="bg-white rounded-xl p-2 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs mb-1">
                       <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                       <span className="truncate">Total</span>
                     </div>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-900">{invTotal}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-gray-900 tracking-tight">{invTotal}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-                    <div className="flex items-center gap-1.5 text-blue-600 text-[10px] sm:text-xs mb-1">
+                  <div className="bg-white rounded-xl p-2 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="flex items-center gap-1.5 text-brand-blue text-[10px] sm:text-xs mb-1">
                       <Mail className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                       <span className="truncate">Invited</span>
                     </div>
-                    <p className="text-lg sm:text-2xl font-bold text-blue-600">{invInvited}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-brand-blue tracking-tight">{invInvited}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-                    <div className="flex items-center gap-1.5 text-yellow-600 text-[10px] sm:text-xs mb-1">
+                  <div className="bg-white rounded-xl p-2 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="flex items-center gap-1.5 text-brand-orange-deep text-[10px] sm:text-xs mb-1">
                       <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                       <span className="truncate">In Progress</span>
                     </div>
-                    <p className="text-lg sm:text-2xl font-bold text-yellow-600">{invInProgress}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-brand-orange-deep tracking-tight">{invInProgress}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
+                  <div className="bg-white rounded-xl p-2 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-green-600 text-[10px] sm:text-xs mb-1">
                       <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                       <span className="truncate">Completed</span>
                     </div>
-                    <p className="text-lg sm:text-2xl font-bold text-green-600">{invCompleted}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-green-600 tracking-tight">{invCompleted}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
+                  <div className="bg-white rounded-xl p-2 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">
                       <X className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                       <span className="truncate">Cancelled</span>
                     </div>
-                    <p className="text-lg sm:text-2xl font-bold text-red-600">{invCancelled}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-red-600 tracking-tight">{invCancelled}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-                    <div className="flex items-center gap-1.5 text-gray-600 text-[10px] sm:text-xs mb-1">
+                  <div className="bg-white rounded-xl p-2 sm:p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="flex items-center gap-1.5 text-brand-cyan text-[10px] sm:text-xs mb-1">
                       <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                       <span className="truncate">Completion</span>
                     </div>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-700">{invCompletionRate}%</p>
+                    <p className="text-lg sm:text-2xl font-bold text-brand-cyan tracking-tight">{invCompletionRate}%</p>
                   </div>
                 </div>
               </div>
@@ -1704,22 +1711,22 @@ export default function AIInterview() {
               <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 min-h-0">
                 {loadingInvitations ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                   </div>
                 ) : invitations.length === 0 ? (
                   <div className="text-center py-12">
-                    <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                    <Users className="w-10 h-10 mx-auto mb-3 text-brand-blue/30" />
                     <p className="text-gray-500 mb-2 text-sm">No candidates invited yet</p>
                     <p className="text-xs sm:text-sm text-gray-400">Use the &quot;Send via Email&quot; button to invite candidates</p>
                   </div>
                 ) : (
                   <div className="space-y-2 sm:space-y-3">
                     {paginatedInvitations.map((inv) => (
-                      <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-2 sm:gap-3">
+                      <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all gap-2 sm:gap-3">
                         {/* Candidate info */}
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs sm:text-sm font-medium text-gray-700">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs sm:text-sm font-medium text-brand-blue">
                               {(inv.candidate_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </span>
                           </div>
@@ -1734,7 +1741,7 @@ export default function AIInterview() {
                           {/* Status badge */}
                           {getInvStatusBadge(inv.status)}
                           {isInvExpired(inv) && (
-                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1">
+                            <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1">
                               <Clock className="w-3 h-3" /> Expired
                             </span>
                           )}
@@ -1756,13 +1763,13 @@ export default function AIInterview() {
                           <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400">
                             {inv.created_at && (
                               <span className="flex items-center gap-1" title="Invited">
-                                <Mail className="w-3 h-3 text-blue-400" />
+                                <Mail className="w-3 h-3 text-brand-blue" />
                                 {formatIST(inv.created_at)}
                               </span>
                             )}
                             {inv.started_at && (
                               <span className="flex items-center gap-1" title="Started">
-                                <Play className="w-3 h-3 text-yellow-500" />
+                                <Play className="w-3 h-3 text-brand-orange" />
                                 {formatIST(inv.started_at)}
                               </span>
                             )}
@@ -1784,7 +1791,7 @@ export default function AIInterview() {
                                 toast.success('Interview link copied!');
                               }}
                               title="Copy interview link"
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                             >
                               <Copy className="w-3 h-3" />
                               Copy Link
@@ -1800,7 +1807,7 @@ export default function AIInterview() {
                               }}
                               disabled={resendingEmailFor === inv.id}
                               title="Revoke old link and send a new invitation"
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-50"
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
                             >
                               {resendingEmailFor === inv.id
                                 ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -1814,7 +1821,7 @@ export default function AIInterview() {
                           {(inv.status === 'completed' || inv.status === 'in_progress') && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleViewCandidateDetail(inv.id); }}
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                             >
                               <Eye className="w-3 h-3" />
                               View Details
@@ -1832,17 +1839,17 @@ export default function AIInterview() {
                           <button
                             onClick={() => setInvitationPage((p) => Math.max(1, p - 1))}
                             disabled={invitationPage === 1}
-                            className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </button>
-                          <span className="text-sm text-gray-700 font-medium px-2">
+                          <span className="text-sm text-brand-blue font-semibold px-2">
                             {invitationPage} / {invitationTotalPages}
                           </span>
                           <button
                             onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))}
                             disabled={invitationPage === invitationTotalPages}
-                            className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             <ChevronRight className="w-4 h-4" />
                           </button>
@@ -1854,7 +1861,7 @@ export default function AIInterview() {
               </div>
 
               {/* Footer */}
-              <div className="border-t border-gray-200 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
+              <div className="border-t border-gray-100 bg-slate-50/60 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
                 <span className="text-xs sm:text-sm text-gray-500">
                   {invitationTotal} candidate{invitationTotal !== 1 ? 's' : ''} invited
                 </span>
@@ -1864,14 +1871,14 @@ export default function AIInterview() {
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                   >
                     <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                     Invite More
                   </button>
                   <button
                     onClick={() => setViewInvitationsConfig(null)}
-                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                   >
                     Close
                   </button>
@@ -1885,20 +1892,22 @@ export default function AIInterview() {
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">{confirmAction.title}</h3>
+          <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">{confirmAction.title}</h3>
             <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmAction.onConfirm}
-                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm text-white rounded-md transition-colors ${
-                  confirmAction.destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-800 hover:bg-gray-900'
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm text-white rounded-lg transition-colors shadow-md ring-1 ring-white/10 ${
+                  confirmAction.destructive
+                    ? 'bg-red-600 hover:bg-red-700 shadow-red-600/25'
+                    : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25'
                 }`}
               >
                 Confirm
@@ -1910,23 +1919,23 @@ export default function AIInterview() {
 
       {showPublishedModal && (
         <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-gray-200 p-6 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] p-6 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="relative inline-flex items-center justify-center mb-4">
               <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
-              <span className="absolute w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
-              <span className="absolute w-2 h-2 rounded-full bg-gray-400 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
+              <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
+              <div className="w-16 h-16 bg-green-100 ring-1 ring-green-200 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">AI Interview Published</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2 tracking-tight">AI Interview Published</h2>
             <p className="text-sm text-gray-500 mb-4">
               Redirected successfully. This message will close in 3 seconds.
             </p>
-            <div className="bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 text-left">
+            <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 px-4 py-3 text-left">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-gray-500">Position</span>
-                <span className="text-sm font-medium text-gray-900 text-right">{publishedTitle}</span>
+                <span className="text-sm font-medium text-brand-blue text-right">{publishedTitle}</span>
               </div>
             </div>
           </div>
@@ -1991,13 +2000,13 @@ export default function AIInterview() {
             durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
           }
           return (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-              <p className="text-amber-900 font-medium mb-1">New link expiry</p>
-              <p className="text-amber-800">
+            <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-xl p-3 text-sm">
+              <p className="text-brand-orange-deep font-medium mb-1">New link expiry</p>
+              <p className="text-brand-orange-deep">
                 Valid for <strong>{durationLabel}</strong> from now — expires on{' '}
                 <strong>{formatIST(newExpiry.toISOString())}</strong>.
               </p>
-              <p className="text-amber-700 text-xs mt-2">
+              <p className="text-brand-orange-deep/80 text-xs mt-2">
                 Same duration as the original invitation.
               </p>
             </div>
@@ -2024,7 +2033,7 @@ function ConsentLogsWrapper() {
   if (loadError) {
     return (
       <div className="text-center py-12">
-        <ScrollText className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+        <ScrollText className="w-10 h-10 mx-auto mb-3 text-brand-blue/30" />
         <p className="text-gray-500">Consent logs module not available</p>
       </div>
     );
@@ -2033,7 +2042,7 @@ function ConsentLogsWrapper() {
   if (!ConsentLogs) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
       </div>
     );
   }

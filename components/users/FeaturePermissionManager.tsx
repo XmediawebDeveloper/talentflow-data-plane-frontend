@@ -18,7 +18,13 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
-  Zap
+  Zap,
+  FileText,
+  Briefcase,
+  ClipboardCheck,
+  BarChart3,
+  Plug,
+  Cog
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { featurePermissionService } from '@/lib/services/featurePermissionService';
@@ -57,13 +63,23 @@ interface FeatureState {
 
 // Category icons
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
-  'Resume Management': Shield,
+  'Resume Management': FileText,
   'AI Features': Zap,
-  'Job Descriptions': Shield,
-  'Assessment': Shield,
-  'Analytics': Shield,
-  'Integration': Link2,
-  'Operations': Shield,
+  'Job Descriptions': Briefcase,
+  'Assessment': ClipboardCheck,
+  'Analytics': BarChart3,
+  'Integration': Plug,
+  'Operations': Cog,
+};
+
+const CATEGORY_GRADIENTS: Record<string, string> = {
+  'Resume Management': 'from-brand-blue to-brand-blue-2',
+  'AI Features': 'from-brand-cyan to-brand-blue',
+  'Job Descriptions': 'from-brand-orange to-brand-orange-deep',
+  'Assessment': 'from-brand-blue to-brand-blue-2',
+  'Analytics': 'from-brand-cyan to-brand-blue-2',
+  'Integration': 'from-brand-orange to-brand-orange-deep',
+  'Operations': 'from-brand-blue-2 to-brand-cyan',
 };
 
 export default function FeaturePermissionManager({
@@ -283,39 +299,49 @@ export default function FeaturePermissionManager({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Feature Permissions
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {userName} ({userRole})
-            </p>
+        <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-gray-900 truncate">
+                Feature Permissions
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                <span className="truncate">{userName}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue uppercase tracking-wider">
+                  {userRole}
+                </span>
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50/40">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
             </div>
           ) : isExpansionBlocked ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="bg-gradient-to-br from-brand-orange/[0.06] to-brand-orange/[0.02] border border-brand-orange/30 rounded-xl p-5 shadow-sm">
               <div className="flex gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-brand-orange-deep flex items-center justify-center shadow-sm flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-white" />
+                </div>
                 <div>
-                  <h3 className="font-medium text-amber-800">Permission Expansion Blocked</h3>
-                  <p className="text-sm text-amber-700 mt-1">
+                  <h3 className="font-semibold text-gray-900">Permission Expansion Blocked</h3>
+                  <p className="text-sm text-gray-700 mt-1">
                     Users with the "{userRole}" role cannot have their permissions expanded.
                     This role is read-only by design.
                   </p>
@@ -325,26 +351,30 @@ export default function FeaturePermissionManager({
           ) : (
             <>
               {/* Auto-enable dependencies toggle */}
-              <div className="mb-6 flex items-center justify-between bg-gray-50 rounded-lg p-4">
+              <div className="mb-6 flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <div className="flex items-center gap-3">
-                  <Link2 className="w-5 h-5 text-gray-500" />
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/20 flex-shrink-0">
+                    <Link2 className="w-4 h-4 text-white" />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-semibold text-gray-900">
                       Auto-enable dependencies
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       Automatically enable required features when enabling a dependent feature
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setAutoEnableDeps(!autoEnableDeps)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    autoEnableDeps ? 'bg-gray-900' : 'bg-gray-200'
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ring-1 ${
+                    autoEnableDeps
+                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
+                      : 'bg-gray-200 ring-gray-300'
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                       autoEnableDeps ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
@@ -355,23 +385,27 @@ export default function FeaturePermissionManager({
               <div className="space-y-4">
                 {Object.entries(featuresByCategory).map(([category, categoryFeatures]) => {
                   const CategoryIcon = CATEGORY_ICONS[category] || Shield;
+                  const gradient = CATEGORY_GRADIENTS[category] || 'from-brand-blue to-brand-blue-2';
                   const isExpanded = expandedCategories.includes(category);
+                  const enabledCount = categoryFeatures.filter(f => isFeatureEnabled(f.code)).length;
 
                   return (
-                    <div key={category} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div key={category} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:border-brand-blue/30 transition-all">
                       <button
                         onClick={() => toggleCategory(category)}
-                        className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white hover:from-brand-blue/[0.04] hover:to-brand-cyan/[0.03] transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <CategoryIcon className="w-5 h-5 text-gray-500" />
-                          <span className="font-medium text-gray-900">{category}</span>
-                          <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
-                            {categoryFeatures.filter(f => isFeatureEnabled(f.code)).length} / {categoryFeatures.length}
+                          <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm ring-1 ring-white/20`}>
+                            <CategoryIcon className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-semibold text-gray-900">{category}</span>
+                          <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
+                            {enabledCount} / {categoryFeatures.length}
                           </span>
                         </div>
                         {isExpanded ? (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                          <ChevronDown className="w-5 h-5 text-brand-blue" />
                         ) : (
                           <ChevronRight className="w-5 h-5 text-gray-400" />
                         )}
@@ -387,23 +421,31 @@ export default function FeaturePermissionManager({
                             return (
                               <div
                                 key={feature.code}
-                                className={`px-4 py-3 flex items-center justify-between ${
-                                  hasChange ? 'bg-blue-50' : ''
+                                className={`px-4 py-3 flex items-center justify-between transition-colors ${
+                                  hasChange
+                                    ? 'bg-brand-blue/[0.06] ring-1 ring-inset ring-brand-blue/20'
+                                    : 'hover:bg-brand-blue/[0.03]'
                                 } ${isDisabled ? 'opacity-60' : ''}`}
                               >
                                 <div className="flex-1 pr-4">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-medium text-gray-900">
                                       {feature.name}
                                     </span>
                                     {feature.locked && (
-                                      <span title={feature.lockedReason}>
-                                        <Lock className="w-4 h-4 text-amber-500" />
+                                      <span
+                                        title={feature.lockedReason}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep"
+                                      >
+                                        <Lock className="w-3 h-3" /> Locked
                                       </span>
                                     )}
                                     {feature.dependencies.length > 0 && (
-                                      <span className="text-xs text-gray-400" title={`Requires: ${feature.dependencies.join(', ')}`}>
-                                        <Link2 className="w-3 h-3 inline" /> {feature.dependencies.length}
+                                      <span
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan"
+                                        title={`Requires: ${feature.dependencies.join(', ')}`}
+                                      >
+                                        <Link2 className="w-3 h-3" /> {feature.dependencies.length}
                                       </span>
                                     )}
                                   </div>
@@ -415,14 +457,14 @@ export default function FeaturePermissionManager({
                                 <button
                                   onClick={() => handleFeatureToggle(feature.code, !isEnabled)}
                                   disabled={isDisabled}
-                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all ring-1 ${
                                     isEnabled
-                                      ? 'bg-gray-900'
-                                      : 'bg-gray-200'
+                                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
+                                      : 'bg-gray-200 ring-gray-300'
                                   } ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                 >
                                   <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                                       isEnabled ? 'translate-x-6' : 'translate-x-1'
                                     }`}
                                   />
@@ -439,17 +481,19 @@ export default function FeaturePermissionManager({
 
               {/* Changes summary */}
               {hasChanges && (
-                <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Info className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm font-medium text-blue-800">
+                <div className="mt-6 bg-gradient-to-r from-brand-blue/[0.08] to-brand-cyan/[0.05] border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
+                        <Info className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="text-sm font-semibold text-brand-blue">
                         {Object.keys(pendingChanges).length} change(s) pending
                       </span>
                     </div>
                     <button
                       onClick={handleReset}
-                      className="text-sm text-blue-600 hover:text-blue-800"
+                      className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 px-3 py-1.5 rounded-lg hover:bg-white/60 transition-colors"
                     >
                       Reset
                     </button>
@@ -461,17 +505,17 @@ export default function FeaturePermissionManager({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-gray-200 bg-white flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
+            className="px-4 py-2 text-gray-700 hover:text-brand-blue hover:bg-brand-blue/[0.06] rounded-lg font-medium transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || isExpansionBlocked}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {isSaving ? (
               <>

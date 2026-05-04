@@ -26,16 +26,16 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 
 // Color mapping for each activity type
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
-  assessment_created: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
-  assessment_updated: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-500', border: 'border-purple-200' },
+  assessment_created: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
+  assessment_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   assessment_deleted: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
   assessment_published: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
-  assessment_archived: { bg: 'bg-gray-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
-  candidate_invited: { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-500', border: 'border-indigo-200' },
-  candidate_started: { bg: 'bg-yellow-50', text: 'text-yellow-700', icon: 'text-yellow-500', border: 'border-yellow-200' },
+  assessment_archived: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
+  candidate_invited: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
+  candidate_started: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
   candidate_completed: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
   candidate_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
-  candidate_expired: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
+  candidate_expired: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
 };
 
 export default function AssessmentAuditTrail() {
@@ -166,54 +166,54 @@ export default function AssessmentAuditTrail() {
     <div className="space-y-4 sm:space-y-6">
       {/* Header Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1.5 sm:mb-2">
             <span className="text-xs sm:text-sm text-gray-600">Total Events</span>
             <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
           </div>
-          <div className="text-lg sm:text-2xl text-gray-900">{total}</div>
+          <div className="text-lg sm:text-2xl text-gray-900 tracking-tight">{total}</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1.5 sm:mb-2">
             <span className="text-xs sm:text-sm text-gray-600">Created</span>
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue" />
           </div>
-          <div className="text-lg sm:text-2xl text-blue-600">{stats.assessments_created}</div>
+          <div className="text-lg sm:text-2xl text-brand-blue tracking-tight">{stats.assessments_created}</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1.5 sm:mb-2">
             <span className="text-xs sm:text-sm text-gray-600">Invited</span>
-            <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
+            <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-cyan" />
           </div>
-          <div className="text-lg sm:text-2xl text-indigo-600">{stats.candidates_invited}</div>
+          <div className="text-lg sm:text-2xl text-brand-cyan tracking-tight">{stats.candidates_invited}</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1.5 sm:mb-2">
             <span className="text-xs sm:text-sm text-gray-600">Completed</span>
             <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
           </div>
-          <div className="text-lg sm:text-2xl text-green-600">{stats.candidates_completed}</div>
+          <div className="text-lg sm:text-2xl text-green-600 tracking-tight">{stats.candidates_completed}</div>
         </div>
 
-        <div className="col-span-2 sm:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1.5 sm:mb-2">
             <span className="text-xs sm:text-sm text-gray-600">In Progress</span>
-            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-600" />
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-orange" />
           </div>
-          <div className="text-lg sm:text-2xl text-yellow-600">{stats.candidates_in_progress}</div>
+          <div className="text-lg sm:text-2xl text-brand-orange-deep tracking-tight">{stats.candidates_in_progress}</div>
         </div>
       </div>
 
       {/* Main Audit Trail */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
         {/* Header */}
-        <div className="p-3 sm:p-6 border-b border-gray-200">
+        <div className="p-3 sm:p-6 border-b border-gray-100">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Activity Log</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Activity Log</h2>
               <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
                 Complete activity log for assessments and candidates
               </p>
@@ -221,7 +221,7 @@ export default function AssessmentAuditTrail() {
 
             <button
               onClick={handleExportAuditLogs}
-              className="self-start sm:self-auto px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
+              className="self-start sm:self-auto px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-slate-100 transition-colors flex items-center gap-1.5 sm:gap-2"
             >
               <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Export Logs
@@ -235,8 +235,8 @@ export default function AssessmentAuditTrail() {
               onClick={() => setCategoryFilter('all')}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                 categoryFilter === 'all'
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
               }`}
             >
               All
@@ -245,8 +245,8 @@ export default function AssessmentAuditTrail() {
               onClick={() => setCategoryFilter('assessment_lifecycle')}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                 categoryFilter === 'assessment_lifecycle'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 hover:bg-brand-blue/10'
               }`}
             >
               <span className="hidden sm:inline">Assessment Lifecycle</span>
@@ -257,8 +257,8 @@ export default function AssessmentAuditTrail() {
               onClick={() => setCategoryFilter('candidate_activity')}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                 categoryFilter === 'candidate_activity'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                  ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
+                  : 'bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 hover:bg-brand-cyan/10'
               }`}
             >
               <span className="hidden sm:inline">Candidate Activities</span>
@@ -276,23 +276,23 @@ export default function AssessmentAuditTrail() {
                 placeholder="Search by assessment, candidate, or user..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black placeholder-gray-400"
+                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-400"
               />
             </div>
 
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`self-start sm:self-auto px-3 sm:px-4 py-2 text-xs sm:text-sm border rounded-md transition-colors flex items-center gap-1.5 sm:gap-2 ${
+              className={`self-start sm:self-auto px-3 sm:px-4 py-2 text-xs sm:text-sm border rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ${
                 showFilters || activeFiltersCount > 0
-                  ? 'border-gray-300 text-gray-900 bg-gray-50'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'border-brand-blue/30 text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-slate-100'
               }`}
             >
               <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded text-xs">
+                <span className="px-1.5 py-0.5 bg-brand-blue text-white rounded text-xs">
                   {activeFiltersCount}
                 </span>
               )}
@@ -301,13 +301,13 @@ export default function AssessmentAuditTrail() {
 
           {/* Filter Panel */}
           {showFilters && (
-            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-slate-50 rounded-lg border border-gray-100">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <h3 className="text-xs sm:text-sm font-medium text-gray-900">Filters</h3>
                 {activeFiltersCount > 0 && (
                   <button
                     onClick={clearFilters}
-                    className="text-xs text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                    className="text-xs text-gray-600 hover:text-brand-blue flex items-center gap-1"
                   >
                     <X className="w-3 h-3" />
                     Clear All
@@ -323,7 +323,7 @@ export default function AssessmentAuditTrail() {
                     type="date"
                     value={filterDateFrom}
                     onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
                   />
                 </div>
 
@@ -334,7 +334,7 @@ export default function AssessmentAuditTrail() {
                     type="date"
                     value={filterDateTo}
                     onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
                   />
                 </div>
               </div>
@@ -346,7 +346,7 @@ export default function AssessmentAuditTrail() {
         <div className="p-3 sm:p-6">
           {isLoading ? (
             <div className="text-center py-8 sm:py-12">
-              <div className="animate-spin w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full mx-auto mb-4"></div>
+              <div className="animate-spin w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full mx-auto mb-4"></div>
               <p className="text-sm text-gray-500">Loading activity log...</p>
             </div>
           ) : activities.length === 0 ? (
@@ -390,8 +390,8 @@ export default function AssessmentAuditTrail() {
                               </h4>
                               <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
                                 activity.category === 'assessment_lifecycle'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-indigo-100 text-indigo-700'
+                                  ? 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
+                                  : 'bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20'
                               }`}>
                                 {getCategoryLabel(activity.category)}
                               </span>
@@ -427,7 +427,7 @@ export default function AssessmentAuditTrail() {
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 mt-1 sm:mt-0">
                             <p className="text-xs sm:text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
-                            <button className="sm:mt-1 text-[10px] sm:text-xs text-gray-400 hover:text-gray-600">
+                            <button className="sm:mt-1 text-[10px] sm:text-xs text-gray-400 hover:text-brand-blue">
                               <Eye className="w-3 h-3 inline mr-0.5 sm:mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
                             </button>
@@ -438,7 +438,7 @@ export default function AssessmentAuditTrail() {
 
                     {/* Expanded Details */}
                     {isExpanded && (
-                      <div className="ml-0 sm:ml-14 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 text-xs sm:text-sm">
+                      <div className="ml-0 sm:ml-14 p-3 sm:p-4 bg-slate-50 rounded-lg border border-gray-100 text-xs sm:text-sm">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
@@ -485,7 +485,7 @@ export default function AssessmentAuditTrail() {
         </div>
 
         {/* Footer with Pagination */}
-        <div className="p-3 sm:p-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
+        <div className="p-3 sm:p-4 bg-slate-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
           <div className="text-xs sm:text-sm text-gray-600">
             Showing {activities.length} of {total} entries
           </div>
@@ -494,7 +494,7 @@ export default function AssessmentAuditTrail() {
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
+                className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-200 bg-white rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
               >
                 Prev
               </button>
@@ -504,7 +504,7 @@ export default function AssessmentAuditTrail() {
               <button
                 onClick={() => setPage(Math.min(Math.ceil(total / pageSize), page + 1))}
                 disabled={page >= Math.ceil(total / pageSize)}
-                className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
+                className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-200 bg-white rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
               >
                 Next
               </button>
