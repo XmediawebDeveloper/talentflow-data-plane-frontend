@@ -570,14 +570,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100/50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-gray-300/50 animate-pulse">
-            <BarChart3 className="w-10 h-10 text-white" />
+          <div className="mx-auto mb-6 flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal shadow-lg shadow-brand-blue/25 ring-4 ring-brand-blue/10">
+            <BarChart3 className="h-10 w-10 text-white" />
           </div>
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
-            <span className="text-lg font-semibold text-gray-700">Loading Usage Data</span>
+          <div className="mb-2 flex items-center justify-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-brand-blue" />
+            <span className="text-lg font-semibold text-gray-900">Loading Usage Data</span>
           </div>
           <p className="text-sm text-gray-500">Fetching your quota information...</p>
         </div>
@@ -759,56 +759,60 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100/50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200/80 shadow-sm sticky top-0 z-10 backdrop-blur-sm bg-white/95">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 sm:gap-5">
-              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 ring-2 sm:ring-4 ring-gray-100">
-                <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">
+        {/* SaaS Hero Header */}
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                Real-time tracking
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Usage & Quotas</h1>
-                <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    Real-time tracking
-                  </span>
-                  <span className="hidden sm:inline text-gray-300">•</span>
-                  <span className="hidden sm:inline">Resume Storage, Scoring, Assessments & AI Interviews</span>
-                </p>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <BarChart3 className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Usage &amp; Quotas</h1>
+                  <p className="mt-1 max-w-2xl text-xs sm:text-sm text-white/80">
+                    Monitor consumption across Resume Storage, Scoring, Assessments &amp; AI Interviews. Top up addons or upgrade your plan when you're approaching limits.
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => refetchQuota()}
-                className="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all hover:scale-105"
-                title="Refresh data"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
+                aria-label="Refresh data" title="Refresh data"
               >
-                <RefreshCw className="w-5 h-5" />
+                <RefreshCw className="h-4 w-4" />
               </button>
               {canUpgradePlan && (
                 <button
                   onClick={handleUpgradeClick}
-                  className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all font-medium flex items-center gap-2 shadow-lg shadow-gray-300/30 hover:shadow-xl hover:shadow-gray-300/40 hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  <TrendingUp className="w-4 h-4" />
+                  <TrendingUp className="h-4 w-4" />
                   Upgrade Plan
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               )}
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium"
+                  className="inline-flex items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
                 >
                   Back
                 </button>
               )}
             </div>
           </div>
-        </div>
+        </section>
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
@@ -816,17 +820,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         {subscriptionSummary && (
           <div className="mb-6 sm:mb-8 bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
             {/* Card Header with gradient */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <CreditCard className="w-4 h-4" />
-                <span>Current Subscription</span>
+            <div className="border-b border-gray-100 bg-gray-50 px-4 sm:px-6 py-3 sm:py-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <CreditCard className="h-4 w-4 text-brand-blue" />
+                <span className="font-medium">Current Subscription</span>
               </div>
             </div>
 
             <div className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
                 <div className="flex items-start gap-3 sm:gap-5">
-                  <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 flex-shrink-0">
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 bg-brand-blue rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-brand-blue/20 flex-shrink-0">
                     <Zap className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                   </div>
                   <div>
@@ -969,14 +973,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             {/* Low Quota Warning — hide for expired/inactive plans */}
             {quotaSummary.has_low_quotas && !['expired', 'inactive', 'suspended'].includes(subscriptionSummary?.status?.toLowerCase() || '') && (
-              <div className="bg-gradient-to-r from-gray-100 to-gray-50 border-2 border-gray-300 rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6 shadow-sm">
+              <div className="mb-4 rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.06] p-3 ring-1 ring-brand-orange/10 sm:mb-6 sm:p-5">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange-deep ring-1 ring-brand-orange/15 sm:h-12 sm:w-12">
+                    <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-900 text-base sm:text-lg">Quota Running Low!</h3>
-                    <p className="text-sm text-gray-600 mt-1">Some quotas are below 20%. Purchase add-on units to continue using these features without interruption.</p>
+                    <h3 className="text-base font-bold text-brand-orange-deep sm:text-lg">Quota Running Low!</h3>
+                    <p className="mt-1 text-sm text-gray-600">Some quotas are below 20%. Purchase add-on units to continue using these features without interruption.</p>
                     {/* Show each low quota with its own Add Credits button */}
                     <div className="flex flex-wrap gap-2 mt-4">
                       {quotaSummary.quotas
@@ -1039,7 +1043,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                     : quota.is_exceeded
                                       ? 'bg-amber-500 text-white hover:bg-amber-600'
                                       : quota.is_exhausted
-                                      ? 'bg-gray-900 text-white hover:bg-gray-800'
+                                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                       : 'bg-gray-700 text-white hover:bg-gray-600'
                               }`}
                             >
@@ -1109,7 +1113,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             : quota.is_exceeded
                               ? 'bg-amber-500 text-white'
                               : quota.is_exhausted
-                                ? 'bg-gray-800 text-white'
+                                ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                 : quota.is_low
                                   ? 'bg-gray-200 text-gray-700'
                                   : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
@@ -1134,7 +1138,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         </span>
                       )}
                       {!isUnlimited && quota.is_exhausted && (
-                        <span className="inline-block text-[10px] font-bold text-white bg-gray-800 px-2 py-0.5 rounded-full animate-pulse">
+                        <span className="inline-block text-[10px] font-bold text-white bg-brand-orange px-2 py-0.5 rounded-full animate-pulse">
                           EXHAUSTED
                         </span>
                       )}
@@ -1161,20 +1165,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
+                    <div className="mb-3 h-3 w-full overflow-hidden rounded-full bg-slate-100">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           isUnlimited
-                            ? 'bg-gradient-to-r from-gray-400 to-gray-500'
+                            ? 'bg-brand-cyan'
                             : quota.is_exceeded_critical
                               ? 'bg-gradient-to-r from-red-400 to-red-600'
                               : quota.is_exceeded
                                 ? 'bg-gradient-to-r from-amber-400 to-amber-500'
                                 : quota.is_exhausted
-                                  ? 'bg-gradient-to-r from-gray-700 to-gray-900'
+                                  ? 'bg-brand-orange'
                                   : quota.is_low
-                                    ? 'bg-gradient-to-r from-gray-500 to-gray-600'
-                                    : 'bg-gradient-to-r from-gray-400 to-gray-500'
+                                    ? 'bg-gradient-to-r from-amber-400 to-brand-orange'
+                                    : 'bg-brand-blue'
                         }`}
                         style={{ width: isUnlimited ? '100%' : `${Math.min(quota.percentage_used, 100)}%` }}
                       />
@@ -1197,7 +1201,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       {!isUnlimited && !quota.is_exceeded && (
                         <span className={`font-semibold px-2 py-0.5 rounded-full ${
                           quota.is_exhausted
-                            ? 'bg-gray-800 text-white'
+                            ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                             : quota.is_low
                               ? 'bg-gray-200 text-gray-700'
                               : 'bg-gray-100 text-gray-600'
@@ -1247,10 +1251,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Section Header */}
-          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+          <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6 sm:py-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center shadow-lg shadow-gray-300/30 flex-shrink-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/15 flex-shrink-0">
                   <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
                 <div>
@@ -1363,7 +1367,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   return (
                     <div
                       key={addon.id}
-                      className="group bg-gradient-to-br from-gray-50 to-white rounded-xl sm:rounded-2xl border-2 border-gray-200 p-4 sm:p-5 transition-all hover:border-gray-300 hover:shadow-lg hover:-translate-y-1"
+                      className="group rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-1 hover:border-brand-blue/20 hover:shadow-lg hover:shadow-brand-blue/10 sm:p-5"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                         <div className="flex items-start gap-3 sm:gap-4">
@@ -1400,7 +1404,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                           className={`w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                             isAddonPurchaseBlocked
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-700 hover:to-gray-800 shadow-lg shadow-gray-300/30 hover:shadow-xl hover:shadow-gray-300/40'
+                              : 'bg-brand-blue text-white shadow-lg shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand-blue/30'
                           }`}
                         >
                           <ShoppingCart className="w-5 h-5" />
@@ -1438,7 +1442,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       {/* Record Usage Modal */}
       {showRecordModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -1458,7 +1462,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setRecordSuccess(null);
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -1587,11 +1591,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       {/* Addon Purchase Modal */}
       {showAddonModal && selectedAddon && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
             {/* Modal Header */}
-            <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex-shrink-0 overflow-hidden">
+            <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal flex-shrink-0 overflow-hidden">
               {/* Decorative circles */}
               <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/5 rounded-full" />
               <div className="absolute -bottom-8 -left-4 w-24 h-24 bg-white/5 rounded-full" />
@@ -1614,7 +1618,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   setAddonPurchaseSuccess(null);
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center hover:bg-white/15 rounded-xl transition-colors"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5 text-gray-300" />
               </button>
             </div>
@@ -1657,7 +1661,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 )}
 
                 {/* Addon Details Card */}
-                <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-2xl p-4 sm:p-5 overflow-hidden">
+                <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] p-4 ring-1 ring-black/[0.02] sm:p-5">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-gray-200/40 rounded-full -translate-y-8 translate-x-8" />
                   <div className="relative flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -1708,11 +1712,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       </button>
                     </div>
                     {/* Units highlight */}
-                    <div className="flex-1 bg-gray-900 text-white rounded-2xl px-4 py-2.5 flex items-center justify-between">
-                      <span className="text-xs text-gray-400">Total units</span>
+                    <div className="flex flex-1 items-center justify-between rounded-2xl bg-brand-blue px-4 py-2.5 text-white shadow-sm shadow-brand-blue/25">
+                      <span className="text-xs text-white/75">Total units</span>
                       <div className="flex items-center gap-1.5">
-                        <Zap className="w-4 h-4 text-gray-300" />
-                        <span className="font-bold text-lg">+{(selectedAddon.credit_amount || 0) * addonQuantity}</span>
+                        <Zap className="h-4 w-4 text-white/85" />
+                        <span className="text-lg font-bold">+{(selectedAddon.credit_amount || 0) * addonQuantity}</span>
                       </div>
                     </div>
                   </div>
@@ -1780,7 +1784,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <button
                   onClick={handlePurchaseAddon}
                   disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess || paymentCaptured}
-                  className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-semibold text-sm hover:bg-gray-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-blue py-3 text-sm font-semibold text-white shadow-lg shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {purchasingAddon || razorpayProcessing ? (
                     <>

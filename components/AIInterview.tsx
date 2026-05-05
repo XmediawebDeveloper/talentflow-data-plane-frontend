@@ -635,26 +635,26 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <div className="flex-1 p-3 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <div className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 lg:gap-6 mb-5 sm:mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="hidden sm:flex w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
-              <Video className="w-5 h-5 text-brand-blue" />
+            <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
+              <Video className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white text-[10px] sm:text-[11px] font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-blue text-white text-[10px] font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <Sparkles className="w-3 h-3" />
                   AI Interview
                 </span>
-                <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium uppercase tracking-wider">Platform</span>
+                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Platform</span>
               </div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight break-words">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight break-words">
                 AI Interview Platform
               </h1>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-xl">
+              <p className="text-xs sm:text-sm text-gray-500 mt-0.5 max-w-xl">
                 Configure, launch, and analyze AI-powered interviews. Multi-round evaluations with real-time scoring and proctoring.
               </p>
             </div>
@@ -674,7 +674,7 @@ export default function AIInterview() {
                     ? 'bg-red-50 text-red-600 ring-red-200'
                     : quotaTone === 'warning'
                     ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                    : 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white ring-white/10 shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue text-white ring-white/10 shadow-sm shadow-brand-blue/25'
                 }`}>
                   <Zap className="w-3.5 h-3.5" />
                 </div>
@@ -716,7 +716,7 @@ export default function AIInterview() {
             {canCreateAIInterviews && (
               <button
                 onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                className="group inline-flex items-center gap-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white px-3.5 py-2 rounded-lg hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="group inline-flex items-center gap-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white px-3.5 py-2 rounded-lg hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 group-hover:rotate-90" />
                 <span>Create AI Interview</span>
@@ -729,7 +729,7 @@ export default function AIInterview() {
         <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-brand-blue/15 ring-1 ring-brand-blue/10 bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm shadow-brand-blue/10">
           <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-brand-blue/5 blur-2xl" aria-hidden />
           <div className="relative flex items-start gap-3 sm:gap-4">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0 flex-1">
@@ -781,9 +781,9 @@ export default function AIInterview() {
             },
           ].map(({ label, value, icon: Icon, tone, hint, trend }) => {
             const toneStyles: Record<string, string> = {
-              slate: 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 text-brand-blue',
+              slate: 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue',
               emerald: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 text-green-600',
-              blue: 'bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 text-brand-cyan',
+              blue: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15 text-brand-cyan',
               amber: 'bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/15 text-brand-orange-deep',
             };
             return (
@@ -921,8 +921,8 @@ export default function AIInterview() {
               {filteredConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 blur-xl scale-150" aria-hidden />
-                    <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
+                    <div className="relative w-20 h-20 rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 flex items-center justify-center">
                       {searchQuery ? (
                         <Search className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
                       ) : (
@@ -947,7 +947,7 @@ export default function AIInterview() {
                   {!searchQuery && activeTab !== 'archived' && canCreateAIInterviews && (
                     <button
                       onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-xl hover:shadow-lg hover:shadow-brand-blue/20 hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-xl hover:shadow-lg hover:shadow-brand-blue/20 hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
                       Create your first interview
@@ -991,14 +991,14 @@ export default function AIInterview() {
                           <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ring-1 ${
                             normalizedStatus === 'published'
                               ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 ring-green-200 group-hover:from-green-200'
-                              : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 text-brand-blue ring-brand-blue/15 group-hover:from-brand-blue/15'
+                              : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15 group-hover:from-brand-blue/15'
                           }`}>
                             <Video className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1.5">
                               {config.display_id && (
-                                <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                                <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-brand-blue text-white rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                                   {config.display_id}
                                 </span>
                               )}
@@ -1095,7 +1095,7 @@ export default function AIInterview() {
                           {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
                             >
                               <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="hidden sm:inline">Continue Editing</span>
@@ -1107,8 +1107,8 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
-                              title="View interview results"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              aria-label="View interview results" title="View interview results"
                             >
                               <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
                               Results
@@ -1120,7 +1120,7 @@ export default function AIInterview() {
                             <button
                               onClick={() => handleViewInvitations(config)}
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
-                              title="Track invitation status"
+                              aria-label="Track invitation status" title="Track invitation status"
                             >
                               <Users className="w-3.5 h-3.5 flex-shrink-0" />
                               <span>Invites{config.invitations_count ? ` · ${config.invitations_count}` : ''}</span>
@@ -1411,7 +1411,7 @@ export default function AIInterview() {
                   <div className="pt-6 border-t border-gray-100">
                     <button
                       onClick={handleSaveSettings}
-                      className="px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                      className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                     >
                       Save Settings
                     </button>
@@ -1445,7 +1445,7 @@ export default function AIInterview() {
                                 onChange={(e) => setProctoringEnabled(e.target.checked)}
                                 className="sr-only"
                               />
-                              <div className={`w-11 h-6 rounded-full transition-colors ${proctoringEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}>
+                              <div className={`w-11 h-6 rounded-full transition-colors ${proctoringEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}>
                                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${proctoringEnabled ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
                               </div>
                             </div>
@@ -1567,7 +1567,7 @@ export default function AIInterview() {
                       <div className="pt-6 border-t border-gray-100">
                         <button
                           onClick={handleSaveProctoringSettings}
-                          className="px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                          className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                         >
                           Save Proctoring Settings
                         </button>
@@ -1644,9 +1644,9 @@ export default function AIInterview() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
             <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] lg:max-w-5xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
               {/* Header */}
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center justify-between flex-shrink-0">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div className="min-w-0">
@@ -1654,7 +1654,7 @@ export default function AIInterview() {
                     <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</p>
                   </div>
                 </div>
-                <button onClick={() => setViewInvitationsConfig(null)} className="p-1.5 sm:p-2 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0">
+                <button onClick={() => setViewInvitationsConfig(null)} className="p-1.5 sm:p-2 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0" aria-label="Close">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -1725,7 +1725,7 @@ export default function AIInterview() {
                       <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all gap-2 sm:gap-3">
                         {/* Candidate info */}
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                             <span className="text-xs sm:text-sm font-medium text-brand-blue">
                               {(inv.candidate_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </span>
@@ -1806,7 +1806,7 @@ export default function AIInterview() {
                                 setResendInviteTarget(inv);
                               }}
                               disabled={resendingEmailFor === inv.id}
-                              title="Revoke old link and send a new invitation"
+                              aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
                               className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
                             >
                               {resendingEmailFor === inv.id
@@ -1871,7 +1871,7 @@ export default function AIInterview() {
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                   >
                     <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                     Invite More
@@ -1907,7 +1907,7 @@ export default function AIInterview() {
                 className={`px-3 sm:px-4 py-2 text-xs sm:text-sm text-white rounded-lg transition-colors shadow-md ring-1 ring-white/10 ${
                   confirmAction.destructive
                     ? 'bg-red-600 hover:bg-red-700 shadow-red-600/25'
-                    : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25'
+                    : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25'
                 }`}
               >
                 Confirm

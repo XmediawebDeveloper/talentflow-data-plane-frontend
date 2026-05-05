@@ -103,7 +103,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 sm:p-2 hover:bg-white/50 rounded-lg transition-colors flex-shrink-0">
+          <button onClick={onClose} className="p-1.5 sm:p-2 hover:bg-white/50 rounded-lg transition-colors flex-shrink-0" aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
           </button>
         </div>

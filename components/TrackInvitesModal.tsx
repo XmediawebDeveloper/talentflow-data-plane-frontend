@@ -234,7 +234,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
           <button
             onClick={onClose}
             className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
-          >
+           aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
@@ -676,7 +676,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               <button
                                 onClick={() => handleResendInvitation(invitation)}
                                 disabled={resendingId === invitation.id}
-                                title="Revoke old link and send a new invitation"
+                                aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
                                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
                                   invitation.status === 'failed'
                                     ? 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'

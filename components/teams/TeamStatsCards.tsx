@@ -35,7 +35,7 @@ export default function TeamStatsCards({ stats, isLoading }: TeamStatsCardsProps
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <Users className="w-6 h-6 text-brand-blue" />
           </div>
         </div>
@@ -45,7 +45,7 @@ export default function TeamStatsCards({ stats, isLoading }: TeamStatsCardsProps
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
             <UserCheck className="w-6 h-6 text-brand-cyan" />
           </div>
         </div>
@@ -55,7 +55,7 @@ export default function TeamStatsCards({ stats, isLoading }: TeamStatsCardsProps
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
             <Layers3 className="w-6 h-6 text-brand-teal" />
           </div>
         </div>

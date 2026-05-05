@@ -20,7 +20,7 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
-  tenant_admin: 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white',
+  tenant_admin: 'bg-brand-blue text-white',
   recruiter: 'bg-brand-cyan/15 text-brand-blue',
   viewer: 'bg-gray-100 text-gray-600',
   billing_manager: 'bg-brand-teal/15 text-brand-teal',

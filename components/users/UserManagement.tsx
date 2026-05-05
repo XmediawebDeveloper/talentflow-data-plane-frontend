@@ -303,7 +303,7 @@ const defaultRoleLabels: Record<string, string> = {
 
 // Default badge colors for known roles - RBAC01-07
 const defaultRoleBadgeColors: Record<string, string> = {
-  tenant_admin: 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25',
+  tenant_admin: 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25',
   admin: 'bg-brand-blue/10 text-brand-blue',
   recruiter: 'bg-brand-cyan/10 text-brand-cyan',
   viewer: 'bg-gray-100 text-gray-600',
@@ -1829,7 +1829,7 @@ export default function UserManagement() {
       <div className="mb-6 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
               <UserCog className="w-6 h-6" />
             </div>
             <div>
@@ -1842,7 +1842,7 @@ export default function UserManagement() {
             <button
               onClick={() => setIsDependencyMatrixOpen(true)}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm transition-all text-sm font-medium"
-              title="View Feature Dependencies"
+              aria-label="View Feature Dependencies" title="View Feature Dependencies"
             >
               <Link2 className="w-4 h-4" />
               Dependencies
@@ -1863,7 +1863,7 @@ export default function UserManagement() {
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
                 isAtLimit
                   ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
-                  : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-brand-blue/25'
+                  : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-brand-blue/25'
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -1915,7 +1915,7 @@ export default function UserManagement() {
                 </span>
               </div>
             </div>
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <UsersIcon className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
@@ -1928,7 +1928,7 @@ export default function UserManagement() {
                     isAtLimit
                       ? 'bg-gradient-to-r from-red-400 to-red-600'
                       : limits.approaching_limit
-                        ? 'bg-gradient-to-r from-brand-orange to-brand-orange-deep'
+                        ? 'bg-brand-orange'
                         : 'bg-gradient-to-r from-brand-blue to-brand-cyan'
                   }`}
                   style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
@@ -2045,7 +2045,7 @@ export default function UserManagement() {
                     <div className="flex items-center gap-2 sm:gap-3">
                       <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
                         user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin'
-                          ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-brand-blue/25'
+                          ? 'bg-brand-blue shadow-brand-blue/25'
                           : user.role.toLowerCase() === 'recruiter'
                           ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
                           : 'bg-gradient-to-br from-slate-500 to-slate-600'
@@ -2140,7 +2140,7 @@ export default function UserManagement() {
                         <button
                           onClick={() => setFeaturePermissionUser(user)}
                           className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Feature Permissions"
+                          aria-label="Feature Permissions" title="Feature Permissions"
                         >
                           <Settings2 className="w-4 h-4" />
                         </button>
@@ -2171,7 +2171,7 @@ export default function UserManagement() {
 
         {!isLoading && filteredUsers.length === 0 && (
           <div className="text-center py-10 sm:py-14 px-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 mb-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">
               <UserCog className="w-7 h-7 text-brand-blue" />
             </div>
             <p className="text-base font-semibold text-gray-900">No users found</p>
@@ -2197,7 +2197,7 @@ export default function UserManagement() {
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             {/* Header strip */}
-            <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-5 sm:px-6 py-4 flex items-center justify-between gap-3">
+            <div className="bg-brand-blue px-5 sm:px-6 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Plus className="w-5 h-5 text-white" />
@@ -2210,7 +2210,7 @@ export default function UserManagement() {
               <button
                 onClick={resetCreateModal}
                 className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 text-white transition-colors flex-shrink-0"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2304,7 +2304,7 @@ export default function UserManagement() {
                             )}
                           </div>
                           {isSelected && (
-                            <div className="w-5 h-5 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                            <div className="w-5 h-5 bg-brand-blue rounded-full flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                               <Check className="w-3 h-3 text-white" />
                             </div>
                           )}
@@ -2429,7 +2429,7 @@ export default function UserManagement() {
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
-                className="px-5 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="px-5 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 Create User
@@ -2444,7 +2444,7 @@ export default function UserManagement() {
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 flex items-center justify-between px-4 sm:px-6 py-4 gap-3">
+            <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Pencil className="w-4 h-4 text-white" />
@@ -2457,7 +2457,7 @@ export default function UserManagement() {
               <button
                 onClick={resetEditModal}
                 className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 text-white transition-colors flex-shrink-0"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2503,7 +2503,7 @@ export default function UserManagement() {
                         }}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ring-1 ${
                           isSelected
-                            ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
+                            ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                             : 'bg-white text-gray-700 ring-gray-200 hover:bg-brand-blue/5 hover:text-brand-blue hover:ring-brand-blue/30'
                         }`}
                       >
@@ -2677,7 +2677,7 @@ export default function UserManagement() {
                             >
                               <div className="flex items-center gap-3">
                                 {category.viewCode && (
-                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isCategoryActive ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
+                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isCategoryActive ? 'bg-brand-blue ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
                                     <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
                                   </div>
                                 )}
@@ -2923,7 +2923,7 @@ export default function UserManagement() {
                 <button
                   onClick={handleUpdateUser}
                   disabled={isSaving}
-                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save Changes
@@ -2972,7 +2972,7 @@ export default function UserManagement() {
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Eye className="w-5 h-5 text-white" />
@@ -2985,7 +2985,7 @@ export default function UserManagement() {
               <button
                 onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
                 className="p-1.5 sm:p-2 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition-colors flex-shrink-0"
-              >
+               aria-label="Close">
                 <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </button>
             </div>
@@ -3018,7 +3018,7 @@ export default function UserManagement() {
                 </div>
               ) : viewingRolePopupPermissions.length === 0 ? (
                 <div className="text-center py-10 sm:py-12">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 mb-3">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-3">
                     <Shield className="w-7 h-7 text-brand-blue" />
                   </div>
                   <p className="text-gray-700 font-semibold text-sm">No permissions allocated</p>
@@ -3078,7 +3078,7 @@ export default function UserManagement() {
               </div>
               <button
                 onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 Close
               </button>

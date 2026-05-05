@@ -1232,7 +1232,7 @@ export default function ScoredResumesTable({
               <button
                 onClick={() => setShowExportModal(false)}
                 className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1468,7 +1468,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>

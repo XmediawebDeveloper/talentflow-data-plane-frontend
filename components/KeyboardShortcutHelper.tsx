@@ -78,7 +78,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
                 <button
                   onClick={onClose}
                   className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-white" />
                 </button>
               </div>

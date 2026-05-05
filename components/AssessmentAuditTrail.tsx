@@ -235,7 +235,7 @@ export default function AssessmentAuditTrail() {
               onClick={() => setCategoryFilter('all')}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                 categoryFilter === 'all'
-                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                   : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
               }`}
             >

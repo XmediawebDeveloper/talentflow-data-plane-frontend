@@ -231,7 +231,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+             aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -519,7 +519,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               <Eye className="w-5 h-5 text-blue-600" />
               <h3 className="font-semibold text-gray-900">{previewTitle}</h3>
             </div>
-            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>

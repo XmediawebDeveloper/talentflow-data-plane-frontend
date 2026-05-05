@@ -224,7 +224,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
             <p className="text-sm text-red-700">{error}</p>
-            <button onClick={() => setError(null)} className="ml-auto">
+            <button onClick={() => setError(null)} className="ml-auto" aria-label="Close">
               <X className="w-4 h-4 text-red-500 hover:text-red-700" />
             </button>
           </div>
@@ -401,7 +401,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                   {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2" aria-label="Close">
                       <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
                     </button>
                   )}

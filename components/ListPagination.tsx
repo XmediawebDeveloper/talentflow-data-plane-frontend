@@ -54,32 +54,32 @@ export default function ListPagination({
   };
 
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mt-4 sm:mt-6">
+    <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Show:</span>
+            <span className="text-sm text-gray-600">Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
                 onItemsPerPageChange(Number(e.target.value));
                 onPageChange(1);
               }}
-              className="h-9 px-2.5 sm:px-3 border border-border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 text-sm bg-background text-foreground"
+              className="h-9 px-2.5 sm:px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>{size}</option>
               ))}
             </select>
-            <span className="text-sm text-muted-foreground">per page</span>
+            <span className="text-sm text-gray-600">per page</span>
           </div>
 
-          <div className="hidden sm:block h-5 w-px bg-border" />
+          <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
-          <span className="text-xs sm:text-sm text-muted-foreground">
-            Showing <span className="font-medium text-foreground">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
-            <span className="font-medium text-foreground">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
-            <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
+          <span className="text-xs sm:text-sm text-gray-600">
+            Showing <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
+            <span className="font-medium text-gray-900">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
+            <span className="font-medium text-gray-900">{totalItems}</span> {itemLabel}
           </span>
         </div>
 
@@ -87,12 +87,12 @@ export default function ListPagination({
           <button
             onClick={() => handlePageClick(safePage - 1)}
             disabled={safePage === 1}
-            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition-colors ${
+            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
               safePage === 1
-                ? 'border-border text-muted-foreground opacity-40 cursor-not-allowed'
-                : 'border-border text-foreground hover:bg-accent/50'
+                ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
             }`}
-            title="Previous page"
+            aria-label="Previous page" title="Previous page"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -105,10 +105,10 @@ export default function ListPagination({
                 disabled={page === '...'}
                 className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 sm:px-3 rounded-md text-sm font-medium transition-colors ${
                   page === safePage
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
+                    ? 'bg-brand-blue text-white'
                     : page === '...'
-                    ? 'text-muted-foreground cursor-default'
-                    : 'border border-border text-foreground hover:bg-accent/50'
+                    ? 'text-gray-400 cursor-default'
+                    : 'border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
                 }`}
               >
                 {page}
@@ -119,12 +119,12 @@ export default function ListPagination({
           <button
             onClick={() => handlePageClick(safePage + 1)}
             disabled={safePage === totalPages}
-            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition-colors ${
+            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
               safePage === totalPages
-                ? 'border-border text-muted-foreground opacity-40 cursor-not-allowed'
-                : 'border-border text-foreground hover:bg-accent/50'
+                ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
             }`}
-            title="Next page"
+            aria-label="Next page" title="Next page"
           >
             <ChevronRight className="w-4 h-4" />
           </button>

@@ -60,7 +60,7 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="w-14 h-14 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-900 hover:shadow-xl transition-all flex items-center justify-center group relative"
-          title="Get Help & Support"
+          aria-label="Get Help & Support" title="Get Help & Support"
         >
           <HelpCircle className="w-6 h-6" />
           

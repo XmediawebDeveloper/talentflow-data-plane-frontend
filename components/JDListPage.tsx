@@ -822,7 +822,7 @@ export default function JDListPage() {
                           setActiveDropdown(activeDropdown === jd.id ? null : jd.id);
                         }}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 bg-white"
-                        title="More actions"
+                        aria-label="More actions" title="More actions"
                       >
                         <MoreVertical className="w-5 h-5 text-gray-700" />
                       </button>

@@ -349,7 +349,7 @@ function RecordingTabContent({
             <a
               href={blobUrl}
               download={downloadName}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
               <Download className="w-4 h-4" /> Download MP4
             </a>
@@ -1035,7 +1035,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50">
       {/* Sticky brand header */}
-      <div className="sticky top-0 z-40 bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      <div className="sticky top-0 z-40 bg-brand-blue shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-6 sm:px-8 py-3 sm:py-4 flex items-center gap-3">
           <button
             onClick={onBack}
@@ -1063,7 +1063,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex items-center justify-center text-white font-semibold text-base">
+                  <div className="w-12 h-12 rounded-full bg-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex items-center justify-center text-white font-semibold text-base">
                     {(interview.candidate_name || 'U')[0].toUpperCase()}
                   </div>
                   <div>
@@ -1569,7 +1569,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <div className="flex justify-end relative">
                       <button
                         onClick={() => setQaExportMenuOpen(v => !v)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Export
@@ -1860,14 +1860,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
+                          <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
                             <Bot className="w-3.5 h-3.5 text-white" />
                           </div>
                           <span className="text-xs text-gray-500">Linda (AI Interviewer)</span>
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-cyan to-brand-teal ring-1 ring-white/20 shadow-sm shadow-brand-cyan/15 flex items-center justify-center text-white font-semibold text-[10px]">
+                          <div className="w-7 h-7 rounded-full bg-brand-cyan ring-1 ring-white/20 shadow-sm shadow-brand-cyan/15 flex items-center justify-center text-white font-semibold text-[10px]">
                             {candidateName[0].toUpperCase()}
                           </div>
                           <span className="text-xs text-gray-500">{candidateName}</span>
@@ -1899,7 +1899,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-brand-teal/30' : 'border-brand-cyan/30'}` : ''}`}
                             >
                               <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm ${
-                                isAssistant ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-brand-blue/20' : 'bg-gradient-to-br from-brand-cyan to-brand-teal text-white shadow-brand-cyan/15'
+                                isAssistant ? 'bg-brand-blue text-white shadow-brand-blue/20' : 'bg-brand-cyan text-white shadow-brand-cyan/15'
                               }`}>
                                 {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
                               </div>
@@ -1934,7 +1934,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                       <DiffText parts={diff.raw} tone="raw" />
                                     </div>
                                     {/* Corrected — shown BELOW */}
-                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
+                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                       <div className="text-[10px] font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
                                       <DiffText parts={diff.corrected} tone="corrected" />
                                     </div>
@@ -1943,7 +1943,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                     )}
                                   </>
                                 ) : (
-                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white rounded-tr-sm ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
+                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white rounded-tr-sm ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                     {content}
                                   </div>
                                 )}
@@ -2180,7 +2180,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             <button
                               onClick={() => setExportMenuOpen(v => !v)}
                               disabled={groups.length === 0}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <Download className="w-3.5 h-3.5" />
                               Export
@@ -2539,7 +2539,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       <span className={`text-2xl font-bold ${risk.color}`}>{totalViolations}</span>
                       <button
                         onClick={() => setShowThresholdEditor(p => !p)}
-                        title="Configure risk thresholds"
+                        aria-label="Configure risk thresholds" title="Configure risk thresholds"
                         className="p-1.5 rounded-lg border border-gray-200 ring-1 ring-black/[0.02] bg-white text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

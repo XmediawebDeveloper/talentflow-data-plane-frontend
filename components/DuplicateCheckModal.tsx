@@ -73,7 +73,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-          >
+           aria-label="Close">
             <X className="w-6 h-6" />
           </button>
         </div>

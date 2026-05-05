@@ -121,7 +121,7 @@ const WarningCard = memo(function WarningCard({
             {warning.timestamp.toLocaleTimeString('en-US', { hour12: true })}
           </p>
         </div>
-        <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`}>
+        <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
           <X className="w-4 h-4" />
         </button>
       </div>

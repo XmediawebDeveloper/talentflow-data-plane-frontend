@@ -266,7 +266,7 @@ export default function AssessmentDetailsView({
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto">
       {/* Sticky Header */}
-      <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 border-b-2 border-brand-blue/50 sticky top-0 z-20 shadow-lg shadow-brand-blue/20">
+      <div className="bg-brand-blue border-b-2 border-brand-blue/50 sticky top-0 z-20 shadow-lg shadow-brand-blue/20">
         <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <button
@@ -303,8 +303,8 @@ export default function AssessmentDetailsView({
           
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/20 backdrop-blur-sm rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
               </div>
               <div className="min-w-0">
                 {/* Line 1: AS-022 SQL Developer - Assessment V1  Active AI-Generated */}
@@ -312,7 +312,7 @@ export default function AssessmentDetailsView({
                   <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-white/95 text-brand-blue rounded text-xs sm:text-sm font-bold ring-1 ring-white/20 shadow-sm">
                     {assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}
                   </span>
-                  <h1 className="text-sm sm:text-lg lg:text-2xl text-white font-semibold truncate tracking-tight">
+                  <h1 className="text-sm sm:text-base lg:text-xl text-white font-semibold truncate tracking-tight">
                     {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
                   </h1>
                   <VersionBadge version={assessment.version} size="md" variant="primary" />
@@ -387,7 +387,7 @@ export default function AssessmentDetailsView({
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'overview'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -397,7 +397,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('activity')}
-              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'activity'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -407,7 +407,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('versions')}
-              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'versions'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -417,7 +417,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('info')}
-              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'info'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -438,7 +438,7 @@ export default function AssessmentDetailsView({
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                   </div>
                   Assessment Details
@@ -449,7 +449,7 @@ export default function AssessmentDetailsView({
                 {/* Total Duration Card */}
                 <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-4 mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <Clock className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -457,7 +457,7 @@ export default function AssessmentDetailsView({
                       <div className="text-xl font-semibold text-gray-900 tracking-tight">{formattedDuration}</div>
                     </div>
                   </div>
-                  <span className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded-lg">
+                  <span className="px-4 py-2 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded-lg">
                     100%
                   </span>
                 </div>
@@ -469,7 +469,7 @@ export default function AssessmentDetailsView({
                   {assessment.hr_enabled && (
                     <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           HR Round
                         </span>
                         <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
@@ -498,7 +498,7 @@ export default function AssessmentDetailsView({
                   {assessment.technical_enabled && (
                     <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           Technical Round
                         </span>
                         <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
@@ -545,7 +545,7 @@ export default function AssessmentDetailsView({
                     return (
                     <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           Coding Round
                         </span>
                         <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
@@ -584,7 +584,7 @@ export default function AssessmentDetailsView({
                           <div key={section.type} className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white">
+                                <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white">
                                   <SectionIcon className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -706,7 +706,7 @@ export default function AssessmentDetailsView({
                               </div>
                               <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-gradient-to-r from-brand-orange to-brand-orange-deep h-2 rounded-full transition-all"
+                                  className="bg-brand-orange h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -762,7 +762,7 @@ export default function AssessmentDetailsView({
                               </div>
                               <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-gradient-to-r from-brand-orange to-brand-orange-deep h-2 rounded-full transition-all"
+                                  className="bg-brand-orange h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -796,14 +796,14 @@ export default function AssessmentDetailsView({
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                     <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                   </div>
                   Invitation Status
                 </h3>
                 <button
                   onClick={() => setActiveTab('activity')}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
                 >
                   <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Full Tracking
@@ -901,7 +901,7 @@ export default function AssessmentDetailsView({
                         return (
                           <div key={activity.id} className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-2.5 sm:p-3 lg:p-4 hover:bg-brand-blue/5 transition-colors">
                             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
-                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs sm:text-sm">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs sm:text-sm">
                                 {activity.candidate_name?.charAt(0).toUpperCase() || 'U'}
                               </div>
                               <div className="flex-1 min-w-0">
@@ -972,7 +972,7 @@ export default function AssessmentDetailsView({
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
               <h3 className="text-sm sm:text-base lg:text-lg text-gray-900 tracking-tight flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <BarChart className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 Recent Activity
@@ -1109,7 +1109,7 @@ export default function AssessmentDetailsView({
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
@@ -1138,7 +1138,7 @@ export default function AssessmentDetailsView({
                     <div key={version.id} className="space-y-4">
                       {/* Version Header */}
                       <div className="flex items-start gap-2 sm:gap-3 lg:gap-4">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-br from-brand-cyan to-brand-teal shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                           <span className="text-white font-bold text-xs sm:text-sm">V{version.version}</span>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1147,7 +1147,7 @@ export default function AssessmentDetailsView({
                               Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
                             </h4>
                             {isCurrentVersion && (
-                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs font-medium rounded w-fit">
+                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs font-medium rounded w-fit">
                                 Current Version
                               </span>
                             )}
@@ -1253,7 +1253,7 @@ export default function AssessmentDetailsView({
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
@@ -1274,7 +1274,7 @@ export default function AssessmentDetailsView({
                   {/* Job Complexity Level */}
                   <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Layers className="w-4 h-4 text-brand-blue" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
@@ -1291,7 +1291,7 @@ export default function AssessmentDetailsView({
                   {/* Experience Level */}
                   <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <TrendingUp className="w-4 h-4 text-brand-cyan" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
@@ -1308,7 +1308,7 @@ export default function AssessmentDetailsView({
                   {/* Primary Domain */}
                   <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Globe className="w-4 h-4 text-brand-blue" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
@@ -1323,7 +1323,7 @@ export default function AssessmentDetailsView({
                   {/* Coding Requirement */}
                   <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <Code className="w-4 h-4 text-brand-cyan" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
@@ -1336,7 +1336,7 @@ export default function AssessmentDetailsView({
                   {/* Eligible Programming Languages */}
                   <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                         <Zap className="w-4 h-4 text-brand-orange-deep" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>

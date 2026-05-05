@@ -589,7 +589,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           <button
             onClick={onClose}
             className="p-1 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100 flex-shrink-0 ml-2"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1028,7 +1028,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               <button
                 onClick={() => setShowNoFilesError(false)}
                 className="p-1 hover:bg-red-100 rounded flex-shrink-0"
-              >
+               aria-label="Close">
                 <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />
               </button>
             </div>

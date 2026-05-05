@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -223,35 +223,43 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
-          <p className="text-gray-600">Loading settings...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+          <p className="font-medium text-gray-600">Loading settings...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <div className="block sm:flex sm:items-center sm:gap-3 mb-3">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
-            <User className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+      <div className="mx-auto max-w-7xl">
+      {/* SaaS Hero Header */}
+      <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+        <div className="relative flex items-start gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+            <User className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Recruiter Settings</h1>
-            <p className="text-sm text-gray-600">Manage your personal preferences and workflow settings</p>
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <Sparkles className="h-3 w-3 text-brand-orange" />
+              Personal preferences
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Recruiter Settings</h1>
+            <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage your personal preferences, notifications, and workflow defaults.</p>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Tabs + Content Layout */}
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
         <div className="w-full lg:w-64 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 lg:sticky lg:top-8">
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-2 lg:sticky lg:top-8">
             <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
               {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
@@ -259,10 +267,10 @@ export default function Settings() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
                       activeTab === tab.id
-                        ? 'bg-gray-800 text-white shadow-md'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20 ring-1 ring-white/10'
+                        : 'text-gray-700 hover:bg-brand-cyan/[0.06] hover:text-brand-blue'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -273,17 +281,17 @@ export default function Settings() {
             </nav>
 
             {/* Role Info */}
-            <div className="hidden lg:block mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="text-xs text-gray-800 uppercase tracking-wider mb-1">Role</div>
-              <div className="text-sm text-gray-800 font-medium">{user?.role || 'Recruiter'}</div>
-              <div className="text-xs text-gray-900 mt-1">Access Level: {user?.role === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
+            <div className="hidden lg:block mt-4 p-3 rounded-xl bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5">
+              <div className="text-[10px] font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
+              <div className="text-sm text-gray-900 font-medium">{user?.role || 'Recruiter'}</div>
+              <div className="text-xs text-gray-600 mt-1">Access Level: {user?.role === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
             </div>
           </div>
         </div>
 
         {/* Right Content Area */}
         <div className="flex-1">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-4 sm:p-6 lg:p-8">
             {!canEditSettings && activeTab !== 'change-password' && (
               <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 View-only access. You can review these settings, but you do not have permission to edit them.
@@ -305,14 +313,14 @@ export default function Settings() {
                   <div className="mb-8 pb-8 border-b border-gray-200">
                     <label className="block text-sm font-medium text-gray-900 mb-3">Profile Picture</label>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-lg text-2xl flex-shrink-0">
+                      <div className="w-20 h-20 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-lg text-2xl flex-shrink-0">
                         {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                       </div>
                       <div className="text-center sm:text-left">
                         <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                           <button
                             type="button"
-                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-brand-blue text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-white/10 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Upload New
                           </button>
@@ -936,7 +944,7 @@ export default function Settings() {
                       newPassword.length < 6 ||
                       newPassword !== confirmPassword
                     }
-                    className="w-full sm:w-auto px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-lg flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-8 py-3 bg-brand-blue text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-white/10 transition-colors shadow-lg flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isChangingPassword ? (
                       <>
@@ -968,7 +976,7 @@ export default function Settings() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="w-full sm:w-auto px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-lg hover:shadow-xl flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-8 py-3 bg-brand-blue text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-white/10 transition-colors shadow-lg hover:shadow-xl flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>
@@ -986,6 +994,7 @@ export default function Settings() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </main>
   );

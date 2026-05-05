@@ -22,6 +22,7 @@ import {
   Timer,
   AlertTriangle,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -85,14 +86,14 @@ const entityIcons: Record<string, React.ElementType> = {
 };
 
 const actionColors: Record<string, string> = {
-  login: 'bg-gray-700',
-  logout: 'bg-gray-400',
-  create: 'bg-green-500',
-  update: 'bg-gray-700',
-  delete: 'bg-red-500',
-  upload: 'bg-teal-500',
-  publish: 'bg-gray-500',
-  default: 'bg-gray-500',
+  login: 'bg-brand-blue',
+  logout: 'bg-gradient-to-br from-gray-400 to-gray-500',
+  create: 'bg-brand-teal',
+  update: 'bg-brand-blue',
+  delete: 'bg-gradient-to-br from-red-500 to-brand-orange-deep',
+  upload: 'bg-brand-cyan',
+  publish: 'bg-brand-orange',
+  default: 'bg-gradient-to-br from-brand-blue/70 to-brand-blue-2/70',
 };
 
 export default function ActivityLogsPage() {
@@ -192,25 +193,32 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-5 sm:mb-6 lg:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <Activity className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <div className="max-w-7xl mx-auto">
+        {/* SaaS Hero Header */}
+        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                <Activity className="h-6 w-6 text-white" />
               </div>
-              <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Activity Logs</h1>
-                <p className="text-xs sm:text-sm text-gray-600">Recent system activity timeline</p>
+              <div>
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                  <Sparkles className="h-3 w-3 text-brand-orange" />
+                  Live timeline
+                </div>
+                <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Activity Logs</h1>
+                <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">A real-time view of recent system activity across your organization.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <select
                 value={limit}
                 onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="flex-1 sm:flex-none h-10 px-3 sm:px-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-black"
+                className="flex-1 sm:flex-none h-10 px-3 sm:px-4 text-sm rounded-xl bg-white/10 ring-1 ring-white/20 text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:text-gray-900"
               >
                 <option value="25">Last 25</option>
                 <option value="50">Last 50</option>
@@ -218,36 +226,38 @@ export default function ActivityLogsPage() {
               </select>
               <button
                 onClick={fetchRecentActivity}
-                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-black text-sm font-medium transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:px-4 rounded-xl bg-white text-brand-blue text-sm font-medium shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Timeline */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] overflow-hidden">
           {loading ? (
             <div className="p-12 text-center">
-              <RefreshCw className="w-8 h-8 text-gray-400 animate-spin mx-auto mb-4" />
-              <p className="text-gray-500">Loading activity...</p>
+              <RefreshCw className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4" />
+              <p className="font-medium text-gray-600">Loading activity...</p>
             </div>
           ) : error ? (
             <div className="p-12 text-center">
               <p className="text-red-500">{error}</p>
               <button
                 onClick={fetchRecentActivity}
-                className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2 text-sm font-medium text-white shadow-md ring-1 ring-white/10 transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
                 Retry
               </button>
             </div>
           ) : logs.length === 0 ? (
             <div className="p-12 text-center">
-              <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No recent activity</p>
+              <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <Activity className="w-6 h-6 text-brand-blue" />
+              </span>
+              <p className="font-medium text-gray-600">No recent activity</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
@@ -255,7 +265,7 @@ export default function ActivityLogsPage() {
                 <div key={date}>
                   {/* Date Header */}
                   <div className="sticky top-0 bg-gray-50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 z-10">
-                    <h3 className="text-xs sm:text-sm font-medium text-gray-700">{date}</h3>
+                    <h3 className="text-xs sm:text-sm font-semibold text-brand-blue">{date}</h3>
                   </div>
 
                   {/* Activities for this date */}
@@ -270,7 +280,7 @@ export default function ActivityLogsPage() {
                       return (
                         <div
                           key={log.id}
-                          className="relative flex items-start gap-3 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors"
+                          className="relative flex items-start gap-3 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-brand-cyan/[0.04] transition-colors"
                         >
                           {/* Timeline dot */}
                           <div className={`relative z-10 w-9 h-9 rounded-full ${getActionColor(log.action)} flex items-center justify-center shadow-sm`}>
@@ -373,7 +383,7 @@ export default function ActivityLogsPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => setLimit(l => l + 50)}
-              className="px-6 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm text-black"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-gray-200 px-6 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
             >
               Load More
             </button>

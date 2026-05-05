@@ -16,7 +16,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10">
       <div className="border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <Shield className="h-5 w-5 text-brand-blue" />
           </div>
           <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-2.5 py-1 text-[11px] font-medium text-brand-blue ring-1 ring-brand-cyan/20">
@@ -76,7 +76,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
         <div className="flex gap-3">
           <button
             onClick={() => onViewDetails(team.id)}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
           >
             View Details
             <ArrowUpRight className="h-4 w-4" />

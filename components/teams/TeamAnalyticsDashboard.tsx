@@ -259,9 +259,9 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   return (
     <div className="space-y-6">
       {/* Header with Period Selector */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent p-5 ring-1 ring-black/[0.02] lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-5 ring-1 ring-black/[0.02] lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div>

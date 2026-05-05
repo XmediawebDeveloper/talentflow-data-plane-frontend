@@ -10,6 +10,7 @@ import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
@@ -244,9 +245,9 @@ const getIconForPlan = (planName: string, tier: string): typeof Users | typeof B
 const getGradientForPlan = (planName: string, tier: string): string => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
-  if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-gray-800 to-gray-900";
-  if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-gray-700 to-gray-800";
-  return "from-gray-600 to-gray-700";
+  if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-brand-blue via-brand-blue-2 to-brand-teal";
+  if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-brand-blue to-brand-blue-2";
+  return "from-brand-cyan to-brand-teal";
 };
 
 /**
@@ -1723,16 +1724,7 @@ function CurrentPlanContent() {
   };
 
   if (isLoading) {
-    return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
-            <p className="mt-4 text-gray-600">Loading subscription details...</p>
-          </div>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="cards" showStats />;
   }
 
   // NOTE: Suspended accounts are now fully blocked by the dashboard layout overlay
@@ -1748,23 +1740,30 @@ function CurrentPlanContent() {
     const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
 
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                <CreditCard className="w-7 h-7 text-white" />
+      <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
+        <div className="mx-auto max-w-7xl">
+          {/* SaaS Hero Header */}
+          <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
+            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+            <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+            <div className="relative flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                <CreditCard className="h-4 w-4 text-white" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
-                <p className="text-sm text-gray-600">Manage your subscription and billing</p>
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                  <Sparkles className="h-3 w-3 text-brand-orange" />
+                  Subscription
+                </div>
+                <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Current Plan</h1>
+                <p className="mt-1 text-sm text-white/80 sm:text-base">Manage your subscription and billing</p>
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Account Status Banner */}
-          <div className={`${colors.bg} border-2 ${colors.border} rounded-xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8`}>
+          <div className={`${colors.bg} border-2 ${colors.border} rounded-2xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8`}>
             <div className="flex items-start gap-3 sm:gap-4">
               <div className={`w-10 h-10 sm:w-12 sm:h-12 ${colors.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
                 <Clock className={`w-5 h-5 sm:w-6 sm:h-6 ${colors.icon}`} />
@@ -1796,19 +1795,19 @@ function CurrentPlanContent() {
                     </>
                   )}
                 </div>
-                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3">
                   <button
                     onClick={() => fetchData()}
-                    className="px-3 sm:px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                   >
-                    <Loader2 className="w-4 h-4" />
+                    <Loader2 className="h-4 w-4" />
                     Refresh Status
                   </button>
                   <a
                     href="mailto:support@talentflow.com"
-                    className={`px-3 sm:px-4 py-2 ${colors.text} underline flex items-center justify-center gap-2 text-sm`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    <Mail className="w-4 h-4" />
+                    <Mail className="h-4 w-4" />
                     Contact Support
                   </a>
                 </div>
@@ -1821,41 +1820,72 @@ function CurrentPlanContent() {
   }
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-              <CreditCard className="w-7 h-7 text-white" />
+    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        {/* SaaS Hero Header */}
+        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                Subscription workspace
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <CreditCard className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Current Plan</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+                    Review your active subscription, manage billing, and explore plan upgrades from one place.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
-              <p className="text-sm text-gray-600">Manage your subscription and billing</p>
-            </div>
+            {selectedPlan && (
+              <div className="grid grid-cols-2 gap-2 text-sm text-white/85 sm:min-w-[260px]">
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
+                  <div className="text-xs text-white/65">Active plan</div>
+                  <div className="mt-1 truncate font-semibold">{selectedPlan.name}</div>
+                </div>
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
+                  <div className="text-xs text-white/65">Status</div>
+                  <div className="mt-1 truncate font-semibold">{statusBadge.label}</div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </section>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500" />
-            <p className="text-red-700">{error}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-medium text-red-700">{error}</p>
           </div>
         )}
 
         {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-8 flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            <p className="text-green-700">{successMessage}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-teal/15 text-brand-teal">
+              <CheckCircle className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-medium text-brand-teal">{successMessage}</p>
           </div>
         )}
 
         {hasPendingChanges && currentChange && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.06] p-4 ring-1 ring-brand-orange/10 sm:flex-row sm:items-center">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange-deep">
+              <AlertCircle className="h-5 w-5" />
+            </span>
             <div className="flex-1">
-              <p className="text-amber-800 font-medium">Plan Changes Pending</p>
-              <p className="text-amber-700 text-sm mt-0.5">
+              <p className="text-sm font-semibold text-brand-orange-deep">Plan Changes Pending</p>
+              <p className="mt-0.5 text-sm text-gray-600">
                 {daysRemaining !== null && (
                   <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
                 )}
@@ -1864,9 +1894,10 @@ function CurrentPlanContent() {
             </div>
             <button
               onClick={openReviewModal}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-orange/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
               Review Changes
+              <ArrowUpRight className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -2352,9 +2383,9 @@ function CurrentPlanContent() {
                 </span>
                 <button
                   onClick={() => setIsYearly(!isYearly)}
-                  className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
+                  className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-4 focus:ring-brand-blue/15 ${
                     isYearly
-                      ? "bg-gray-800"
+                      ? "bg-brand-blue shadow-sm shadow-brand-blue/25"
                       : "bg-gray-300"
                   }`}
                   aria-label="Toggle billing period"
@@ -2440,7 +2471,7 @@ function CurrentPlanContent() {
                     )}
                     {plan.popular && !isCurrentForToggle && !isSelectedPending && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-gray-800 text-white px-4 py-1">
+                        <Badge className="bg-brand-orange text-white px-4 py-1 shadow-md shadow-brand-orange/25">
                           Most Popular
                         </Badge>
                       </div>
@@ -2462,7 +2493,7 @@ function CurrentPlanContent() {
                       {(plan.monthlyPrice || plan.annualPrice) ? (
                         <div>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-4xl font-bold text-gray-900">
+                            <span className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
                               {formatCurrency(
                                 isYearly
                                   ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
@@ -2520,7 +2551,7 @@ function CurrentPlanContent() {
                           )}
                         </div>
                       ) : (
-                        <div className="text-4xl font-bold text-gray-900">Custom</div>
+                        <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Custom</div>
                       )}
                     </div>
 
@@ -2649,8 +2680,8 @@ function CurrentPlanContent() {
                                 (isYearly && !plan.annualPrice && plan.monthlyPrice) || (!isYearly && !plan.monthlyPrice && plan.annualPrice)
                                 ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                               : plan.popular
-                                ? "bg-gray-800 text-white hover:bg-gray-700"
-                                : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                ? "bg-brand-blue text-white shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg"
+                                : "border border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                       }`}
                     >
                       {isCurrentForToggle ? (
@@ -2729,7 +2760,7 @@ function CurrentPlanContent() {
                 <button
                   onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); setIsDowngradePayment(false); }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -2843,12 +2874,12 @@ function CurrentPlanContent() {
                 </div>
 
                 {/* Total Summary - Above checkboxes */}
-                <div className="bg-gray-800 text-white rounded-xl p-4">
-                  <div className="flex justify-between items-center">
+                <div className="relative overflow-hidden rounded-xl bg-brand-blue p-4 text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-3xl" />
+                  <div className="relative flex items-center justify-between">
                     <div>
                       <span className="font-semibold">Total (incl. GST)</span>
-                      <p className="text-xs text-gray-300">
-                        {/* Show actual billing period based on availability */}
+                      <p className="text-xs text-white/75">
                         {(isYearly && selectedPlanForPayment?.annualPrice) || (!selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice)
                           ? 'Billed annually (12× quotas)'
                           : 'Billed monthly'}
@@ -2954,7 +2985,7 @@ function CurrentPlanContent() {
                 <button
                   onClick={handlePaymentSubmit}
                   disabled={isSelectingPlan}
-                  className="w-full py-3 bg-gray-800 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-blue py-3 font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60"
                 >
                   {isSelectingPlan ? (
                     <>
@@ -3049,7 +3080,7 @@ function CurrentPlanContent() {
                         await fetchData();
                         await fetchQueuedUpgrades();
                       }}
-                      className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                      className="w-full rounded-lg bg-brand-blue px-4 py-2.5 font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       Got it
                     </button>
@@ -3186,7 +3217,7 @@ function CurrentPlanContent() {
                         // Refresh data to show updated plan
                         await fetchData();
                       }}
-                      className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                      className="w-full rounded-lg bg-brand-blue px-4 py-2.5 font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       Done
                     </button>
@@ -3227,7 +3258,7 @@ function CurrentPlanContent() {
                     setTcAccepted(false);
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -3314,14 +3345,14 @@ function CurrentPlanContent() {
                     setSelectedQueuedUpgrade(null);
                     setTcAccepted(false);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleApplyUpgrade}
                   disabled={!tcAccepted || isApplyingUpgrade}
-                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-teal px-4 py-2.5 font-medium text-white shadow-md shadow-brand-teal/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isApplyingUpgrade ? (
                     <>
@@ -3374,7 +3405,7 @@ function CurrentPlanContent() {
                     setCancelReason('');
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>

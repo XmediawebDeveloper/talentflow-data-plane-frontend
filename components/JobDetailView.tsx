@@ -915,15 +915,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   }
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto">
       {/* Header */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
+      <div className="mb-5">
+        <div className="flex items-center justify-between mb-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm sm:text-base"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm"
           >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            <ArrowLeft className="w-4 h-4" />
             Back to Jobs
           </button>
           {totalCount != null && totalCount > 0 && (
@@ -952,24 +952,24 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         </div>
 
         {/* Job Details Card */}
-        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-3 sm:p-4 md:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 lg:gap-4">
+        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-4">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               {/* Row 1: JD ID + Job Title + Status */}
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 {job.job_id && (
-                  <span className="inline-flex items-center px-2.5 py-1 bg-blue-600 text-white rounded-md text-xs sm:text-sm font-semibold font-mono tracking-wide">
+                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="font-normal text-gray-900 text-base sm:text-lg md:text-xl truncate">{job.title}</h1>
-                <span className={`inline-flex items-center px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm border whitespace-nowrap ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
+                <h1 className="font-normal text-gray-900 text-base sm:text-lg truncate">{job.title}</h1>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
               </div>
 
               {/* Row 2: Location + Education + Employment Type + Work Mode + Posted Date + Posted By + Version */}
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
                 {/* Location */}
                 {job.location && (
                   <>
@@ -1073,7 +1073,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <button
                     onClick={() => setShowVersionHistory(true)}
                     className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors"
-                    title="View version history"
+                    aria-label="View version history" title="View version history"
                   >
                     v{job.currentVersion}.0
                   </button>
@@ -1099,7 +1099,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <button
                 disabled
                 className="flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm"
-                title="AI Talent Match is not available for disabled JDs"
+                aria-label="AI Talent Match is not available for disabled JDs" title="AI Talent Match is not available for disabled JDs"
               >
                 <Sparkles className="w-4 h-4" />
                 AI Talent Match
@@ -1161,7 +1161,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <button
                     onClick={() => onEnable(job)}
                     className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
-                    title="Re-enable this JD"
+                    aria-label="Re-enable this JD" title="Re-enable this JD"
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span className="font-medium">Re-enable JD</span>
@@ -1187,7 +1187,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <button
                     onClick={handleDelete}
                     className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
-                    title="Delete Job"
+                    aria-label="Delete Job" title="Delete Job"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -1200,11 +1200,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       </div>
 
       {/* Tab Navigation */}
-      <div className="mb-4 sm:mb-6 bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="mb-5 bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="flex items-center border-b border-gray-200 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm transition-colors relative whitespace-nowrap ${
+            className={`px-4 py-2.5 text-sm transition-colors relative whitespace-nowrap ${
               activeTab === 'overview'
                 ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -1218,7 +1218,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           {hasPlanFeature('resume_scoring') && (
             <button
               onClick={() => setActiveTab('scored-resumes')}
-              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'scored-resumes'
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -1240,7 +1240,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           {hasPlanFeature('assessment') && (
             <button
               onClick={() => setActiveTab('assessment-results')}
-              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'assessment-results'
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -1262,7 +1262,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           {hasPlanFeature('ai_talent_match') && (
             <button
               onClick={() => setActiveTab('ai-talent-match')}
-              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'ai-talent-match'
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -1288,7 +1288,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {activeTab === 'overview' && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column - Job Details */}
-        <div className="lg:col-span-8 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-8 space-y-4">
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header - COMMENTED OUT
@@ -1334,15 +1334,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             */}
 
             {/* JD Content */}
-            <div className="p-4 sm:p-6 md:p-8">
-              <div className="space-y-4 sm:space-y-6 md:space-y-8">
+            <div className="p-4 sm:p-5">
+              <div className="space-y-4 sm:space-y-5">
                 {/* Job Description - Actual Content */}
                 {job.description ? (
                   <div>
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-3">
                       Job Description
                     </h2>
-                    <div className="h-px bg-gray-200 mb-3 sm:mb-4"></div>
+                    <div className="h-px bg-gray-200 mb-3"></div>
                     <div className="markdown-content prose prose-sm max-w-none text-gray-700">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
@@ -1398,8 +1398,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
           <div className={`grid ${hasPlanFeature('assessment') ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
             {/* Internal Recruiter Notes */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-              <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Internal Recruiter Notes</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Internal Recruiter Notes</h3>
               <div className="text-sm text-gray-600 space-y-2">
                 {job.internalRecruiterComments && job.internalRecruiterComments.length > 0 ? (
                   <ul className="list-disc list-inside space-y-1">
@@ -1415,8 +1415,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
             {/* Assessment Guidance - only if plan includes assessment */}
             {hasPlanFeature('assessment') && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-gray-900 mb-4">Assessment Guidance</h3>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Assessment Guidance</h3>
                 <div className="text-sm text-gray-600">
                   {job.assessmentGuidance ? (
                     <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
@@ -1430,10 +1430,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         </div>
 
         {/* Right Column - Actions & Activity */}
-        <div className="lg:col-span-4 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-4 space-y-4">
           {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Quick Actions</h3>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
             <div className="space-y-2">
               {/* 1. View JD History */}
               {permissions.canReadJD && (
@@ -1504,9 +1504,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </div>
 
           {/* Applicant Statistics */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Applicant Statistics</h3>
-            <div className="space-y-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Applicant Statistics</h3>
+            <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="text-gray-600">Total Scored Resumes</span>
@@ -1547,9 +1547,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </div>
 
           {/* Recent Activity */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Recent Activity</h3>
-            <div className="space-y-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Recent Activity</h3>
+            <div className="space-y-3">
               {scoredResumesStats.total > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1610,15 +1610,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {activeTab === 'scored-resumes' && (
         <div className="mt-0">
           {loadingScoredResumes ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-12 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600 text-sm sm:text-base">Loading scored resumes...</span>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 sm:p-10 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600 text-sm">Loading scored resumes...</span>
             </div>
           ) : scoredResumes.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-12 text-center">
-              <Users className="w-10 h-10 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 sm:p-10 text-center">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500 text-base sm:text-lg">No scored resumes yet</p>
-              <p className="text-gray-400 text-xs sm:text-sm mt-2">
+              <p className="text-gray-400 text-sm mt-2">
                 Upload and score resumes against this job description to see them here
               </p>
             </div>
@@ -1769,28 +1769,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       {/* JD History Modal */}
       {showJDHistory && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="bg-gray-800 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="bg-gray-800 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
                 {selectedHistoryVersion ? (
                   <button
                     onClick={() => setSelectedHistoryVersion(null)}
-                    className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors flex-shrink-0"
+                    className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors flex-shrink-0"
                   >
-                    <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                    <ArrowLeft className="w-4 h-4 text-white" />
                   </button>
                 ) : (
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <History className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  <div className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <History className="w-4 h-4 text-white" />
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h2 className="text-base sm:text-xl font-semibold text-white truncate">
+                  <h2 className="text-base sm:text-lg font-semibold text-white truncate">
                     {selectedHistoryVersion ? `Version ${selectedHistoryVersion.version.version_number}.0` : 'Job Description History'}
                   </h2>
-                  <p className="text-xs sm:text-sm text-gray-300 truncate">{job.title}</p>
+                  <p className="text-xs text-gray-300 truncate">{job.title}</p>
                 </div>
               </div>
               <button
@@ -1798,14 +1798,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   setShowJDHistory(false);
                   setSelectedHistoryVersion(null);
                 }}
-                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
+               aria-label="Close">
+                <X className="w-4 h-4 text-white" />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-3 sm:p-6 overflow-y-auto max-h-[calc(90vh-140px)] sm:max-h-[calc(85vh-140px)]">
+            <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(90vh-140px)] sm:max-h-[calc(85vh-140px)]">
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
@@ -1815,18 +1815,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 /* Version Detail View */
                 <div>
                   {/* Version Info Bar with Download Button */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                      <span className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-semibold">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <span className="px-2.5 py-1 bg-gray-900 text-white rounded-lg text-xs font-semibold">
                         v{selectedHistoryVersion.version.version_number}.0
                       </span>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-xs text-gray-600">
                         <span className="flex items-center gap-1">
-                          <UserIcon className="w-4 h-4" />
+                          <UserIcon className="w-3.5 h-3.5" />
                           {selectedHistoryVersion.performedBy}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-500">{selectedHistoryVersion.timestamp}</span>
+                      <span className="text-xs text-gray-500">{selectedHistoryVersion.timestamp}</span>
                       {selectedHistoryVersion.version.version_number > 1 && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                           New content highlighted in blue
@@ -1906,11 +1906,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
 
                   {/* Job Title + Description - same layout as Overview tab */}
-                  <div className="p-4 sm:p-6 md:p-8 bg-white rounded-lg border border-gray-200">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">
+                  <div className="p-4 sm:p-5 bg-white rounded-lg border border-gray-200">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-3">
                       {selectedHistoryVersion.version.title}
                     </h2>
-                    <div className="h-px bg-gray-200 mb-3 sm:mb-4"></div>
+                    <div className="h-px bg-gray-200 mb-3"></div>
 
                   {(() => {
                       const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
@@ -1989,9 +1989,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               ) : jdHistory.length === 0 ? (
-                <div className="text-center py-12">
-                  <History className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg">No version history available</p>
+                <div className="text-center py-10">
+                  <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 text-base">No version history available</p>
                   <p className="text-gray-400 text-sm mt-2">
                     Versions are created when you publish the job description
                   </p>
@@ -2033,59 +2033,59 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     const textColorClasses = 'text-gray-900';
 
                     return (
-                      <div key={item.id} className="relative flex gap-3 sm:gap-6">
+                      <div key={item.id} className="relative flex gap-3 sm:gap-4">
                         {/* Timeline Icon */}
                         <div className="relative flex-shrink-0">
-                          <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-4 border-white ${colorClasses} flex items-center justify-center shadow-lg z-10 relative`}>
-                            <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                          <div className={`h-9 w-9 rounded-full border-4 border-white ${colorClasses} flex items-center justify-center shadow-lg z-10 relative`}>
+                            <IconComponent className="w-4 h-4 text-white" />
                           </div>
                           {isFirst && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-700 rounded-full border-2 border-white"></div>
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-700 rounded-full border-2 border-white"></div>
                           )}
                         </div>
 
                         {/* Content Card - Now Clickable */}
-                        <div className={`flex-1 pb-6 ${!isLast ? '' : 'pb-0'}`}>
+                        <div className={`flex-1 pb-5 ${!isLast ? '' : 'pb-0'}`}>
                           <button
                             type="button"
                             onClick={() => setSelectedHistoryVersion(item)}
-                            className={`w-full text-left rounded-lg border-2 ${bgColorClasses} p-3 sm:p-5 shadow-sm hover:shadow-md transition-all`}
+                            className={`w-full text-left rounded-lg border-2 ${bgColorClasses} p-3 sm:p-4 shadow-sm hover:shadow-md transition-all`}
                           >
                             {/* Action Header */}
-                            <div className="flex items-start justify-between mb-2 sm:mb-3 gap-2">
+                            <div className="flex items-start justify-between mb-2 gap-2">
                               <div className="min-w-0">
-                                <h3 className={`font-semibold ${textColorClasses} text-sm sm:text-lg mb-1`}>
+                                <h3 className={`font-semibold ${textColorClasses} text-sm sm:text-base mb-1`}>
                                   {item.action}
                                 </h3>
                                 <p className="text-sm text-gray-700 mb-2">
                                   {item.description}
                                 </p>
                               </div>
-                              <span className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded-full font-medium whitespace-nowrap">
+                              <span className="text-xs bg-gray-200 text-gray-800 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
                                 {item.date}
                               </span>
                             </div>
 
                             {/* Performed By Info */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 pt-2 sm:pt-3 border-t border-gray-200">
-                              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-gray-200">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className="h-7 w-7 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <UserIcon className="w-3.5 h-3.5 text-white" />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{item.performedBy}</p>
+                                  <p className="text-xs font-medium text-gray-900 truncate">{item.performedBy}</p>
                                   <p className="text-xs text-gray-600">{item.performedByRole}</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-500 pl-9 sm:pl-0">
-                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                              <div className="flex items-center gap-1 text-xs text-gray-500 pl-9 sm:pl-0">
+                                <Clock className="w-3 h-3" />
                                 <span className="truncate">{item.timestamp}</span>
                               </div>
                             </div>
 
                             {/* Click hint */}
-                            <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-center gap-2 text-gray-500">
-                              <Eye className="w-4 h-4" />
+                            <div className="mt-3 pt-2 border-t border-gray-200 flex items-center justify-center gap-2 text-gray-500">
+                              <Eye className="w-3.5 h-3.5" />
                               <span className="text-xs">Click to view full JD</span>
                             </div>
                           </button>
@@ -2100,8 +2100,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
 
             {/* Footer */}
-            <div className="bg-gray-50 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 border-t border-gray-200">
-              <p className="text-xs sm:text-sm text-gray-600">
+            <div className="bg-gray-50 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 border-t border-gray-200">
+              <p className="text-xs text-gray-600">
                 {selectedHistoryVersion ? `Viewing version ${selectedHistoryVersion.version.version_number}.0` : 'Showing complete history from creation to present'}
               </p>
               <button
@@ -2109,7 +2109,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   setShowJDHistory(false);
                   setSelectedHistoryVersion(null);
                 }}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm text-sm w-full sm:w-auto text-center"
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm text-sm w-full sm:w-auto text-center"
               >
                 Close
               </button>
@@ -2239,9 +2239,9 @@ function AIMatchTabContent({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center py-12">
         <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
           <p className="text-gray-500 text-sm">Loading AI match results...</p>
         </div>
       </div>
@@ -2250,9 +2250,9 @@ function AIMatchTabContent({
 
   if (candidates.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <Brain className="w-16 h-16 text-gray-300 mb-4" />
-        <h3 className="text-lg font-medium text-gray-700 mb-2">No AI Talent Match Results</h3>
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <Brain className="w-12 h-12 text-gray-300 mb-3" />
+        <h3 className="text-base font-medium text-gray-700 mb-2">No AI Talent Match Results</h3>
         <p className="text-sm text-gray-500 max-w-sm">
           Run an AI Talent Match session to find the best candidates for this role.
         </p>

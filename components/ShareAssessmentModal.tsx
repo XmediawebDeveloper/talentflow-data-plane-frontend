@@ -508,7 +508,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 setShowDuplicateError(false);
                 setDuplicateEmail('');
               }}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
+              className="flex-1 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
             >
               Try Different Email
             </button>
@@ -532,9 +532,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -548,7 +548,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
@@ -558,7 +558,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           {/* Assessment Info Banner */}
           <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
             <div className="flex items-start gap-2.5 sm:gap-4">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
                 <FileText className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
@@ -783,7 +783,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     }`}>
                       {candidate.source === 'database' && (
                         <div className="flex-shrink-0">
-                          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center">
                             <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
                         </div>
@@ -957,7 +957,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       <button
                         onClick={handleAddFromDatabase}
                         disabled={selectedResumes.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed"
                       >
                         <Users className="w-4 h-4" />
                         Add Selected
@@ -1105,7 +1105,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              className="px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>

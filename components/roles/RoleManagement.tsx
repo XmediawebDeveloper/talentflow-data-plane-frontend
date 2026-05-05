@@ -29,39 +29,6 @@ import {
   AuditLogEntry,
 } from '@/lib/types/rbac';
 
-const mockRoles: RoleListItem[] = [
-  { id: 1, code: 'admin', name: 'Admin', description: 'Full access to all features', is_system: true, is_default: false, priority: 100, permission_count: 24, user_count: 2 },
-  { id: 2, code: 'recruiter', name: 'Recruiter', description: 'Can manage JDs, resumes, and assessments', is_system: true, is_default: true, priority: 50, parent_role_id: 3, parent_role_name: 'Viewer', permission_count: 16, user_count: 5 },
-  { id: 3, code: 'viewer', name: 'Viewer', description: 'Read-only access', is_system: true, is_default: false, priority: 10, permission_count: 5, user_count: 8 },
-];
-
-const mockPermissions: Permission[] = [
-  { id: 1, code: 'jd:create', name: 'Create Job Description', module: 'jd', action: 'create', is_system: true },
-  { id: 2, code: 'jd:read', name: 'View Job Description', module: 'jd', action: 'read', is_system: true },
-  { id: 3, code: 'jd:update', name: 'Update Job Description', module: 'jd', action: 'update', is_system: true },
-  { id: 4, code: 'jd:delete', name: 'Delete Job Description', module: 'jd', action: 'delete', is_system: true },
-  { id: 5, code: 'resumes:create', name: 'Upload Resumes', module: 'resumes', action: 'create', is_system: true },
-  { id: 6, code: 'resumes:read', name: 'View Resumes', module: 'resumes', action: 'read', is_system: true },
-  { id: 7, code: 'resumes:update', name: 'Update Resumes', module: 'resumes', action: 'update', is_system: true },
-  { id: 8, code: 'resumes:delete', name: 'Delete Resumes', module: 'resumes', action: 'delete', is_system: true },
-  { id: 9, code: 'internal_db:read', name: 'Access Internal Database', module: 'internal_db', action: 'read', is_system: true },
-  { id: 10, code: 'assessments:create', name: 'Create Assessments', module: 'assessments', action: 'create', is_system: true },
-  { id: 11, code: 'assessments:read', name: 'View Assessments', module: 'assessments', action: 'read', is_system: true },
-  { id: 12, code: 'assessments:update', name: 'Update Assessments', module: 'assessments', action: 'update', is_system: true },
-  { id: 13, code: 'assessments:delete', name: 'Delete Assessments', module: 'assessments', action: 'delete', is_system: true },
-  { id: 14, code: 'analytics:read', name: 'View Analytics', module: 'analytics', action: 'read', is_system: true },
-  { id: 15, code: 'settings:read', name: 'View Settings', module: 'settings', action: 'read', is_system: true },
-  { id: 16, code: 'settings:update', name: 'Update Settings', module: 'settings', action: 'update', is_system: true },
-  { id: 17, code: 'users:create', name: 'Create Users', module: 'users', action: 'create', is_system: true },
-  { id: 18, code: 'users:read', name: 'View Users', module: 'users', action: 'read', is_system: true },
-  { id: 19, code: 'users:update', name: 'Update Users', module: 'users', action: 'update', is_system: true },
-  { id: 20, code: 'users:delete', name: 'Delete Users', module: 'users', action: 'delete', is_system: true },
-  { id: 21, code: 'roles:create', name: 'Create Roles', module: 'roles', action: 'create', is_system: true },
-  { id: 22, code: 'roles:read', name: 'View Roles', module: 'roles', action: 'read', is_system: true },
-  { id: 23, code: 'roles:update', name: 'Update Roles', module: 'roles', action: 'update', is_system: true },
-  { id: 24, code: 'roles:delete', name: 'Delete Roles', module: 'roles', action: 'delete', is_system: true },
-];
-
 type TabType = 'roles' | 'audit';
 
 const protectedRoleCodes = ['admin', 'recruiter', 'billing_manager', 'viewer'];
@@ -126,9 +93,10 @@ export default function RoleManagement() {
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
     } catch (error) {
-      console.warn('API unavailable, using mock data:', error);
-      setRoles(mockRoles);
-      setPermissions(mockPermissions);
+      console.error('Failed to load roles and permissions:', error);
+      toast.error('Failed to load roles and permissions');
+      setRoles([]);
+      setPermissions([]);
     } finally {
       setIsLoading(false);
     }
@@ -180,9 +148,8 @@ export default function RoleManagement() {
       toast.success('Role deleted successfully');
       loadData();
     } catch (error) {
-      console.warn('API unavailable, simulating delete:', error);
-      setRoles((prev) => prev.filter((item) => item.id !== roleId));
-      toast.success('Role deleted (offline mode)');
+      console.error('Failed to delete role:', error);
+      toast.error('Failed to delete role');
     }
   };
 
@@ -378,7 +345,7 @@ export default function RoleManagement() {
               onClick={() => setActiveTab('roles')}
               className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
                 activeTab === 'roles'
-                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                   : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
@@ -389,7 +356,7 @@ export default function RoleManagement() {
               onClick={() => setActiveTab('audit')}
               className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
                 activeTab === 'audit'
-                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                   : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
@@ -436,7 +403,7 @@ export default function RoleManagement() {
                     <p className="text-sm text-gray-500">Total Roles</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{roles.length}</p>
                   </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                     <Shield className="h-5 w-5 text-brand-blue" />
                   </span>
                 </div>
@@ -447,7 +414,7 @@ export default function RoleManagement() {
                     <p className="text-sm text-gray-500">System Roles</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{systemRolesCount}</p>
                   </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
                     <Lock className="h-5 w-5 text-brand-cyan" />
                   </span>
                 </div>
@@ -458,7 +425,7 @@ export default function RoleManagement() {
                     <p className="text-sm text-gray-500">Assigned Users</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{assignedUsersCount}</p>
                   </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                     <Users className="h-5 w-5 text-brand-teal" />
                   </span>
                 </div>
@@ -469,7 +436,7 @@ export default function RoleManagement() {
                     <p className="text-sm text-gray-500">Permissions Catalog</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{managedPermissionsCount}</p>
                   </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                     <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                   </span>
                 </div>
@@ -477,7 +444,7 @@ export default function RoleManagement() {
             </section>
 
             <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-              <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent px-4 py-4 sm:px-6">
+              <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Roles Directory</h2>
                   <p className="text-sm text-gray-500">Review access levels, inheritance, and role usage across the organization.</p>
@@ -490,7 +457,7 @@ export default function RoleManagement() {
                 </div>
               ) : filteredRoles.length === 0 ? (
                 <div className="px-6 py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Shield className="h-6 w-6 text-brand-blue" />
                   </div>
                   <h3 className="text-base font-semibold text-gray-900">No roles found</h3>
@@ -516,7 +483,7 @@ export default function RoleManagement() {
                           <tr key={role.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                             <td className="px-6 py-5">
                               <div className="flex items-start gap-3">
-                                <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                                <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                                   <Shield className="h-5 w-5 text-brand-blue" />
                                 </span>
                                 <div className="min-w-0">
@@ -609,7 +576,7 @@ export default function RoleManagement() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-3">
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                               <Shield className="h-5 w-5 text-brand-blue" />
                             </span>
                             <div className="min-w-0">
@@ -687,7 +654,7 @@ export default function RoleManagement() {
 
         {activeTab === 'audit' && (
           <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent px-4 py-4 sm:px-6">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Access Activity Log</h2>
                 <p className="text-sm text-gray-500">Track role lifecycle changes and permission updates for audit readiness.</p>
@@ -699,7 +666,7 @@ export default function RoleManagement() {
 
             {auditLogs.length === 0 ? (
               <div className="px-6 py-16 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
                   <History className="h-6 w-6 text-brand-cyan" />
                 </div>
                 <h3 className="text-base font-semibold text-gray-900">No audit logs found</h3>
@@ -777,7 +744,7 @@ export default function RoleManagement() {
       {viewingRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-            <div className="relative overflow-hidden bg-gradient-to-r from-brand-blue via-brand-blue-2 to-brand-teal px-5 py-5 text-white sm:px-6">
+            <div className="relative overflow-hidden bg-brand-blue px-5 py-5 text-white sm:px-6">
               <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
               <div className="relative flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
@@ -829,7 +796,7 @@ export default function RoleManagement() {
 
               {viewingRolePermissions.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Shield className="h-6 w-6 text-brand-blue" />
                   </div>
                   <h3 className="text-base font-semibold text-gray-900">No permissions allocated</h3>
@@ -842,7 +809,7 @@ export default function RoleManagement() {
                       key={moduleName}
                       className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
                     >
-                      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] to-transparent px-4 py-3 sm:px-5">
+                      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 sm:px-5">
                         <div>
                           <h3 className="text-sm font-semibold capitalize text-gray-900">{moduleName.replace(/_/g, ' ')}</h3>
                           <p className="text-xs text-gray-500">{modulePermissions.length} permission{modulePermissions.length !== 1 ? 's' : ''}</p>

@@ -541,7 +541,7 @@ export default function ResumeDetailPage() {
                               className={`p-2 rounded-lg transition-colors ${
                                 index === 0 ? 'text-gray-800 hover:bg-gray-100' : 'text-gray-600 hover:bg-gray-100'
                               }`}
-                              title="Download"
+                              aria-label="Download" title="Download"
                             >
                               <Download className="w-4 h-4" />
                             </button>
@@ -578,7 +578,7 @@ export default function ResumeDetailPage() {
                         <button
                           onClick={handleDownload}
                           className="p-2 text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="Download"
+                          aria-label="Download" title="Download"
                         >
                           <Download className="w-4 h-4" />
                         </button>

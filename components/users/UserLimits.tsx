@@ -72,8 +72,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   const progressColor = limits.is_at_limit
     ? 'bg-gradient-to-r from-red-500 to-red-600'
     : limits.approaching_limit
-    ? 'bg-gradient-to-r from-brand-orange to-brand-orange-deep'
-    : 'bg-gradient-to-r from-brand-blue to-brand-blue-2';
+    ? 'bg-brand-orange'
+    : 'bg-brand-blue';
 
   if (compact) {
     return (
@@ -91,8 +91,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                 limits.is_at_limit
                   ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/25'
                   : limits.approaching_limit
-                  ? 'bg-gradient-to-br from-brand-orange to-brand-orange-deep shadow-brand-orange/25'
-                  : 'bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-brand-blue/25'
+                  ? 'bg-brand-orange shadow-brand-orange/25'
+                  : 'bg-brand-blue shadow-brand-blue/25'
               }`}>
                 <Users className="w-3.5 h-3.5 text-white" />
               </div>
@@ -109,7 +109,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3 h-3" />
                 Add Seats
@@ -151,8 +151,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             limits.is_at_limit
               ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/25'
               : limits.approaching_limit
-              ? 'bg-gradient-to-br from-brand-orange to-brand-orange-deep shadow-brand-orange/25'
-              : 'bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-brand-blue/25'
+              ? 'bg-brand-orange shadow-brand-orange/25'
+              : 'bg-brand-blue shadow-brand-blue/25'
           }`}>
             <Users className="w-5 h-5 text-white" />
           </div>
@@ -225,7 +225,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                       setShowAddSeatsModal(true);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Add Seats
@@ -247,7 +247,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
       {limits.approaching_limit && !limits.is_at_limit && (
         <div className="mt-4 flex items-start gap-3 p-3 sm:p-4 bg-brand-orange/5 border border-brand-orange/20 rounded-xl ring-1 ring-brand-orange/10">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-brand-orange-deep flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+          <div className="w-9 h-9 rounded-lg bg-brand-orange flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
             <Info className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
@@ -265,7 +265,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Seats

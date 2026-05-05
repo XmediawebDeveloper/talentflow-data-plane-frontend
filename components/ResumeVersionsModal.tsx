@@ -247,7 +247,7 @@ export default function ResumeVersionsModal({
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -584,7 +584,7 @@ export default function ResumeVersionsModal({
                               handleCompare(version, index);
                             }}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Compare with previous version"
+                            aria-label="Compare with previous version" title="Compare with previous version"
                           >
                             <GitBranch className="w-4 h-4" />
                           </button>
@@ -595,7 +595,7 @@ export default function ResumeVersionsModal({
                             handlePreview(version);
                           }}
                           className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="Preview"
+                          aria-label="Preview" title="Preview"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -605,7 +605,7 @@ export default function ResumeVersionsModal({
                             handleDownload(version);
                           }}
                           className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="Download"
+                          aria-label="Download" title="Download"
                         >
                           <Download className="w-4 h-4" />
                         </button>

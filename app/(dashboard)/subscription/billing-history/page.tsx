@@ -1,12 +1,13 @@
 'use client';
 
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 interface LineItem {
   description: string;
@@ -195,20 +196,20 @@ export default function BillingHistoryPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'paid': case 'success': return <CheckCircle2 className="w-4 h-4 text-green-600" />;
-      case 'pending': return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'failed': case 'refunded': return <XCircle className="w-4 h-4 text-red-600" />;
-      default: return <CheckCircle2 className="w-4 h-4 text-gray-600" />;
+      case 'paid': case 'success': return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
+      case 'pending': return <Clock className="h-3.5 w-3.5 text-amber-600" />;
+      case 'failed': case 'refunded': return <XCircle className="h-3.5 w-3.5 text-red-600" />;
+      default: return <CheckCircle2 className="h-3.5 w-3.5 text-gray-500" />;
     }
   };
 
   const getStatusStyles = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'paid': case 'success': return 'bg-green-100 text-green-700 border-green-200';
-      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'failed': case 'refunded': return 'bg-red-100 text-red-700 border-red-200';
-      case 'open': return 'bg-blue-100 text-blue-700 border-blue-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'paid': case 'success': return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
+      case 'pending': return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
+      case 'failed': case 'refunded': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+      case 'open': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
     }
   };
 
@@ -233,96 +234,132 @@ export default function BillingHistoryPage() {
   };
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      <div className="max-w-6xl mx-auto">
+    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl">
 
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                <Receipt className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+        {/* SaaS Hero Header */}
+        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                Invoices &amp; transactions
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Billing History</h1>
-                <p className="text-sm text-gray-600">View and download your invoices and transactions</p>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <Receipt className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Billing History</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+                    Review every invoice, addon purchase, and payment receipt — download a PDF copy or retry failed activations from one place.
+                  </p>
+                </div>
               </div>
             </div>
             <button
               onClick={() => { fetchBillingData(); fetchAddonTransactions(); }}
               disabled={loading}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>
-        </div>
+        </section>
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Total Amount</p>
-              <p className="text-2xl font-bold text-gray-900">{formatAmount(stats.total_amount)}</p>
-              <p className="text-xs text-gray-500 mt-1">{stats.total_invoices} invoices</p>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Total Amount</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">{formatAmount(stats.total_amount)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{stats.total_invoices} invoices</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                  <Receipt className="h-5 w-5 text-brand-blue" />
+                </span>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Paid</p>
-              <p className="text-2xl font-bold text-green-600">{stats.paid_count}</p>
-              <p className="text-xs text-gray-500 mt-1">Completed payments</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Paid</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{stats.paid_count}</p>
+                  <p className="mt-1 text-xs text-gray-500">Completed payments</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                  <CheckCircle2 className="h-5 w-5 text-brand-teal" />
+                </span>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Open / Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.open_count}</p>
-              <p className="text-xs text-gray-500 mt-1">Awaiting payment</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Open / Pending</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.open_count}</p>
+                  <p className="mt-1 text-xs text-gray-500">Awaiting payment</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                  <Clock className="h-5 w-5 text-brand-orange-deep" />
+                </span>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Total Invoices</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.total_invoices}</p>
-              <p className="text-xs text-gray-500 mt-1">All time</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Total Invoices</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-blue">{stats.total_invoices}</p>
+                  <p className="mt-1 text-xs text-gray-500">All time</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
+                  <FileText className="h-5 w-5 text-brand-cyan" />
+                </span>
+              </div>
             </div>
           </div>
         )}
 
         {/* Search */}
-        <div className="mb-6">
+        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by invoice number, plan name, or description..."
+              placeholder="Search by invoice number, plan name, or description"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+              className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
             />
           </div>
         </div>
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-medium text-red-700">{error}</p>
           </div>
         )}
 
         {/* Loading State */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="w-10 h-10 text-gray-400 animate-spin" />
-            <p className="mt-4 text-gray-500">Loading billing history...</p>
-          </div>
-        )}
+        {loading && <TableSkeleton rows={6} columns={6} />}
 
         {/* Empty State */}
         {!loading && !error && filteredInvoices.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-              <Receipt className="w-8 h-8 text-gray-400" />
+          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <Receipt className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Billing History</h3>
-            <p className="text-gray-600 max-w-md mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900">No Billing History</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
               {searchQuery
                 ? 'No invoices match your search criteria.'
                 : 'Your billing history will appear here once you make a subscription or addon purchase.'}
@@ -332,57 +369,62 @@ export default function BillingHistoryPage() {
 
         {/* Invoices Table */}
         {!loading && !error && filteredInvoices.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <p className="text-sm text-gray-600">
-                Showing {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''}
-              </p>
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Invoices</h2>
+                <p className="text-xs text-gray-500">
+                  Showing {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''}
+                </p>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px]">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">Invoice</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[160px]">Timestamp</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[160px]">Payment</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[130px]">Amount</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Actions</th>
+                <thead className="bg-gray-50/80">
+                  <tr className="text-left">
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[200px]">Invoice</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[160px]">Timestamp</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Description</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[160px]">Payment</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[130px]">Amount</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[100px]">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[100px]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {paginatedInvoices.map((inv, index) => (
-                    <tr key={inv.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                <tbody className="divide-y divide-gray-100">
+                  {paginatedInvoices.map((inv) => (
+                    <tr key={inv.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="text-sm font-medium text-gray-900 truncate" title={inv.invoice_number}>
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                            <FileText className="h-4 w-4 text-brand-blue" />
+                          </span>
+                          <span className="truncate text-sm font-semibold text-gray-900" title={inv.invoice_number}>
                             {inv.invoice_number}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
                         {formatIST(inv.issue_date)}
                       </td>
                       <td className="px-4 py-4">
-                        <div className="text-sm font-medium text-gray-900 truncate" title={getDescription(inv)}>
+                        <div className="truncate text-sm font-medium text-gray-900" title={getDescription(inv)}>
                           {getDescription(inv)}
                         </div>
                         {inv.plan_name && (
-                          <div className="text-xs text-gray-500 mt-0.5 truncate">{inv.plan_name.trim()}</div>
+                          <div className="mt-0.5 truncate text-xs text-gray-500">{inv.plan_name.trim()}</div>
                         )}
                         {inv.subscription_start_date && (
-                          <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                            <Calendar className="w-3 h-3 flex-shrink-0" />
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-400">
+                            <Calendar className="h-3 w-3 shrink-0" />
                             {formatISTDate(inv.subscription_start_date)} – {formatISTDate(inv.subscription_end_date)}
                           </div>
                         )}
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                          <span className="text-sm text-gray-700 truncate" title={getPaymentLabel(inv)}>
+                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                          <span className="truncate text-sm text-gray-700" title={getPaymentLabel(inv)}>
                             {getPaymentLabel(inv)}
                           </span>
                         </div>
@@ -396,30 +438,30 @@ export default function BillingHistoryPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusStyles(inv.status)}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(inv.status)}`}>
                           {getStatusIcon(inv.status)}
                           {inv.status}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setSelectedInvoice(inv)}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="View Details"
+                            className="inline-flex items-center gap-1 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-2.5 py-1.5 text-xs font-medium text-brand-blue transition-all hover:-translate-y-0.5 hover:bg-brand-blue/[0.08]"
+                            aria-label="View Details" title="View Details"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <ExternalLink className="h-3.5 w-3.5" />
                             View
                           </button>
                           <button
                             onClick={() => handleDownloadInvoice(inv)}
                             disabled={downloadingId === inv.id}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Download Invoice"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:translate-y-0 disabled:opacity-50"
+                            aria-label="Download Invoice" title="Download Invoice"
                           >
                             {downloadingId === inv.id
-                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              : <Download className="w-3.5 h-3.5" />}
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Download className="h-3.5 w-3.5" />}
                           </button>
                         </div>
                       </td>
@@ -445,91 +487,96 @@ export default function BillingHistoryPage() {
 
         {/* Purchase History (addons, seats, subscriptions) */}
         {addonTransactions.length > 0 && (
-          <div className="mt-8">
-            <div className="mb-3 flex items-center gap-2">
-              <Package className="w-5 h-5 text-gray-600" />
-              <h2 className="text-base font-semibold text-gray-800">Purchase History</h2>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px]">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[110px]">Amount</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[130px]">Activation Status</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {paginatedAddonTransactions.map((txn, index) => (
-                      <tr key={txn.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="text-sm font-medium text-gray-900 truncate max-w-[160px]" title={txn.invoice_number}>
-                              {txn.invoice_number}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                          {txn.transaction_date ? formatISTDate(txn.transaction_date) : '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-gray-800 truncate block max-w-[220px]" title={txn.addon_name}>
-                            {txn.addon_name}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className="text-sm font-semibold text-gray-900">
-                            ₹{Math.abs(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {txn.activation_status === 'activated' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Activated
-                            </span>
-                          )}
-                          {txn.activation_status === 'failed' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                              <XCircle className="w-3.5 h-3.5" />
-                              Failed
-                            </span>
-                          )}
-                          {txn.activation_status === 'processing' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
-                              <Clock className="w-3.5 h-3.5" />
-                              Processing
-                            </span>
-                          )}
-                          {txn.activation_status === 'unknown' && (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {txn.activation_status === 'failed' ? (
-                            <button
-                              onClick={() => handleRetryActivation(txn.id)}
-                              disabled={retryingId === txn.id}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                            >
-                              {retryingId === txn.id
-                                ? <><Loader2 className="w-3 h-3 animate-spin" /> Retrying...</>
-                                : <><RotateCcw className="w-3 h-3" /> Retry</>}
-                            </button>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="mt-8 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                <Package className="h-5 w-5 text-brand-orange-deep" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Purchase History</h2>
+                <p className="text-xs text-gray-500">Addons, seats &amp; one-time purchases</p>
               </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[750px]">
+                <thead className="bg-gray-50/80">
+                  <tr className="text-left">
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Invoice</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Date</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Description</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Amount</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[130px]">Activation</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[120px]">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paginatedAddonTransactions.map((txn) => (
+                    <tr key={txn.id} className="transition-colors hover:bg-brand-blue/[0.02]">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
+                            <FileText className="h-3.5 w-3.5 text-brand-cyan" />
+                          </span>
+                          <span className="block max-w-[160px] truncate text-sm font-medium text-gray-900" title={txn.invoice_number}>
+                            {txn.invoice_number}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
+                        {txn.transaction_date ? formatISTDate(txn.transaction_date) : '-'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="block max-w-[220px] truncate text-sm text-gray-800" title={txn.addon_name}>
+                          {txn.addon_name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm font-semibold text-gray-900">
+                          ₹{Math.abs(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {txn.activation_status === 'activated' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/20">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Activated
+                          </span>
+                        )}
+                        {txn.activation_status === 'failed' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700 ring-1 ring-red-200">
+                            <XCircle className="h-3 w-3" />
+                            Failed
+                          </span>
+                        )}
+                        {txn.activation_status === 'processing' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                            <Clock className="h-3 w-3" />
+                            Processing
+                          </span>
+                        )}
+                        {txn.activation_status === 'unknown' && (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {txn.activation_status === 'failed' ? (
+                          <button
+                            onClick={() => handleRetryActivation(txn.id)}
+                            disabled={retryingId === txn.id}
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-orange px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-brand-orange/25 transition-all hover:-translate-y-0.5 hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {retryingId === txn.id
+                              ? <><Loader2 className="h-3 w-3 animate-spin" /> Retrying...</>
+                              : <><RotateCcw className="h-3 w-3" /> Retry</>}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             <ListPagination
               currentPage={addonPage}
@@ -544,66 +591,78 @@ export default function BillingHistoryPage() {
 
         {/* Invoice Detail Modal */}
         {selectedInvoice && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
               {/* Modal Header */}
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 rounded-t-xl sticky top-0">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Invoice Details</h2>
-                  <p className="text-sm text-gray-500 font-mono">{selectedInvoice.invoice_number}</p>
+              <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
+                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                      <Receipt className="h-5 w-5 text-white" />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-semibold">Invoice Details</h2>
+                      <p className="mt-0.5 font-mono text-sm text-white/75">{selectedInvoice.invoice_number}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedInvoice(null)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-                <button onClick={() => setSelectedInvoice(null)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
-                  <XCircle className="w-5 h-5 text-gray-500" />
-                </button>
               </div>
 
-              <div className="p-6 space-y-5">
+              <div className="max-h-[calc(90vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
                 {/* Key Info Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Issue Date</p>
-                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.issue_date)}</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Issue Date</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedInvoice.issue_date)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Due Date</p>
-                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.due_date)}</p>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Due Date</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedInvoice.due_date)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</p>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyles(selectedInvoice.status)}`}>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Status</p>
+                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedInvoice.status)}`}>
                       {getStatusIcon(selectedInvoice.status)}
                       {selectedInvoice.status}
                     </span>
                   </div>
                   {selectedInvoice.paid_at && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Paid At</p>
-                      <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.paid_at)}</p>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Paid At</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedInvoice.paid_at)}</p>
                     </div>
                   )}
                   {selectedInvoice.billing_interval && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Billing Interval</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedInvoice.billing_interval.toLowerCase()}</p>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Billing Interval</p>
+                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900">{selectedInvoice.billing_interval.toLowerCase()}</p>
                     </div>
                   )}
                   {(selectedInvoice.payment_method || selectedInvoice.metadata?.payment_method) && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Payment</p>
-                      <p className="text-sm font-medium text-gray-900">{getPaymentLabel(selectedInvoice)}</p>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Payment</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{getPaymentLabel(selectedInvoice)}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Plan Info */}
                 {(selectedInvoice.plan_name || selectedInvoice.plan_type) && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-3">
                     <div>
-                      <p className="text-xs text-blue-500 uppercase tracking-wide mb-0.5">Plan</p>
-                      <p className="text-sm font-semibold text-blue-900">{selectedInvoice.plan_name?.trim()}</p>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-brand-blue/70">Plan</p>
+                      <p className="mt-0.5 text-sm font-semibold text-brand-blue">{selectedInvoice.plan_name?.trim()}</p>
                     </div>
                     {selectedInvoice.plan_type && (
-                      <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">
+                      <span className="rounded-full bg-brand-blue/10 px-2.5 py-1 text-[11px] font-medium text-brand-blue ring-1 ring-brand-blue/15">
                         {selectedInvoice.plan_type}
                       </span>
                     )}
@@ -612,23 +671,23 @@ export default function BillingHistoryPage() {
 
                 {/* Subscription Period */}
                 {selectedInvoice.subscription_start_date && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Subscription Period</p>
+                  <div className="overflow-hidden rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
+                    <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Subscription Period</p>
                     </div>
-                    <div className="p-4 grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 p-4">
                       <div>
-                        <p className="text-xs text-gray-500 mb-0.5">Start</p>
-                        <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.subscription_start_date)}</p>
+                        <p className="text-[11px] text-gray-400">Start</p>
+                        <p className="mt-0.5 text-sm font-semibold text-gray-900">{formatISTDate(selectedInvoice.subscription_start_date)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 mb-0.5">End</p>
-                        <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.subscription_end_date)}</p>
+                        <p className="text-[11px] text-gray-400">End</p>
+                        <p className="mt-0.5 text-sm font-semibold text-gray-900">{formatISTDate(selectedInvoice.subscription_end_date)}</p>
                       </div>
                       {selectedInvoice.next_billing_date && (
                         <div>
-                          <p className="text-xs text-gray-500 mb-0.5">Next Billing</p>
-                          <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.next_billing_date)}</p>
+                          <p className="text-[11px] text-gray-400">Next Billing</p>
+                          <p className="mt-0.5 text-sm font-semibold text-gray-900">{formatISTDate(selectedInvoice.next_billing_date)}</p>
                         </div>
                       )}
                     </div>
@@ -637,18 +696,18 @@ export default function BillingHistoryPage() {
 
                 {/* Line Items */}
                 {selectedInvoice.line_items?.length > 0 && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line Items</p>
+                  <div className="overflow-hidden rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
+                    <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Line Items</p>
                     </div>
                     <div className="divide-y divide-gray-100">
                       {selectedInvoice.line_items.map((item, idx) => (
-                        <div key={idx} className="px-4 py-3 flex items-center justify-between gap-4">
-                          <span className="text-sm text-gray-700 flex-1">{item.description}</span>
-                          <span className="text-sm text-gray-500 shrink-0">
+                        <div key={idx} className="flex items-center justify-between gap-4 px-4 py-3">
+                          <span className="flex-1 text-sm text-gray-700">{item.description}</span>
+                          <span className="shrink-0 text-sm text-gray-500">
                             {item.quantity} × {formatAmount(item.unit_price)}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900 shrink-0 min-w-[80px] text-right">
+                          <span className="min-w-[80px] shrink-0 text-right text-sm font-semibold text-gray-900">
                             {formatAmount(Math.abs(item.amount ?? item.total ?? 0))}
                           </span>
                         </div>
@@ -658,7 +717,7 @@ export default function BillingHistoryPage() {
                 )}
 
                 {/* Totals */}
-                <div className="border-t border-gray-200 pt-4 space-y-2">
+                <div className="space-y-2 border-t border-gray-100 pt-4">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Subtotal</span>
                     <span className="text-gray-900">{formatAmount(selectedInvoice.amount_inr || 0)}</span>
@@ -672,28 +731,29 @@ export default function BillingHistoryPage() {
                   {(selectedInvoice.discount_amount_inr || 0) > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Discount</span>
-                      <span className="text-green-600">-{formatAmount(selectedInvoice.discount_amount_inr)}</span>
+                      <span className="text-brand-teal">-{formatAmount(selectedInvoice.discount_amount_inr)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-base font-semibold border-t border-gray-200 pt-2 mt-1">
-                    <span className="text-gray-900">Total</span>
-                    <span className="text-gray-900">{formatAmount(selectedInvoice.total_amount_inr || 0)}</span>
+                  <div className="relative mt-2 flex items-center justify-between overflow-hidden rounded-xl bg-brand-blue px-4 py-3 text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+                    <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-3xl" />
+                    <span className="relative text-sm font-semibold">Total</span>
+                    <span className="relative text-base font-bold">{formatAmount(selectedInvoice.total_amount_inr || 0)}</span>
                   </div>
                 </div>
 
                 {/* Payment Reference */}
                 {(selectedInvoice.razorpay_payment_id || selectedInvoice.razorpay_order_id) && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-2">
+                  <div className="space-y-2 rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
                     {selectedInvoice.razorpay_payment_id && (
                       <div>
-                        <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Payment ID</p>
-                        <p className="text-sm text-blue-900 font-mono mt-0.5">{selectedInvoice.razorpay_payment_id}</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Payment ID</p>
+                        <p className="mt-0.5 break-all font-mono text-sm text-gray-900">{selectedInvoice.razorpay_payment_id}</p>
                       </div>
                     )}
                     {selectedInvoice.razorpay_order_id && (
                       <div>
-                        <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Order ID</p>
-                        <p className="text-sm text-blue-900 font-mono mt-0.5">{selectedInvoice.razorpay_order_id}</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Order ID</p>
+                        <p className="mt-0.5 break-all font-mono text-sm text-gray-900">{selectedInvoice.razorpay_order_id}</p>
                       </div>
                     )}
                   </div>
@@ -701,26 +761,26 @@ export default function BillingHistoryPage() {
 
                 {/* Reason */}
                 {(selectedInvoice.reason || selectedInvoice.metadata?.reason) && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Reason</p>
-                    <p className="text-sm text-gray-800">{selectedInvoice.reason || selectedInvoice.metadata?.reason}</p>
+                  <div className="rounded-xl border border-gray-100 bg-slate-50 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Reason</p>
+                    <p className="mt-1 text-sm text-gray-800">{selectedInvoice.reason || selectedInvoice.metadata?.reason}</p>
                   </div>
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex gap-3 pt-1">
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:gap-3">
                   <button
                     onClick={() => handleDownloadInvoice(selectedInvoice)}
                     disabled={downloadingId === selectedInvoice.id}
-                    className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {downloadingId === selectedInvoice.id
-                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
-                      : <><Download className="w-4 h-4" /> Download Invoice</>}
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating PDF...</>
+                      : <><Download className="h-4 w-4" /> Download Invoice</>}
                   </button>
                   <button
                     onClick={() => setSelectedInvoice(null)}
-                    className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
                   >
                     Close
                   </button>

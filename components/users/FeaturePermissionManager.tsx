@@ -304,7 +304,7 @@ export default function FeaturePermissionManager({
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-brand-blue flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
               <Shield className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
@@ -322,7 +322,7 @@ export default function FeaturePermissionManager({
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors flex-shrink-0"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -336,7 +336,7 @@ export default function FeaturePermissionManager({
           ) : isExpansionBlocked ? (
             <div className="bg-gradient-to-br from-brand-orange/[0.06] to-brand-orange/[0.02] border border-brand-orange/30 rounded-xl p-5 shadow-sm">
               <div className="flex gap-3">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-brand-orange-deep flex items-center justify-center shadow-sm flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-brand-orange flex items-center justify-center shadow-sm flex-shrink-0">
                   <AlertTriangle className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -369,7 +369,7 @@ export default function FeaturePermissionManager({
                   onClick={() => setAutoEnableDeps(!autoEnableDeps)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ring-1 ${
                     autoEnableDeps
-                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
+                      ? 'bg-brand-blue ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
                       : 'bg-gray-200 ring-gray-300'
                   }`}
                 >
@@ -459,7 +459,7 @@ export default function FeaturePermissionManager({
                                   disabled={isDisabled}
                                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all ring-1 ${
                                     isEnabled
-                                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
+                                      ? 'bg-brand-blue ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
                                       : 'bg-gray-200 ring-gray-300'
                                   } ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                 >
@@ -484,7 +484,7 @@ export default function FeaturePermissionManager({
                 <div className="mt-6 bg-gradient-to-r from-brand-blue/[0.08] to-brand-cyan/[0.05] border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-xl p-4 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
+                      <div className="w-9 h-9 rounded-lg bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
                         <Info className="w-4 h-4 text-white" />
                       </div>
                       <span className="text-sm font-semibold text-brand-blue">
@@ -515,7 +515,7 @@ export default function FeaturePermissionManager({
           <button
             onClick={handleSave}
             disabled={isSaving || isExpansionBlocked}
-            className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {isSaving ? (
               <>

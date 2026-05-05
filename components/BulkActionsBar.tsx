@@ -37,7 +37,7 @@ export default function BulkActionsBar({
   const actionBtn = "inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg transition-all text-xs sm:text-sm font-medium border border-white/15 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
 
   return (
-    <div className="sticky top-0 z-50 bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-lg shadow-brand-blue/25 border-b border-white/10 ring-1 ring-white/10 animate-fadeIn rounded-xl">
+    <div className="sticky top-0 z-50 bg-brand-blue shadow-lg shadow-brand-blue/25 border-b border-white/10 ring-1 ring-white/10 animate-fadeIn rounded-xl">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 gap-2 sm:gap-4">
         {/* Left: Selected count + Clear */}
         <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-start">
@@ -66,7 +66,7 @@ export default function BulkActionsBar({
               <button
                 onClick={() => setShowFolderMenu(!showFolderMenu)}
                 className={actionBtn}
-                title="Move to Folder"
+                aria-label="Move to Folder" title="Move to Folder"
               >
                 <FolderInput className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden md:inline">Move to Folder</span>
@@ -112,7 +112,7 @@ export default function BulkActionsBar({
             <button
               onClick={onApplyToJob}
               className={actionBtn}
-              title="Apply to Job"
+              aria-label="Apply to Job" title="Apply to Job"
             >
               <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden md:inline">Apply to Job</span>
@@ -124,7 +124,7 @@ export default function BulkActionsBar({
             <button
               onClick={onResumeScoring}
               className={actionBtn}
-              title="Resume Scoring"
+              aria-label="Resume Scoring" title="Resume Scoring"
             >
               <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden md:inline">Resume Scoring</span>
@@ -136,7 +136,7 @@ export default function BulkActionsBar({
             <button
               onClick={onAssessment}
               className={actionBtn}
-              title="Assessment"
+              aria-label="Assessment" title="Assessment"
             >
               <ClipboardCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden md:inline">Assessment</span>
@@ -148,7 +148,7 @@ export default function BulkActionsBar({
             <button
               onClick={onAITalentMatch}
               className={actionBtn}
-              title="AI Talent Match"
+              aria-label="AI Talent Match" title="AI Talent Match"
             >
               <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden md:inline">AI Talent Match</span>
@@ -160,7 +160,7 @@ export default function BulkActionsBar({
             <button
               onClick={onDownload}
               className={actionBtn}
-              title="Download"
+              aria-label="Download" title="Download"
             >
               <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden md:inline">Download</span>
@@ -171,7 +171,7 @@ export default function BulkActionsBar({
             <button
               onClick={onArchive}
               className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 text-white bg-amber-500/90 hover:bg-amber-600 backdrop-blur-sm rounded-lg transition-all text-xs sm:text-sm font-medium shadow-sm border border-amber-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-              title="Archive"
+              aria-label="Archive" title="Archive"
             >
               <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden md:inline">Archive</span>
@@ -184,7 +184,7 @@ export default function BulkActionsBar({
               <button
                 onClick={onDelete}
                 className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 text-white bg-red-500/90 hover:bg-red-600 backdrop-blur-sm rounded-lg transition-all text-xs sm:text-sm font-medium shadow-sm border border-red-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                title="Delete"
+                aria-label="Delete" title="Delete"
               >
                 <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden md:inline">Delete</span>

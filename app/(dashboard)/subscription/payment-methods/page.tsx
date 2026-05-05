@@ -1,11 +1,12 @@
 'use client';
 
-import { Wallet, Plus, CreditCard, Trash2, Check, Building2, X, Loader2 } from 'lucide-react';
+import { Wallet, Plus, CreditCard, Trash2, Building2, X, Loader2, Sparkles, ArrowUpRight, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { CardGridSkeleton } from '@/components/ui/skeleton';
 
 interface PaymentMethod {
   id: string;
@@ -293,59 +294,66 @@ export default function PaymentMethodsPage() {
     }
   };
 
-  const getCardIcon = (cardType: string) => {
-    // You could replace this with actual card brand icons
-    return <CreditCard className="w-6 h-6 text-gray-600" />;
+  const getCardIcon = (_cardType: string) => {
+    return <CreditCard className="h-6 w-6 text-brand-blue" />;
   };
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                <Wallet className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        {/* SaaS Hero Header */}
+        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                Billing &amp; payments
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Payment Methods</h1>
-                <p className="text-sm text-gray-600">Manage your payment methods</p>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <Wallet className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Payment Methods</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+                    Securely store and manage the cards used for subscription renewals and addon purchases.
+                  </p>
+                </div>
               </div>
             </div>
             {canAdd && (
               <button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="h-4 w-4" />
                 Add Payment Method
+                <ArrowUpRight className="h-4 w-4" />
               </button>
             )}
           </div>
-        </div>
+        </section>
 
         {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-700" />
-          </div>
-        )}
+        {loading && <CardGridSkeleton count={3} />}
 
         {/* Empty State */}
         {!loading && paymentMethods.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CreditCard className="w-8 h-8 text-gray-400" />
+          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <CreditCard className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No payment methods</h3>
-            <p className="text-gray-500 mb-6">Add a payment method to manage your subscription</p>
+            <h3 className="text-lg font-semibold text-gray-900">No payment methods</h3>
+            <p className="mt-1 text-sm text-gray-500">Add a payment method to manage your subscription</p>
             {canAdd && (
               <button
                 onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="h-4 w-4" />
                 Add Payment Method
               </button>
             )}
@@ -358,32 +366,39 @@ export default function PaymentMethodsPage() {
             {paymentMethods.map((method) => (
               <div
                 key={method.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+                className={`rounded-2xl border bg-white p-5 shadow-sm ring-1 ring-black/[0.02] transition-all hover:shadow-md sm:p-6 ${
+                  method.is_default
+                    ? 'border-brand-blue/20 shadow-brand-blue/10 ring-brand-blue/10'
+                    : 'border-gray-100 shadow-brand-blue/5 hover:border-brand-cyan/25'
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                       {getCardIcon(method.card_type)}
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {method.card_type} •••• {method.card_last_four}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {method.cardholder_name} • Expires {method.expiry_month}/{method.expiry_year}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-gray-900">
+                          {method.card_type} •••• {method.card_last_four}
+                        </p>
+                        {method.is_default && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/15">
+                            <ShieldCheck className="h-3 w-3" />
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {method.cardholder_name} · Expires {String(method.expiry_month).padStart(2, '0')}/{method.expiry_year}
                       </p>
                     </div>
-                    {method.is_default && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        Default
-                      </span>
-                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {canEdit && !method.is_default && (
                       <button
                         onClick={() => setAsDefault(method.id)}
-                        className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                       >
                         Set as Default
                       </button>
@@ -392,12 +407,13 @@ export default function PaymentMethodsPage() {
                       <button
                         onClick={() => deleteMethod(method.id)}
                         disabled={deleting === method.id}
-                        className="p-2 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1] disabled:translate-y-0 disabled:opacity-50"
+                        aria-label="Delete payment method" title="Delete payment method"
                       >
                         {deleting === method.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-red-600" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Trash2 className="w-4 h-4 text-red-600" />
+                          <Trash2 className="h-4 w-4" />
                         )}
                       </button>
                     )}
@@ -408,15 +424,15 @@ export default function PaymentMethodsPage() {
           </div>
         )}
 
-        {/* Add Payment Method Info */}
-        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6">
+        {/* Secure Payments Info */}
+        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-6">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-5 h-5 text-gray-600" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+              <ShieldCheck className="h-5 w-5 text-brand-teal" />
             </div>
             <div>
-              <h3 className="text-sm font-medium text-gray-900">Secure Payments</h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <h3 className="text-sm font-semibold text-gray-900">Secure Payments</h3>
+              <p className="mt-1 text-sm text-gray-600">
                 All payment information is securely processed and stored. We use industry-standard encryption to protect your data.
               </p>
             </div>
@@ -426,183 +442,185 @@ export default function PaymentMethodsPage() {
 
       {/* Add Payment Method Modal — only renders if user has Add permission */}
       {showAddModal && canAdd && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-gray-600" />
+            <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
+              <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                    <CreditCard className="h-5 w-5 text-white" />
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-semibold">Add Payment Method</h2>
+                    <p className="mt-0.5 text-sm text-white/75">Enter your card details to save it for future billing.</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Add Payment Method</h2>
-                  <p className="text-sm text-gray-500">Enter your card details</p>
-                </div>
+                <button
+                  onClick={() => { setShowAddModal(false); resetForm(); }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <button
-                onClick={() => { setShowAddModal(false); resetForm(); }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4">
+            <div className="max-h-[calc(90vh-184px)] space-y-5 overflow-y-auto p-5 sm:p-6">
               {/* Card Information */}
               <div className="space-y-4">
-                <h3 className="text-sm font-medium text-gray-700">Card Information</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Card Information</h3>
 
                 {/* Cardholder Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cardholder Name *
-                  </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700">
+                    Cardholder Name <span className="text-brand-orange">*</span>
+                  </span>
                   <input
                     type="text"
                     value={formData.cardholderName}
                     onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
-                    placeholder="John Doe"
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
-                      formErrors.cardholderName ? 'border-red-300' : 'border-gray-300'
+                    placeholder="Name as it appears on the card"
+                    className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      formErrors.cardholderName ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                     }`}
                   />
                   {formErrors.cardholderName && (
-                    <p className="text-red-500 text-xs mt-1">{formErrors.cardholderName}</p>
+                    <p className="mt-1 text-xs text-red-500">{formErrors.cardholderName}</p>
                   )}
-                </div>
+                </label>
 
                 {/* Card Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Card Number *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.cardNumber}
-                    onChange={(e) => setFormData({ ...formData, cardNumber: formatCardNumber(e.target.value) })}
-                    placeholder="1234 5678 9012 3456"
-                    maxLength={19}
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
-                      formErrors.cardNumber ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                  />
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700">
+                    Card Number <span className="text-brand-orange">*</span>
+                  </span>
+                  <div className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5 transition-all focus-within:ring-4 ${
+                    formErrors.cardNumber ? 'border-red-300 focus-within:border-red-300 focus-within:ring-red-100' : 'border-gray-200 focus-within:border-brand-blue/30 focus-within:ring-brand-blue/10'
+                  }`}>
+                    <CreditCard className="h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.cardNumber}
+                      onChange={(e) => setFormData({ ...formData, cardNumber: formatCardNumber(e.target.value) })}
+                      placeholder="•••• •••• •••• ••••"
+                      maxLength={19}
+                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                    />
+                  </div>
                   {formErrors.cardNumber && (
-                    <p className="text-red-500 text-xs mt-1">{formErrors.cardNumber}</p>
+                    <p className="mt-1 text-xs text-red-500">{formErrors.cardNumber}</p>
                   )}
-                </div>
+                </label>
 
                 {/* Expiry and CVV */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Month *
-                    </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">
+                      Month <span className="text-brand-orange">*</span>
+                    </span>
                     <input
                       type="text"
                       value={formData.expiryMonth}
                       onChange={(e) => setFormData({ ...formData, expiryMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })}
                       placeholder="MM"
                       maxLength={2}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
-                        formErrors.expiryMonth ? 'border-red-300' : 'border-gray-300'
+                      className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                        formErrors.expiryMonth ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.expiryMonth && (
-                      <p className="text-red-500 text-xs mt-1">{formErrors.expiryMonth}</p>
+                      <p className="mt-1 text-xs text-red-500">{formErrors.expiryMonth}</p>
                     )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Year *
-                    </label>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">
+                      Year <span className="text-brand-orange">*</span>
+                    </span>
                     <input
                       type="text"
                       value={formData.expiryYear}
                       onChange={(e) => setFormData({ ...formData, expiryYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="YYYY"
                       maxLength={4}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
-                        formErrors.expiryYear ? 'border-red-300' : 'border-gray-300'
+                      className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                        formErrors.expiryYear ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.expiryYear && (
-                      <p className="text-red-500 text-xs mt-1">{formErrors.expiryYear}</p>
+                      <p className="mt-1 text-xs text-red-500">{formErrors.expiryYear}</p>
                     )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      CVV *
-                    </label>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">
+                      CVV <span className="text-brand-orange">*</span>
+                    </span>
                     <input
                       type="password"
                       value={formData.cvv}
                       onChange={(e) => setFormData({ ...formData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="•••"
                       maxLength={4}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
-                        formErrors.cvv ? 'border-red-300' : 'border-gray-300'
+                      className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                        formErrors.cvv ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.cvv && (
-                      <p className="text-red-500 text-xs mt-1">{formErrors.cvv}</p>
+                      <p className="mt-1 text-xs text-red-500">{formErrors.cvv}</p>
                     )}
-                  </div>
+                  </label>
                 </div>
               </div>
 
               {/* Billing Address (Optional) */}
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700">Billing Address (Optional)</h3>
+              <div className="space-y-4 border-t border-gray-100 pt-5">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-brand-blue" />
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Billing Address (Optional)</h3>
+                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Street Address
-                  </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Street Address</span>
                   <input
                     type="text"
                     value={formData.billingAddress}
                     onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
-                    placeholder="123 Main Street"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="Street and number"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
-                </div>
+                </label>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City
-                    </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">City</span>
                     <input
                       type="text"
                       value={formData.billingCity}
                       onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
-                      placeholder="New York"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="City"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ZIP Code
-                    </label>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">ZIP Code</span>
                     <input
                       type="text"
                       value={formData.billingZip}
                       onChange={(e) => setFormData({ ...formData, billingZip: e.target.value })}
-                      placeholder="10001"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="Postal code"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
-                  </div>
+                  </label>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Country
-                  </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Country</span>
                   <select
                     value={formData.billingCountry}
                     onChange={(e) => setFormData({ ...formData, billingCountry: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   >
                     <option value="">Select Country</option>
                     <option value="US">United States</option>
@@ -615,45 +633,50 @@ export default function PaymentMethodsPage() {
                     <option value="SG">Singapore</option>
                     <option value="AE">UAE</option>
                   </select>
-                </div>
+                </label>
               </div>
 
               {/* Set as Default */}
-              <div className="flex items-center gap-3 pt-4">
+              <label
+                htmlFor="setAsDefault"
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all ${
+                  formData.setAsDefault
+                    ? 'border-brand-blue/25 bg-brand-blue/[0.04]'
+                    : 'border-gray-200 bg-white hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
+                }`}
+              >
                 <input
                   type="checkbox"
                   id="setAsDefault"
                   checked={formData.setAsDefault}
                   onChange={(e) => setFormData({ ...formData, setAsDefault: e.target.checked })}
-                  className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
+                  className="h-4 w-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/30"
                 />
-                <label htmlFor="setAsDefault" className="text-sm text-gray-700">
-                  Set as default payment method
-                </label>
-              </div>
+                <span className="text-sm font-medium text-gray-700">Set as default payment method</span>
+              </label>
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+            <div className="flex flex-col items-stretch justify-end gap-2 border-t border-gray-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
               <button
                 onClick={() => { setShowAddModal(false); resetForm(); }}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-5 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Adding...
                   </>
                 ) : (
                   <>
-                    <Plus className="w-4 h-4" />
+                    <Plus className="h-4 w-4" />
                     Add Card
                   </>
                 )}

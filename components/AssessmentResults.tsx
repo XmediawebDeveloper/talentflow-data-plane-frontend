@@ -962,7 +962,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
-                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {downloadingBulkPDF ? (
                     <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -975,7 +975,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
+                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
               >
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Export Results</span>
@@ -996,7 +996,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Total Candidates</div>
                 <div className="text-xl sm:text-2xl text-gray-900 tracking-tight">{displayResults.length}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
             </div>
@@ -1020,7 +1020,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
                 <div className="text-xl sm:text-2xl text-brand-cyan tracking-tight">{inProgressCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
                 <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
             </div>
@@ -1294,7 +1294,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs shrink-0">
                                 {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                               </div>
                               <div className="min-w-0">
@@ -1382,7 +1382,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 } catch { /* ignore quota errors */ }
                                 router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
                               }}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                               title="View Details"
                               aria-label={`View details for ${candidate.name || 'candidate'}`}
                             >
@@ -1393,7 +1393,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                               aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
@@ -1574,7 +1574,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('candidate') && (
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs">
+                            <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
                             <div className="text-sm text-gray-900 font-medium break-words">{candidate.name || 'Unknown'}</div>
@@ -1710,7 +1710,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               } catch { /* ignore quota errors */ }
                               router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
                             }}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
@@ -1722,7 +1722,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                               aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
@@ -1785,7 +1785,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         onClick={() => setCurrentPage(pageNum)}
                         className={`min-w-[28px] sm:min-w-[34px] px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-md transition-colors ${
                           currentPage === pageNum
-                            ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                             : 'border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                         }`}
                       >
@@ -1837,9 +1837,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <FileText className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -1853,7 +1853,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setExportStep('format');
                     }}
                     className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
-                  >
+                   aria-label="Close">
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
@@ -1879,7 +1879,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       onClick={() => handleFormatSelect('excel')}
                       className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
                     >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
                         <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                       </div>
                       <div className="text-left flex-1 min-w-0">
@@ -1907,9 +1907,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {/* Step 2: Scope Selection */}
             {exportStep === 'scope' && (
               <>
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <Layers className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -1925,7 +1925,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setExportStep('format');
                     }}
                     className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
-                  >
+                   aria-label="Close">
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
@@ -1968,7 +1968,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         disabled={isExporting}
                         className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-brand-blue/40 rounded-xl hover:bg-brand-blue/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
                             <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
                           ) : (
@@ -1992,7 +1992,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         disabled={isExporting}
                         className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-brand-cyan/40 rounded-xl hover:bg-brand-cyan/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center transition-colors flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
                             <div className="w-4 h-4 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin" />
                           ) : (

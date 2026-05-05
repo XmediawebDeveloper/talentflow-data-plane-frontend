@@ -117,12 +117,12 @@ export default function AITalentMatchPageJobsList({
             <button
               onClick={onBack}
               className="p-1.5 sm:p-2 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center shadow-sm border border-gray-200"
-              title="Back to Dashboard"
+              aria-label="Back to Dashboard" title="Back to Dashboard"
             >
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700 rotate-180" />
             </button>
           )}
-          <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
             <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
           <div className="flex-1 min-w-0">
@@ -285,7 +285,7 @@ export default function AITalentMatchPageJobsList({
                       {/* Job Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-3 sm:gap-4 mb-2 sm:mb-3">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
                             <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-brand-blue" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -369,7 +369,7 @@ export default function AITalentMatchPageJobsList({
                     <div className="flex-shrink-0 flex items-center justify-center sm:justify-end">
                       <button
                         onClick={() => onSelectJob(job.id)}
-                        className="w-full sm:w-auto px-4 sm:px-5 lg:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm sm:text-base"
+                        className="w-full sm:w-auto px-4 sm:px-5 lg:px-6 py-2.5 sm:py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm sm:text-base"
                       >
                         <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
                         Run AI Match
@@ -394,7 +394,7 @@ export default function AITalentMatchPageJobsList({
       ) : publishedJobs.length === 0 ? (
         <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-12 lg:p-16 text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
               <Briefcase className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-brand-blue" />
             </div>
             <h3 className="text-base sm:text-lg lg:text-xl text-gray-900 mb-2">No Published Jobs Available</h3>
@@ -406,7 +406,7 @@ export default function AITalentMatchPageJobsList({
       ) : (
         <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-12 lg:p-16 text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
               <Search className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-brand-blue" />
             </div>
             <h3 className="text-base sm:text-lg lg:text-xl text-gray-900 mb-2">No Results Found</h3>
@@ -420,7 +420,7 @@ export default function AITalentMatchPageJobsList({
                 setLocationFilter('');
                 setEmploymentTypeFilter('');
               }}
-              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
+              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
               Clear All Filters
@@ -431,7 +431,7 @@ export default function AITalentMatchPageJobsList({
 
       {/* How It Works */}
       <div className="mt-4 sm:mt-6 bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5 rounded-xl p-3 sm:p-4 lg:p-5 flex items-start gap-2.5 sm:gap-3">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
           <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">

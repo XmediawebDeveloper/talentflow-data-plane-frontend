@@ -430,7 +430,7 @@ export default function CandidateResultDetails({
       {/* Sticky Header — Back + Title + Prev/Next + Export Results, all in one
           gradient bar so the inner Question-Analysis tab nav (z-20) can no
           longer climb on top of it during scroll. */}
-      <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -463,7 +463,7 @@ export default function CandidateResultDetails({
                     onClick={onPrev}
                     disabled={!onPrev || currentIndex === 0}
                     className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Previous candidate"
+                    aria-label="Previous candidate" title="Previous candidate"
                   >
                     <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span className="hidden sm:inline">Previous</span>
@@ -475,7 +475,7 @@ export default function CandidateResultDetails({
                     onClick={onNext}
                     disabled={!onNext || currentIndex === totalCount - 1}
                     className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Next candidate"
+                    aria-label="Next candidate" title="Next candidate"
                   >
                     <span className="hidden sm:inline">Next</span>
                     <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -515,7 +515,7 @@ export default function CandidateResultDetails({
         <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 font-semibold">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-brand-blue flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 font-semibold">
                 {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="min-w-0">
@@ -554,7 +554,7 @@ export default function CandidateResultDetails({
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                 <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
@@ -572,7 +572,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
               </div>
               <div>
@@ -581,7 +581,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
@@ -592,7 +592,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                 <Clipboard className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
               <div className="min-w-0">
@@ -603,7 +603,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                 <Info className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
@@ -614,7 +614,7 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-teal" />
               </div>
               <div>
@@ -838,7 +838,7 @@ export default function CandidateResultDetails({
                         {!isHR && scoringDone && (
                           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-3 ring-1 ring-black/[0.03]">
                             <div
-                              className={`h-3 rounded-full ${section.percentage >= 70 ? 'bg-gradient-to-r from-green-600 to-emerald-600' : section.percentage >= 40 ? 'bg-gradient-to-r from-brand-orange to-brand-orange-deep' : 'bg-gradient-to-r from-red-600 to-red-700'}`}
+                              className={`h-3 rounded-full ${section.percentage >= 70 ? 'bg-gradient-to-r from-green-600 to-emerald-600' : section.percentage >= 40 ? 'bg-brand-orange' : 'bg-gradient-to-r from-red-600 to-red-700'}`}
                               style={{ width: `${Math.min(section.percentage, 100)}%` }}
                             />
                           </div>
@@ -1007,9 +1007,9 @@ export default function CandidateResultDetails({
         {/* Candidate Insights - AI Generated Analysis */}
         {detailedResult && detailedResult.scoring_status === 'completed' && (
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden mb-6">
-            <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="bg-gray-50 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/20 shadow-md shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue ring-1 ring-white/20 shadow-md shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
                   <Award className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -1023,7 +1023,7 @@ export default function CandidateResultDetails({
                 <button
                   onClick={handleGenerateInsights}
                   disabled={isGeneratingInsights}
-                  className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isGeneratingInsights ? (
                     <>
@@ -1104,7 +1104,7 @@ export default function CandidateResultDetails({
                   <button
                     onClick={handleGenerateInsights}
                     disabled={isGeneratingInsights}
-                    className="px-6 py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="px-6 py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
                     {isGeneratingInsights ? (
                       <>
@@ -1126,7 +1126,7 @@ export default function CandidateResultDetails({
 
         {/* Detailed Answers */}
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-          <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 sm:px-6 py-4 sm:py-5 ring-1 ring-white/10">
+          <div className="bg-brand-blue px-4 sm:px-6 py-4 sm:py-5 ring-1 ring-white/10">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
                 <h2 className="text-white text-sm sm:text-base tracking-tight font-semibold">Detailed Question Analysis</h2>
@@ -1170,7 +1170,7 @@ export default function CandidateResultDetails({
           {detailedResult && detailedResult.scoring_status === 'processing' && (
             <div className="p-8">
               <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-8 text-center shadow-sm shadow-brand-blue/10">
-                <div className="w-20 h-20 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md shadow-brand-blue/25 ring-1 ring-white/20">
+                <div className="w-20 h-20 bg-brand-blue rounded-full flex items-center justify-center mx-auto mb-4 shadow-md shadow-brand-blue/25 ring-1 ring-white/20">
                   <Loader2 className="w-10 h-10 text-white animate-spin" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2 tracking-tight">Processing Results</h3>
@@ -1334,7 +1334,7 @@ export default function CandidateResultDetails({
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                                      <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-full text-xs font-medium shadow-sm shadow-brand-blue/20">
+                                      <span className="px-3 py-1 bg-brand-blue text-white rounded-full text-xs font-medium shadow-sm shadow-brand-blue/20">
                                         Q{qIdx + 1}
                                       </span>
                                       {/* Question-type badge removed —
@@ -1544,7 +1544,7 @@ export default function CandidateResultDetails({
                                     return (
                                       <div>
                                         <div className="flex items-center gap-2 mb-3">
-                                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                          <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                             <User className="w-4 h-4 text-brand-blue" />
                                           </div>
                                           <div className="text-sm font-medium text-gray-800">OPTIONS</div>
@@ -1602,7 +1602,7 @@ export default function CandidateResultDetails({
                                   return (
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                           <User className="w-4 h-4 text-brand-blue" />
                                         </div>
                                         <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
@@ -1635,7 +1635,7 @@ export default function CandidateResultDetails({
                                   <>
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-8 h-8 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                                           <FileText className="w-4 h-4 text-brand-orange-deep" />
                                         </div>
                                         <div className="text-sm font-medium text-gray-800">CODE INPUT</div>
@@ -1647,7 +1647,7 @@ export default function CandidateResultDetails({
 
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-8 h-8 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                                           <FileText className="w-4 h-4 text-brand-cyan" />
                                         </div>
                                         <div className="text-sm font-medium text-gray-800">CANDIDATE OUTPUT</div>
@@ -1662,7 +1662,7 @@ export default function CandidateResultDetails({
                                   {q.candidate_test_results?.marks_breakdown && (
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                           <Award className="w-4 h-4 text-brand-blue" />
                                         </div>
                                         <div className="text-sm font-medium text-gray-800">MARKS BREAKDOWN</div>
@@ -1690,7 +1690,7 @@ export default function CandidateResultDetails({
                                   {q.candidate_test_results?.details && q.candidate_test_results.details.length > 0 && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-3">
-                                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                          <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                             <FileText className="w-4 h-4 text-brand-blue" />
                                           </div>
                                           <div className="text-sm font-medium text-gray-800">TEST CASES</div>
@@ -1802,7 +1802,7 @@ export default function CandidateResultDetails({
                                 {!isHRRound && (q.feedback || q.question_type === 'coding') && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                      <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                         <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="text-sm font-medium text-gray-800">
@@ -2357,7 +2357,7 @@ export default function CandidateResultDetails({
                                       onClick={() => setEventsPage(page)}
                                       className={`min-w-[28px] px-2 py-1 rounded text-xs font-medium border transition-colors ${
                                         page === eventsPage
-                                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white border-brand-blue shadow-sm shadow-brand-blue/25'
+                                          ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
                                           : 'bg-white text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                                       }`}
                                     >
