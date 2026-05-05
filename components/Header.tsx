@@ -589,8 +589,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
             {showPlanMenu && !isExpiredSubscription && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowPlanMenu(false)} />
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20">
+                {/* Backdrop + panel z-indices were z-10 / z-20, but the
+                    dashboard's sticky tab row and content cards stack above
+                    that, which is why the dropdown body bled through behind
+                    them. Lift to z-40 / z-50 so the menu always renders on
+                    top of in-page chrome. */}
+                <div className="fixed inset-0 z-40" onClick={() => setShowPlanMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
                   {/* Header */}
                   <div className="px-4 py-3 bg-gray-800 text-white">
                     <h3 className="font-medium flex items-center gap-2 text-sm">
