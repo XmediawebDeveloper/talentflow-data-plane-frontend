@@ -1158,11 +1158,26 @@ export default function ResumeScoringPage({
   if (viewMode === 'candidateView' && selectedCandidateForView && !selectedHistoryItem) {
     const candidateJdId = selectedCandidateForView.jdId || 'global';
     const candidateJobTitle = selectedCandidateForView.jobTitle || 'All Jobs';
+    const _globalIdx = globalScoredResumes.findIndex(
+      (r: any) => (r.id ?? r.resumeId) === (selectedCandidateForView.id ?? selectedCandidateForView.resumeId)
+    );
+    const _goToGlobalCandidate = (candidate: any) => {
+      setSelectedCandidateForView(candidate);
+      const jdId = candidate.jdId || 'global';
+      router.push(
+        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}`,
+        { scroll: false }
+      );
+    };
     return (
       <CandidateScoringDetailPage
         resume={selectedCandidateForView}
         jobTitle={candidateJobTitle}
         jobId={candidateJdId}
+        currentIndex={_globalIdx >= 0 ? _globalIdx : undefined}
+        totalCount={globalScoredResumes.length}
+        onPrev={_globalIdx > 0 ? () => _goToGlobalCandidate(globalScoredResumes[_globalIdx - 1]) : undefined}
+        onNext={_globalIdx >= 0 && _globalIdx < globalScoredResumes.length - 1 ? () => _goToGlobalCandidate(globalScoredResumes[_globalIdx + 1]) : undefined}
         onBack={() => {
           setSelectedCandidateForView(null);
           setViewMode('history');

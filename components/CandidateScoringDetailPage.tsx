@@ -437,11 +437,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
                   <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 min-w-0">
                     <Mail className="w-4 h-4 text-gray-800 flex-shrink-0" />
-                    <span className="text-gray-900 truncate">{resume.email}</span>
+                    <span className={`truncate ${resume.email ? 'text-gray-900' : 'text-gray-400'}`}>{resume.email || '-'}</span>
                   </span>
                   <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200">
                     <Phone className="w-4 h-4 text-green-600 flex-shrink-0" />
-                    <span className="text-gray-900">{resume.phone}</span>
+                    <span className={resume.phone ? 'text-gray-900' : 'text-gray-400'}>{resume.phone || '-'}</span>
                   </span>
                   {resume.location && (
                     <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200">
@@ -802,18 +802,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
                     {/* Contact Info */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                      {resume.email && (
-                        <div className="flex items-center gap-2 text-sm text-gray-700">
-                          <Mail className="w-4 h-4 text-gray-500" />
+                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                        <Mail className="w-4 h-4 text-gray-500" />
+                        {resume.email ? (
                           <a href={`mailto:${resume.email}`} className="hover:text-gray-900">{resume.email}</a>
-                        </div>
-                      )}
-                      {resume.phone && (
-                        <div className="flex items-center gap-2 text-sm text-gray-700">
-                          <Phone className="w-4 h-4 text-gray-500" />
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                        <Phone className="w-4 h-4 text-gray-500" />
+                        {resume.phone ? (
                           <a href={`tel:${resume.phone}`} className="hover:text-gray-900">{resume.phone}</a>
-                        </div>
-                      )}
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Top Skills Tags */}

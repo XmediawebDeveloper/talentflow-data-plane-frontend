@@ -803,7 +803,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // will kick in.
     if (ctx.state !== 'running') {
       ctx.resume().catch(() => { /* ignore */ });
-      if (ctx.state !== 'running') return;
+      // resume() can flip state to 'running' synchronously in some browsers;
+      // re-read through AudioContextState to defeat TS's earlier narrowing.
+      if ((ctx.state as AudioContextState) !== 'running') return;
     }
     try {
       const sampleCount = pcmData.byteLength / 2; // Int16 = 2 bytes/sample
@@ -1506,7 +1508,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
 
       // Read time-domain waveform: 256 values, 0–255, centre = 128 (silence)
-      analyser.getByteTimeDomainData(data);
+      analyser.getByteTimeDomainData(data as Uint8Array<ArrayBuffer>);
 
       // Compute RMS amplitude normalised to 0.0–1.0
       let sum = 0;
@@ -1693,7 +1695,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         const priorMsgs: Array<{ role: string; content: string }> = data.prior_messages || [];
         if (priorMsgs.length > 0) {
           setMessages(
-            priorMsgs.map((m) => ({
+            priorMsgs.map((m, i) => ({
+              id: `restored-${i}`,
               role: m.role as "user" | "assistant",
               content: m.content,
             }))

@@ -53,13 +53,42 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
 
   const isSelected = (optionId: string) => selectedOptions.includes(optionId);
 
+  // Strip embedded MCQ option lines from the question prompt. The question
+  // generator occasionally inlines the options ("A. ...", "B) ...", "1. ...")
+  // into question_text — when we then render the structured options below,
+  // candidates see them twice. Only run this when the question is an MCQ
+  // *and* the inlined lines actually match the structured options, so a
+  // free-text question that legitimately uses "A.", "B." prose stays intact.
+  const stripEmbeddedOptionsForMCQ = (raw: string): string => {
+    if (!isMCQ || !raw) return raw;
+    const lines = raw.split(/\r?\n/);
+    // A line like "A. text", "A) text", "(A) text", "1. text" — capture the body.
+    const optionLineRe = /^\s*\(?[A-Za-z0-9]\)?[.)\-–:]\s*(.+?)\s*$/;
+    // Walk from the bottom up, dropping consecutive option-shaped lines.
+    let cutoff = lines.length;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const m = lines[i].match(optionLineRe);
+      if (!m && lines[i].trim() === '') {
+        // tolerate blank lines between/around the inlined options
+        continue;
+      }
+      if (m) {
+        cutoff = i;
+        continue;
+      }
+      break;
+    }
+    if (cutoff === lines.length) return raw;
+    return lines.slice(0, cutoff).join('\n').trimEnd();
+  };
+
   // Split a "Scenario: <block>\nQuestion: <prompt>" question into a
   // structured scenario block and the inline question. Falls back to the
   // raw text when there's no Scenario/Question split. Either way, newlines
   // and whitespace are preserved (the previous <h3> collapsed everything
   // into one line, which mangled scenario-based questions).
   const renderQuestionText = (raw: string) => {
-    const text = raw || '';
+    const text = stripEmbeddedOptionsForMCQ(raw || '');
     const scenarioMatch = /^\s*scenario\s*:/i.test(text);
     if (scenarioMatch) {
       // Split on the first "Question:" delimiter (case-insensitive).
@@ -77,24 +106,24 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
           <div className="space-y-3">
             <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 sm:p-4">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 mb-1">Scenario</div>
-              <pre className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-6 text-gray-800 m-0">
+              <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-6 text-gray-800 m-0">
                 {scenarioBody}
-              </pre>
+              </div>
             </div>
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-600 mb-1">Question</div>
-              <pre className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
+              <div className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
                 {questionBody}
-              </pre>
+              </div>
             </div>
           </div>
         );
       }
     }
     return (
-      <pre className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
+      <div className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
         {text}
-      </pre>
+      </div>
     );
   };
 
@@ -102,8 +131,11 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
   if (isTextQuestion || !isMCQ) {
     return (
       <div className="space-y-6">
-        {/* Question Text */}
-        <div className="prose max-w-none">
+        {/* Question Text — explicitly NOT wrapped in `prose`. The typography
+            plugin re-skins raw <pre> tags with a dark code-block background,
+            which collided with our explicit text-gray-900 and rendered the
+            question as dark-on-dark for candidates. */}
+        <div className="max-w-none">
           {renderQuestionText(question.question_text)}
         </div>
 

@@ -339,9 +339,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // Export current page only
   const exportCurrentPage = async () => {
     try {
-      const assessmentId = jobId;
-      const blob = await assessmentService.exportResults(
-        assessmentId,
+      // The JD details page hosts results from N assessments under one
+      // JD; the per-assessment endpoint can't aggregate them. Hit the
+      // JD-level endpoint instead — same params, same file shape.
+      const blob = await assessmentService.exportJdResults(
+        jobId,
         selectedFormat,
         false,
         enabledColumns.map(c => c.id),
@@ -371,13 +373,19 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // Export all filtered results
   const exportAllFiltered = async () => {
     try {
-      const assessmentId = jobId;
-      const blob = await assessmentService.exportResults(
-        assessmentId,
+      // JD-level endpoint — see exportCurrentPage for why.
+      const filters = buildExportFilters();
+      // When the user has selected specific rows, scope the export to
+      // those attempt/invitation IDs so the backend filters correctly.
+      if (selectedResults.length > 0) {
+        filters.result_ids = selectedResults;
+      }
+      const blob = await assessmentService.exportJdResults(
+        jobId,
         selectedFormat,
         false,
         enabledColumns.map(c => c.id),
-        buildExportFilters()
+        filters
       );
 
       const url = window.URL.createObjectURL(blob);
@@ -614,8 +622,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
               >
                 <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Export to Excel</span>
-                <span className="sm:hidden">Export</span>
+                Export
               </button>
             )}
 

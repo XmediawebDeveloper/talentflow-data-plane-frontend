@@ -28,6 +28,8 @@ export interface TalkingHeadHandle {
   notifyEnd(): void;
   /** Feed accumulated text so word-level visemes can be generated from audio timing */
   setText(text: string): void;
+  /** Optional live viseme override driven by the InterviewUI amplitude loop. */
+  applyVisemeLive?(viseme: string, value: number): void;
 }
 
 interface Props {

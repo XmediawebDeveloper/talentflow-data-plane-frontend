@@ -10,6 +10,7 @@ export interface AIInterviewRoundConfig {
   duration_minutes: number;
   topics: string[];
   topic_weights?: Record<string, number>;
+  topic_skills?: Record<string, string[]>;
   topic_time_minutes?: Record<string, number>;
   topic_comments?: Record<string, string>;
   enabled: boolean;
@@ -775,6 +776,11 @@ export const aiInterviewService = {
      * (and repair any LLM mis-routing deterministically). */
     mthParentGroups?: { parent: string; sub_skills: string[] }[],
     nthParentGroups?: { parent: string; sub_skills: string[] }[],
+    /** Per-skill type from the recruiter UI dropdown ('Skill' | 'Command' |
+     * 'Certification'). Backend uses this to keep Command and Certification
+     * skills in separate clusters. */
+    mthSkillTypes?: Record<string, string>,
+    nthSkillTypes?: Record<string, string>,
   ): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -791,6 +797,8 @@ export const aiInterviewService = {
         nth_max_clusters: nthMaxClusters,
         mth_parent_groups: mthParentGroups,
         nth_parent_groups: nthParentGroups,
+        mth_skill_types: mthSkillTypes,
+        nth_skill_types: nthSkillTypes,
       });
       return response.data;
     } catch (error) {
@@ -819,6 +827,11 @@ export const aiInterviewService = {
      * backend re-route any sub-skill that ended up in the wrong cluster. */
     mthParentGroups?: { parent: string; sub_skills: string[] }[];
     nthParentGroups?: { parent: string; sub_skills: string[] }[];
+    /** Per-skill type from the recruiter UI dropdown ('Skill' | 'Command' |
+     * 'Certification'). REQUIRED to keep refine from re-merging Commands and
+     * Certifications back into Skill clusters. */
+    mthSkillTypes?: Record<string, string>;
+    nthSkillTypes?: Record<string, string>;
   }): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -836,6 +849,8 @@ export const aiInterviewService = {
         preserve_skill_names: args.preserveSkillNames ?? false,
         mth_parent_groups: args.mthParentGroups,
         nth_parent_groups: args.nthParentGroups,
+        mth_skill_types: args.mthSkillTypes,
+        nth_skill_types: args.nthSkillTypes,
       });
       return response.data;
     } catch (error) {

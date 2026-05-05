@@ -795,6 +795,55 @@ export const assessmentService = {
   },
 
   /**
+   * 3b. Export every assessment-result for a JD into one file.
+   * Mirrors `exportResults` but hits the JD-aggregating endpoint —
+   * used by the JD details page where one job owns N assessments and
+   * recruiters expect a single combined download.
+   */
+  async exportJdResults(
+    jdId: string,
+    format: ExportFormat = 'excel',
+    includeDetails: boolean = false,
+    columns?: string[],
+    filters?: {
+      search?: string;
+      status_filter?: string;
+      passed?: boolean;
+      score_min?: number;
+      score_max?: number;
+      result_ids?: string[];
+    },
+    sorting?: {
+      sort_by?: string;
+      sort_order?: string;
+    }
+  ): Promise<Blob> {
+    try {
+      const params: any = { format, include_details: includeDetails };
+      if (columns && columns.length > 0) params.columns = columns.join(',');
+      if (filters) {
+        if (filters.search) params.search = filters.search;
+        if (filters.status_filter) params.status_filter = filters.status_filter;
+        if (filters.passed !== undefined) params.passed = filters.passed;
+        if (filters.score_min !== undefined) params.score_min = filters.score_min;
+        if (filters.score_max !== undefined) params.score_max = filters.score_max;
+        if (filters.result_ids && filters.result_ids.length > 0) params.result_ids = filters.result_ids.join(',');
+      }
+      if (sorting) {
+        if (sorting.sort_by) params.sort_by = sorting.sort_by;
+        if (sorting.sort_order) params.sort_order = sorting.sort_order;
+      }
+      const response = await api.get(`/assessments/jobs/${jdId}/results/export`, {
+        params,
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * 4. Get audit trail (legacy - invitation-based)
    */
   async getAuditTrail(params?: {

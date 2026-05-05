@@ -42,18 +42,21 @@ export interface ProctoringEvent {
 }
 
 // Warning messages
+// Copy uses the neutral word "session" so the same bus serves both the
+// AI Interview surface and the candidate-Assessment surface — saying
+// "interview window" on an MCQ assessment confused candidates.
 const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
-  tab_switch: 'Tab switching detected. Please stay on the interview page.',
-  copy_attempt: 'Copying is not allowed during the interview.',
-  paste_attempt: 'Pasting is not allowed during the interview.',
-  voice_detected: 'Voice activity detected. Please maintain silence during the interview.',
+  tab_switch: 'Tab switching detected. Please stay on this page.',
+  copy_attempt: 'Copying is not allowed during this session.',
+  paste_attempt: 'Pasting is not allowed during this session.',
+  voice_detected: 'Voice activity detected. Please maintain silence during this session.',
   multiple_voices: 'Multiple voices detected. Please ensure you are alone.',
   camera_disabled: 'Camera has been disabled. Please enable your camera to continue.',
   microphone_disabled: 'Microphone has been disabled. Please enable your microphone.',
   camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
   screenshot_attempt: 'Screenshot attempt detected. Screenshots are not allowed.',
   screen_recording_attempt: 'Screen recording detected. Recording is not allowed.',
-  window_blur: 'You navigated away from the interview window.',
+  window_blur: 'You navigated away from this window.',
   fullscreen_exit: 'Fullscreen mode exited. Please return to fullscreen to continue.',
   face_missing: 'No face detected. Please ensure your face is visible to the camera.',
   multiple_faces: 'Multiple faces detected. Please ensure you are alone.',
@@ -62,7 +65,7 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   face_identity_changed: 'A different person has been detected. Identity verification failed.',
   voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
-  screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout the interview.',
+  screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout this session.',
   background_noise: 'Excessive background noise detected. Please move to a quieter environment for a better experience.',
 };
 

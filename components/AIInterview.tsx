@@ -153,12 +153,12 @@ export default function AIInterview() {
   useEffect(() => {
     const quotas = quotaData?.quotas;
     if (!quotas?.AIU) return;
-    const sub = quotas.AIU.subscription || {};
-    const addon = quotas.AIU.addon || {};
-    const subLimit = sub.limit;
-    const used = sub.used || 0;
-    const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
-    const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
+    const sub = quotas.AIU.subscription;
+    const addon = quotas.AIU.addon;
+    const subLimit = sub?.limit;
+    const used = sub?.used ?? 0;
+    const addonPurchased = typeof addon?.total_purchased === 'number' ? addon.total_purchased : 0;
+    const addonConsumed = typeof addon?.total_consumed === 'number' ? addon.total_consumed : 0;
     const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
 
     const unlimited = subLimit === -1 || subLimit === 'unlimited';
@@ -2012,7 +2012,7 @@ export default function AIInterview() {
  * Wrapper component that lazy-loads ConsentLogs
  */
 function ConsentLogsWrapper() {
-  const [ConsentLogs, setConsentLogs] = useState<ComponentType<{ compact?: boolean }> | null>(null);
+  const [ConsentLogs, setConsentLogs] = useState<ComponentType<{ compact?: boolean; defaultFeature?: string }> | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {

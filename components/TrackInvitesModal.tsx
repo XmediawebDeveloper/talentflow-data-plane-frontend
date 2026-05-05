@@ -168,6 +168,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
   if (!isOpen) return null;
 
+  // Status badge labels and styling kept in lockstep with the
+  // assessment-level popup (Assessments.tsx) so a recruiter sees the
+  // same wording — "Link Opened" / "Invite Sent" / "Invite Failed" —
+  // regardless of which surface they opened the popup from.
   const getStatusBadge = (inv: any) => {
     const effective = getEffectiveStatus(inv);
     const base = "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0";
@@ -175,7 +179,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
       return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Completed</span>;
     }
     if (effective === 'failed') {
-      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
+      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Invite Failed</span>;
     }
     if (effective === 'bounced') {
       return <span className={`${base} bg-red-100 text-red-700`}><RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Bounced</span>;
@@ -184,21 +188,32 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
       return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
     }
     if (effective === 'abandoned') {
-      return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Left</span>;
+      return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Abandoned</span>;
     }
     if (effective === 'started') {
       return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Started</span>;
     }
     if (effective === 'opened') {
-      return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Opened</span>;
+      return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Link Opened</span>;
     }
     if (inv.email_read_at) {
       return <span className={`${base} bg-indigo-100 text-indigo-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Read</span>;
     }
     if (effective === 'sent') {
-      return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Sent</span>;
+      return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Invite Sent</span>;
     }
     return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
+  };
+
+  // Secondary "Expired" badge — shown alongside the base status when the
+  // invitation has passed its expiry but hasn't reached a terminal state.
+  // Mirrors isInvExpired() in the assessment-level popup so both surfaces
+  // flag the same expired-but-not-yet-marked invitations.
+  const isInvExpired = (inv: any): boolean => {
+    const s = (inv.status || '').toLowerCase();
+    if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+    if (inv.unit_consumed) return false;
+    return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
   };
 
   return (
@@ -487,7 +502,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             <p className="text-sm text-gray-700">{invitation.assessment_title}</p>
                           </td>
                           <td className="py-3 px-3 lg:px-4">
-                            {getStatusBadge(invitation)}
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {getStatusBadge(invitation)}
+                                {isInvExpired(invitation) && (
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> Expired
+                                  </span>
+                                )}
+                              </div>
+                              {invitation.status === 'failed' && (
+                                <p className="text-xs text-red-500 mt-1">Incorrect Email</p>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-3 lg:px-4 text-xs text-gray-500">
                             <div className="space-y-1">
@@ -521,6 +548,26 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   <span>Completed: {formatIST(invitation.completed_at)}</span>
                                 </div>
                               )}
+                              {/* Expired-at timestamp — shown when the link
+                                  has expired (status='expired' or clock-based
+                                  expiry on a never-started invite). Same rule
+                                  as the assessment-level popup. */}
+                              {(() => {
+                                const s = (invitation.status || '').toLowerCase();
+                                const clockExpired = !invitation.started_at
+                                  && !invitation.unit_consumed
+                                  && invitation.expires_at
+                                  && new Date(invitation.expires_at) < new Date();
+                                const isExpired = !invitation.completed_at
+                                  && (s === 'expired' || clockExpired);
+                                if (!isExpired || !invitation.expires_at) return null;
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-amber-500" />
+                                    <span className="text-amber-600">Expired at: {formatIST(invitation.expires_at)}</span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </td>
                           {/* Tech Score column body — render the cell only
@@ -574,6 +621,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             </td>
                           )}
                           <td className="py-3 px-3 lg:px-4">
+                            {/* Action rules mirror the assessment-level
+                                popup so a recruiter sees the same controls
+                                from either entry point: View Results when
+                                completed, Change Email on bounce, and a
+                                Resend button on sent/opened/failed invites
+                                that haven't been started yet. */}
                             {getEffectiveStatus(invitation) === 'completed' ? (
                               <button
                                 onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
@@ -582,10 +635,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 <Eye className="w-3.5 h-3.5" />
                                 View Results
                               </button>
-                            ) : (['failed', 'bounced'].includes(getEffectiveStatus(invitation))) ? (
+                            ) : invitation.status === 'bounced' ? (
                               editingEmailId === invitation.id ? (
-                                // Inline email editor
-                                <div className="flex flex-col gap-1.5 min-w-[180px]">
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
                                   <input
                                     type="email"
                                     value={newEmailValue}
@@ -612,27 +664,28 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   </div>
                                 </div>
                               ) : (
-                                // Retry or Change Email buttons depending on email validity
-                                <div className="flex flex-col gap-1">
-                                  {isValidEmail(invitation.candidate_email) ? (
-                                    <button
-                                      onClick={() => handleResendInvitation(invitation)}
-                                      disabled={resendingId === invitation.id}
-                                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap"
-                                    >
-                                      <RefreshCw className={`w-3.5 h-3.5 ${resendingId === invitation.id ? 'animate-spin' : ''}`} />
-                                      {resendingId === invitation.id ? 'Sending…' : 'Retry'}
-                                    </button>
-                                  ) : null}
-                                  <button
-                                    onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors whitespace-nowrap"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                    Change Email
-                                  </button>
-                                </div>
+                                <button
+                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  Change Email
+                                </button>
                               )
+                            ) : (['sent', 'opened', 'failed', 'expired'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
+                              <button
+                                onClick={() => handleResendInvitation(invitation)}
+                                disabled={resendingId === invitation.id}
+                                title="Revoke old link and send a new invitation"
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
+                                  invitation.status === 'failed'
+                                    ? 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
+                                    : 'border border-gray-400 text-gray-700 hover:bg-gray-50 disabled:opacity-60'
+                                }`}
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                {resendingId === invitation.id ? 'Sending…' : 'Resend'}
+                              </button>
                             ) : null}
                           </td>
                         </tr>

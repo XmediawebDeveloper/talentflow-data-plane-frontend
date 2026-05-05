@@ -1232,7 +1232,11 @@ export default function AssessmentDetailsView({
         const skillDepth: any[] = assessment.jd_skill_depth || [];
         const niceToHaveSkills: any[] = (assessment as any).jd_nice_to_have_skills || [];
         const codingLanguages: string[] = assessment.coding_languages || [];
-        const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || niceToHaveSkills.length > 0 || codingLanguages.length > 0;
+        // NHS section is always rendered (with an empty-state placeholder)
+        // so its presence shouldn't gate the whole panel — fall back to the
+        // other JD-snapshot signals to decide whether there's anything
+        // worth showing at all.
+        const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
 
         return (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -1341,13 +1345,15 @@ export default function AssessmentDetailsView({
                   </div>
                 </div>
 
-                {/* Skill Depth — Must-Have Skills (MHS) */}
+                {/* Must-Have Skills (MHS) — labelled symmetrically with the
+                    NHS section so a recruiter scanning the page sees a
+                    matching pair instead of "Skill Depth" + "Nice-to-Have". */}
                 {skillDepth.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <Star className="w-4 h-4 text-gray-600" />
-                      <h4 className="text-sm font-medium text-gray-900">Skill Depth</h4>
-                      <span className="text-xs text-gray-500">(Must-have skills extracted from JD)</span>
+                      <h4 className="text-sm font-medium text-gray-900">Must-Have Skills</h4>
+                      <span className="text-xs text-gray-500">(Required skills extracted from JD)</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {skillDepth.map((skill: any, idx: number) => {
@@ -1369,16 +1375,18 @@ export default function AssessmentDetailsView({
                   </div>
                 )}
 
-                {/* Nice-to-Have Skills (NHS) — extracted from JD,
-                    visually distinct from MHS so a recruiter can tell at a
-                    glance which skills are essential vs preferred. */}
-                {niceToHaveSkills.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Star className="w-4 h-4 text-blue-500" />
-                      <h4 className="text-sm font-medium text-gray-900">Nice-to-Have Skills</h4>
-                      <span className="text-xs text-gray-500">(Preferred skills extracted from JD)</span>
-                    </div>
+                {/* Nice-to-Have Skills (NHS) — always rendered alongside
+                    MHS so the section's presence is consistent. When the
+                    JD has none configured we show a muted placeholder
+                    instead of hiding the heading entirely (which made
+                    recruiters think NHS support was missing). */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Star className="w-4 h-4 text-blue-500" />
+                    <h4 className="text-sm font-medium text-gray-900">Nice-to-Have Skills</h4>
+                    <span className="text-xs text-gray-500">(Preferred skills extracted from JD)</span>
+                  </div>
+                  {niceToHaveSkills.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {niceToHaveSkills.map((skill: any, idx: number) => {
                         const skillName = typeof skill === 'string' ? skill : skill?.name || skill?.skill || JSON.stringify(skill);
@@ -1396,8 +1404,12 @@ export default function AssessmentDetailsView({
                         );
                       })}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm text-gray-400 bg-gray-50 border border-gray-200">
+                      None configured for this JD
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>

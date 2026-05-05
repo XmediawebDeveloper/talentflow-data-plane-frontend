@@ -704,8 +704,7 @@ export function useInterviewProctoringMonitor({
     const permCleanups: Array<() => void> = [];
     const watchPermission = async (name: 'camera' | 'microphone') => {
       try {
-        // @ts-expect-error — 'camera'/'microphone' are valid PermissionName values in browsers
-        const status = await navigator.permissions.query({ name });
+        const status = await navigator.permissions.query({ name: name as PermissionName });
         const onChange = () => {
           if (status.state !== 'granted') {
             if (name === 'camera') reportCameraDisabled(`permission_${status.state}`);

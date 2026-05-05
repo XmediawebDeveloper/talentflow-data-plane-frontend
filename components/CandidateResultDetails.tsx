@@ -149,6 +149,11 @@ export default function CandidateResultDetails({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('technical-knowledge');
   const [candidateData, setCandidateData] = useState<CandidateBasicInfo | null>(null);
+  // JD metadata snapshot from the assessment record (Must-Have & Nice-to-Have
+  // skills). Hydrated from the assessments GET endpoint which now exposes
+  // `jd_skill_depth` and `jd_nice_to_have_skills` — mirroring the JD Summary
+  // card the AI-Interview detail page renders on its Overview tab.
+  const [assessmentMeta, setAssessmentMeta] = useState<any | null>(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -263,6 +268,23 @@ export default function CandidateResultDetails({
 
     fetchDetailedResults();
   }, [assessmentId, candidateId]);
+
+  // Pull the assessment record for its JD-snapshot fields. Mirrors what the
+  // Results-page Assessment Info tab already does — the candidate detail page
+  // didn't load this before, which is why MHS/NHS were missing here even
+  // though the backend started shipping them.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const meta = await assessmentService.get(assessmentId);
+        if (!cancelled) setAssessmentMeta(meta);
+      } catch (err) {
+        console.warn('[CandidateResultDetails] Failed to load assessment metadata:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assessmentId]);
 
   // Poll for scoring completion when AI evaluation is still running
   useEffect(() => {
@@ -616,6 +638,81 @@ export default function CandidateResultDetails({
             </div>
           </div>
         </div>
+
+        {/* JD Summary — Must-Have & Nice-to-Have skills snapshotted from the
+            JD when the assessment was generated. Both sections always render
+            (with an empty-state placeholder) so the layout is consistent
+            even when the JD didn't capture preferred skills. Same shape as
+            the AI-Interview detail page's Overview tab. */}
+        {(() => {
+          const skillDepth: any[] = (assessmentMeta?.jd_skill_depth as any[]) || [];
+          const niceToHaveSkills: any[] = (assessmentMeta?.jd_nice_to_have_skills as any[]) || [];
+          if (!assessmentMeta) return null;
+          const skillName = (s: any): string =>
+            typeof s === 'string' ? s : (s?.skill || s?.name || s?.label || '');
+          return (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Job Description Summary</h3>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    Must-Have Skills <span className="text-gray-400 font-normal">({skillDepth.length})</span>
+                  </div>
+                  {skillDepth.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {skillDepth.map((skill: any, idx: number) => {
+                        const name = skillName(skill);
+                        if (!name) return null;
+                        return (
+                          <span
+                            key={`mhs-${idx}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs border border-green-200"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            {name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs text-gray-400 bg-gray-50 border border-gray-200">
+                      None configured for this JD
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    Nice-to-Have Skills <span className="text-gray-400 font-normal">({niceToHaveSkills.length})</span>
+                  </div>
+                  {niceToHaveSkills.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {niceToHaveSkills.map((skill: any, idx: number) => {
+                        const name = skillName(skill);
+                        if (!name) return null;
+                        return (
+                          <span
+                            key={`nhs-${idx}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full text-xs border border-gray-200"
+                          >
+                            {name}
+                            <span className="text-[10px] text-gray-400">(preferred)</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs text-gray-400 bg-gray-50 border border-gray-200">
+                      None configured for this JD
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Score Calculation Notice - Show if individual questions are all 0 */}
         {detailedResult && candidateData && (() => {

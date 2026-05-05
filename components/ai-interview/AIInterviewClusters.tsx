@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Shield, Star, Plus, X,
@@ -289,12 +289,16 @@ function DraggableClusterSkill({
   category,
   onRemove,
   isReadOnly = false,
+  chipClass,
 }: {
   skillName: string;
   clusterId: string;
   category: 'mth' | 'nth';
   onRemove: (skillName: string, clusterId: string) => void;
   isReadOnly?: boolean;
+  /** Tailwind classes for the chip's background/border/text — used by
+   * ClusterRow to color-code Skill / Command / Certification badges. */
+  chipClass?: string;
 }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: DND_TYPES.CLUSTER_SKILL,
@@ -307,7 +311,7 @@ function DraggableClusterSkill({
       ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-opacity ${
         isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-40' : 'opacity-100'} bg-white border-gray-200 text-gray-700`}
+      } ${isDragging ? 'opacity-40' : 'opacity-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'}`}
     >
       {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 text-gray-300" />}
       {skillName}
@@ -336,6 +340,8 @@ function ClusterRow({
   onMoveSkill,
   onRemoveSkill,
   isReadOnly = false,
+  skillTypeLookup,
+  mainSkillSet,
 }: {
   cluster: Cluster;
   index: number;
@@ -348,9 +354,23 @@ function ClusterRow({
   onMoveSkill: (skillName: string, fromClusterId: string, toClusterId: string) => void;
   onRemoveSkill: (skillName: string, clusterId: string) => void;
   isReadOnly?: boolean;
+  /** Lowercased skill name → 'Skill' | 'Command' | 'Certification', so the
+   * cluster card can group its badges by type and render a sub-header per
+   * group instead of one flat list. */
+  skillTypeLookup?: Map<string, SkillType>;
+  /** Lowercased recruiter-typed skill names. When present, sub-skills
+   * (auto-extracted from /expand-skills) are filtered out of the cluster
+   * view so only main entries render. */
+  mainSkillSet?: Set<string>;
 }) {
   const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
   const rowRef = useRef<HTMLDivElement>(null);
+
+  // Filter out auto-derived sub-skills so the cluster only renders recruiter-typed
+  // entries, matching the same rule applied at the pool level.
+  const visibleClusterSkills = mainSkillSet && mainSkillSet.size > 0
+    ? cluster.skills.filter(s => mainSkillSet.has(s.toLowerCase().trim()))
+    : cluster.skills;
 
   /* Drag handle for reordering clusters */
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
@@ -410,7 +430,7 @@ function ClusterRow({
           </div>
         )}
         <PriorityBadge p={cluster.priority} />
-        {cluster.skills.length === 0 && (
+        {visibleClusterSkills.length === 0 && (
           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-600 border border-red-200 flex-shrink-0">
             <AlertTriangle className="w-2.5 h-2.5" /> Empty
           </span>
@@ -419,7 +439,7 @@ function ClusterRow({
           {cluster.name || 'Unnamed Cluster'}
         </span>
         <span className="text-xs text-gray-400">
-          {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
+          {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
         </span>
         {expanded ? (
           <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -472,24 +492,49 @@ function ClusterRow({
             />
           </div>
 
-          {/* Skills (draggable between clusters) */}
+          {/* Skills — grouped by type (Skill / Command / Certification) */}
           <div>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
-              Skills ({cluster.skills.length})
-            </span>
-            {cluster.skills.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {cluster.skills.map((s) => (
-                  <DraggableClusterSkill
-                    key={s}
-                    skillName={s}
-                    clusterId={cluster.id}
-                    category={category}
-                    onRemove={onRemoveSkill}
-                    isReadOnly={isReadOnly}
-                  />
-                ))}
-              </div>
+            {visibleClusterSkills.length > 0 ? (
+              (() => {
+                const groups: Record<SkillType, string[]> = { Skill: [], Command: [], Certification: [] };
+                for (const s of visibleClusterSkills) {
+                  const t = skillTypeLookup?.get(s.toLowerCase().trim()) ?? 'Skill';
+                  groups[t].push(s);
+                }
+                const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
+                  { type: 'Skill', label: 'Skills', chipClass: 'bg-purple-50 border-purple-200 text-purple-700' },
+                  { type: 'Command', label: 'Commands', chipClass: 'bg-blue-50 border-blue-200 text-blue-700' },
+                  { type: 'Certification', label: 'Certifications', chipClass: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                ];
+                const visible = groupOrder.filter(g => groups[g.type].length > 0);
+                return (
+                  <div className="space-y-2 mt-1.5">
+                    {visible.map(g => (
+                      <div key={g.type}>
+                        {/* Always show the type sub-header so Skills / Commands /
+                            Certifications are visually separated within every
+                            cluster card, even when only one type is present. */}
+                        <div className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                          {g.label} ({groups[g.type].length})
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {groups[g.type].map((s) => (
+                            <DraggableClusterSkill
+                              key={s}
+                              skillName={s}
+                              clusterId={cluster.id}
+                              category={category}
+                              onRemove={onRemoveSkill}
+                              isReadOnly={isReadOnly}
+                              chipClass={g.chipClass}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
             ) : (
               <p className="text-xs text-gray-400 mt-1">No skills assigned. Drag skills here from other clusters.</p>
             )}
@@ -561,6 +606,17 @@ function CategorySection({
   const [newSkillInput, setNewSkillInput] = useState('');
   const [skillInputError, setSkillInputError] = useState('');
 
+  // Lowercased skill name → type, derived from the recruiter's per-skill
+  // dropdown choice. Used by each ClusterRow to render Skill / Command /
+  // Certification badges in separate type-grouped sub-sections.
+  const skillTypeLookup = useMemo(() => {
+    const m = new Map<string, SkillType>();
+    for (const e of skills) {
+      if (e?.name) m.set(e.name.toLowerCase().trim(), e.type ?? 'Skill');
+    }
+    return m;
+  }, [skills]);
+
   const handleAddSkill = () => {
     const trimmed = newSkillInput.trim();
     if (!trimmed) { setSkillInputError('Skill name cannot be empty'); return; }
@@ -619,146 +675,95 @@ function CategorySection({
         )}
       </div>
 
-      {/* ── Skills pool section ── */}
-      <div className="px-4 pt-4 pb-2 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skills</span>
-          <span className="text-xs text-gray-400">{skills.length} skill{skills.length !== 1 ? 's' : ''}</span>
-        </div>
+      {/* ── Pool section: split into Skills / Commands / Certifications ── */}
+      {(() => {
+        // Show only recruiter-typed (main) entries. Auto-derived sub-skills
+        // from /expand-skills are intentionally hidden here per spec.
+        const visibleSkills = mainSkillSet && mainSkillSet.size > 0
+          ? skills.filter(s => mainSkillSet.has(s.name.toLowerCase().trim()))
+          : skills;
+        const groups: Record<SkillType, SkillEntry[]> = { Skill: [], Command: [], Certification: [] };
+        for (const e of visibleSkills) groups[e.type ?? 'Skill'].push(e);
+        const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
+          { type: 'Skill',         label: 'Skills',         chipClass: 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200' },
+          { type: 'Command',       label: 'Commands',       chipClass: 'bg-blue-50 text-blue-700 border-blue-200' },
+          { type: 'Certification', label: 'Certifications', chipClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+        ];
+        const visibleGroups = groupOrder.filter(g => groups[g.type].length > 0);
 
-        {/* Skill chip — shared between flat and grouped layouts */}
-        {(() => {
-          const renderChip = (name: string, opts?: { isMain?: boolean }) => {
-            const isMain = opts?.isMain ?? (mainSkillSet?.has(name.toLowerCase().trim()) ?? false);
-            return (
-              <span
-                key={name}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-                  isMain
-                    ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200'
-                    : 'bg-purple-50 text-purple-700 border-purple-200'
-                }`}
-                title={isMain ? 'Main skill (added by recruiter)' : undefined}
+        const renderChip = (name: string, chipClass: string) => (
+          <span
+            key={name}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${chipClass}`}
+          >
+            {name}
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={() => onRemoveSkillFromPool?.(name)}
+                className="ml-0.5 hover:text-red-500 transition-colors"
+                title="Remove"
               >
-                {isMain && (
-                  <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-200 text-amber-900 px-1 py-px rounded leading-none">
-                    Main
-                  </span>
-                )}
-                {name}
-                {!isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={() => onRemoveSkillFromPool?.(name)}
-                    className="ml-0.5 hover:text-red-500 transition-colors"
-                    title="Remove skill"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </span>
-            );
-          };
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </span>
+        );
 
-          // Hierarchical layout: each parent main skill heading + its sub-skills
-          // nested below. Driven by /expand-skills' parent_groups response,
-          // restored from special_instructions on load. When unavailable
-          // (legacy drafts before parent_groups was tracked), fall through
-          // to the flat list — a fresh "Regenerate" recovers the grouping.
-          if (skills.length > 0 && parentGroups && parentGroups.length > 0) {
-            // Build name lookups: skills currently in the pool, and skills
-            // already accounted for under their parent. Anything left over
-            // shows in an "Other" bucket so nothing visually disappears.
-            const poolByName = new Map(skills.map(s => [s.name.toLowerCase().trim(), s]));
-            const accounted = new Set<string>();
-            return (
+        return (
+          <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+            {visibleGroups.length === 0 ? (
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skills</span>
+                <span className="text-xs text-gray-400">0</span>
+              </div>
+            ) : (
               <div className="space-y-3 mb-3">
-                {parentGroups.map((group) => {
-                  const parentName = group.parent;
-                  const parentKey = parentName.toLowerCase().trim();
-                  // Parent counts as "the main skill" — show first.
-                  const parentInPool = poolByName.has(parentKey);
-                  if (parentInPool) accounted.add(parentKey);
-                  // Sub-skills filtered to those still in the pool (recruiter
-                  // may have removed some manually).
-                  const subs = (group.sub_skills || []).filter(s => {
-                    const k = s.toLowerCase().trim();
-                    if (poolByName.has(k) && !accounted.has(k)) {
-                      accounted.add(k);
-                      return true;
-                    }
-                    return false;
-                  });
-                  return (
-                    <div key={parentName} className="space-y-1.5">
-                      <div className="flex items-center gap-1.5">
-                        {parentInPool ? renderChip(parentName, { isMain: true }) : (
-                          <span className="text-xs font-medium text-gray-500 italic">{parentName} (removed)</span>
-                        )}
-                      </div>
-                      {subs.length > 0 && (
-                        <div className="ml-4 pl-3 border-l-2 border-amber-200 flex flex-wrap gap-1.5">
-                          {subs.map(s => renderChip(s, { isMain: false }))}
-                        </div>
-                      )}
+                {visibleGroups.map(g => (
+                  <div key={g.type}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{g.label}</span>
+                      <span className="text-xs text-gray-400">
+                        {groups[g.type].length} {g.label.toLowerCase()}
+                      </span>
                     </div>
-                  );
-                })}
-                {/* Skills not in any parent group (recruiter manual additions etc.) */}
-                {(() => {
-                  const others = skills.filter(s => !accounted.has(s.name.toLowerCase().trim()));
-                  if (others.length === 0) return null;
-                  return (
-                    <div className="space-y-1.5 pt-1 border-t border-gray-100">
-                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Other</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {others.map(s => renderChip(s.name))}
-                      </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {groups[g.type].map(e => renderChip(e.name, g.chipClass))}
                     </div>
-                  );
-                })()}
+                  </div>
+                ))}
               </div>
-            );
-          }
+            )}
 
-          // Flat fallback (no parent_groups available).
-          if (skills.length > 0) {
-            return (
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {skills.map(s => renderChip(s.name))}
+            {/* Add skill input */}
+            {!isReadOnly && (
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={newSkillInput}
+                    onChange={e => { setNewSkillInput(e.target.value); if (skillInputError) setSkillInputError(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSkill(); } }}
+                    placeholder={`Add a ${category === 'mth' ? 'must-have' : 'nice-to-have'} skill`}
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
+                      skillInputError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                    }`}
+                  />
+                  {skillInputError && <p className="mt-1 text-[11px] text-red-500">{skillInputError}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddSkill}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
               </div>
-            );
-          }
-          return null;
-        })()}
-
-        {/* Add skill input */}
-        {!isReadOnly && (
-          <div className="flex items-start gap-2">
-            <div className="flex-1">
-              <input
-                type="text"
-                value={newSkillInput}
-                onChange={e => { setNewSkillInput(e.target.value); if (skillInputError) setSkillInputError(''); }}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSkill(); } }}
-                placeholder={`Add a ${category === 'mth' ? 'must-have' : 'nice-to-have'} skill`}
-                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
-                  skillInputError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
-                }`}
-              />
-              {skillInputError && <p className="mt-1 text-[11px] text-red-500">{skillInputError}</p>}
-            </div>
-            <button
-              type="button"
-              onClick={handleAddSkill}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add
-            </button>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Cluster list */}
       <div className="p-4 space-y-2.5">
@@ -784,6 +789,8 @@ function CategorySection({
               onMoveSkill={(skillName, fromId, toId) => onMoveSkill(category, skillName, fromId, toId)}
               onRemoveSkill={onRemoveSkill}
               isReadOnly={isReadOnly}
+              skillTypeLookup={skillTypeLookup}
+              mainSkillSet={mainSkillSet}
             />
           ))
         )}
@@ -858,10 +865,50 @@ export default function AIInterviewClusters() {
 
   /* ── Parse skill entries from round config ── */
   const toSkillEntries = useCallback((names: string[], comments?: Record<string, string>, types?: Record<string, string>): SkillEntry[] => {
+    // Build a normalized lookup so the recruiter's saved type survives the
+    // LLM's name normalization on regeneration (e.g. "Database design" vs
+    // "Database design (PostgreSQL, MySQL, MongoDB)" vs different casing).
+    const typeByNorm = new Map<string, SkillType>();
+    if (types) {
+      for (const [k, v] of Object.entries(types)) {
+        if (!k || !v) continue;
+        typeByNorm.set(k.toLowerCase().trim(), v as SkillType);
+      }
+    }
+    const lookupType = (n: string): SkillType => {
+      const key = n.toLowerCase().trim();
+      // Exact match
+      const exact = typeByNorm.get(key);
+      if (exact) return exact;
+      // Try matching by stripping parenthetical detail: "Database design (PostgreSQL, ...)" → "database design"
+      const noParen = key.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+      if (noParen !== key) {
+        const v = typeByNorm.get(noParen);
+        if (v) return v;
+      }
+      // Try the other direction: any saved key whose noParen form equals our key
+      for (const [savedKey, v] of typeByNorm.entries()) {
+        const savedNoParen = savedKey.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+        if (savedNoParen === key || savedNoParen === noParen) return v;
+      }
+      // Try prefix match: any saved key that starts with our key (or vice versa)
+      // — guards against LLM appending/dropping qualifiers.
+      for (const [savedKey, v] of typeByNorm.entries()) {
+        if (savedKey.startsWith(key + ' ') || key.startsWith(savedKey + ' ')) return v;
+      }
+      return 'Skill';
+    };
+
+    const comments_norm = new Map<string, string>();
+    if (comments) {
+      for (const [k, v] of Object.entries(comments)) {
+        if (k && v) comments_norm.set(k.toLowerCase().trim(), v);
+      }
+    }
     return names.map(n => ({
       name: n,
-      comment: comments?.[n] ?? '',
-      type: (types?.[n] as SkillType) ?? 'Skill',
+      comment: comments?.[n] ?? comments_norm.get(n.toLowerCase().trim()) ?? '',
+      type: lookupType(n),
     }));
   }, []);
 
@@ -1279,6 +1326,19 @@ export default function AIInterviewClusters() {
         }
       }
 
+      // Build {skillName: type} maps so the backend can keep [Command]
+      // and [Certification] skills in separate clusters. Source of truth
+      // is the per-row dropdown the recruiter set on the Skills step.
+      const buildTypesMap = (entries: SkillEntry[]): Record<string, string> => {
+        const out: Record<string, string> = {};
+        for (const e of entries) {
+          if (e?.name) out[e.name] = e.type ?? 'Skill';
+        }
+        return out;
+      };
+      const mthTypesMap = buildTypesMap(mthSkills);
+      const nthTypesMap = nthSkillNames.length > 0 ? buildTypesMap(nthSkills) : undefined;
+
       const result = await aiInterviewService.generateClusters(
         mthSkillNames,
         nthSkillNames,
@@ -1290,6 +1350,8 @@ export default function AIInterviewClusters() {
         nthSkillNames.length > 0 ? nthMaxClusters : 0,
         mthParentGroups,
         nthSkillNames.length > 0 ? nthParentGroups : undefined,
+        mthTypesMap,
+        nthTypesMap,
       );
       let newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
         ? (() => {
@@ -1335,6 +1397,9 @@ export default function AIInterviewClusters() {
             preserveSkillNames: !allowMerge,
             mthParentGroups,
             nthParentGroups: nthEnabled ? nthParentGroups : undefined,
+            // Per-skill type so refine keeps Commands/Certifications separate.
+            mthSkillTypes: mthTypesMap,
+            nthSkillTypes: nthTypesMap,
           });
           if (refineResult.mth_clusters?.length) {
             newMthClusters = refineResult.mth_clusters.map(c => ({
@@ -1876,25 +1941,13 @@ export default function AIInterviewClusters() {
             // never flows back into rounds_config). When clusters exist with
             // expanded skills, the Skills panel shows the full distributed set;
             // otherwise falls back to the recruiter-input list from rounds_config.
-            const unionFromClusters = (clusters: typeof mthClusters): SkillEntry[] => {
-              const seen = new Set<string>();
-              const out: SkillEntry[] = [];
-              for (const c of clusters) {
-                for (const s of (c.skills || [])) {
-                  const name = typeof s === 'string' ? s : (s as any)?.name;
-                  if (typeof name === 'string' && name.trim()) {
-                    const k = name.toLowerCase();
-                    if (!seen.has(k)) {
-                      seen.add(k);
-                      out.push({ name, comment: '', type: 'Skill' });
-                    }
-                  }
-                }
-              }
-              return out;
-            };
-            const mthDisplaySkills = mthClusters.length > 0 ? unionFromClusters(mthClusters) : mthSkills;
-            const nthDisplaySkills = nthClusters.length > 0 ? unionFromClusters(nthClusters) : nthSkills;
+            // Pool always shows the recruiter's Step 2 list verbatim so every
+            // typed Skill / Command / Certification appears here, regardless
+            // of whether the AI placed it in a cluster. Sub-skills from
+            // /expand-skills are filtered out downstream by mainSkillSet in
+            // CategorySection.
+            const mthDisplaySkills = mthSkills;
+            const nthDisplaySkills = nthSkills;
             return (
             <>
               {/* Must-To-Have Section */}

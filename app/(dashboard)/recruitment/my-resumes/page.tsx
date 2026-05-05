@@ -1032,6 +1032,23 @@ export default function MyResumesPage() {
   // Navigate to folder in card view
   const navigateToFolder = useCallback((folderId: string | null) => {
     setCardViewFolder(folderId);
+    // Drive the server-side filter too — without this, the card view
+    // tries to client-filter the currently loaded (paginated) page of
+    // resumes, which usually doesn't contain the target folder's items
+    // and shows an empty grid in Edge/Firefox.
+    if (folderId === null) {
+      setSelectedFolder('all');
+    } else if (folderId === 'all' || folderId === 'uncategorized') {
+      setSelectedFolder(folderId);
+    } else {
+      setSelectedFolder(folderId);
+    }
+    setCurrentPage(1);
+    // Clear stale resumes and flip to loading immediately so the grid shows a
+    // spinner instead of "No resumes in this folder" while the fetch is in
+    // flight (the debounced effect can take ~300ms before it fires).
+    setResumes([]);
+    setLoading(true);
     if (folderId) {
       const path = buildBreadcrumbPath(folderId);
       setBreadcrumbPath(path);
@@ -2739,8 +2756,16 @@ export default function MyResumesPage() {
                     </div>
                   )}
 
+                  {/* Loading state at root level (folders/resumes not yet fetched) */}
+                  {loading && cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
+                    <div className="text-center py-12">
+                      <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
+                      <p className="text-sm text-gray-500">Loading folders…</p>
+                    </div>
+                  )}
+
                   {/* Empty state for root level */}
-                  {cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
+                  {!loading && cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
                     <div className="text-center py-12">
                       <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No folders found</h3>
@@ -2879,8 +2904,16 @@ export default function MyResumesPage() {
                         </div>
                       )}
 
+                      {/* Loading state while the folder's resumes are being fetched */}
+                      {loading && folderResumes.length === 0 && foldersToDisplay.length === 0 && (
+                        <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
+                          <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
+                          <p className="text-sm text-gray-500">Loading resumes…</p>
+                        </div>
+                      )}
+
                       {/* Empty state when no resumes and no subfolders */}
-                      {folderResumes.length === 0 && foldersToDisplay.length === 0 && (
+                      {!loading && folderResumes.length === 0 && foldersToDisplay.length === 0 && (
                         <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
                           <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                           <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>

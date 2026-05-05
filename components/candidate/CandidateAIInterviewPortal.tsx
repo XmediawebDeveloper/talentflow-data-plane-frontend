@@ -1247,38 +1247,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
-  // ========== COMPLETED ==========
-  if (step === 'completed') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-md w-full text-center">
-          <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Interview Complete</h1>
-          <p className="text-sm text-gray-600">
-            Thank you for completing the AI interview. Your responses have been recorded and will be reviewed by the hiring team.
-          </p>
-          {interview && (
-            <div className="mt-6 border border-gray-200 rounded-xl p-4 bg-white text-left shadow-sm">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-xs text-gray-500">Position</div>
-                  <div className="font-medium text-gray-900">{interview.position}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500">Candidate</div>
-                  <div className="font-medium text-gray-900">{interview.candidate_name}</div>
-                </div>
-              </div>
-            </div>
-          )}
-          <p className="text-xs text-gray-400 mt-6">You may close this window.</p>
-        </div>
-      </div>
-    );
-  }
-
   // ========== PRE-INTERVIEW STEPS (dynamic — reflects only the steps this candidate will visit) ==========
   const hasIntroVideo = !!interview?.introduction_video_url;
   // language_select is only shown when there are multiple languages AND none has been confirmed yet
