@@ -406,22 +406,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pending': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'Completed': return 'bg-green-100 text-green-800 border-green-200';
-      case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'Pending': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+      case 'Completed': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+      case 'In Progress': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
+      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
     }
   };
 
   const getInviteSourceMeta = (src?: string) => {
     const value = src || 'Manual';
     const styleMap: Record<string, string> = {
-      'JD': 'bg-blue-100 text-blue-700',
-      'Assessment': 'bg-purple-100 text-purple-700',
-      'Resume Scoring': 'bg-orange-100 text-orange-700',
-      'My Resumes': 'bg-orange-100 text-orange-700',
-      'Internal DB': 'bg-teal-100 text-teal-700',
-      'Manual': 'bg-gray-100 text-gray-600',
+      'JD': 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
+      'Assessment': 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
+      'Resume Scoring': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+      'My Resumes': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+      'Internal DB': 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20',
+      'Manual': 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
     };
     const labelMap: Record<string, string> = {
       'JD': 'Job',
@@ -432,7 +432,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       'Manual': 'Manual',
     };
     return {
-      cls: styleMap[value] || 'bg-gray-100 text-gray-600',
+      cls: styleMap[value] || 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
       label: labelMap[value] || value,
     };
   };
@@ -740,8 +740,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-gray-800';
-    if (percentage >= 40) return 'text-yellow-600';
+    if (percentage >= 60) return 'text-brand-blue';
+    if (percentage >= 40) return 'text-brand-orange-deep';
     return 'text-red-600';
   };
 
@@ -814,9 +814,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex-1 bg-gray-50 flex items-center justify-center px-4">
+      <div className="flex-1 bg-slate-50 flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3 sm:mb-4"></div>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3 sm:mb-4"></div>
           <p className="text-sm sm:text-base text-gray-600">Loading assessment results...</p>
         </div>
       </div>
@@ -914,7 +914,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const completedCount = candidateResults.length > 0 ? apiStats.completed_count : filteredCandidates.filter(c => c.status === 'Completed').length;
   const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
   const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
-  const stickyHeaderClass = 'bg-gray-50';
+  const stickyHeaderClass = 'bg-slate-50';
 
   const syncHorizontalScroll = (source: 'table' | 'sticky') => {
     const tableEl = tableScrollRef.current;
@@ -933,24 +933,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto">
+    <div className="flex-1 bg-slate-50 overflow-y-auto">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors"
+            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-3 sm:mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back
           </button>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
-              <h1 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2 truncate">{assessmentTitle}</h1>
+              <h1 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2 truncate tracking-tight">{assessmentTitle}</h1>
               <p className="text-xs sm:text-sm text-gray-600">
                 Assessment Results - {totalItems} total candidates
                 {selectedRows.length > 0 && (
-                  <span className="ml-2 text-gray-800 font-medium">
+                  <span className="ml-2 text-brand-blue font-medium">
                     • {selectedRows.length} selected
                   </span>
                 )}
@@ -962,7 +962,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
-                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {downloadingBulkPDF ? (
                     <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -975,7 +975,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
+                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
               >
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Export Results</span>
@@ -990,57 +990,57 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Total Candidates</div>
-                <div className="text-xl sm:text-2xl text-gray-900">{displayResults.length}</div>
+                <div className="text-xl sm:text-2xl text-gray-900 tracking-tight">{displayResults.length}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
-                <div className="text-xl sm:text-2xl text-green-600">{completedCount}</div>
+                <div className="text-xl sm:text-2xl text-green-600 tracking-tight">{completedCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
                 <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
-                <div className="text-xl sm:text-2xl text-blue-600">{inProgressCount}</div>
+                <div className="text-xl sm:text-2xl text-brand-cyan tracking-tight">{inProgressCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Pending</div>
-                <div className="text-xl sm:text-2xl text-gray-600">{pendingCount}</div>
+                <div className="text-xl sm:text-2xl text-brand-orange-deep tracking-tight">{pendingCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
               </div>
             </div>
           </div>
         </div>
 
         {/* AS-23: Search and Filter Bar */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
           {/* Search Input - full width row */}
           <div className="relative">
             <label htmlFor="assessment-results-search" className="sr-only">
@@ -1056,7 +1056,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm sm:text-base text-black"
+              className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base text-black"
             />
           </div>
 
@@ -1072,7 +1072,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
                     setCurrentPage(1);
                   }}
-                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
                 >
                   <option value="all">All</option>
                   <option value="Completed">Completed</option>
@@ -1091,7 +1091,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
                     setCurrentPage(1);
                   }}
-                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
                 >
                   <option value="all">All</option>
                   <option value="pass">Pass</option>
@@ -1111,7 +1111,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                       setCurrentPage(1);
                     }}
-                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -1132,7 +1132,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                       setCurrentPage(1);
                     }}
-                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -1152,7 +1152,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   value={dateFrom}
                   max={dateTo || undefined}
                   onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
                   title="From date"
                   aria-label="Filter from date"
                 />
@@ -1164,7 +1164,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   value={dateTo}
                   min={dateFrom || undefined}
                   onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
                   title="To date"
                   aria-label="Filter to date"
                 />
@@ -1184,7 +1184,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setDateTo('');
                       setCurrentPage(1);
                     }}
-                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-xs sm:text-sm"
                   >
                     <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Clear
@@ -1198,7 +1198,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   aria-expanded={showColumnSelector}
                   aria-haspopup="dialog"
                   aria-controls="assessment-results-column-selector"
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm text-gray-700"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-xs sm:text-sm"
                 >
                   <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="hidden sm:inline">Columns ({enabledColumnsCount})</span>
@@ -1215,9 +1215,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       id="assessment-results-column-selector"
                       role="dialog"
                       aria-label="Select visible result columns"
-                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
+                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
                     >
-                      <div className="px-3 sm:px-4 py-2 border-b border-gray-200">
+                      <div className="px-3 sm:px-4 py-2 border-b border-gray-100">
                         <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
                         <div className="text-xs text-gray-500 mt-0.5">
                           {enabledColumnsCount} of {columns.length} selected
@@ -1226,13 +1226,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {columns.map((column) => (
                         <label
                           key={column.id}
-                          className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-gray-50 cursor-pointer"
+                          className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors cursor-pointer"
                         >
                           <input
                             type="checkbox"
                             checked={column.enabled}
                             onChange={() => handleToggleColumn(column.id)}
-                            className="w-4 h-4 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                            className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
                           />
                           <span className="text-xs sm:text-sm text-gray-700">{column.label}</span>
                         </label>
@@ -1246,19 +1246,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
 
         {/* Candidates Results Table */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-slate-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm sm:text-base font-medium text-gray-900">Candidate Results</h2>
+              <h2 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
               {isFetching && (
-                <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
               )}
             </div>
             <div className="text-xs sm:text-sm text-gray-500">
               {selectedRows.length > 0 && `${selectedRows.length} selected`}
             </div>
           </div>
-          <div className="xl:hidden divide-y divide-gray-200">
+          <div className="xl:hidden divide-y divide-gray-100">
             {paginatedCandidates.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <div className="flex flex-col items-center">
@@ -1288,13 +1288,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         type="checkbox"
                         checked={selectedRows.includes(candidate.id)}
                         onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs shrink-0">
                                 {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                               </div>
                               <div className="min-w-0">
@@ -1303,7 +1303,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               </div>
                             </div>
                           </div>
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border shrink-0 ${getStatusColor(candidate.status)}`}>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs shrink-0 ${getStatusColor(candidate.status)}`}>
                             {candidate.status}
                           </span>
                         </div>
@@ -1335,7 +1335,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">CID</div>
-                            <div className="font-mono text-purple-700">{candidate.candidateDisplayId || '-'}</div>
+                            <div className="font-mono text-brand-blue">{candidate.candidateDisplayId || '-'}</div>
                           </div>
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">Invite Source</div>
@@ -1372,8 +1372,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <div className="mt-3 flex flex-wrap gap-2">
                           {candidate.status !== 'Pending' && (
                             <button
-                              onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              onClick={() => {
+                                try {
+                                  sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
+                                    paginatedCandidates
+                                      .filter(c => c.status !== 'Pending')
+                                      .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
+                                  ));
+                                } catch { /* ignore quota errors */ }
+                                router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
+                              }}
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                               title="View Details"
                               aria-label={`View details for ${candidate.name || 'candidate'}`}
                             >
@@ -1384,7 +1393,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                               aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
@@ -1415,14 +1424,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             onScroll={() => syncHorizontalScroll('table')}
           >
             <table className="w-full min-w-[1480px] table-fixed">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-slate-50 border-b border-gray-100">
                 <tr>
                   <th className={`px-4 py-3 w-10 ${stickyHeaderClass}`}>
                     <input
                       type="checkbox"
                       checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
                       onChange={(e) => handleSelectAll(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                      className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
                   {isColumnEnabled('cid') && (
@@ -1430,12 +1439,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('candidate') && (
                     <th
-                      className={`w-40 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
+                      className={`w-40 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1">
                         Candidate
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
                   )}
@@ -1468,34 +1477,34 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
                         Tech Score
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
                   )}
                   {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                     <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
                         Coding Score
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
                   )}
                   {isColumnEnabled('status') && (
                     <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1">
                         Result Status
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
                   )}
@@ -1509,12 +1518,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('completed') && (
                     <th
-                      className={`w-32 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
+                      className={`w-32 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('date')}
                     >
                       <div className="flex items-center gap-1">
                         Completed
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
                   )}
@@ -1524,7 +1533,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {paginatedCandidates.length === 0 ? (
                   <tr>
                     <td colSpan={enabledColumnsCount + 2} className="px-6 py-12 text-center">
@@ -1546,18 +1555,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </tr>
                 ) : (
                   paginatedCandidates.map((candidate) => (
-                    <tr key={candidate.id} className={`hover:bg-gray-50 transition-colors ${selectedRows.includes(candidate.id) ? 'bg-gray-50' : ''}`}>
+                    <tr key={candidate.id} className={`hover:bg-brand-blue/5 transition-colors ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5' : ''}`}>
                       <td className="px-4 py-4">
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(candidate.id)}
                           onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
-                          className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                          className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                       </td>
                       {isColumnEnabled('cid') && (
                         <td className="px-4 py-4">
-                          <span className="inline-flex max-w-full break-all text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                          <span className="inline-flex max-w-full break-all text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
                         </td>
@@ -1565,7 +1574,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('candidate') && (
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
                             <div className="text-sm text-gray-900 font-medium break-words">{candidate.name || 'Unknown'}</div>
@@ -1636,7 +1645,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('status') && (
                         <td className="px-4 py-4 text-center">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusColor(candidate.status)}`}>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs ${getStatusColor(candidate.status)}`}>
                             {candidate.status}
                           </span>
                         </td>
@@ -1646,13 +1655,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <div className="space-y-1 break-words">
                             {candidate.sent_at && (
                               <div className="flex items-center gap-2">
-                                <Mail className="w-3 h-3 text-blue-500" />
+                                <Mail className="w-3 h-3 text-brand-blue" />
                                 <span>Sent: {formatTimelineDate(candidate.sent_at)}</span>
                               </div>
                             )}
                             {candidate.started_at && (
                               <div className="flex items-center gap-2">
-                                <Play className="w-3 h-3 text-yellow-500" />
+                                <Play className="w-3 h-3 text-brand-orange-deep" />
                                 <span>Started: {formatTimelineDate(candidate.started_at)}</span>
                               </div>
                             )}
@@ -1691,8 +1700,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           {candidate.status !== 'Pending' && (
                           <button
-                            onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            onClick={() => {
+                              try {
+                                sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
+                                  paginatedCandidates
+                                    .filter(c => c.status !== 'Pending')
+                                    .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
+                                ));
+                              } catch { /* ignore quota errors */ }
+                              router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
+                            }}
+                            className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
@@ -1704,7 +1722,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                               aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
@@ -1728,7 +1746,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           {/* AS-23: Pagination Controls */}
           {totalPages > 1 && (
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs sm:text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
               </div>
@@ -1736,14 +1754,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <button
                   onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   First
                 </button>
                 <button
                   onClick={() => setCurrentPage(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="p-1 sm:p-1.5 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  className="p-1 sm:p-1.5 border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
@@ -1765,10 +1783,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       <button
                         key={pageNum}
                         onClick={() => setCurrentPage(pageNum)}
-                        className={`min-w-[28px] sm:min-w-[34px] px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-md ${
+                        className={`min-w-[28px] sm:min-w-[34px] px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-md transition-colors ${
                           currentPage === pageNum
-                            ? 'bg-gray-800 text-white'
-                            : 'border border-gray-300 hover:bg-gray-100'
+                            ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                            : 'border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                         }`}
                       >
                         {pageNum}
@@ -1780,14 +1798,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <button
                   onClick={() => setCurrentPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="p-1 sm:p-1.5 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  className="p-1 sm:p-1.5 border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
                 <button
                   onClick={() => setCurrentPage(totalPages)}
                   disabled={currentPage === totalPages}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   Last
                 </button>
@@ -1798,7 +1816,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
         {showStickyScrollbar && (
           <div
-            className="hidden xl:block fixed bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+            className="hidden xl:block fixed bottom-0 z-20 border-t border-gray-100 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
             style={{ left: stickyScrollbarPosition.left, width: stickyScrollbarPosition.width }}
           >
             <div
@@ -1815,21 +1833,26 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200">
-                  <div>
-                    <h3 className="text-base sm:text-lg font-medium text-gray-900">Export Assessment Results</h3>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Assessment Results</h3>
+                      <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                    className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                   >
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
@@ -1841,9 +1864,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <div className="space-y-2.5 sm:space-y-3">
                     <button
                       onClick={() => handleFormatSelect('csv')}
-                      className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                      className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
                     >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors flex-shrink-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
                         <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
                       </div>
                       <div className="text-left flex-1 min-w-0">
@@ -1854,10 +1877,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
                     <button
                       onClick={() => handleFormatSelect('excel')}
-                      className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                      className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
                     >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors flex-shrink-0">
-                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-700" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
+                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                       </div>
                       <div className="text-left flex-1 min-w-0">
                         <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
@@ -1867,13 +1890,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-200">
+                <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-100">
                   <button
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
                   >
                     Cancel
                   </button>
@@ -1884,19 +1907,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {/* Step 2: Scope Selection */}
             {exportStep === 'scope' && (
               <>
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200">
-                  <div>
-                    <h3 className="text-base sm:text-lg font-medium text-gray-900">Export Scope</h3>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                      Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
-                    </p>
+                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                      <Layers className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Scope</h3>
+                      <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                        Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                    className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                   >
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
@@ -1915,9 +1943,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       <button
                         onClick={handleExportSelected}
                         disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-green-500 rounded-lg hover:bg-green-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-green-400 rounded-xl hover:bg-green-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
                             <div className="w-4 h-4 border-2 border-green-700 border-t-transparent rounded-full animate-spin" />
                           ) : (
@@ -1938,20 +1966,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       <button
                         onClick={handleExportAllFiltered}
                         disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-indigo-500 rounded-lg hover:bg-indigo-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-brand-blue/40 rounded-xl hover:bg-brand-blue/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
-                            <div className="w-4 h-4 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
                           ) : (
-                            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-700" />
+                            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                           )}
                         </div>
                         <div className="text-left flex-1 min-w-0">
                           <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'All Filtered Results'}</div>
                           <div className="text-xs sm:text-sm text-gray-500">
                             Export all {filteredCandidates.length} results with {enabledColumnsCount} selected columns
-                            <div className="text-xs text-indigo-600 mt-1">
+                            <div className="text-xs text-brand-blue mt-1">
                               (includes completed, in-progress, and pending)
                             </div>
                           </div>
@@ -1962,13 +1990,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       <button
                         onClick={handleExportCurrentPage}
                         disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-purple-500 rounded-lg hover:bg-purple-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-brand-cyan/40 rounded-xl hover:bg-brand-cyan/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
-                            <div className="w-4 h-4 border-2 border-purple-700 border-t-transparent rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin" />
                           ) : (
-                            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-700" />
+                            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
                           )}
                         </div>
                         <div className="text-left flex-1 min-w-0">
@@ -1982,10 +2010,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-t border-gray-200">
+                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-t border-gray-100">
                   <button
                     onClick={() => setExportStep('format')}
-                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
                   >
                     ← Back
                   </button>
@@ -1994,7 +2022,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
                   >
                     Cancel
                   </button>

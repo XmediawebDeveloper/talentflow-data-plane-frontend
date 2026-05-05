@@ -61,7 +61,7 @@ const PAGE_SIZE = 20;
 type LucideIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const UNIT_TYPE_CONFIG: Record<UnitType, { label: string; icon: LucideIcon; color: string; bg: string; bar: string }> = {
-  RS: { label: 'Resume Scoring', icon: Target, color: 'text-blue-700', bg: 'bg-blue-50', bar: 'bg-blue-500' },
+  RS: { label: 'Resume Scoring', icon: Target, color: 'text-brand-blue', bg: 'bg-brand-blue/10', bar: 'bg-brand-blue' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'text-purple-700', bg: 'bg-purple-50', bar: 'bg-purple-500' },
   AIU: { label: 'AI Interview', icon: Video, color: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500' },
 };
@@ -72,16 +72,16 @@ const CONSUMPTION_COLUMNS: Array<{
   icon: LucideIcon;
   iconClass: string;
 }> = [
-  { key: 'RS', label: 'Resume Scoring', icon: Target, iconClass: 'text-blue-500' },
+  { key: 'RS', label: 'Resume Scoring', icon: Target, iconClass: 'text-brand-blue' },
   { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-purple-500' },
   { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-emerald-500' },
-  { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-amber-500' },
+  { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-brand-orange' },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  SUCCESS: { label: 'Success', color: 'text-green-700', bg: 'bg-green-50' },
+  SUCCESS: { label: 'Success', color: 'text-emerald-700', bg: 'bg-emerald-50' },
   FAILED: { label: 'Failed', color: 'text-red-700', bg: 'bg-red-50' },
-  INSUFFICIENT_UNITS: { label: 'Insufficient', color: 'text-orange-700', bg: 'bg-orange-50' },
+  INSUFFICIENT_UNITS: { label: 'Insufficient', color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10' },
   ABANDONED: { label: 'Abandoned', color: 'text-gray-600', bg: 'bg-gray-100' },
   INTERRUPTED: { label: 'Interrupted', color: 'text-yellow-700', bg: 'bg-yellow-50' },
   TENANT_SUSPENDED: { label: 'Suspended', color: 'text-red-700', bg: 'bg-red-50' },
@@ -105,17 +105,28 @@ function getUsagePct(consumed: number, allocated: number): number {
 }
 
 function getBarColor(pct: number): string {
-  if (pct >= 90) return 'bg-red-500';
-  if (pct >= 70) return 'bg-orange-400';
-  return 'bg-blue-500';
+  if (pct >= 90) return 'bg-gradient-to-r from-red-500 to-red-600';
+  if (pct >= 70) return 'bg-gradient-to-r from-brand-orange to-brand-orange-deep';
+  return 'bg-gradient-to-r from-brand-blue to-brand-cyan';
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, color: 'text-gray-600', bg: 'bg-gray-100' };
+  const ringMap: Record<string, string> = {
+    SUCCESS: 'ring-emerald-200',
+    FAILED: 'ring-red-200',
+    INSUFFICIENT_UNITS: 'ring-orange-200',
+    ABANDONED: 'ring-gray-200',
+    INTERRUPTED: 'ring-yellow-200',
+    TENANT_SUSPENDED: 'ring-red-200',
+    TENANT_EXPIRED: 'ring-red-200',
+    BLOCKED: 'ring-gray-200',
+  };
+  const ring = ringMap[status] ?? 'ring-gray-200';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.color}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${ring} ${cfg.bg} ${cfg.color}`}>
       {cfg.label}
     </span>
   );
@@ -125,14 +136,19 @@ function UnitTypeBadge({ type }: { type: string }) {
   const cfg = UNIT_TYPE_CONFIG[type as UnitType];
   if (!cfg) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200">
         {type}
       </span>
     );
   }
   const Icon = cfg.icon;
+  const ringMap: Record<string, string> = {
+    RS: 'ring-brand-blue/20',
+    AS: 'ring-purple-200',
+    AIU: 'ring-emerald-200',
+  };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.color}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${ringMap[type] ?? 'ring-gray-200'} ${cfg.bg} ${cfg.color}`}>
       <Icon className="w-3 h-3" />
       {cfg.label}
     </span>
@@ -155,15 +171,15 @@ function Pagination({
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-white">
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gradient-to-b from-white to-slate-50/50">
       <p className="text-sm text-gray-500">
-        Showing <span className="font-medium">{start}–{end}</span> of <span className="font-medium">{total}</span> records
+        Showing <span className="font-medium text-gray-900">{start}–{end}</span> of <span className="font-medium text-gray-900">{total}</span> records
       </p>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600"
+          className="p-1.5 rounded-lg border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-all"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -182,7 +198,7 @@ function Pagination({
             <button
               key={pageNum}
               onClick={() => onPageChange(pageNum)}
-              className={`w-8 h-8 text-sm rounded ${pageNum === page ? 'bg-blue-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`w-8 h-8 text-sm rounded-lg transition-all ${pageNum === page ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
             >
               {pageNum}
             </button>
@@ -191,7 +207,7 @@ function Pagination({
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600"
+          className="p-1.5 rounded-lg border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-all"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -213,11 +229,16 @@ function ExportModal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="text-base font-semibold text-gray-900">Export Usage History</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-500">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
+              <Download className="w-5 h-5 text-white" />
+            </div>
+            <h3 className="text-base font-semibold text-white">Export Usage History</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -226,32 +247,32 @@ function ExportModal({
           <button
             onClick={() => onExport('csv')}
             disabled={isExporting}
-            className="w-full flex items-center gap-3 p-3.5 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-colors group disabled:opacity-50"
+            className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-md transition-all group disabled:opacity-50"
           >
-            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-green-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm shadow-emerald-500/25 ring-1 ring-white/10">
+              <FileText className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-medium text-gray-900 group-hover:text-blue-700">CSV File</p>
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-blue">CSV File</p>
               <p className="text-xs text-gray-500">Comma-separated values (.csv)</p>
             </div>
           </button>
           <button
             onClick={() => onExport('excel')}
             disabled={isExporting}
-            className="w-full flex items-center gap-3 p-3.5 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-colors group disabled:opacity-50"
+            className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-md transition-all group disabled:opacity-50"
           >
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-emerald-500 text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-medium text-gray-900 group-hover:text-blue-700">Excel Spreadsheet</p>
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-blue">Excel Spreadsheet</p>
               <p className="text-xs text-gray-500">Microsoft Excel format (.xlsx)</p>
             </div>
           </button>
         </div>
         {isExporting && (
-          <div className="px-5 pb-4 flex items-center gap-2 text-sm text-blue-600">
+          <div className="px-5 pb-4 flex items-center gap-2 text-sm text-brand-blue">
             <Loader2 className="w-4 h-4 animate-spin" />
             Preparing export…
           </div>
@@ -276,6 +297,17 @@ function AnalyticsCards({
 }) {
   const unitTypes: UnitType[] = ['RS', 'AS', 'AIU'];
 
+  const tileGradient: Record<UnitType, string> = {
+    RS: 'from-brand-blue to-brand-blue-2 shadow-brand-blue/25',
+    AS: 'from-purple-500 to-purple-700 shadow-purple-500/25',
+    AIU: 'from-brand-cyan to-emerald-500 shadow-brand-cyan/25',
+  };
+  const ringByType: Record<UnitType, string> = {
+    RS: 'ring-brand-blue/20',
+    AS: 'ring-purple-200',
+    AIU: 'ring-brand-cyan/20',
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
@@ -294,12 +326,12 @@ function AnalyticsCards({
         const barColor = getBarColor(pct);
 
         return (
-          <div key={type} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div key={type} className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
-              <div className={`w-10 h-10 rounded-lg ${cfg.bg} flex items-center justify-center`}>
-                <Icon className={`w-5 h-5 ${cfg.color}`} />
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
+                <Icon className="w-5 h-5" />
               </div>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${cfg.bg} ${cfg.color}`}>{type}</span>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${ringByType[type]} ${cfg.bg} ${cfg.color}`}>{type}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">{cfg.label}</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -313,7 +345,7 @@ function AnalyticsCards({
               </div>
               <div>
                 <p className="text-xs text-gray-400">Remaining</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-orange-500' : 'text-emerald-600'}`}>
+                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-brand-orange-deep' : 'text-emerald-600'}`}>
                   {isUnlimited ? '∞' : (remaining?.toLocaleString() ?? '—')}
                 </p>
               </div>
@@ -323,7 +355,7 @@ function AnalyticsCards({
                 <span>Usage</span>
                 <span className={pct >= 90 ? 'text-red-600 font-medium' : ''}>{isUnlimited ? 'Unlimited' : `${pct}%`}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                 <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: isUnlimited ? '0%' : `${pct}%` }} />
               </div>
             </div>
@@ -337,12 +369,12 @@ function AnalyticsCards({
         const pct = ru ? (ru.is_unlimited ? 0 : Math.min(100, Math.round(ru.percentage_used))) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
-              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-amber-700" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-orange to-brand-orange-deep text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+                <FileText className="w-5 h-5" />
               </div>
-              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-50 text-amber-700">RU</span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
             </div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">Resume Storage</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -358,7 +390,7 @@ function AnalyticsCards({
               </div>
               <div>
                 <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-orange-500' : 'text-emerald-600'}`}>
+                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-brand-orange-deep' : 'text-emerald-600'}`}>
                   {ru ? (ru.is_unlimited ? '∞' : ru.available.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -370,7 +402,7 @@ function AnalyticsCards({
                   {ru?.is_unlimited ? 'Unlimited' : `${pct}%`}
                 </span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                 <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: ru?.is_unlimited ? '0%' : `${pct}%` }} />
               </div>
             </div>
@@ -384,12 +416,12 @@ function AnalyticsCards({
         const pct = userLimits && !isUnlimited ? Math.min(100, Math.round(userLimits.usage_percentage)) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
-              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-                <Users className="w-5 h-5 text-indigo-700" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-sm shadow-indigo-500/25 ring-1 ring-white/10">
+                <Users className="w-5 h-5" />
               </div>
-              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700">MAX</span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-indigo-200 bg-indigo-50 text-indigo-700">MAX</span>
             </div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">User Seats</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -405,7 +437,7 @@ function AnalyticsCards({
               </div>
               <div>
                 <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-orange-500' : 'text-emerald-600'}`}>
+                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-brand-orange-deep' : 'text-emerald-600'}`}>
                   {userLimits ? (isUnlimited ? '∞' : userLimits.available_slots.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -417,7 +449,7 @@ function AnalyticsCards({
                   {isUnlimited ? 'Unlimited' : `${pct}%`}
                 </span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                 <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: isUnlimited ? '0%' : `${pct}%` }} />
               </div>
             </div>
@@ -448,7 +480,7 @@ function FeatureWiseTab({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
   }
@@ -456,9 +488,11 @@ function FeatureWiseTab({
   if (!items.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <BarChart3 className="w-10 h-10 text-gray-300 mb-3" />
-        <p className="text-gray-500 font-medium">No usage records found</p>
-        <p className="text-gray-400 text-sm mt-1">Try adjusting your filters or date range</p>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+          <Layers className="w-7 h-7 text-brand-blue" />
+        </div>
+        <p className="text-gray-700 font-semibold">No usage records found</p>
+        <p className="text-gray-500 text-sm mt-1">Try adjusting your filters or date range</p>
       </div>
     );
   }
@@ -468,26 +502,26 @@ function FeatureWiseTab({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Feature</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">User</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Entity</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Units</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Status</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Balance After</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Date & Time</th>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Feature</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">User</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Entity</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Units</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Balance After</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Date & Time</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100">
             {items.map((entry) => (
-              <tr key={entry.id} className="hover:bg-gray-50/60 transition-colors">
+              <tr key={entry.id} className="hover:bg-brand-blue/[0.03] transition-colors">
                 <td className="px-4 py-3">
                   <UnitTypeBadge type={entry.unit_type} />
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <User className="w-3 h-3 text-blue-600" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                      <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-800 text-xs leading-tight">{entry.user_name || '—'}</p>
@@ -505,13 +539,13 @@ function FeatureWiseTab({
                 <td className="px-4 py-3">
                   <StatusBadge status={entry.status} />
                   {entry.refund_flag === 'YES' && (
-                    <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-700">
+                    <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                       Refunded
                     </span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className="text-gray-600 text-xs">{entry.balance_after?.toLocaleString() ?? '—'}</span>
+                  <span className="text-gray-600 text-xs font-medium">{entry.balance_after?.toLocaleString() ?? '—'}</span>
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-gray-700 text-xs">{formatISTDate(entry.created_at)}</p>
@@ -619,7 +653,7 @@ function UserWiseTab({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
   }
@@ -627,8 +661,10 @@ function UserWiseTab({
   if (!users.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <Users className="w-10 h-10 text-gray-300 mb-3" />
-        <p className="text-gray-500 font-medium">No user usage data found</p>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+          <Users className="w-7 h-7 text-brand-blue" />
+        </div>
+        <p className="text-gray-700 font-semibold">No user usage data found</p>
       </div>
     );
   }
@@ -638,33 +674,33 @@ function UserWiseTab({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">#</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">User</th>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">#</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">User</th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 return (
-                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
+                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">
                     <span className="inline-flex items-center gap-1">
-                      <Icon className={`w-3 h-3 ${column.iconClass}`} />
+                      <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
                       {column.label}
                     </span>
                   </th>
                 );
               })}
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Total</th>
-              <th className="text-center px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Success / Failed</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Last Active</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Success / Failed</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100">
             {paginatedUsers.map((u, idx) => (
-              <tr key={u.userId} className="hover:bg-gray-50/60 transition-colors">
-                <td className="px-4 py-3 text-gray-400 text-xs">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+              <tr key={u.userId} className="hover:bg-brand-blue/[0.03] transition-colors">
+                <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-xs font-bold">{u.userName.charAt(0).toUpperCase()}</span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                      <span className="text-xs font-bold">{u.userName.charAt(0).toUpperCase()}</span>
                     </div>
                     <div>
                       <p className="font-medium text-gray-800 text-xs">{u.userName}</p>
@@ -678,15 +714,14 @@ function UserWiseTab({
                   </td>
                 ))}
                 <td className="px-4 py-3 text-right">
-                  <span className="font-bold text-gray-900">{u.total.toLocaleString()}</span>
+                  <span className="font-bold text-brand-blue">{u.total.toLocaleString()}</span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-2">
-                    <span className="inline-flex items-center gap-0.5 text-xs text-green-700 font-medium">
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium px-2 py-0.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200">
                       <CheckCircle2 className="w-3 h-3" />{u.successCount}
                     </span>
-                    <span className="text-gray-300">/</span>
-                    <span className="inline-flex items-center gap-0.5 text-xs text-red-600 font-medium">
+                    <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium px-2 py-0.5 rounded-full bg-red-50 ring-1 ring-red-200">
                       <XCircle className="w-3 h-3" />{u.failedCount}
                     </span>
                   </div>
@@ -726,7 +761,7 @@ function TeamWiseTab({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
   }
@@ -734,9 +769,11 @@ function TeamWiseTab({
   if (!teamsData?.teams?.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <Users className="w-10 h-10 text-gray-300 mb-3" />
-        <p className="text-gray-500 font-medium">No team usage data found</p>
-        <p className="text-gray-400 text-sm mt-1">Teams data will appear once team members start using features</p>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+          <Users className="w-7 h-7 text-brand-blue" />
+        </div>
+        <p className="text-gray-700 font-semibold">No team usage data found</p>
+        <p className="text-gray-500 text-sm mt-1">Teams data will appear once team members start using features</p>
       </div>
     );
   }
@@ -750,25 +787,25 @@ function TeamWiseTab({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">#</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Team</th>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">#</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Team</th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 return (
-                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
+                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">
                     <span className="inline-flex items-center gap-1">
-                      <Icon className={`w-3 h-3 ${column.iconClass}`} />
+                      <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
                       {column.label}
                     </span>
                   </th>
                 );
               })}
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">JDs Created</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Assessments</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">JDs Created</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Assessments</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100">
             {paginatedTeams.map((team, idx) => {
               const rsConsumed = team.by_type?.RS?.total_consumed ?? 0;
               const asConsumed = team.by_type?.AS?.total_consumed ?? 0;
@@ -779,21 +816,21 @@ function TeamWiseTab({
               return (
                 <React.Fragment key={team.team_id}>
                   <tr
-                    className="hover:bg-gray-50/60 transition-colors cursor-pointer"
+                    className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${isExpanded ? 'bg-brand-blue/[0.04]' : ''}`}
                     onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
                   >
-                    <td className="px-4 py-3 text-gray-400 text-xs">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          className="text-gray-400 hover:text-gray-600"
+                          className="text-gray-400 hover:text-brand-blue transition-colors"
                           aria-label={isExpanded ? 'Collapse team users' : 'Expand team users'}
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
-                          <Users className="w-3.5 h-3.5 text-white" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex-shrink-0">
+                          <Users className="w-4 h-4" />
                         </div>
                         <div>
                           <p className="font-medium text-gray-800 text-xs">{team.team_name || 'Unnamed Team'}</p>
@@ -809,7 +846,7 @@ function TeamWiseTab({
                     <td className="px-4 py-3 text-right text-gray-600">{team.assessments_created?.toLocaleString() ?? '—'}</td>
                   </tr>
                   {isExpanded && (
-                    <tr className="bg-gray-50/70">
+                    <tr className="bg-gradient-to-b from-brand-blue/[0.03] to-slate-50/70">
                       <td colSpan={8} className="px-4 py-4">
                         <InlineTeamMembersUsage
                           teamId={team.team_id}
@@ -825,11 +862,11 @@ function TeamWiseTab({
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-gray-200 bg-gray-50">
+            <tr className="border-t-2 border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50">
               <td className="px-4 py-3" colSpan={2}>
-                <span className="text-xs font-semibold text-gray-600">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
+                <span className="text-xs font-semibold text-gray-700">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-blue-700">
+              <td className="px-4 py-3 text-right text-xs font-bold text-brand-blue">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.RS?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
               <td className="px-4 py-3 text-right text-xs font-bold text-purple-700">
@@ -838,7 +875,7 @@ function TeamWiseTab({
               <td className="px-4 py-3 text-right text-xs font-bold text-emerald-700">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.AIU?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-amber-700">
+              <td className="px-4 py-3 text-right text-xs font-bold text-brand-orange-deep">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.RU?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
               <td colSpan={2} />
@@ -899,7 +936,7 @@ function InlineTeamMembersUsage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500">
+      <div className="flex items-center gap-2 text-sm text-brand-blue">
         <Loader2 className="w-4 h-4 animate-spin" />
         Loading team users usage...
       </div>
@@ -908,7 +945,7 @@ function InlineTeamMembersUsage({
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100">
         {error}
       </div>
     );
@@ -918,35 +955,40 @@ function InlineTeamMembersUsage({
 
   if (!members.length) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
         No usage found for users in {teamName} during the selected date range.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">{teamName} Users</p>
-          <p className="text-xs text-gray-500">Usage details for team members</p>
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+            <Users className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{teamName} Users</p>
+            <p className="text-xs text-gray-500">Usage details for team members</p>
+          </div>
         </div>
-        <span className="text-xs font-medium text-gray-500">{members.length} user{members.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs font-medium text-brand-blue px-2.5 py-1 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-white">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">User</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Resume Scoring</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Assessment</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">AI Interview</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Resume Storage</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Total</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Last Active</th>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">User</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Resume Scoring</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Assessment</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">AI Interview</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Resume Storage</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100">
             {members.map((member) => {
               const rs = member.by_type?.RS?.total_consumed ?? 0;
               const as = member.by_type?.AS?.total_consumed ?? 0;
@@ -954,18 +996,23 @@ function InlineTeamMembersUsage({
               const ru = member.by_type?.RU?.total_consumed ?? 0;
               const total = rs + as + aiu + ru;
               return (
-                <tr key={member.user_id} className="hover:bg-gray-50/60 transition-colors">
+                <tr key={member.user_id} className="hover:bg-brand-blue/[0.03] transition-colors">
                   <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium text-gray-800 text-xs">{member.user_name || 'Unknown User'}</p>
-                      <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex-shrink-0">
+                        <span className="text-xs font-bold">{(member.user_name || 'U').charAt(0).toUpperCase()}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800 text-xs">{member.user_name || 'Unknown User'}</p>
+                        <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{rs ? rs.toLocaleString() : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{as ? as.toLocaleString() : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{aiu ? aiu.toLocaleString() : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{ru ? ru.toLocaleString() : '—'}</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900">{total.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-bold text-brand-blue">{total.toLocaleString()}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{member.last_activity ? formatIST(member.last_activity) : '—'}</td>
                 </tr>
               );
@@ -996,21 +1043,21 @@ function RefundsTab({
 }) {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-    REFUND: { label: 'Refund', color: 'text-teal-700', bg: 'bg-teal-50' },
-    ADJUST_ADD: { label: 'Credit', color: 'text-green-700', bg: 'bg-green-50' },
-    ADJUST_DEDUCT: { label: 'Deduct', color: 'text-red-700', bg: 'bg-red-50' },
-    REPLENISH: { label: 'Replenish', color: 'text-blue-700', bg: 'bg-blue-50' },
-    UPGRADE: { label: 'Upgrade', color: 'text-indigo-700', bg: 'bg-indigo-50' },
-    EXPIRE: { label: 'Expired', color: 'text-gray-600', bg: 'bg-gray-100' },
-    INIT: { label: 'Init', color: 'text-gray-600', bg: 'bg-gray-100' },
-    CONSUME: { label: 'Consume', color: 'text-orange-700', bg: 'bg-orange-50' },
+  const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; ring: string }> = {
+    REFUND: { label: 'Refund', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', ring: 'ring-brand-cyan/20' },
+    ADJUST_ADD: { label: 'Credit', color: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
+    ADJUST_DEDUCT: { label: 'Deduct', color: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
+    REPLENISH: { label: 'Replenish', color: 'text-brand-blue', bg: 'bg-brand-blue/10', ring: 'ring-brand-blue/20' },
+    UPGRADE: { label: 'Upgrade', color: 'text-indigo-700', bg: 'bg-indigo-50', ring: 'ring-indigo-200' },
+    EXPIRE: { label: 'Expired', color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' },
+    INIT: { label: 'Init', color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' },
+    CONSUME: { label: 'Consume', color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', ring: 'ring-brand-orange/20' },
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
   }
@@ -1018,9 +1065,11 @@ function RefundsTab({
   if (unavailable) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <AlertTriangle className="w-10 h-10 text-amber-300 mb-3" />
-        <p className="text-gray-600 font-medium">Refunds & Adjustments Not Yet Available</p>
-        <p className="text-gray-400 text-sm mt-1 max-w-sm">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-orange/10 to-amber-100 ring-1 ring-brand-orange/20 mb-4">
+          <AlertTriangle className="w-7 h-7 text-brand-orange-deep" />
+        </div>
+        <p className="text-gray-700 font-semibold">Refunds & Adjustments Not Yet Available</p>
+        <p className="text-gray-500 text-sm mt-1 max-w-sm">
           This feature requires a database migration that hasn't been applied to your tenant yet.
           Please contact your system administrator.
         </p>
@@ -1031,9 +1080,11 @@ function RefundsTab({
   if (!items.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <RefreshCw className="w-10 h-10 text-gray-300 mb-3" />
-        <p className="text-gray-500 font-medium">No refunds or adjustments found</p>
-        <p className="text-gray-400 text-sm mt-1">Unit adjustments and refunds will appear here</p>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+          <RefreshCw className="w-7 h-7 text-brand-blue" />
+        </div>
+        <p className="text-gray-700 font-semibold">No refunds or adjustments found</p>
+        <p className="text-gray-500 text-sm mt-1">Unit adjustments and refunds will appear here</p>
       </div>
     );
   }
@@ -1043,25 +1094,25 @@ function RefundsTab({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Type</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Feature</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Units</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Before</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">After</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Actor</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Reason</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Date</th>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Feature</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Units</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Before</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">After</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Actor</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Reason</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Date</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100">
             {items.map((entry) => {
-              const acfg = ACTION_CONFIG[entry.action_type] ?? { label: entry.action_type, color: 'text-gray-600', bg: 'bg-gray-100' };
+              const acfg = ACTION_CONFIG[entry.action_type] ?? { label: entry.action_type, color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' };
               const isPositive = ['REFUND', 'ADJUST_ADD', 'REPLENISH', 'UPGRADE', 'INIT'].includes(entry.action_type);
               return (
-                <tr key={entry.id} className="hover:bg-gray-50/60 transition-colors">
+                <tr key={entry.id} className="hover:bg-brand-blue/[0.03] transition-colors">
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${acfg.bg} ${acfg.color}`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${acfg.ring} ${acfg.bg} ${acfg.color}`}>
                       {acfg.label}
                     </span>
                   </td>
@@ -1069,7 +1120,7 @@ function RefundsTab({
                     <UnitTypeBadge type={entry.unit_type} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className={`font-bold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
                       {isPositive ? '+' : '-'}{Math.abs(entry.units_amount).toLocaleString()}
                     </span>
                   </td>
@@ -1167,8 +1218,10 @@ export default function UsageHistory() {
   if (!isTenantAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-        <Shield className="w-12 h-12 text-gray-300 mb-4" />
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Access Restricted</h2>
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+          <Shield className="w-8 h-8 text-brand-blue" />
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Access Restricted</h2>
         <p className="text-gray-500 max-w-sm">Usage History is only accessible to Tenant Admins.</p>
       </div>
     );
@@ -1348,29 +1401,38 @@ export default function UsageHistory() {
   return (
     <div className="p-6 space-y-6">
       {/* ── Page Header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Usage History</h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-blue via-brand-blue-2 to-brand-blue text-white shadow-lg shadow-brand-blue/20 ring-1 ring-white/10">
+        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-cyan/20 blur-3xl" />
+        <div className="absolute -bottom-12 right-24 h-40 w-40 rounded-full bg-brand-orange/20 blur-3xl" />
+        <div className="relative flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 backdrop-blur">
+              <TrendingDown className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Usage History</h1>
+              <p className="text-white/80 mt-1 text-sm max-w-2xl">
+                Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50 backdrop-blur"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-blue bg-white rounded-lg hover:bg-white/95 transition-colors shadow-md ring-1 ring-white/40"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1383,15 +1445,20 @@ export default function UsageHistory() {
       />
 
       {/* ── Filters ── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-medium text-gray-700">Filters</span>
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+            <Filter className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="text-sm font-semibold text-gray-900">Filters</span>
+            <p className="text-xs text-gray-500">Refine your usage data view</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3">
           {/* Quick Period */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Period</label>
+            <label className="text-xs font-medium text-gray-600">Period</label>
             <select
               value={quickPeriod}
               onChange={(e) => {
@@ -1417,7 +1484,7 @@ export default function UsageHistory() {
                 setStartDateInput(start);
                 setEndDateInput(end);
               }}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
             >
               <option value="">All Time</option>
               <option value="last_week">Last Week</option>
@@ -1429,35 +1496,41 @@ export default function UsageHistory() {
 
           {/* Date Range */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">From</label>
-            <input
-              type="date"
-              value={startDateInput}
-              max={endDateInput || defaultEndDate}
-              onChange={(e) => { setStartDateInput(e.target.value); setQuickPeriod(''); }}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label className="text-xs font-medium text-gray-600">From</label>
+            <div className="relative">
+              <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-brand-blue/70" />
+              <input
+                type="date"
+                value={startDateInput}
+                max={endDateInput || defaultEndDate}
+                onChange={(e) => { setStartDateInput(e.target.value); setQuickPeriod(''); }}
+                className="text-sm border border-gray-200 rounded-lg pl-8 pr-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+              />
+            </div>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">To</label>
-            <input
-              type="date"
-              value={endDateInput}
-              min={startDateInput || undefined}
-              max={defaultEndDate}
-              onChange={(e) => { setEndDateInput(e.target.value); setQuickPeriod(''); }}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label className="text-xs font-medium text-gray-600">To</label>
+            <div className="relative">
+              <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-brand-blue/70" />
+              <input
+                type="date"
+                value={endDateInput}
+                min={startDateInput || undefined}
+                max={defaultEndDate}
+                onChange={(e) => { setEndDateInput(e.target.value); setQuickPeriod(''); }}
+                className="text-sm border border-gray-200 rounded-lg pl-8 pr-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+              />
+            </div>
           </div>
 
           {/* Status */}
           {(activeTab === 'feature') && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">Status</label>
+              <label className="text-xs font-medium text-gray-600">Status</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
               >
                 <option value="all">All Statuses</option>
                 <option value="SUCCESS">Success</option>
@@ -1475,8 +1548,8 @@ export default function UsageHistory() {
       {/* ── Tabs + Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Tab bar */}
-        <div className="border-b border-gray-100 px-4">
-          <div className="flex gap-0 overflow-x-auto">
+        <div className="border-b border-gray-200 px-4 bg-gradient-to-b from-slate-50/50 to-white">
+          <div className="flex gap-1 overflow-x-auto">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1484,16 +1557,16 @@ export default function UsageHistory() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${
                     isActive
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200'
+                      ? 'border-brand-blue text-brand-blue'
+                      : 'border-transparent text-gray-500 hover:text-brand-blue hover:border-brand-blue/30'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
                   {tab.count !== undefined && tab.count > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ring-1 ${isActive ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-gray-100 text-gray-500 ring-gray-200'}`}>
                       {tab.count}
                     </span>
                   )}
@@ -1548,9 +1621,11 @@ export default function UsageHistory() {
       </div>
 
       {/* ── Audit note ── */}
-      <div className="flex items-start gap-2 text-xs text-gray-400 bg-gray-50 rounded-lg p-3 border border-gray-100">
-        <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-        <p>All dashboard access and exports are audit-logged with your Tenant ID, User ID, and timestamp in compliance with platform policies.</p>
+      <div className="flex items-start gap-3 text-xs text-gray-600 bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl p-4 border border-brand-blue/15 ring-1 ring-brand-blue/5">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+          <Info className="w-3.5 h-3.5" />
+        </div>
+        <p className="pt-1">All dashboard access and exports are audit-logged with your Tenant ID, User ID, and timestamp in compliance with platform policies.</p>
       </div>
 
       {/* ── Export Modal ── */}

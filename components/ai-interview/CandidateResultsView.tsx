@@ -59,9 +59,9 @@ const DEFAULT_VIOLATION_THRESHOLDS: ViolationCountThresholds = { lowMax: 2, medM
 
 function violationBoxRisk(count: number, t: ViolationCountThresholds): { label: string; cls: string } {
   if (count === 0) return { label: '', cls: '' };
-  if (count <= t.lowMax) return { label: 'Low Risk', cls: 'text-blue-600 bg-blue-50' };
-  if (count <= t.medMax) return { label: 'Medium Risk', cls: 'text-orange-600 bg-orange-50' };
-  return { label: 'High Risk', cls: 'text-red-600 bg-red-50' };
+  if (count <= t.lowMax) return { label: 'Low Risk', cls: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20' };
+  if (count <= t.medMax) return { label: 'Medium Risk', cls: 'text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20' };
+  return { label: 'High Risk', cls: 'text-red-600 bg-red-50 ring-1 ring-red-200' };
 }
 
 function getRiskLevelWeighted(
@@ -70,29 +70,29 @@ function getRiskLevelWeighted(
 ): { label: string; color: string; bg: string; border: string } {
   if (score === 0)                    return { label: 'Clean',       color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300'  };
   if (score <= thresholds.low)        return { label: 'Low Risk',    color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200'  };
-  if (score <= thresholds.medium)     return { label: 'Medium Risk', color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-300' };
+  if (score <= thresholds.medium)     return { label: 'Medium Risk', color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/30' };
   return                                     { label: 'High Risk',   color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300'    };
 }
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
-  tab_switch:               { label: 'Tab Switch',           icon: <Monitor className="w-4 h-4" />,      color: 'text-orange-600', bg: 'bg-orange-50',  border: 'border-orange-200' },
+  tab_switch:               { label: 'Tab Switch',           icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10',  border: 'border-brand-orange/20' },
   window_blur:              { label: 'Window Blur',          icon: <Eye className="w-4 h-4" />,           color: 'text-red-600',    bg: 'bg-red-50',     border: 'border-red-200'    },
-  copy_attempt:             { label: 'Copy Attempt',         icon: <Clipboard className="w-4 h-4" />,     color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-  paste_attempt:            { label: 'Paste Attempt',        icon: <MousePointer className="w-4 h-4" />,  color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-  camera_disabled:          { label: 'Camera Disabled',      icon: <Camera className="w-4 h-4" />,        color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-200'   },
-  camera_obstructed:        { label: 'Camera Obstructed',    icon: <Eye className="w-4 h-4" />,           color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
-  microphone_disabled:      { label: 'Mic Disabled',         icon: <Mic className="w-4 h-4" />,           color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-200'   },
-  voice_detected:           { label: 'Voice Detected',       icon: <Volume2 className="w-4 h-4" />,       color: 'text-pink-600',   bg: 'bg-pink-50',   border: 'border-pink-200'   },
-  multiple_voices:          { label: 'Multiple Voices',      icon: <Volume2 className="w-4 h-4" />,       color: 'text-pink-700',   bg: 'bg-pink-50',   border: 'border-pink-200'   },
-  multiple_faces:           { label: 'Multiple Faces',       icon: <Users className="w-4 h-4" />,         color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
+  copy_attempt:             { label: 'Copy Attempt',         icon: <Clipboard className="w-4 h-4" />,     color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  paste_attempt:            { label: 'Paste Attempt',        icon: <MousePointer className="w-4 h-4" />,  color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  camera_disabled:          { label: 'Camera Disabled',      icon: <Camera className="w-4 h-4" />,        color: 'text-slate-600',  bg: 'bg-slate-50',  border: 'border-slate-200'  },
+  camera_obstructed:        { label: 'Camera Obstructed',    icon: <Eye className="w-4 h-4" />,           color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20' },
+  microphone_disabled:      { label: 'Mic Disabled',         icon: <Mic className="w-4 h-4" />,           color: 'text-slate-600',  bg: 'bg-slate-50',  border: 'border-slate-200'  },
+  voice_detected:           { label: 'Voice Detected',       icon: <Volume2 className="w-4 h-4" />,       color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20' },
+  multiple_voices:          { label: 'Multiple Voices',      icon: <Volume2 className="w-4 h-4" />,       color: 'text-brand-teal', bg: 'bg-brand-teal/10', border: 'border-brand-teal/20' },
+  multiple_faces:           { label: 'Multiple Faces',       icon: <Users className="w-4 h-4" />,         color: 'text-brand-blue', bg: 'bg-brand-blue/10', border: 'border-brand-blue/20' },
   face_missing:             { label: 'Face Not Visible',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-600',    bg: 'bg-red-50',    border: 'border-red-200'    },
-  gaze_away:                { label: 'Gaze Away',            icon: <Eye className="w-4 h-4" />,           color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
-  fullscreen_exit:          { label: 'Fullscreen Exit',      icon: <Maximize2 className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-200'   },
-  screenshot_attempt:       { label: 'Screenshot Attempt',   icon: <Camera className="w-4 h-4" />,        color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200'  },
-  screen_recording_attempt: { label: 'Screen Recording',     icon: <Video className="w-4 h-4" />,         color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200'  },
-  face_mismatch:            { label: 'Face Mismatch',        icon: <User className="w-4 h-4" />,          color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+  gaze_away:                { label: 'Gaze Away',            icon: <Eye className="w-4 h-4" />,           color: 'text-brand-orange', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  fullscreen_exit:          { label: 'Fullscreen Exit',      icon: <Maximize2 className="w-4 h-4" />,     color: 'text-brand-blue', bg: 'bg-brand-blue/10', border: 'border-brand-blue/20' },
+  screenshot_attempt:       { label: 'Screenshot Attempt',   icon: <Camera className="w-4 h-4" />,        color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  screen_recording_attempt: { label: 'Screen Recording',     icon: <Video className="w-4 h-4" />,         color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  face_mismatch:            { label: 'Face Mismatch',        icon: <User className="w-4 h-4" />,          color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
   face_identity_changed:    { label: 'Identity Changed',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
-  voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+  voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
   screen_share_stopped:     { label: 'Screen Share Stopped', icon: <Monitor className="w-4 h-4" />,       color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
 };
@@ -124,8 +124,8 @@ function VideoPane({
   if (!hasFile) {
     return (
       <div className="text-center py-12">
-        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
-          <VideoOff className="w-6 h-6 text-gray-400" />
+        <div className="w-12 h-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
+          <VideoOff className="w-6 h-6 text-brand-blue/40" />
         </div>
         <p className="text-gray-500 text-sm">{label} not available</p>
       </div>
@@ -134,7 +134,7 @@ function VideoPane({
   if (error) {
     return (
       <div className="text-center py-12">
-        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+        <div className="w-12 h-12 rounded-full bg-red-50 ring-1 ring-red-200 flex items-center justify-center mx-auto mb-3">
           <VideoOff className="w-6 h-6 text-red-400" />
         </div>
         <p className="text-gray-500 text-sm">Could not load {label.toLowerCase()}</p>
@@ -145,7 +145,7 @@ function VideoPane({
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto mb-3" />
+        <div className="w-8 h-8 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3" />
         <p className="text-sm text-gray-500">Loading {label.toLowerCase()}…</p>
       </div>
     );
@@ -197,7 +197,7 @@ function VideoWithDuration({ blobUrl, onError, onDuration }: { blobUrl: string; 
       <video
         ref={videoRef}
         controls
-        className="w-full max-h-[500px] rounded-lg bg-black"
+        className="w-full max-h-[500px] rounded-xl bg-slate-900 ring-1 ring-black/[0.04]"
         src={blobUrl}
         onLoadedMetadata={handleLoadedMetadata}
         onError={onError}
@@ -205,7 +205,7 @@ function VideoWithDuration({ blobUrl, onError, onDuration }: { blobUrl: string; 
         Your browser does not support video playback.
       </video>
       {duration !== null && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded bg-black/70 text-white text-xs font-medium">
+        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur-sm text-white text-xs font-medium ring-1 ring-white/10">
           <Clock className="w-3 h-3" /> {formatDuration(duration)}
         </div>
       )}
@@ -245,9 +245,9 @@ function RecordingInfoPanel({
     </div>
   );
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="text-sm font-semibold text-gray-900 mb-2">Recording Information</h3>
-      <Row label="Status" value={<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">{status}</span>} />
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+      <h3 className="text-sm font-semibold text-gray-900 mb-2 tracking-tight">Recording Information</h3>
+      <Row label="Status" value={<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 ring-1 ring-green-200 text-xs font-medium">{status}</span>} />
       <Row label="File Size" value={formatBytes(size)} />
       <Row label="Duration" value={duration != null ? formatDuration(duration) : '—'} />
       <Row label="Interview Date" value={formatInterviewDate(interviewDate)} />
@@ -290,11 +290,11 @@ function RecordingTabContent({
   return (
     <div className="space-y-4">
       {/* Sub-tab pills */}
-      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit ring-1 ring-slate-200">
         <button
           onClick={() => setRecView('candidate')}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            isCandidate ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Camera className="w-3.5 h-3.5" /> Candidate View
@@ -302,7 +302,7 @@ function RecordingTabContent({
         <button
           onClick={() => setRecView('screen')}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            !isCandidate ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            !isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Monitor className="w-3.5 h-3.5" /> Interview View
@@ -349,7 +349,7 @@ function RecordingTabContent({
             <a
               href={blobUrl}
               download={downloadName}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
               <Download className="w-4 h-4" /> Download MP4
             </a>
@@ -437,7 +437,7 @@ function diffWords(raw: string, corrected: string): { raw: DiffPart[]; corrected
 
 function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected' }) {
   const hl = tone === 'raw'
-    ? 'bg-amber-200/80 text-amber-900 rounded px-0.5'
+    ? 'bg-brand-orange/25 text-brand-orange-deep rounded px-0.5'
     : 'bg-green-200/80 text-green-900 rounded px-0.5 font-medium';
   return (
     <span>
@@ -880,13 +880,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, string> = {
-      completed: 'bg-green-100 text-green-700',
-      in_progress: 'bg-yellow-100 text-yellow-700',
-      invited: 'bg-purple-100 text-purple-700',
-      cancelled: 'bg-red-100 text-red-700',
-      draft: 'bg-gray-100 text-gray-600',
+      completed: 'bg-green-100 text-green-700 ring-1 ring-green-200',
+      in_progress: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
+      invited: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
+      cancelled: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+      draft: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
     };
-    return map[status] || 'bg-gray-100 text-gray-600';
+    return map[status] || 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
   };
 
   const getStatusLabel = (status: string) => {
@@ -901,9 +901,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 4) return 'text-green-600 bg-green-50 border-green-200';
-    if (score >= 3) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-    return 'text-red-600 bg-red-50 border-red-200';
+    if (score >= 4) return 'text-green-600 bg-green-50 border-green-200 ring-1 ring-green-200';
+    if (score >= 3) return 'text-brand-orange-deep bg-brand-orange/10 border-brand-orange/30 ring-1 ring-brand-orange/20';
+    return 'text-red-600 bg-red-50 border-red-200 ring-1 ring-red-200';
   };
 
   const toggleQuestion = (key: string) => {
@@ -992,8 +992,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
   const renderPlaceholder = (message: string) => (
     <div className="text-center py-16">
-      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-        <Clock className="w-6 h-6 text-gray-400" />
+      <div className="w-12 h-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+        <Clock className="w-6 h-6 text-brand-blue/40" />
       </div>
       <p className="text-gray-500">{message}</p>
     </div>
@@ -1003,17 +1003,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const renderEvaluationSpinner = () => (
     <div className="flex flex-col items-center justify-center py-24">
       <div className="relative mb-6">
-        <div className="w-16 h-16 rounded-full border-4 border-gray-200" />
-        <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-t-indigo-600 animate-spin" />
+        <div className="w-16 h-16 rounded-full border-4 border-brand-blue/20" />
+        <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-t-brand-blue animate-spin" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 mb-1">Generating Evaluation Results</h3>
+      <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="text-sm text-gray-500 max-w-xs text-center">
         The AI is analyzing the interview transcript and computing scores.
         This usually takes 15–30 seconds.
       </p>
       <div className="flex items-center gap-2 mt-4">
-        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-        <span className="text-xs text-indigo-600 font-medium">Processing...</span>
+        <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
+        <span className="text-xs text-brand-blue font-medium">Processing...</span>
       </div>
     </div>
   );
@@ -1033,83 +1033,98 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const placeholderMsg = getPlaceholderMessage();
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
-      <div className="w-full">
-        {/* Header */}
-        <div className="mb-6">
+    <div className="flex-1 overflow-y-auto bg-slate-50">
+      {/* Sticky brand header */}
+      <div className="sticky top-0 z-40 bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+        <div className="px-6 sm:px-8 py-3 sm:py-4 flex items-center gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
+            className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 text-white transition-colors"
+            aria-label="Back"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Config Details
           </button>
+          <div className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-white/15 backdrop-blur-sm ring-1 ring-white/25">
+            <User className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate">
+              Candidate Results
+            </h1>
+            <p className="text-xs text-white/70 truncate">Per-candidate AI interview report</p>
+          </div>
+        </div>
+      </div>
 
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold text-sm">
-                  {(interview.candidate_name || 'U')[0].toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-xl font-semibold text-gray-900">
-                      {interview.candidate_name || 'Unknown Candidate'}
-                    </h1>
-                    {interview.candidate_cid && (
-                      <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-mono font-medium">
-                        {interview.candidate_cid}
+      <div className="p-6 sm:p-8">
+        <div className="w-full">
+          {/* Candidate header banner */}
+          <div className="mb-6 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex items-center justify-center text-white font-semibold text-base">
+                    {(interview.candidate_name || 'U')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-xl font-semibold text-gray-900 tracking-tight">
+                        {interview.candidate_name || 'Unknown Candidate'}
+                      </h1>
+                      {interview.candidate_cid && (
+                        <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium">
+                          {interview.candidate_cid}
+                        </span>
+                      )}
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(interview.status)}`}>
+                        {getStatusLabel(interview.status)}
                       </span>
-                    )}
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(interview.status)}`}>
-                      {getStatusLabel(interview.status)}
-                    </span>
-                    {/* Interview mode badge — reads from config (special_instructions.interview_mode) */}
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                      isFlexibleMode
-                        ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
-                        : 'bg-amber-100 text-amber-700 border-amber-200'
-                    }`}>
-                      {isFlexibleMode ? 'Conversational Mode' : 'Timed Mode'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-                    {interview.candidate_email && <span>{interview.candidate_email}</span>}
-                    {interview.position && (
-                      <>
-                        <span className="text-gray-300">|</span>
-                        <span>{interview.position}</span>
-                      </>
-                    )}
+                      {/* Interview mode badge — reads from config (special_instructions.interview_mode) */}
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${
+                        isFlexibleMode
+                          ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                          : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                      }`}>
+                        {isFlexibleMode ? 'Conversational Mode' : 'Timed Mode'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                      {interview.candidate_email && <span>{interview.candidate_email}</span>}
+                      {interview.position && (
+                        <>
+                          <span className="text-gray-300">|</span>
+                          <span>{interview.position}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-[52px]">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  {formatDuration(eval_.duration_minutes || interview.duration_minutes)}
-                </span>
-                {interview.completed_at && (
-                  <span>
-                    Completed {formatISTDate(interview.completed_at)}
+                <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-[60px]">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    {formatDuration(eval_.duration_minutes || interview.duration_minutes)}
                   </span>
-                )}
+                  {interview.completed_at && (
+                    <span>
+                      Completed {formatISTDate(interview.completed_at)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
         {/* Evaluation pending banner */}
         {evaluationPending && (
-          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-800">
-            <div className="w-4 h-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin flex-shrink-0" />
+          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-blue/5 border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-xl text-sm text-brand-blue shadow-sm shadow-brand-blue/5">
+            <div className="w-4 h-4 rounded-full border-2 border-brand-blue/20 border-t-brand-blue animate-spin flex-shrink-0" />
             Generating evaluation results — this usually takes 15–30 seconds...
           </div>
         )}
 
         {/* Partial warning banner */}
         {isPartial && (
-          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             Interview disconnected — showing partial results
           </div>
@@ -1155,11 +1170,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           }
 
           const toneClasses = tone === 'red'
-            ? 'bg-red-50 border-red-200 text-red-800'
-            : 'bg-amber-50 border-amber-200 text-amber-900';
+            ? 'bg-red-50 border-red-200 ring-1 ring-red-100 text-red-800'
+            : 'bg-brand-orange/10 border-brand-orange/30 ring-1 ring-brand-orange/15 text-brand-orange-deep';
 
           return (
-            <div className={`mb-4 flex items-start gap-2 px-4 py-3 border rounded-lg text-sm ${toneClasses}`}>
+            <div className={`mb-4 flex items-start gap-2 px-4 py-3 border rounded-xl text-sm shadow-sm ${toneClasses}`}>
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-semibold">{title}</div>
@@ -1169,9 +1184,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           );
         })()}
 
-        {/* Tabs */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="border-b border-gray-200 px-6 overflow-x-auto">
+        {/* Tabs card */}
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="sticky top-[64px] sm:top-[80px] z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
             <div className="flex gap-1 min-w-max">
               {tabs.map(tab => (
                 <button
@@ -1181,14 +1196,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     activeTab === tab.key
                       ? tab.key === 'violations'
                         ? 'border-red-500 text-red-700 font-medium'
-                        : 'border-gray-800 text-gray-800 font-medium'
+                        : 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   {tab.icon}
                   {tab.label}
                   {tab.live && (
-                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full ml-0.5">
+                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full ml-0.5 ring-1 ring-red-300">
                       <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                       LIVE
                     </span>
@@ -1197,9 +1212,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
                       tab.badge > 0
                         ? activeTab === 'violations'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-red-100 text-red-600'
-                        : 'bg-gray-100 text-gray-500'
+                          ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                          : 'bg-red-100 text-red-600 ring-1 ring-red-200'
+                        : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
                     }`}>
                       {tab.badge}
                     </span>
@@ -1267,8 +1282,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   {sentimentTimeline.length > 0 ? (
                     <>
                       <div>
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Sentiment Timeline</h3>
-                        <div className="bg-gray-50 rounded-lg p-4" style={{ height: 300 }}>
+                        <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Sentiment Timeline</h3>
+                        <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 p-4" style={{ height: 300 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={sentimentTimeline} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
                               <CartesianGrid strokeDasharray="3 3" />
@@ -1276,9 +1291,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
                               <Tooltip />
                               <Legend />
-                              <Line type="monotone" dataKey="confidence" stroke="#22c55e" strokeWidth={2} name="Confidence" dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="confidence" stroke="#16a34a" strokeWidth={2} name="Confidence" dot={{ r: 3 }} />
                               <Line type="monotone" dataKey="nervousness" stroke="#ef4444" strokeWidth={2} name="Nervousness" dot={{ r: 3 }} />
-                              <Line type="monotone" dataKey="engagement" stroke="#3b82f6" strokeWidth={2} name="Engagement" dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="engagement" stroke="#0f3c99" strokeWidth={2} name="Engagement" dot={{ r: 3 }} />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -1286,10 +1301,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
                       {/* Emotion per turn */}
                       <div>
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Emotion per Turn</h3>
+                        <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Emotion per Turn</h3>
                         <div className="flex flex-wrap gap-2">
                           {sentimentTimeline.map((t, i) => (
-                            <div key={i} className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                            <div key={i} className="px-3 py-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 text-center">
                               <div className="text-[10px] text-gray-400 mb-0.5">{t.turn}</div>
                               <div className="text-xs font-medium text-gray-700 capitalize">
                                 {t.dominant_emotion || 'neutral'}
@@ -1302,27 +1317,27 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       {/* Summary stats */}
                       {sentimentSummary.total_turns_analyzed != null && (
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900 mb-3">Summary Statistics</h3>
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Summary Statistics</h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-gray-50 rounded-lg p-3 text-center">
+                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
                               <div className="text-lg font-semibold text-green-600">
                                 {(sentimentSummary.avg_confidence || 0).toFixed(1)}
                               </div>
                               <div className="text-xs text-gray-500">Avg Confidence</div>
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-3 text-center">
+                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
                               <div className="text-lg font-semibold text-red-600">
                                 {(sentimentSummary.avg_nervousness || 0).toFixed(1)}
                               </div>
                               <div className="text-xs text-gray-500">Avg Nervousness</div>
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-3 text-center">
-                              <div className="text-lg font-semibold text-blue-600">
+                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                              <div className="text-lg font-semibold text-brand-blue">
                                 {(sentimentSummary.avg_engagement || 0).toFixed(1)}
                               </div>
                               <div className="text-xs text-gray-500">Avg Engagement</div>
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-3 text-center">
+                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
                               <div className="text-lg font-semibold text-gray-900">
                                 {sentimentSummary.total_turns_analyzed}
                               </div>
@@ -1538,7 +1553,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       {truncated && (
                         <button
                           onClick={() => toggleQuestion(key)}
-                          className="flex items-center gap-1 mt-1.5 text-xs text-gray-400 hover:text-gray-600"
+                          className="flex items-center gap-1 mt-1.5 text-xs text-brand-blue hover:text-brand-blue-2"
                         >
                           {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                           {isExpanded ? 'Show less' : 'Show more'}
@@ -1554,7 +1569,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <div className="flex justify-end relative">
                       <button
                         onClick={() => setQaExportMenuOpen(v => !v)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-gray-900 text-white hover:bg-gray-800"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Export
@@ -1563,12 +1578,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       {qaExportMenuOpen && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setQaExportMenuOpen(false)} />
-                          <div className="absolute right-0 top-9 z-20 w-32 bg-white border border-gray-200 rounded-md shadow-lg py-1">
-                            <button onClick={exportQaPDF} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                          <div className="absolute right-0 top-9 z-20 w-32 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
+                            <button onClick={exportQaPDF} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
                               <FileText className="w-3.5 h-3.5 text-red-500" /> PDF
                             </button>
-                            <button onClick={exportQaDOCX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
-                              <FileText className="w-3.5 h-3.5 text-blue-600" /> DOCX
+                            <button onClick={exportQaDOCX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
+                              <FileText className="w-3.5 h-3.5 text-brand-blue" /> DOCX
                             </button>
                           </div>
                         </>
@@ -1601,33 +1616,33 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       // Same color scheme for the full round — not position-dependent.
                       // Must Have → amber; Nice To Have → blue; HR → purple.
                       const roundBadge = isHR
-                        ? { label: 'HR', cls: 'bg-purple-50 text-purple-700 border-purple-200' }
+                        ? { label: 'HR', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' }
                         : isMustHave
-                        ? { label: 'Must Have Skills', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                        ? { label: 'Must Have Skills', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' }
                         : isNiceToHave
-                        ? { label: 'Nice To Have Skills', cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+                        ? { label: 'Nice To Have Skills', cls: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20' }
                         : item.round_type
-                        ? { label: item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), cls: 'bg-gray-50 text-gray-600 border-gray-200' }
+                        ? { label: item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), cls: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200' }
                         : null;
 
                       return (
-                        <div key={idx} className={`border rounded-lg p-4 ${isSkipped ? 'border-gray-100 bg-gray-50/50' : 'border-gray-200'}`}>
+                        <div key={idx} className={`bg-white rounded-xl border ring-1 shadow-sm ${isSkipped ? 'border-gray-100 ring-black/[0.02] bg-slate-50/50 shadow-brand-blue/5' : 'border-gray-100 ring-black/[0.02] shadow-brand-blue/5'} p-4`}>
                           <div className="flex items-start gap-3 mb-2">
-                            <span className="flex-shrink-0 text-xs font-semibold text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 mt-0.5">
+                            <span className="flex-shrink-0 text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5 mt-0.5">
                               Q{item.question_number ?? idx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                                 {roundBadge && (
-                                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium border ${roundBadge.cls}`}>
+                                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${roundBadge.cls}`}>
                                     {roundBadge.label}
                                   </span>
                                 )}
                                 {effectiveTopic && effectiveTopic !== 'general' && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">{effectiveTopic}</span>
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-xs rounded-full">{effectiveTopic}</span>
                                 )}
                                 {isSkipped && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
                                     Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
                                   </span>
                                 )}
@@ -1638,13 +1653,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           </div>
 
                           {Array.isArray(item.clarifications) && item.clarifications.length > 0 && (
-                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-amber-200">
+                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-brand-orange/30">
                               {item.clarifications.map((cl: any, cIdx: number) => {
                                 const clKey = `q-${idx}-cl-${cIdx}`;
                                 return (
                                   <div key={clKey}>
                                     <div className="flex items-start gap-2">
-                                      <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-amber-700 bg-amber-100">
+                                      <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
                                         CL{cl.clarification_number ?? cIdx + 1}
                                       </span>
                                       <div className="flex-1 min-w-0">
@@ -1661,7 +1676,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           {followUps.length > 0 && (() => {
                             let _qaFuC = 0, _qaDdC = 0;
                             return (
-                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-violet-200">
+                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-brand-cyan/30">
                               {followUps.map((fu: any, fIdx: number) => {
                                 const fuSkipped = fu.response_type === 'skipped';
                                 const isDd = fu.question_intent === 'deep_dive';
@@ -1670,11 +1685,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 if (isDd) {
                                   _qaDdC += 1;
                                   badge = `D${_qaDdC}`;
-                                  badgeCls = 'text-teal-700 bg-teal-100';
+                                  badgeCls = 'text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/20';
                                 } else {
                                   _qaFuC += 1;
                                   badge = `F${_qaFuC}`;
-                                  badgeCls = 'text-violet-700 bg-violet-100';
+                                  badgeCls = 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20';
                                 }
                                 return (
                                   <div key={fIdx}>
@@ -1684,7 +1699,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                       </span>
                                       <div className="flex-1 min-w-0">
                                         {fuSkipped && (
-                                          <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full mb-1">
+                                          <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
                                             Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
                                           </span>
                                         )}
@@ -1831,7 +1846,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   <button
                     onClick={() => setTranscriptView(value)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      transcriptView === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      transcriptView === value ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {icon}
@@ -1845,14 +1860,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                            <Bot className="w-3.5 h-3.5 text-blue-600" />
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
+                            <Bot className="w-3.5 h-3.5 text-white" />
                           </div>
                           <span className="text-xs text-gray-500">Linda (AI Interviewer)</span>
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold text-[10px]">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-cyan to-brand-teal ring-1 ring-white/20 shadow-sm shadow-brand-cyan/15 flex items-center justify-center text-white font-semibold text-[10px]">
                             {candidateName[0].toUpperCase()}
                           </div>
                           <span className="text-xs text-gray-500">{candidateName}</span>
@@ -1860,7 +1875,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-gray-400">{messages.length} messages</span>
-                        <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                        <div className="flex items-center bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
                           <ToggleBtn value="chat" label="Chat" icon={<MessageSquare className="w-3.5 h-3.5" />} />
                           <ToggleBtn value="table" label="Table" icon={<Layers className="w-3.5 h-3.5" />} />
                         </div>
@@ -1881,10 +1896,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           return (
                             <div
                               key={idx}
-                              className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-teal-200' : 'border-violet-200'}` : ''}`}
+                              className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-brand-teal/30' : 'border-brand-cyan/30'}` : ''}`}
                             >
-                              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
-                                isAssistant ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'
+                              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm ${
+                                isAssistant ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-brand-blue/20' : 'bg-gradient-to-br from-brand-cyan to-brand-teal text-white shadow-brand-cyan/15'
                               }`}>
                                 {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
                               </div>
@@ -1893,14 +1908,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 {(label || language) && (
                                   <div className={`flex items-center gap-1.5 mb-1 ${isAssistant ? '' : 'flex-row-reverse'}`}>
                                     {label && (
-                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-none ${
-                                        qtype === 'deepdive' ? 'bg-teal-100 text-teal-700' : isFollowUp ? 'bg-violet-100 text-violet-700' : 'bg-indigo-100 text-indigo-700'
+                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-none ring-1 ${
+                                        qtype === 'deepdive' ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' : isFollowUp ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
                                       }`}>
                                         {label}
                                       </span>
                                     )}
                                     {language && !isAssistant && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 leading-none">
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ring-1 ring-slate-200 leading-none">
                                         {language}
                                       </span>
                                     )}
@@ -1908,27 +1923,27 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 )}
 
                                 {isAssistant ? (
-                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-800 rounded-tl-sm">
+                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-slate-100 text-gray-800 rounded-tl-sm ring-1 ring-slate-200/60">
                                     {content}
                                   </div>
                                 ) : hasCorrection && diff ? (
                                   <>
                                     {/* Original (raw ASR) — shown FIRST */}
-                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-amber-50 border border-amber-200 text-amber-900">
-                                      <div className="text-[10px] font-semibold text-amber-600 mb-1 uppercase tracking-wide">Original (ASR)</div>
+                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-brand-orange/10 ring-1 ring-brand-orange/25 text-brand-orange-deep">
+                                      <div className="text-[10px] font-semibold text-brand-orange-deep mb-1 uppercase tracking-wide">Original (ASR)</div>
                                       <DiffText parts={diff.raw} tone="raw" />
                                     </div>
                                     {/* Corrected — shown BELOW */}
-                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-blue-500 text-white">
-                                      <div className="text-[10px] font-semibold text-blue-100 mb-1 uppercase tracking-wide">Corrected</div>
+                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
+                                      <div className="text-[10px] font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
                                       <DiffText parts={diff.corrected} tone="corrected" />
                                     </div>
                                     {diff.mode === 'sentence' && (
-                                      <div className="text-[10px] text-amber-600 mt-1 pr-1 text-right italic">full-sentence rewrite</div>
+                                      <div className="text-[10px] text-brand-orange-deep mt-1 pr-1 text-right italic">full-sentence rewrite</div>
                                     )}
                                   </>
                                 ) : (
-                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-blue-500 text-white rounded-tr-sm">
+                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white rounded-tr-sm ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                     {content}
                                   </div>
                                 )}
@@ -2165,7 +2180,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             <button
                               onClick={() => setExportMenuOpen(v => !v)}
                               disabled={groups.length === 0}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <Download className="w-3.5 h-3.5" />
                               Export
@@ -2174,11 +2189,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             {exportMenuOpen && (
                               <>
                                 <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
-                                <div className="absolute right-0 top-9 z-20 w-32 bg-white border border-gray-200 rounded-md shadow-lg py-1">
-                                  <button onClick={exportCSV} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
-                                    <FileText className="w-3.5 h-3.5 text-gray-400" /> CSV
+                                <div className="absolute right-0 top-9 z-20 w-32 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
+                                  <button onClick={exportCSV} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
+                                    <FileText className="w-3.5 h-3.5 text-slate-400" /> CSV
                                   </button>
-                                  <button onClick={exportXLSX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                                  <button onClick={exportXLSX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
                                     <FileText className="w-3.5 h-3.5 text-green-600" /> XLSX
                                   </button>
                                 </div>
@@ -2186,9 +2201,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             )}
                           </div>
 
-                          <div className="overflow-x-auto rounded-lg border border-gray-200">
+                          <div className="overflow-x-auto rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
                             <table className="w-full text-sm">
-                              <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
+                              <thead className="bg-slate-50 text-gray-600 text-xs uppercase tracking-wide border-b border-gray-100">
                                 <tr>
                                   <th className="px-3 py-2.5 text-left font-semibold w-12">S.No</th>
                                   <th className="px-3 py-2.5 text-left font-semibold w-20">Question ID</th>
@@ -2207,16 +2222,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                   const isDd = r.type === 'Deep Dive';
                                   const isSub = isFu || isDd;
                                   return (
-                                    <tr key={idx} className={`align-top ${isDd ? 'bg-teal-50/40' : isFu ? 'bg-violet-50/40' : 'bg-white'}`}>
+                                    <tr key={idx} className={`align-top ${isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : 'bg-white'}`}>
                                       <td className="px-3 py-3 align-top text-xs text-gray-500">{r.sno}</td>
                                       <td className="px-3 py-3 align-top">
-                                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                                           {r.questionId}
                                         </span>
                                       </td>
                                       <td className="px-3 py-3 align-top">
-                                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
-                                          isDd ? 'bg-teal-100 text-teal-700' : isFu ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
+                                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ring-1 ${
+                                          isDd ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' : isFu ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' : 'bg-slate-100 text-slate-600 ring-slate-200'
                                         }`}>
                                           {r.type}
                                         </span>
@@ -2224,7 +2239,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                       <td className="px-3 py-3 align-top text-[12px] text-gray-700 leading-snug italic">
                                         {r.question || '—'}
                                       </td>
-                                      <td className="px-3 py-3 align-top text-amber-900 leading-snug">
+                                      <td className="px-3 py-3 align-top text-brand-orange-deep leading-snug">
                                         {diff && diff.mode !== 'none'
                                           ? <DiffText parts={diff.raw} tone="raw" />
                                           : <span className="text-gray-700">{r.raw || '—'}</span>}
@@ -2505,12 +2520,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               <div className="space-y-6">
 
                 {/* Total Violations Banner */}
-                <div className={`rounded-lg border ${risk.bg} ${risk.border} overflow-hidden`}>
+                <div className={`rounded-xl border ${risk.bg} ${risk.border} ring-1 ring-black/[0.02] shadow-sm overflow-hidden`}>
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-3">
                       <ShieldAlert className={`w-5 h-5 ${risk.color}`} />
                       <div>
-                        <p className={`text-sm font-semibold ${risk.color}`}>
+                        <p className={`text-sm font-semibold tracking-tight ${risk.color}`}>
                           Integrity Status: {risk.label}
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5">
@@ -2525,7 +2540,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       <button
                         onClick={() => setShowThresholdEditor(p => !p)}
                         title="Configure risk thresholds"
-                        className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-white transition-colors"
+                        className="p-1.5 rounded-lg border border-gray-200 ring-1 ring-black/[0.02] bg-white text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -2537,35 +2552,35 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
                   {/* Threshold Editor — configures per-box risk levels */}
                   {showThresholdEditor && (
-                    <div className="px-4 pb-3 border-t border-gray-200 pt-3 bg-white bg-opacity-60">
-                      <p className="text-xs font-medium text-gray-600 mb-2">Configure Per-Violation Risk Thresholds</p>
+                    <div className="px-4 pb-3 border-t border-gray-200 pt-3 bg-white/60 backdrop-blur-sm">
+                      <p className="text-xs font-medium text-gray-600 mb-2 tracking-tight">Configure Per-Violation Risk Thresholds</p>
                       <div className="flex items-center gap-4 flex-wrap">
                         <label className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="text-blue-600 font-medium">Low Risk</span>
+                          <span className="text-brand-blue font-medium">Low Risk</span>
                           <span>0 –</span>
                           <input
                             type="number" min={1} max={violationThresholds.medMax - 1}
                             value={violationThresholds.lowMax}
                             onChange={e => setViolationThresholds(t => ({ ...t, lowMax: Math.max(1, Math.min(t.medMax - 1, Number(e.target.value))) }))}
-                            className="w-14 px-2 py-1 rounded border border-gray-300 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            className="w-14 px-2 py-1 rounded-md border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                           />
                           <span className="text-gray-400">violations</span>
                         </label>
                         <label className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="text-orange-600 font-medium">Medium Risk</span>
+                          <span className="text-brand-orange-deep font-medium">Medium Risk</span>
                           <span>{violationThresholds.lowMax + 1} –</span>
                           <input
                             type="number" min={violationThresholds.lowMax + 1}
                             value={violationThresholds.medMax}
                             onChange={e => setViolationThresholds(t => ({ ...t, medMax: Math.max(t.lowMax + 1, Number(e.target.value)) }))}
-                            className="w-14 px-2 py-1 rounded border border-gray-300 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            className="w-14 px-2 py-1 rounded-md border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                           />
                           <span className="text-gray-400">violations</span>
                         </label>
                         <span className="text-xs text-red-600 font-medium">{violationThresholds.medMax + 1}+ = High Risk</span>
                         <button
                           onClick={() => { setViolationThresholds(DEFAULT_VIOLATION_THRESHOLDS); }}
-                          className="text-xs text-blue-500 hover:underline"
+                          className="text-xs text-brand-blue hover:underline"
                         >
                           Reset defaults
                         </button>
@@ -2588,7 +2603,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   ];
                   return (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Violation Breakdown</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Violation Breakdown</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {ALL_TYPES.map(type => {
                       const cfg = EVENT_CONFIG[type];
@@ -2598,8 +2613,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       return (
                         <div
                           key={type}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border ${
-                            count > 0 ? `${cfg.bg} ${cfg.border}` : 'bg-gray-50 border-gray-100'
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border ring-1 shadow-sm ${
+                            count > 0 ? `${cfg.bg} ${cfg.border} ring-black/[0.02] shadow-brand-blue/5` : 'bg-white border-gray-100 ring-black/[0.02] shadow-brand-blue/5'
                           }`}
                         >
                           <span className={count > 0 ? cfg.color : 'text-gray-300'}>{cfg.icon}</span>
@@ -2630,24 +2645,24 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
                 {/* Event Log Table */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Event Log</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Event Log</h3>
                   {groupedViolations.length === 0 ? (
-                    <div className="text-center py-12 bg-green-50 rounded-lg border border-green-200">
-                      <ShieldAlert className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                    <div className="text-center py-12 bg-green-50 rounded-xl border border-green-200 ring-1 ring-green-100">
+                      <ShieldAlert className="w-8 h-8 text-green-500 mx-auto mb-2" />
                       <p className="text-sm font-medium text-green-700">No violations recorded</p>
-                      <p className="text-xs text-green-500 mt-1">This interview completed with a clean integrity status.</p>
+                      <p className="text-xs text-green-600/80 mt-1">This interview completed with a clean integrity status.</p>
                     </div>
                   ) : (
                     <>
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
                         <table className="w-full text-sm">
-                          <thead className="bg-gray-50 border-b border-gray-200">
+                          <thead className="bg-slate-50 border-b border-gray-100">
                             <tr>
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-10">#</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Event</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Time</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Severity</th>
-                              <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">Count</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Event</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Time</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
+                              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
@@ -2655,20 +2670,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               const cfg = EVENT_CONFIG[row.event_type];
                               const sev = normaliseSeverity(row.severity);
                               const sevStyle =
-                                sev === 'severe'   ? 'bg-red-100 text-red-700' :
-                                sev === 'moderate' ? 'bg-orange-100 text-orange-700' :
-                                                     'bg-blue-50 text-blue-600';
+                                sev === 'severe'   ? 'bg-red-100 text-red-700 ring-1 ring-red-200' :
+                                sev === 'moderate' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' :
+                                                     'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
                               const countStyle =
                                 row.count >= 5 ? 'text-red-600 font-bold' :
-                                row.count >= 3 ? 'text-orange-500 font-semibold' :
+                                row.count >= 3 ? 'text-brand-orange-deep font-semibold' :
                                                  'text-gray-600';
                               const globalIdx = (violationPage - 1) * ROWS_PER_PAGE + idx + 1;
                               return (
-                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                <tr key={idx} className="hover:bg-brand-blue/[0.02] transition-colors">
                                   <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
                                   <td className="px-4 py-2.5">
-                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${
-                                      cfg ? `${cfg.bg} ${cfg.color}` : 'bg-gray-100 text-gray-600'
+                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ring-1 ${
+                                      cfg ? `${cfg.bg} ${cfg.color} ring-black/[0.04]` : 'bg-slate-100 text-slate-600 ring-slate-200'
                                     }`}>
                                       {cfg?.icon}
                                       {cfg?.label ?? row.event_type.replace(/_/g, ' ')}
@@ -2690,7 +2705,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
                       {/* Pagination */}
                       {totalPages > 1 && (
-                        <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center justify-between mt-3 px-4 py-3 bg-slate-50 border-t border-gray-100 rounded-b-xl">
                           <p className="text-xs text-gray-500">
                             Showing {(violationPage - 1) * ROWS_PER_PAGE + 1}–{Math.min(violationPage * ROWS_PER_PAGE, groupedViolations.length)} of {groupedViolations.length} events
                           </p>
@@ -2698,7 +2713,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             <button
                               onClick={() => setViolationPage(p => Math.max(1, p - 1))}
                               disabled={violationPage === 1}
-                              className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                               <ChevronLeft className="w-3.5 h-3.5" />
                             </button>
@@ -2706,7 +2721,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             <button
                               onClick={() => setViolationPage(p => Math.min(totalPages, p + 1))}
                               disabled={violationPage === totalPages}
-                              className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                               <ChevronRight className="w-3.5 h-3.5" />
                             </button>
@@ -2720,6 +2735,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             )}
 
           </div>
+        </div>
         </div>
       </div>
     </div>

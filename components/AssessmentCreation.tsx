@@ -19,7 +19,7 @@ const JDCreation = dynamic(() => import('@/components/JDCreation'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue" />
     </div>
   ),
 });
@@ -565,37 +565,37 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     if (!showAddHRQuizModal) return null;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4">
-        <div className="w-full max-w-5xl rounded-2xl border border-gray-700 bg-gray-800 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-gray-700 px-6 py-5">
-            <h3 className="text-2xl font-semibold text-white">Add New Question</h3>
-            <button type="button" onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-white">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+        <div className="w-full max-w-5xl rounded-2xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+            <h3 className="text-2xl font-semibold text-gray-900 tracking-tight">Add New Question</h3>
+            <button type="button" onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-brand-blue transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
 
           <div className="space-y-6 px-6 py-6">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-200">Question Text *</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Question Text *</label>
               <input
                 type="text"
                 value={newHRQuestion.question_text}
                 onChange={(e) => setNewHRQuestion(prev => ({ ...prev, question_text: e.target.value }))}
                 placeholder="Enter the HR question..."
-                className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
               />
             </div>
 
             <div>
-              <label className="mb-3 block text-sm font-medium text-gray-200">Answer Type</label>
+              <label className="mb-3 block text-sm font-medium text-gray-700">Answer Type</label>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'text', correct_answer: undefined, time_minutes: 3 }))}
                   className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
                     newHRQuestion.answer_type === 'text'
-                      ? 'border-teal-500 bg-teal-950/40 text-teal-400'
-                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                      ? 'border-brand-blue bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   Text Answer (3 min)
@@ -605,8 +605,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
                   className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
                     newHRQuestion.answer_type === 'yes_no'
-                      ? 'border-gray-500 bg-gray-700 text-gray-100'
-                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                      ? 'border-brand-blue bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   Yes / No (1 min)
@@ -616,15 +616,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             {newHRQuestion.answer_type === 'yes_no' && (
               <div>
-                <label className="mb-3 block text-sm font-medium text-gray-200">Correct Answer *</label>
+                <label className="mb-3 block text-sm font-medium text-gray-700">Correct Answer *</label>
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
                     onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
                     className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
                       newHRQuestion.correct_answer === 'Yes'
-                        ? 'border-green-500 bg-green-950/40 text-green-400'
-                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
                     }`}
                   >
                     Yes is correct
@@ -634,8 +634,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
                     className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
                       newHRQuestion.correct_answer === 'No'
-                        ? 'border-green-500 bg-green-950/40 text-green-400'
-                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
                     }`}
                   >
                     No is correct
@@ -645,11 +645,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             )}
           </div>
 
-          <div className="flex justify-end gap-4 border-t border-gray-700 px-6 py-5">
+          <div className="flex justify-end gap-4 border-t border-gray-100 px-6 py-5">
             <button
               type="button"
               onClick={closeAddHRQuizModal}
-              className="rounded-xl border border-gray-600 px-6 py-3 text-lg text-gray-200 hover:bg-gray-700"
+              className="rounded-xl border border-gray-200 bg-white px-6 py-3 text-lg text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
             >
               Cancel
             </button>
@@ -657,7 +657,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               type="button"
               onClick={handleSaveHRQuestion}
               disabled={isSavingHRQuestion}
-              className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-lg font-semibold text-gray-900 hover:bg-white disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-6 py-3 text-lg font-semibold disabled:opacity-60 transition-all"
             >
               <FileText className="w-5 h-5" />
               {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
@@ -1584,18 +1584,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // Step 1: Select JD
   if (step === 'select-jd') {
     return (
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
         <div className="w-full">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 mb-4 sm:mb-6 transition-colors"
+            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-4 sm:mb-6 transition-colors"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Assessments
           </button>
 
           <div className="mb-6 sm:mb-8">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-2">{isEditMode ? 'Edit Assessment' : 'Create New Assessment'}</h1>
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-2 tracking-tight">{isEditMode ? 'Edit Assessment' : 'Create New Assessment'}</h1>
             <p className="text-sm sm:text-base text-gray-600">
               {isEditMode
                 ? 'Update the assessment configuration. Changes will create a new version.'
@@ -1603,21 +1603,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </p>
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0 mt-0.5" />
+          <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
             <div>
-              <div className="text-xs sm:text-sm text-gray-800 mb-1">AI-Powered Assessment Generation</div>
-              <div className="text-xs sm:text-sm text-gray-900">
+              <div className="text-xs sm:text-sm text-brand-blue font-medium mb-1">AI-Powered Assessment Generation</div>
+              <div className="text-xs sm:text-sm text-gray-700">
                 Automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="p-4 sm:p-6 border-b border-gray-100">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                 <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Select Job Description</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Select Job Description</h2>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     Choose the JD that this assessment will be based on
                   </p>
@@ -1625,7 +1625,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {canCreateJd && (
                   <button
                     onClick={handleCreateNewJD}
-                    className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                    className="px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 text-sm flex-shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                     <span className="hidden sm:inline">Create New Job</span>
@@ -1638,7 +1638,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <div className="p-4 sm:p-6">
               {isLoadingJobs ? (
                 <div className="text-center py-8 sm:py-12">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
                   <p className="text-sm sm:text-base text-gray-500">Loading job descriptions...</p>
                 </div>
               ) : (
@@ -1661,16 +1661,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <div
                       key={job.id}
                       onClick={() => !hasExistingAssessment && handleJobSelect(job)}
-                      className={`w-full text-left p-3 sm:p-5 border rounded-lg transition-all ${
+                      className={`w-full text-left p-3 sm:p-5 border rounded-xl transition-all ${
                         hasExistingAssessment
-                          ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                          : 'border-gray-200 hover:border-gray-300 hover:shadow-md cursor-pointer bg-white'
+                          ? 'border-gray-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                          : 'border-gray-100 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02] hover:shadow-md hover:shadow-brand-blue/10 cursor-pointer bg-white'
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
                         {/* Icon */}
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                         </div>
 
                         {/* Content */}
@@ -1678,7 +1678,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {/* Title Row */}
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {job.job_id && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">
+                              <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-medium">
                                 {job.job_id}
                               </span>
                             )}
@@ -1690,8 +1690,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               Published
                             </span>
                             {job.creation_method === 'ai_generated' && (
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                              <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-brand-cyan rounded-full"></span>
                                 AI
                               </span>
                             )}
@@ -1749,12 +1749,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               }
                             }
                             return codingDetected ? (
-                              <span className="px-2 sm:px-2.5 py-1 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
+                              <span className="px-2 sm:px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded text-xs flex items-center gap-1">
                                 <Code className="w-3 h-3" />
                                 Coding
                               </span>
                             ) : (
-                              <span className="px-2 sm:px-2.5 py-1 bg-gray-100 text-gray-500 rounded text-xs flex items-center gap-1">
+                              <span className="px-2 sm:px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs flex items-center gap-1">
                                 <Code className="w-3 h-3" />
                                 <span className="hidden sm:inline">No Coding</span>
                                 <span className="sm:hidden">N/A</span>
@@ -1768,7 +1768,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               <span className="sm:hidden">Created</span>
                             </span>
                           ) : (
-                            <button className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs hover:bg-gray-900 transition-colors">
+                            <button className="px-3 py-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs transition-all">
                               Select
                             </button>
                           )}
@@ -1786,7 +1786,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     {canCreateJd && (
                       <button
                         onClick={handleCreateNewJD}
-                        className="mt-4 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto text-sm"
+                        className="mt-4 px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"
                       >
                         <Plus className="w-4 h-4" />
                         Create New Job
@@ -1802,17 +1802,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {/* Full-screen JD Creation Modal */}
         {showJDCreation && (
-          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-6">
-            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-[98vw] sm:w-[95vw] h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-[98vw] sm:w-[95vw] h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Modal Header */}
-              <div className="bg-gray-800 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0 rounded-t-xl sm:rounded-t-2xl">
+              <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0 rounded-t-xl sm:rounded-t-2xl">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 ring-1 ring-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base text-white font-medium truncate">Create New Job</h2>
-                    <p className="text-gray-300 text-xs sm:text-sm hidden sm:block">Create a job description for your assessment</p>
+                    <h2 className="text-sm sm:text-base text-white font-medium truncate tracking-tight">Create New Job</h2>
+                    <p className="text-white/80 text-xs sm:text-sm hidden sm:block">Create a job description for your assessment</p>
                   </div>
                 </div>
                 <button
@@ -1845,12 +1845,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const enabledSectionsCount = sections.filter(section => section.enabled).length;
 
     return (
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50 relative">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50 relative">
         {/* Auto-saving overlay */}
         {isAutoSaving && (
-          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-4 sm:p-5 flex items-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin text-gray-700" />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-5 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
               <span className="text-sm sm:text-base text-gray-700 font-medium">Auto-saving draft...</span>
             </div>
           </div>
@@ -1860,16 +1860,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <button
             onClick={() => handleAutoSaveDraft(() => setStep('select-jd'))}
             disabled={isAutoSaving}
-            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 mb-4 sm:mb-6 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-4 sm:mb-6 transition-colors disabled:opacity-50"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Job Selection
           </button>
 
           <div className="mb-4 sm:mb-6">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1">Configure Assessment</h1>
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 tracking-tight">Configure Assessment</h1>
             <p className="text-sm sm:text-base text-gray-600">
-              Set duration, section distribution, and topics for <span className="text-gray-900 font-medium truncate">{selectedJob?.title}</span>
+              Set duration, section distribution, and topics for <span className="text-brand-blue font-medium truncate">{selectedJob?.title}</span>
             </p>
           </div>
 
@@ -1878,10 +1878,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             {/* Left Column - Main Content */}
             <div className="flex-1 space-y-4 sm:space-y-6">
               {/* Configure Assessment Rounds */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
-                  <h3 className="text-sm sm:text-base font-medium text-gray-900">Configure Assessment Rounds</h3>
+                  <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Configure Assessment Rounds</h3>
                 </div>
                 <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
                   Choose which rounds to include in this assessment. Disabled rounds will not appear in the section distribution.
@@ -1889,17 +1889,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                 <div className="space-y-3">
                   {/* HR Round - Summary (selection is in Section Distribution below) */}
-                  <div className={`p-3 sm:p-4 border rounded-lg transition-all ${hrEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className={`p-3 sm:p-4 border rounded-xl transition-all ${hrEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                        </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <span className="text-sm sm:text-base font-medium text-gray-900">HR Round</span>
-                            <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Question Bank</span>
-                            <span className="px-1.5 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">No Timer</span>
+                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">Question Bank</span>
+                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs">No Timer</span>
                             {!hrEnabled && (
-                              <span className="px-1.5 sm:px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">Disabled</span>
+                              <span className="px-1.5 sm:px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-xs">Disabled</span>
                             )}
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5 leading-snug">
@@ -1915,7 +1917,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         aria-pressed={hrEnabled}
                         onClick={handleHRToggle}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                          hrEnabled ? 'bg-gray-800' : 'bg-gray-300'
+                          hrEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
                         }`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1926,10 +1928,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </div>
 
                   {/* Technical Round Toggle */}
-                  <div className={`p-3 sm:p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className={`p-3 sm:p-4 border rounded-xl transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                          <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                        </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <span className="text-sm sm:text-base font-medium text-gray-900">Technical Round</span>
@@ -1939,7 +1943,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </div>
                       <button
                         onClick={() => handleTechnicalToggle()}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
@@ -1953,17 +1957,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     const isAutoEnabled = hasExtractedLanguages; // IT job = auto-enabled
 
                     return (
-                      <div className={`p-3 sm:p-4 border rounded-lg transition-all ${codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                      <div className={`p-3 sm:p-4 border rounded-xl transition-all ${codingEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                            <Code className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                              <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep" />
+                            </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                 <span className="text-sm sm:text-base font-medium text-gray-900">Coding Round</span>
                                 {isAutoEnabled ? (
                                   <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Auto (IT Job)</span>
                                 ) : (
-                                  <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">Auto (Not Required)</span>
+                                  <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-xs">Auto (Not Required)</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500 mt-0.5 leading-snug truncate">
@@ -1976,7 +1982,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           </div>
                           <button
                             onClick={() => handleCodingToggle()}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
                           >
                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
@@ -1989,13 +1995,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
-                  <h3 className="text-sm sm:text-base font-medium text-gray-900">Assessment Duration</h3>
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Duration</h3>
                   <span className="text-xs text-gray-500 ml-2 hidden sm:inline">(Fixed at 30 minutes)</span>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
                   {(() => {
                     const techSection = sections.find(s => s.name === 'Technical');
                     const codeSection = sections.find(s => s.name === 'Coding');
@@ -2038,31 +2044,31 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   const codeSection = sections.find(s => s.name === 'Coding');
 
                   return (
-                    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <p className="text-xs font-medium text-blue-800 mb-2">Auto-calculated from JD:</p>
+                    <div className="mt-3 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3">
+                      <p className="text-xs font-medium text-brand-blue mb-2">Auto-calculated from JD:</p>
                       <div className="space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between text-blue-700">
+                        <div className="flex items-center justify-between text-brand-blue/80">
                           <span>Experience</span>
                           <span className="font-semibold">{expMin}-{expMax} yrs ({level})</span>
                         </div>
-                        <div className="flex items-center justify-between text-blue-700">
+                        <div className="flex items-center justify-between text-brand-blue/80">
                           <span>Skills count</span>
                           <span className="font-semibold">{skillCount} skills {skillCount >= 8 ? '(broad)' : skillCount <= 3 ? '(deep)' : '(balanced)'}</span>
                         </div>
-                        <div className="border-t border-blue-200 pt-1.5 space-y-1">
-                          <div className="flex items-center justify-between text-blue-800">
+                        <div className="border-t border-brand-blue/15 pt-1.5 space-y-1">
+                          <div className="flex items-center justify-between text-brand-blue">
                             <span>Technical</span>
                             <span className="font-semibold">{techSection?.percentage || 0}% → {Math.round(30 * ((techSection?.percentage || 0) / 100))} min</span>
                           </div>
                           {codeSection?.enabled && (
-                            <div className="flex items-center justify-between text-blue-800">
+                            <div className="flex items-center justify-between text-brand-blue">
                               <span>Coding</span>
                               <span className="font-semibold">{codeSection.percentage}% → {30 - Math.round(30 * ((techSection?.percentage || 0) / 100))} min</span>
                             </div>
                           )}
                         </div>
                       </div>
-                      <p className="text-[10px] text-blue-600 mt-2">
+                      <p className="text-[10px] text-brand-blue/70 mt-2">
                         {level} level + {skillCount} skills = Technical {techSection?.percentage || 0}% / Coding {codeSection?.percentage || 0}%. Recruiter can adjust above.
                       </p>
                     </div>
@@ -2135,11 +2141,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div> */}
 
               {/* Section Distribution */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
-                    <h3 className="text-sm sm:text-base font-medium text-gray-900">Section Distribution</h3>
+                    <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Section Distribution</h3>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs sm:text-sm text-gray-500">Total:</span>
@@ -2171,33 +2177,33 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   {(hrQuestionBank.length > 0 || selectedHRQuestions.length > 0 || !!hrSection) && (
                   <div
                     aria-disabled={!hrEnabled}
-                    className={`p-3 sm:p-4 border rounded-lg transition-all ${
-                      hrEnabled ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-70'
+                    className={`p-3 sm:p-4 border rounded-xl transition-all ${
+                      hrEnabled ? 'border-gray-100 bg-white ring-1 ring-black/[0.02]' : 'border-gray-100 bg-slate-50 opacity-70'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Users className="w-4 h-4 text-gray-600" />
+                        <Users className="w-4 h-4 text-brand-blue" />
                         <span className="text-sm sm:text-base font-medium text-gray-900">HR Section</span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Question Bank</span>
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">No Timer</span>
+                        <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">Question Bank</span>
+                        <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs">No Timer</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <button
                           type="button"
                           onClick={openAddHRQuizModal}
                           disabled={!hrEnabled}
-                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 font-medium ${
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 font-medium transition-colors ${
                             hrEnabled
-                              ? 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                              ? 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                               : 'border-gray-200 text-gray-400 cursor-not-allowed'
                           }`}
                         >
                           <Plus className="w-3.5 h-3.5" />
                           Add Quiz
                         </button>
-                        <span className={`${hrEnabled && selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
-                        <button type="button" onClick={selectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-blue-600 hover:text-blue-800 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>All</button>
+                        <span className={`${hrEnabled && selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
+                        <button type="button" onClick={selectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-brand-blue hover:text-brand-blue-2 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>All</button>
                         <span className="text-gray-300">|</span>
                         <button type="button" onClick={deselectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-gray-500 hover:text-gray-700 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>None</button>
                       </div>
@@ -2205,7 +2211,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                     <div className="space-y-1.5 max-h-72 overflow-y-auto">
                       {hrQuestionBank.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                        <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
                           No HR questions found. Add one to start building this section.
                         </div>
                       ) : hrQuestionBank.map((q, idx) => {
@@ -2218,10 +2224,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               hrEnabled ? 'cursor-pointer' : 'cursor-not-allowed'
                             } ${
                               isSelected
-                                ? 'bg-blue-50 border border-blue-200'
+                                ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10'
                                 : hrEnabled
-                                  ? 'bg-gray-50 border border-transparent hover:bg-gray-100'
-                                  : 'bg-gray-50 border border-transparent'
+                                  ? 'bg-slate-50 border border-transparent hover:bg-brand-blue/5'
+                                  : 'bg-slate-50 border border-transparent'
                             }`}
                           >
                             <input
@@ -2230,12 +2236,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               onChange={(e) => e.stopPropagation()}
                               onClick={(e) => e.stopPropagation()}
                               readOnly
-                              className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 flex-shrink-0 pointer-events-none"
+                              className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
                             />
-                            <span className="w-5 h-5 flex items-center justify-center bg-gray-800 text-white rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
+                            <span className="w-5 h-5 flex items-center justify-center bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
                             <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
-                              q.type === 'Yes/No' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
+                              q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
                             }`}>{q.type}</span>
                             <span className="text-gray-400 flex-shrink-0">{q.time} min</span>
                           </div>
@@ -2254,11 +2260,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                   {/* Technical & Coding Sections */}
                   {sections.filter(s => s.enabled && s.name !== 'HR').map((section) => (
-                    <div key={section.name} className="p-3 sm:p-4 border border-gray-200 rounded-lg">
+                    <div key={section.name} className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {section.name === 'Technical' && <Brain className="w-4 h-4 text-gray-600" />}
-                          {section.name === 'Coding' && <Code className="w-4 h-4 text-gray-600" />}
+                          {section.name === 'Technical' && <Brain className="w-4 h-4 text-brand-cyan" />}
+                          {section.name === 'Coding' && <Code className="w-4 h-4 text-brand-orange-deep" />}
                           <span className="text-sm sm:text-base font-medium text-gray-900">{section.name} Section</span>
                         </div>
                         {section.name === 'Coding' && codingEnabledSource === 'auto' && (
@@ -2287,10 +2293,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             step={section.name === 'Coding' || sections.some(s => s.name === 'Coding' && s.enabled) ? 1 : 1}
                             value={section.percentage}
                             onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
-                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                            className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
                           />
                           <div className="flex items-center gap-1">
-                            <span className="w-14 px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-center text-sm text-gray-700 select-none">
+                            <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
                               {section.percentage}
                             </span>
                             <span className="text-xs sm:text-sm text-gray-600">%</span>
@@ -2316,11 +2322,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 ? 'domain tools, regulations, workflows'
                                 : 'algorithm type, framework, logic pattern'
                             }`}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm text-black"
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-gray-900"
                           />
                           <button
                             onClick={() => addTopic(section.name)}
-                            className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-1 text-sm flex-shrink-0"
+                            className="px-3 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
                           >
                             <Plus className="w-4 h-4" />
                             <span className="hidden sm:inline">Add Topic</span>
@@ -2331,10 +2337,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {section.topics.map((topic, idx) => (
                             <span
                               key={idx}
-                              className="px-2.5 py-1 bg-gray-100 text-gray-800 rounded text-xs flex items-center gap-1.5 border border-gray-200"
+                              className="px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1.5"
                             >
                               {topic}
-                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-gray-900">
+                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2">
                                 <X className="w-3 h-3" />
                               </button>
                             </span>
@@ -2356,14 +2362,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             {/* Right Column - Sidebar */}
             <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4">
               {/* AI Assessment Generation Info */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
                 <div
                   className="flex items-center justify-between cursor-pointer"
                   onClick={() => setIsAIGenerationExpanded(!isAIGenerationExpanded)}
                 >
                   <div className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-gray-700" />
-                    <h4 className="font-medium text-gray-900 text-sm">AI Assessment Generation</h4>
+                    <Sparkles className="w-5 h-5 text-brand-blue" />
+                    <h4 className="font-medium text-gray-900 text-sm tracking-tight">AI Assessment Generation</h4>
                   </div>
                   {isAIGenerationExpanded ? (
                     <ChevronUp className="w-5 h-5 text-gray-600" />
@@ -2383,14 +2389,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Assessment Scoring Rules */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
                 <div
                   className="flex items-center justify-between cursor-pointer"
                   onClick={() => setIsScoringRulesExpanded(!isScoringRulesExpanded)}
                 >
                   <div className="flex items-center gap-2">
-                    <BarChart className="w-5 h-5 text-gray-700" />
-                    <h4 className="font-medium text-gray-900 text-sm">Assessment Scoring Rules</h4>
+                    <BarChart className="w-5 h-5 text-brand-blue" />
+                    <h4 className="font-medium text-gray-900 text-sm tracking-tight">Assessment Scoring Rules</h4>
                   </div>
                   {isScoringRulesExpanded ? (
                     <ChevronUp className="w-5 h-5 text-gray-600" />
@@ -2405,7 +2411,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {/* Technical Section */}
                 <div className="mb-3 pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-2 mb-1">
-                    <Brain className="w-4 h-4 text-gray-600" />
+                    <Brain className="w-4 h-4 text-brand-cyan" />
                     <span className="text-xs font-medium text-gray-900">Technical Section</span>
                   </div>
                   <div className="text-xs text-gray-600 ml-6 space-y-0.5">
@@ -2420,7 +2426,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {/* Coding Section */}
                 <div className="mb-3 pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-2 mb-1">
-                    <Code className="w-4 h-4 text-gray-600" />
+                    <Code className="w-4 h-4 text-brand-orange-deep" />
                     <span className="text-xs font-medium text-gray-900">Coding Section</span>
                   </div>
                   <div className="text-xs text-gray-600 ml-6 space-y-0.5">
@@ -2435,7 +2441,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {/* Pass/Fail Logic */}
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle2 className="w-4 h-4 text-gray-600" />
+                    <CheckCircle2 className="w-4 h-4 text-brand-blue" />
                     <span className="text-xs font-medium text-gray-900">Pass/Fail Logic (Technical & Coding Only)</span>
                   </div>
                   <div className="text-xs text-gray-600 ml-6 space-y-1">
@@ -2455,15 +2461,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Summary */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Total Duration</div>
-                    <div className="text-lg sm:text-xl font-semibold text-gray-900">{duration} min</div>
+                    <div className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">{duration} min</div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Sections</div>
-                    <div className="text-lg sm:text-xl font-semibold text-gray-900">{enabledSectionsCount}</div>
+                    <div className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">{enabledSectionsCount}</div>
                   </div>
                 </div>
 
@@ -2472,14 +2478,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <button
                     onClick={() => handleGenerateAssessment(true)}
                     disabled={!isPercentageValid || isGenerating}
-                    className="flex-1 px-3 sm:px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="flex-1 px-3 sm:px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     {isGenerating ? 'Saving...' : 'Save as Draft'}
                   </button>
                   <button
                     onClick={() => handleGenerateAssessment(false)}
                     disabled={!isPercentageValid || isGenerating}
-                    className="flex-1 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
+                    className="flex-1 px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     {isGenerating ? 'Publishing...' : 'Publish'}
@@ -2492,21 +2498,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {/* Coding Confirmation Popup */}
         {showCodingConfirm && (
-          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
               {/* Header */}
-              <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-blue-50 border-b border-blue-200'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
+              <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 ${codingPopupMode === 'disable' ? 'bg-red-100' : 'bg-blue-100'} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                    <Code className={`w-4 h-4 sm:w-5 sm:h-5 ${codingPopupMode === 'disable' ? 'text-red-600' : 'text-blue-600'}`} />
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 ${codingPopupMode === 'disable' ? 'bg-red-100' : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15'} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                    <Code className={`w-4 h-4 sm:w-5 sm:h-5 ${codingPopupMode === 'disable' ? 'text-red-600' : 'text-brand-blue'}`} />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm sm:text-base font-medium text-gray-900">
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">
                       {codingPopupMode === 'disable'
                         ? 'Disable Coding Round?'
                         : 'Enable Coding Round'}
                     </h3>
-                    <p className={`text-xs sm:text-sm ${codingPopupMode === 'disable' ? 'text-red-700' : 'text-blue-700'}`}>
+                    <p className={`text-xs sm:text-sm ${codingPopupMode === 'disable' ? 'text-red-700' : 'text-brand-blue'}`}>
                       {codingPopupMode === 'disable'
                         ? 'This will remove the coding assessment'
                         : 'Select programming languages for the assessment'}
@@ -2524,7 +2530,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </p>
                     <div className="flex flex-wrap gap-2 mb-4">
                       {selectedCodingLanguages.map(lang => (
-                        <span key={lang} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
+                        <span key={lang} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-sm">
                           {lang}
                         </span>
                       ))}
@@ -2540,16 +2546,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                         Programming Languages <span className="text-red-500">*</span>
                       </label>
-                      <div className="border border-gray-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      <div className="border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto">
                         <div className="flex flex-wrap gap-2">
                           {programmingLanguages.map(lang => (
                             <button
                               key={lang}
                               onClick={() => toggleLanguageSelection(lang)}
-                              className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                              className={`px-3 py-1.5 rounded-full text-sm transition-all ${
                                 selectedCodingLanguages.includes(lang)
-                                  ? 'bg-gray-800 text-white'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                  : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
                             >
                               {lang}
@@ -2568,20 +2574,20 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Actions */}
-              <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={handleCancelCodingAction}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-sm sm:text-base text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-200 bg-white text-sm sm:text-base text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmCodingAction}
                   disabled={codingPopupMode === 'enable' && selectedCodingLanguages.length === 0}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm sm:text-base transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm sm:text-base transition-all disabled:bg-gray-300 disabled:cursor-not-allowed ${
                     codingPopupMode === 'disable'
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'bg-gray-800 text-white hover:bg-gray-900'
+                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10'
+                      : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   }`}
                 >
                   {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
@@ -2593,16 +2599,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {/* Minimum Round Required Popup */}
         {showMinRoundPopup && (
-          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-sm w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-sm w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
               {/* Header */}
               <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
                     <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                   </div>
                   <div>
-                    <h3 className="text-sm sm:text-base font-medium text-gray-900">Cannot Disable Round</h3>
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Cannot Disable Round</h3>
                     <p className="text-xs sm:text-sm text-amber-700">Minimum requirement not met</p>
                   </div>
                 </div>
@@ -2616,10 +2622,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Actions */}
-              <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl">
+              <div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl">
                 <button
                   onClick={() => setShowMinRoundPopup(false)}
-                  className="w-full px-4 py-2 bg-gray-800 text-white text-sm sm:text-base rounded-lg hover:bg-gray-900 transition-colors"
+                  className="w-full px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all"
                 >
                   Got it
                 </button>
@@ -2637,10 +2643,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   if (step === 'preview') {
     if (isGenerating) {
       return (
-        <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
+        <div className="flex-1 flex items-center justify-center bg-slate-50 p-4">
           <div className="text-center">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-gray-800 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <h3 className="text-sm sm:text-base text-gray-900 mb-2">Saving Assessment Definition...</h3>
+            <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-4"></div>
+            <h3 className="text-sm sm:text-base text-gray-900 mb-2 tracking-tight">Saving Assessment Definition...</h3>
             <p className="text-xs sm:text-sm text-gray-600">Configuring your assessment parameters</p>
           </div>
         </div>
@@ -2648,12 +2654,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     return (
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
         <div className="w-full">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-3 mb-2">
               <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 flex-shrink-0" />
-              <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Assessment Definition Saved Successfully</h1>
+              <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 tracking-tight">Assessment Definition Saved Successfully</h1>
             </div>
             <p className="text-sm sm:text-base text-gray-600">
               Your assessment configuration has been saved. Questions will be generated when candidates are assigned.
@@ -2663,11 +2669,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           {/* Unique Question Generation Highlight */}
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="p-2 sm:p-3 bg-green-600 rounded-lg flex-shrink-0">
+              <div className="p-2 sm:p-3 bg-green-600 rounded-xl flex-shrink-0">
                 <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm sm:text-base text-green-900 mb-2">Unique Question Generation Enabled</h3>
+                <h3 className="text-sm sm:text-base text-green-900 mb-2 tracking-tight">Unique Question Generation Enabled</h3>
                 <p className="text-xs sm:text-sm text-green-800 mb-3">
                   <strong>Each candidate will receive a completely unique set of questions</strong> when they take this assessment. 
                   This ensures fairness, prevents question sharing, and maintains assessment integrity.
@@ -2695,35 +2701,35 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
 
           {/* Assessment Summary */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
-              <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 truncate">{generatedAssessment?.title}</h2>
-              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold flex-shrink-0">
+              <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 truncate tracking-tight">{generatedAssessment?.title}</h2>
+              <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-semibold flex-shrink-0">
                 V{generatedAssessment?.version || 1}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
-              <div className="p-3 sm:p-4 bg-gray-50 rounded-lg">
-                <div className="text-xs sm:text-sm text-gray-800 mb-1">Duration</div>
-                <div className="text-lg sm:text-2xl text-gray-900">{duration} min</div>
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 ring-1 ring-brand-blue/15 rounded-xl">
+                <div className="text-xs sm:text-sm text-brand-blue mb-1 font-medium">Duration</div>
+                <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{duration} min</div>
               </div>
-              <div className="p-3 sm:p-4 bg-green-50 rounded-lg">
-                <div className="text-xs sm:text-sm text-green-600 mb-1">Sections</div>
-                <div className="text-lg sm:text-2xl text-gray-900">{generatedAssessment?.sections.length}</div>
+              <div className="p-3 sm:p-4 bg-green-50 ring-1 ring-green-200 rounded-xl">
+                <div className="text-xs sm:text-sm text-green-700 mb-1 font-medium">Sections</div>
+                <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{generatedAssessment?.sections.length}</div>
               </div>
-              <div className="p-3 sm:p-4 bg-yellow-50 rounded-lg">
-                <div className="text-xs sm:text-sm text-yellow-600 mb-1">Difficulty</div>
-                <div className="text-lg sm:text-2xl text-gray-900 truncate">{selectedJob?.experience}</div>
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl">
+                <div className="text-xs sm:text-sm text-brand-orange-deep mb-1 font-medium">Difficulty</div>
+                <div className="text-lg sm:text-2xl text-gray-900 truncate font-semibold tracking-tight">{selectedJob?.experience}</div>
               </div>
             </div>
           </div>
 
           {/* Scoring Rules Summary */}
-          <div className="bg-gradient-to-r from-gray-50 to-pink-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
-              <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 flex-shrink-0" />
+              <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
               <div>
-                <h3 className="text-sm sm:text-base text-gray-800 mb-2">Evaluation & Scoring Logic</h3>
+                <h3 className="text-sm sm:text-base text-brand-blue mb-2 font-semibold tracking-tight">Evaluation & Scoring Logic</h3>
                 <p className="text-xs sm:text-sm text-gray-700">
                   How candidates will be evaluated when taking this assessment
                 </p>
@@ -2732,11 +2738,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {/* Technical + Coding Info */}
-              <div className="bg-white rounded-lg p-3 sm:p-4 border border-green-300">
+              <div className="bg-white rounded-xl p-3 sm:p-4 border border-green-200 ring-1 ring-green-100">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <Brain className="w-4 h-4 text-gray-800" />
-                  <Code className="w-4 h-4 text-green-600" />
-                  <h4 className="text-xs sm:text-sm text-gray-900">Technical + Coding</h4>
+                  <Brain className="w-4 h-4 text-brand-cyan" />
+                  <Code className="w-4 h-4 text-brand-orange-deep" />
+                  <h4 className="text-xs sm:text-sm text-gray-900 font-medium">Technical + Coding</h4>
                   <span className="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
                     Scored
                   </span>
@@ -2751,7 +2757,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
             </div>
 
-            <div className="mt-4 bg-green-100 border border-green-300 rounded-lg p-3">
+            <div className="mt-4 bg-green-100 border border-green-300 rounded-xl p-3">
               <p className="text-sm text-green-900 text-center">
                 <strong>Final Result:</strong> PASS/FAIL determined by Technical + Coding sections only
               </p>
@@ -2761,17 +2767,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           {/* Section Breakdown */}
           <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
             {generatedAssessment?.sections.map((section: any, idx: number) => (
-              <div key={idx} className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+              <div key={idx} className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2">
                   <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                    {section.name === 'HR' && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />}
-                    {section.name === 'Technical' && <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />}
-                    {section.name === 'Coding' && <Code className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />}
+                    {section.name === 'HR' && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />}
+                    {section.name === 'Technical' && <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />}
+                    {section.name === 'Coding' && <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep" />}
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm sm:text-base font-medium text-gray-900">{section.name} Section</h3>
+                        <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">{section.name} Section</h3>
                         {section.name === 'HR' ? (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
                             Informational Only
                           </span>
                         ) : (
@@ -2783,7 +2789,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
                   </div>
                   <div className="flex flex-col items-start sm:items-end gap-1">
-                    <div className="text-xl sm:text-2xl text-gray-800">{section.percentage}%</div>
+                    <div className="text-xl sm:text-2xl text-brand-blue font-semibold tracking-tight">{section.percentage}%</div>
                     {section.name !== 'HR' && (
                       <span className="text-xs text-green-600">Counts to PASS/FAIL</span>
                     )}
@@ -2794,7 +2800,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <div className="text-xs sm:text-sm text-gray-700 mb-2">Topics Covered:</div>
                   <div className="flex flex-wrap gap-2">
                     {section.topics.map((topic: string, tidx: number) => (
-                      <span key={tidx} className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-xs sm:text-sm">
+                      <span key={tidx} className="px-2 sm:px-3 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm">
                         {topic}
                       </span>
                     ))}
@@ -2802,8 +2808,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
 
                 {/* Note: Questions NOT generated yet */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
-                  <div className="text-xs sm:text-sm text-gray-800">
+                <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4">
+                  <div className="text-xs sm:text-sm text-gray-700">
                     <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>
                 </div>
@@ -2823,7 +2829,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 // Let parent handle navigation to avoid double router.push()
                 onCreateAssessment(generatedAssessment);
               }}
-              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 bg-gray-800 text-white text-sm sm:text-base rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Done - Go to Assessments</span>

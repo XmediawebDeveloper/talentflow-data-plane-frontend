@@ -823,15 +823,15 @@ export default function AITalentMatchPage({
 
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-gray-800';
-    if (score >= 50) return 'text-yellow-600';
+    if (score >= 70) return 'text-brand-cyan';
+    if (score >= 50) return 'text-brand-orange-deep';
     return 'text-gray-600';
   };
 
   const getMatchBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-900';
-    if (score >= 50) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
+    if (score >= 70) return 'bg-brand-cyan/10 border-brand-cyan/30 text-brand-cyan';
+    if (score >= 50) return 'bg-brand-orange/10 border-brand-orange/30 text-brand-orange-deep';
     return 'bg-gray-100 border-gray-300 text-gray-700';
   };
 
@@ -892,7 +892,7 @@ export default function AITalentMatchPage({
     return (
       <>
 
-      <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50">
         {/* Header Section - Sticky */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-4 sm:p-6">
           {/* Back Button & Title */}
@@ -916,7 +916,7 @@ export default function AITalentMatchPage({
                         setSelectedCandidates([]);
                         router.push('/recruitment/ai-talent-match', { scroll: false });
                       }}
-                      className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
+                      className="flex items-center gap-2 text-brand-blue hover:text-brand-blue-2 font-medium transition-colors"
                     >
                       <ArrowLeft className="w-5 h-5" />
                       Back to Matched Jobs
@@ -973,7 +973,7 @@ export default function AITalentMatchPage({
                       disabled={!canRunAiMatch}
                       className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
                         canRunAiMatch
-                          ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
+                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                       }`}
                       title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
@@ -985,9 +985,9 @@ export default function AITalentMatchPage({
                 </div>
 
                 {/* Job Info Card */}
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 sm:p-4 mb-4">
+                <div className="bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/5 p-3 sm:p-4 mb-4">
                   <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                       <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1008,7 +1008,7 @@ export default function AITalentMatchPage({
                     <User className="w-4 h-4" />
                     {selectedHistoryItem.totalMatches} matches
                   </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-xs font-medium border border-blue-200">
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs font-medium border border-brand-blue/20">
                     <Sparkles className="w-3 h-3" />
                     AI Talent Match • 0 units consumed
                   </span>
@@ -1027,21 +1027,21 @@ export default function AITalentMatchPage({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
                 />
               </div>
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-xs sm:text-sm text-black"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
-                {filteredCandidates.length} candidates
+              <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg font-medium">
+                <span className="text-brand-blue font-semibold">{filteredCandidates.length}</span> candidates
               </div>
               {selectedCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -1061,7 +1061,7 @@ export default function AITalentMatchPage({
                     className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-gray-800 hover:bg-gray-900'
+                        : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                     }`}
                     >
                       <Target className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1071,7 +1071,7 @@ export default function AITalentMatchPage({
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
-                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial"
+                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
                     >
                       <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
                       Assessment ({selectedCandidates.length})
@@ -1088,33 +1088,33 @@ export default function AITalentMatchPage({
                 value={filterPhone}
                 onChange={(e) => setFilterPhone(e.target.value)}
                 placeholder="Filter by phone..."
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="text"
                 value={filterLocation}
                 onChange={(e) => setFilterLocation(e.target.value)}
                 placeholder="Filter by location..."
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="number"
                 value={filterExperienceMin}
                 onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Min exp"
-                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="number"
                 value={filterExperienceMax}
                 onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Max exp"
-                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+                className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-xs sm:text-sm text-black"
               >
                 <option value="rank">Sort by Rating</option>
                 <option value="name">Sort by Name</option>
@@ -1152,7 +1152,7 @@ export default function AITalentMatchPage({
                         setSelectedCandidates([]);
                       }
                     }}
-                    className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                    className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
@@ -1194,8 +1194,8 @@ export default function AITalentMatchPage({
               {paginatedCandidates.map((candidate, index) => (
                 <tr
                   key={candidate.id}
-                  className={`hover:bg-gray-50 transition-colors cursor-pointer ${
-                    selectedCandidates.includes(candidate.id) ? 'bg-blue-50' : ''
+                  className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${
+                    selectedCandidates.includes(candidate.id) ? 'bg-brand-blue/5' : ''
                   }`}
                   onClick={() => {
                     if (candidate.resumeId) {
@@ -1212,13 +1212,13 @@ export default function AITalentMatchPage({
                       type="checkbox"
                       checked={selectedCandidates.includes(candidate.id)}
                       onChange={() => handleSelectCandidate(candidate.id)}
-                      className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                      className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </td>
                   <td className="px-4 py-4">
                     <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
                       (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
-                      (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                      (candidate.rank || 0) >= 4 ? 'bg-brand-orange/10 text-brand-orange-deep border border-brand-orange/20' :
                       (candidate.rank || 0) >= 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' :
                       'bg-gray-50 text-gray-400 border border-gray-200'
                     }`}>
@@ -1249,13 +1249,13 @@ export default function AITalentMatchPage({
                       {candidate.skills && candidate.skills.slice(0, 4).map((skill, idx) => (
                         <span
                           key={idx}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
                         >
                           {skill}
                         </span>
                       ))}
                       {candidate.skills && candidate.skills.length > 4 && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-blue-600">
+                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-brand-blue">
                           +{candidate.skills.length - 4} more
                         </span>
                       )}
@@ -1416,7 +1416,7 @@ export default function AITalentMatchPage({
                   value={assessmentSearchQuery}
                   onChange={(e) => setAssessmentSearchQuery(e.target.value)}
                   placeholder="Search assessments..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                 />
               </div>
 
@@ -1441,7 +1441,7 @@ export default function AITalentMatchPage({
                         setSelectedAssessments(filteredAssessments);
                       }
                     }}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-3"
+                    className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium mt-3"
                   >
                     {selectedAssessments.length === filteredAssessments.length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
                   </button>
@@ -1478,8 +1478,8 @@ export default function AITalentMatchPage({
                           onClick={() => handleAssessmentSelect(assessment)}
                           className={`w-full text-left border-2 rounded-lg p-3 sm:p-4 transition-all ${
                             isSelected
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                              : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5'
                           }`}
                         >
                           <div className="flex items-start gap-2 sm:gap-3">
@@ -1487,7 +1487,7 @@ export default function AITalentMatchPage({
                             <div className="flex-shrink-0 mt-1">
                               <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                 isSelected
-                                  ? 'bg-blue-500 border-blue-500'
+                                  ? 'bg-brand-blue border-brand-blue'
                                   : 'bg-white border-gray-300'
                               }`}>
                                 {isSelected && (
@@ -1500,7 +1500,7 @@ export default function AITalentMatchPage({
                               {/* Assessment ID, Title, and Active Badge */}
                               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                 {assessment.short_id && (
-                                  <span className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded font-semibold">
+                                  <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                                     {assessment.short_id}
                                   </span>
                                 )}
@@ -1574,7 +1574,7 @@ export default function AITalentMatchPage({
                 <button
                   onClick={handleProceedToInvite}
                   disabled={selectedAssessments.length === 0}
-                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-sm rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Mail className="w-4 h-4" />
                   <span className="hidden sm:inline">Proceed to Send Invitations</span>
@@ -1632,7 +1632,7 @@ export default function AITalentMatchPage({
   // View: History List
   if (viewMode === 'history') {
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-white">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
         {/* Header */}
         <div className="mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4">
@@ -1645,7 +1645,7 @@ export default function AITalentMatchPage({
                 <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
               </button>
             )}
-            <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
               <History className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -1686,7 +1686,7 @@ export default function AITalentMatchPage({
               disabled={!canRunAiMatch}
               className={`w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center justify-center gap-2 shadow-sm ${
                 canRunAiMatch
-                  ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
               }`}
               title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
@@ -1706,7 +1706,7 @@ export default function AITalentMatchPage({
               value={historySearchQuery}
               onChange={(e) => setHistorySearchQuery(e.target.value)}
               placeholder="Search by job title..."
-              className="w-full pl-9 pr-4 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-xs sm:text-sm bg-white text-black placeholder:text-gray-400"
+              className="w-full pl-9 pr-4 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm bg-white text-black placeholder:text-gray-400"
             />
           </div>
 
@@ -1716,14 +1716,14 @@ export default function AITalentMatchPage({
               onClick={() => setShowHistoryFilters(!showHistoryFilters)}
               className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border transition-all flex items-center gap-2 text-xs sm:text-sm font-medium ${
                 activeFiltersCount > 0
-                  ? 'bg-gray-900 border-gray-900 text-white'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-brand-blue border-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
               }`}
             >
               <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold bg-white text-gray-900">
+                <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold bg-white text-brand-blue">
                   {activeFiltersCount}
                 </span>
               )}
@@ -1773,7 +1773,7 @@ export default function AITalentMatchPage({
                             type="date"
                             value={historyDateFrom}
                             onChange={(e) => setHistoryDateFrom(e.target.value)}
-                            className="w-full px-2 sm:px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-xs sm:text-sm text-black"
+                            className="w-full px-2 sm:px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-xs sm:text-sm text-black"
                           />
                         </div>
                         <div>
@@ -1782,7 +1782,7 @@ export default function AITalentMatchPage({
                             type="date"
                             value={historyDateTo}
                             onChange={(e) => setHistoryDateTo(e.target.value)}
-                            className="w-full px-2 sm:px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-xs sm:text-sm text-black"
+                            className="w-full px-2 sm:px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-xs sm:text-sm text-black"
                           />
                         </div>
                       </div>
@@ -1798,7 +1798,7 @@ export default function AITalentMatchPage({
                           value={historyFilterPhone}
                           onChange={(e) => setHistoryFilterPhone(e.target.value)}
                           placeholder="Search by mobile number"
-                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
+                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
                         />
                       </div>
                     </div>
@@ -1813,7 +1813,7 @@ export default function AITalentMatchPage({
                           value={historyFilterLocation}
                           onChange={(e) => setHistoryFilterLocation(e.target.value)}
                           placeholder="Search by location"
-                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
+                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
                         />
                       </div>
                     </div>
@@ -1828,7 +1828,7 @@ export default function AITalentMatchPage({
                           onChange={(e) => setHistoryFilterExpMin(e.target.value === '' ? '' : Number(e.target.value))}
                           placeholder="Min"
                           min={0}
-                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
                         />
                         <input
                           type="number"
@@ -1836,7 +1836,7 @@ export default function AITalentMatchPage({
                           onChange={(e) => setHistoryFilterExpMax(e.target.value === '' ? '' : Number(e.target.value))}
                           placeholder="Max"
                           min={0}
-                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-xs sm:text-sm text-black placeholder:text-gray-400"
                         />
                       </div>
                     </div>
@@ -1845,7 +1845,7 @@ export default function AITalentMatchPage({
                   <div className="px-4 py-3 border-t border-gray-100 flex-shrink-0">
                     <button
                       onClick={() => setShowHistoryFilters(false)}
-                      className="w-full py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                      className="w-full py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-sm font-medium rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
                     >
                       Apply Filters
                     </button>
@@ -1855,8 +1855,8 @@ export default function AITalentMatchPage({
             )}
           </div>
 
-          <div className="text-xs sm:text-sm text-gray-500 bg-gray-50 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-            <span className="text-gray-900 font-semibold">{filteredHistory.length}</span> / {matchHistory.length} jobs
+          <div className="text-xs sm:text-sm text-gray-500 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg whitespace-nowrap font-medium">
+            <span className="text-brand-blue font-semibold">{filteredHistory.length}</span> / {matchHistory.length} jobs
           </div>
           </div>
         </div>
@@ -1882,39 +1882,39 @@ export default function AITalentMatchPage({
                     setViewMode('details');
                     updateUrlParams({ jdId: item.jobId, view: 'details' });
                   }}
-                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-4 sm:p-6 cursor-pointer group"
+                  className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-150 p-4 sm:p-6 cursor-pointer group"
                   role="button"
                   tabIndex={0}
                 >
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     {/* Job Info */}
                     <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0 group-hover:scale-105 transition-transform">
                         <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           {jobData?.jobId && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
                               {jobData.jobId}
                             </span>
                           )}
                           {jobData?.currentVersion && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
                               v{jobData.currentVersion}
                             </span>
                           )}
                           {jobData?.currentVersion && (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
                               jobData.currentVersion > 1
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                                 : 'bg-green-50 text-green-700 border-green-200'
                             }`}>
                               {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
                             </span>
                           )}
                         </div>
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 group-hover:text-brand-blue transition-colors">
                           {item.jobTitle}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
@@ -1940,7 +1940,7 @@ export default function AITalentMatchPage({
                         setViewMode('details');
                         updateUrlParams({ jdId: item.jobId, view: 'details' });
                       }}
-                      className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 font-medium text-xs sm:text-sm w-full sm:w-auto"
+                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-xs sm:text-sm w-full sm:w-auto shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       View Details
                       <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
@@ -1960,10 +1960,10 @@ export default function AITalentMatchPage({
             />
           </>
         ) : matchHistory.length === 0 ? (
-          <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-8 sm:p-12 lg:p-16 text-center">
+          <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-12 lg:p-16 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-gradient-to-br from-gray-100 to-gray-100 rounded-full flex items-center justify-center">
-                <History className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-gray-800" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                <History className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-brand-blue" />
               </div>
               <h3 className="text-base sm:text-lg lg:text-xl text-gray-900 mb-2">No Matching History Yet</h3>
               <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
@@ -1982,7 +1982,7 @@ export default function AITalentMatchPage({
                 disabled={!canRunAiMatch}
                 className={`px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 ${
                   canRunAiMatch
-                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                 }`}
                 title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
@@ -1993,10 +1993,10 @@ export default function AITalentMatchPage({
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-8 sm:p-12 lg:p-16 text-center">
+          <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-12 lg:p-16 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-gradient-to-br from-gray-100 to-gray-100 rounded-full flex items-center justify-center">
-                <Search className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-gray-800" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                <Search className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-brand-blue" />
               </div>
               <h3 className="text-base sm:text-lg lg:text-xl text-gray-900 mb-2">No Results Found</h3>
               <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
@@ -2008,7 +2008,7 @@ export default function AITalentMatchPage({
                   setHistoryDateFrom('');
                   setHistoryDateTo('');
                 }}
-                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2 text-sm sm:text-base"
+                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
               >
                 <X className="w-5 h-5" />
                 Clear All Filters
@@ -2033,7 +2033,7 @@ export default function AITalentMatchPage({
       (loadingHistorySessionId === selectedHistoryItem?.id || loadingHistorySessionId === historyItemForSelectedJob?.id);
 
     return (
-      <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50">
         {/* Header Section - Sticky */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
           {/* Back Button & Title */}
@@ -2045,7 +2045,7 @@ export default function AITalentMatchPage({
                 setMatchedCandidates([]);
                 updateUrlParams({}); // Clear URL params
               }}
-              className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors text-sm sm:text-base"
+              className="flex items-center gap-2 text-brand-blue hover:text-brand-blue-2 font-medium transition-colors text-sm sm:text-base"
             >
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               Back to Matched Jobs
@@ -2064,7 +2064,7 @@ export default function AITalentMatchPage({
                     setShowMatchingPanel(true);
                   }
                 }}
-                className="w-full sm:w-auto px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 New AI Match
@@ -2073,9 +2073,9 @@ export default function AITalentMatchPage({
           </div>
 
           {/* Job Info Card */}
-          <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4">
+          <div className="bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                 <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
@@ -2089,7 +2089,7 @@ export default function AITalentMatchPage({
                     <CheckCircle2 className="w-3 h-3" />
                     Complete
                   </span>
-                  <span className="hidden sm:flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[10px] sm:text-xs font-medium border border-blue-200">
+                  <span className="hidden sm:flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-[10px] sm:text-xs font-medium border border-brand-blue/20">
                     <Sparkles className="w-3 h-3" />
                     AI Talent Match • 0 units consumed
                   </span>
@@ -2108,21 +2108,21 @@ export default function AITalentMatchPage({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
                 />
               </div>
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-xs sm:text-sm text-black"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200 whitespace-nowrap">
-                {filteredCandidates.length} candidates
+              <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg font-medium whitespace-nowrap">
+                <span className="text-brand-blue font-semibold">{filteredCandidates.length}</span> candidates
               </div>
               {selectedCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -2142,7 +2142,7 @@ export default function AITalentMatchPage({
                     className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-gray-800 hover:bg-gray-900'
+                        : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                     }`}
                     >
                       <Target className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -2152,7 +2152,7 @@ export default function AITalentMatchPage({
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
-                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial"
+                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
                     >
                       <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
                       Assessment ({selectedCandidates.length})
@@ -2169,33 +2169,33 @@ export default function AITalentMatchPage({
                 value={filterPhone}
                 onChange={(e) => setFilterPhone(e.target.value)}
                 placeholder="Filter by phone..."
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="text"
                 value={filterLocation}
                 onChange={(e) => setFilterLocation(e.target.value)}
                 placeholder="Filter by location..."
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="number"
                 value={filterExperienceMin}
                 onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Min exp (years)"
-                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="number"
                 value={filterExperienceMax}
                 onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Max exp (years)"
-                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+                className="w-full sm:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-xs sm:text-sm text-black placeholder:text-gray-400"
               />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+                className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-xs sm:text-sm text-black"
               >
                 <option value="rank">Sort by Rating (High to Low)</option>
                 <option value="name">Sort by Name (A to Z)</option>
@@ -2210,13 +2210,13 @@ export default function AITalentMatchPage({
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
           {isLoadingResultsFromHistory ? (
             <div className="flex flex-col items-center justify-center h-full py-8 sm:py-16 px-4">
-              <Loader2 className="w-8 h-8 text-gray-500 animate-spin mb-4" />
+              <Loader2 className="w-8 h-8 text-brand-blue animate-spin mb-4" />
               <p className="text-sm sm:text-base text-gray-600 text-center">Loading matched candidates...</p>
             </div>
           ) : matchedCandidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-8 sm:py-16 px-4">
-              <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4 sm:mb-6">
-                <Sparkles className="w-7 h-7 sm:w-10 sm:h-10 text-gray-400" />
+              <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center mb-4 sm:mb-6">
+                <Sparkles className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
               </div>
               <h3 className="text-base sm:text-xl font-semibold text-gray-900 mb-2 text-center">No AI Match Results Yet</h3>
               <p className="text-xs sm:text-base text-gray-600 text-center max-w-md mb-4 sm:mb-6">
@@ -2233,7 +2233,7 @@ export default function AITalentMatchPage({
                 disabled={!canRunAiMatch}
                 className={`px-6 py-3 rounded-lg transition-all font-medium flex items-center gap-2 shadow-md ${
                   canRunAiMatch
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 cursor-pointer'
+                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                 }`}
                 title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
@@ -2258,7 +2258,7 @@ export default function AITalentMatchPage({
                           setSelectedCandidates([]);
                         }
                       }}
-                      className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                      className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
                   <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
@@ -2300,8 +2300,8 @@ export default function AITalentMatchPage({
                 {paginatedCandidates.map((candidate, index) => (
                   <tr
                     key={candidate.id}
-                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${
-                      selectedCandidates.includes(candidate.id) ? 'bg-blue-50' : ''
+                    className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${
+                      selectedCandidates.includes(candidate.id) ? 'bg-brand-blue/5' : ''
                     }`}
                     onClick={() => {
                       if (candidate.resumeId) {
@@ -2318,14 +2318,14 @@ export default function AITalentMatchPage({
                         type="checkbox"
                         checked={selectedCandidates.includes(candidate.id)}
                         onChange={() => handleSelectCandidate(candidate.id)}
-                        className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                        className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                       />
                     </td>
                     <td className="px-4 py-4">
                       <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
                         (candidate.rank || 0) >= 9 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
-                        (candidate.rank || 0) >= 7 ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' :
-                        (candidate.rank || 0) >= 5 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
+                        (candidate.rank || 0) >= 7 ? 'bg-brand-cyan/10 text-brand-cyan border-2 border-brand-cyan/30' :
+                        (candidate.rank || 0) >= 5 ? 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/30' :
                         'bg-gray-100 text-gray-600 border-2 border-gray-200'
                       }`}>
                         {candidate.rank || '-'}
@@ -2355,13 +2355,13 @@ export default function AITalentMatchPage({
                         {candidate.skills && candidate.skills.slice(0, 4).map((skill, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
                           >
                             {skill}
                           </span>
                         ))}
                         {candidate.skills && candidate.skills.length > 4 && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-blue-600">
+                          <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-brand-blue">
                             +{candidate.skills.length - 4} more
                           </span>
                         )}
@@ -2539,7 +2539,7 @@ export default function AITalentMatchPage({
                   value={assessmentSearchQuery}
                   onChange={(e) => setAssessmentSearchQuery(e.target.value)}
                   placeholder="Search assessments..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                 />
               </div>
 
@@ -2564,7 +2564,7 @@ export default function AITalentMatchPage({
                         setSelectedAssessments(filteredAssessments);
                       }
                     }}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-3"
+                    className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium mt-3"
                   >
                     {selectedAssessments.length === filteredAssessments.length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
                   </button>
@@ -2601,8 +2601,8 @@ export default function AITalentMatchPage({
                           onClick={() => handleAssessmentSelect(assessment)}
                           className={`w-full text-left border-2 rounded-lg p-3 sm:p-4 transition-all ${
                             isSelected
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                              : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5'
                           }`}
                         >
                           <div className="flex items-start gap-2 sm:gap-3">
@@ -2610,7 +2610,7 @@ export default function AITalentMatchPage({
                             <div className="flex-shrink-0 mt-1">
                               <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                 isSelected
-                                  ? 'bg-blue-500 border-blue-500'
+                                  ? 'bg-brand-blue border-brand-blue'
                                   : 'bg-white border-gray-300'
                               }`}>
                                 {isSelected && (
@@ -2623,7 +2623,7 @@ export default function AITalentMatchPage({
                               {/* Assessment ID, Title, and Active Badge */}
                               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                 {assessment.short_id && (
-                                  <span className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded font-semibold">
+                                  <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                                     {assessment.short_id}
                                   </span>
                                 )}
@@ -2697,7 +2697,7 @@ export default function AITalentMatchPage({
                 <button
                   onClick={handleProceedToInvite}
                   disabled={selectedAssessments.length === 0}
-                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white text-sm rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Mail className="w-4 h-4" />
                   <span className="hidden sm:inline">Proceed to Send Invitations</span>

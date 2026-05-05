@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Briefcase, FileText } from 'lucide-react';
+import { Users, Briefcase, FileText, ArrowUpRight, Shield } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -13,48 +13,55 @@ interface TeamCardProps {
 
 export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false }: TeamCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-      {/* Team Header */}
-      <div className="bg-gray-800 p-6 text-white">
-        <p className="text-sm font-medium opacity-90 mb-1 line-clamp-1">{team.description || 'No description'}</p>
-        <h3 className="text-xl font-bold line-clamp-1">{team.name}</h3>
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10">
+      <div className="border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <Shield className="h-5 w-5 text-brand-blue" />
+          </div>
+          <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-2.5 py-1 text-[11px] font-medium text-brand-blue ring-1 ring-brand-cyan/20">
+            Team
+          </span>
+        </div>
+        <h3 className="line-clamp-1 text-xl font-semibold tracking-tight text-gray-900">{team.name}</h3>
+        <p className="mt-2 line-clamp-2 text-sm text-gray-600">
+          {team.description || 'No description provided for this team yet.'}
+        </p>
       </div>
 
-      {/* Team Stats */}
       <div className="p-6">
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-gray-500" />
-              <p className="text-2xl font-bold text-gray-900">{team.member_count}</p>
+        <div className="mb-6 grid grid-cols-3 gap-4">
+          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+            <div className="mb-1 flex items-center gap-2">
+              <Users className="w-4 h-4 text-brand-blue" />
+              <p className="text-2xl font-semibold text-gray-900">{team.member_count}</p>
             </div>
             <p className="text-xs text-gray-600">Members</p>
           </div>
 
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Briefcase className="w-4 h-4 text-gray-500" />
-              <p className="text-2xl font-bold text-gray-900">{team.active_jobs_count}</p>
+          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+            <div className="mb-1 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-brand-cyan" />
+              <p className="text-2xl font-semibold text-gray-900">{team.active_jobs_count}</p>
             </div>
             <p className="text-xs text-gray-600">Active Jobs</p>
           </div>
 
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <FileText className="w-4 h-4 text-gray-500" />
-              <p className="text-2xl font-bold text-gray-900">{team.resumes_count}</p>
+          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+            <div className="mb-1 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-brand-teal" />
+              <p className="text-2xl font-semibold text-gray-900">{team.resumes_count}</p>
             </div>
             <p className="text-xs text-gray-600">Resumes</p>
           </div>
         </div>
 
-        {/* Member Avatars */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="mb-6 flex items-center gap-3">
           <div className="flex -space-x-2">
             {team.members.slice(0, 4).map((member) => (
               <div
                 key={member.id}
-                className="w-10 h-10 rounded-full bg-gray-700 text-white flex items-center justify-center text-sm font-semibold border-2 border-white"
+                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-semibold text-white shadow-sm"
                 title={member.name}
               >
                 {member.initials}
@@ -62,24 +69,22 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
             ))}
           </div>
           {team.member_count > 4 && (
-            <span className="text-sm text-gray-600">
-              +{team.member_count - 4} more
-            </span>
+            <span className="text-sm text-gray-600">+{team.member_count - 4} more</span>
           )}
         </div>
 
-        {/* Action Buttons */}
         <div className="flex gap-3">
           <button
             onClick={() => onViewDetails(team.id)}
-            className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
           >
             View Details
+            <ArrowUpRight className="h-4 w-4" />
           </button>
           {canManage && (
             <button
               onClick={() => onManageTeam(team.id)}
-              className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium"
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
             >
               Manage Team
             </button>
@@ -92,28 +97,29 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
 
 export function TeamCardSkeleton() {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gray-800 p-6">
-        <Skeleton className="h-4 w-32 mb-2 bg-gray-700" />
-        <Skeleton className="h-6 w-48 bg-gray-700" />
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+      <div className="border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
+        <Skeleton className="mb-3 h-10 w-10 rounded-xl" />
+        <Skeleton className="mb-2 h-6 w-48" />
+        <Skeleton className="h-4 w-32" />
       </div>
       <div className="p-6">
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="text-center">
-              <Skeleton className="h-8 w-12 mx-auto mb-1" />
-              <Skeleton className="h-3 w-16 mx-auto" />
+        <div className="mb-6 grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((index) => (
+            <div key={index} className="text-center">
+              <Skeleton className="mx-auto mb-1 h-8 w-12" />
+              <Skeleton className="mx-auto h-3 w-16" />
             </div>
           ))}
         </div>
-        <div className="flex gap-2 mb-6">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="w-10 h-10 rounded-full" />
+        <div className="mb-6 flex gap-2">
+          {[1, 2, 3].map((index) => (
+            <Skeleton key={index} className="h-10 w-10 rounded-full" />
           ))}
         </div>
         <div className="flex gap-3">
-          <Skeleton className="flex-1 h-10 rounded-lg" />
-          <Skeleton className="flex-1 h-10 rounded-lg" />
+          <Skeleton className="h-10 flex-1 rounded-xl" />
+          <Skeleton className="h-10 flex-1 rounded-xl" />
         </div>
       </div>
     </div>

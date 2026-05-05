@@ -10,7 +10,6 @@ import {
   Upload,
   Briefcase,
   Calendar,
-  Loader2,
   AlertCircle,
   Download,
 } from 'lucide-react';
@@ -31,12 +30,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
 } from 'recharts';
-import teamService, { AllTeamsUsageSummary, TeamUsageSummary } from '@/lib/services/teamService';
+import teamService, { AllTeamsUsageSummary } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/providers/AuthProvider';
 
@@ -46,8 +41,8 @@ interface TeamAnalyticsDashboardProps {
 
 const COLORS = {
   RS: '#3B82F6', // Blue for Resume Scoring
-  AS: '#10B981', // Green for Assessment
-  AIU: '#8B5CF6', // Purple for AI Interview
+  AS: '#14B8A6', // Teal for Assessment
+  AIU: '#06B6D4', // Cyan for AI Interview
   RU: '#F97316', // Orange for Resume Upload
 };
 
@@ -88,9 +83,14 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         const data = await teamService.getMyTeamsUsage(fromDate, toDate);
         setTeamsUsage(data as unknown as AllTeamsUsageSummary);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching analytics:', err);
-      setError(err.response?.data?.detail?.message || err.message || 'Failed to load analytics');
+      if (typeof err === 'object' && err !== null && 'response' in err) {
+        const response = (err as { response?: { data?: { detail?: { message?: string } } } }).response;
+        setError(response?.data?.detail?.message || 'Failed to load analytics');
+      } else {
+        setError('Failed to load analytics');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -130,7 +130,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
     });
 
     return Object.entries(totals)
-      .filter(([_, value]) => value > 0)
+      .filter((entry) => entry[1] > 0)
       .map(([name, value]) => ({
         name: UNIT_LABELS[name],
         value: parseFloat(value.toFixed(2)),
@@ -217,7 +217,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         {/* Summary Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
+            <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
               <Skeleton className="w-10 h-10 rounded-lg mb-3" />
               <Skeleton className="h-8 w-20 mb-1" />
               <Skeleton className="h-4 w-32" />
@@ -227,11 +227,11 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
         {/* Charts Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <Skeleton className="h-5 w-32 mb-4" />
             <Skeleton className="h-[300px] w-full rounded-lg" />
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <Skeleton className="h-5 w-40 mb-4" />
             <Skeleton className="h-[300px] w-full rounded-lg" />
           </div>
@@ -259,10 +259,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   return (
     <div className="space-y-6">
       {/* Header with Period Selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent p-5 ring-1 ring-black/[0.02] lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-white" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
@@ -271,15 +271,15 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Calendar className="w-4 h-4 text-gray-500" />
             <input
               type="date"
               value={fromDate}
               max={toDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
             />
             <span className="text-sm text-gray-500">to</span>
             <input
@@ -288,13 +288,13 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setToDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
             />
           </div>
           {canExport && teamsUsage?.teams && teamsUsage.teams.length > 0 && (
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
             >
               <Download className="w-4 h-4" />
               Export CSV
@@ -305,10 +305,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Summary Cards - Unit Consumption */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FileText className="w-5 h-5 text-blue-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <FileText className="w-5 h-5 text-brand-blue" />
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900">{Math.round(totals.RS)}</p>
@@ -316,10 +316,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           <p className="text-xs text-gray-500 mt-1">{actionCounts.RS} actions</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <ClipboardCheck className="w-5 h-5 text-green-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+              <ClipboardCheck className="w-5 h-5 text-brand-teal" />
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900">{totals.AS.toFixed(1)}</p>
@@ -327,10 +327,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           <p className="text-xs text-gray-500 mt-1">{actionCounts.AS} actions</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-purple-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
+              <Users className="w-5 h-5 text-brand-cyan" />
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900">{Math.round(totals.AIU)}</p>
@@ -338,7 +338,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           <p className="text-xs text-gray-500 mt-1">{actionCounts.AIU} actions</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
               <Upload className="w-5 h-5 text-orange-600" />
@@ -349,7 +349,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           <p className="text-xs text-gray-500 mt-1">{actionCounts.RU} actions</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-indigo-600" />
@@ -359,7 +359,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           <p className="text-sm text-gray-600">JDs Created</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
               <ClipboardCheck className="w-5 h-5 text-teal-600" />
@@ -369,7 +369,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           <p className="text-sm text-gray-600">Assessments Created</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-white" />
@@ -385,7 +385,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Team Comparison Bar Chart */}
         {teamComparisonData.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <h4 className="text-md font-semibold text-gray-900 mb-4">Usage by Team</h4>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -419,7 +419,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
         {/* Unit Distribution Pie Chart */}
         {unitDistributionData.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <h4 className="text-md font-semibold text-gray-900 mb-4">Unit Type Distribution</h4>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -468,15 +468,15 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Top Performing Teams */}
       {topTeams.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <h4 className="text-md font-semibold text-gray-900 mb-4">Top Performing Teams</h4>
           <div className="space-y-3">
             {topTeams.map((team, index) => (
               <div
                 key={team.name}
-                className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg"
+                className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-white to-brand-blue/[0.02] p-3 ring-1 ring-gray-100"
               >
-                <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-bold text-white">
                   {index + 1}
                 </div>
                 <div className="flex-1">
@@ -502,7 +502,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Empty State */}
       {(!teamsUsage?.teams || teamsUsage.teams.length === 0) && (
-        <div className="bg-gray-50 rounded-xl p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
           <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">No Usage Data</h3>
           <p className="text-gray-600">

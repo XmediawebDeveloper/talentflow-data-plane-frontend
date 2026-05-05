@@ -264,9 +264,9 @@ export default function AssessmentDetailsView({
   };
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto">
+    <div className="flex-1 bg-slate-50 overflow-y-auto">
       {/* Sticky Header */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
+      <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 border-b-2 border-brand-blue/50 sticky top-0 z-20 shadow-lg shadow-brand-blue/20">
         <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <button
@@ -281,7 +281,7 @@ export default function AssessmentDetailsView({
                 <button
                   onClick={onPrev}
                   disabled={!onPrev || currentIndex === 0}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 ring-1 ring-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Previous
@@ -292,7 +292,7 @@ export default function AssessmentDetailsView({
                 <button
                   onClick={onNext}
                   disabled={!onNext || currentIndex === totalCount - 1}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 ring-1 ring-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                   <ChevronRight className="w-4 h-4" />
@@ -303,30 +303,30 @@ export default function AssessmentDetailsView({
           
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 flex items-center justify-center flex-shrink-0">
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
               </div>
               <div className="min-w-0">
                 {/* Line 1: AS-022 SQL Developer - Assessment V1  Active AI-Generated */}
                 <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2 flex-wrap">
-                  <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-white/90 text-gray-900 rounded text-xs sm:text-sm font-bold">
+                  <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-white/95 text-brand-blue rounded text-xs sm:text-sm font-bold ring-1 ring-white/20 shadow-sm">
                     {assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}
                   </span>
-                  <h1 className="text-sm sm:text-lg lg:text-2xl text-white font-semibold truncate">
+                  <h1 className="text-sm sm:text-lg lg:text-2xl text-white font-semibold truncate tracking-tight">
                     {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
                   </h1>
                   <VersionBadge version={assessment.version} size="md" variant="primary" />
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                     assessment.status === 'Active'
-                      ? 'bg-gray-200/30 text-gray-100 border border-gray-300/30'
+                      ? 'bg-green-100/90 text-green-800 ring-1 ring-green-200/50'
                       : assessment.status === 'Draft'
-                      ? 'bg-gray-400/30 text-gray-200 border border-gray-400/30'
-                      : 'bg-gray-500/20 text-gray-100 border border-gray-400/30'
+                      ? 'bg-brand-orange/20 text-white ring-1 ring-brand-orange/40'
+                      : 'bg-white/15 text-white ring-1 ring-white/20'
                   }`}>
                     {assessment.status}
                   </span>
                   {sections.length > 0 && (
-                    <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
+                    <span className="px-2 py-1 bg-brand-cyan/25 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 ring-1 ring-white/20">
                       <Sparkles className="w-3 h-3" />
                       AI-Generated
                     </span>
@@ -370,7 +370,7 @@ export default function AssessmentDetailsView({
               {onShare && canCreateAssessments && (
                 <button
                   onClick={onShare}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-brand-blue hover:bg-brand-blue/5 rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm"
                 >
                   <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Share
@@ -382,15 +382,15 @@ export default function AssessmentDetailsView({
       </div>
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 sticky top-[120px] sm:top-[148px] lg:top-[168px] z-10">
+      <div className="bg-white border-b border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 sticky top-[120px] sm:top-[148px] lg:top-[168px] z-10">
         <div className="px-3 sm:px-5 lg:px-8">
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('overview')}
               className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'overview'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-brand-blue text-brand-blue font-medium'
+                  : 'border-transparent text-gray-600 hover:text-brand-blue'
               }`}
             >
               Assessment Details
@@ -399,8 +399,8 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('activity')}
               className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'activity'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-brand-blue text-brand-blue font-medium'
+                  : 'border-transparent text-gray-600 hover:text-brand-blue'
               }`}
             >
               Recent Activity
@@ -409,8 +409,8 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('versions')}
               className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'versions'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-brand-blue text-brand-blue font-medium'
+                  : 'border-transparent text-gray-600 hover:text-brand-blue'
               }`}
             >
               Version History
@@ -419,8 +419,8 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('info')}
               className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'info'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-brand-blue text-brand-blue font-medium'
+                  : 'border-transparent text-gray-600 hover:text-brand-blue'
               }`}
             >
               Assessment Info
@@ -435,27 +435,29 @@ export default function AssessmentDetailsView({
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Assessment Details Section */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                  </div>
                   Assessment Details
                 </h3>
               </div>
 
               <div className="p-3 sm:p-4 lg:p-6">
                 {/* Total Duration Card */}
-                <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-4 mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <Clock className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Total Duration</div>
-                      <div className="text-xl font-semibold text-gray-900">{formattedDuration}</div>
+                      <div className="text-xl font-semibold text-gray-900 tracking-tight">{formattedDuration}</div>
                     </div>
                   </div>
-                  <span className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-lg">
+                  <span className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded-lg">
                     100%
                   </span>
                 </div>
@@ -465,12 +467,12 @@ export default function AssessmentDetailsView({
                   <h4 className="text-sm font-medium text-gray-700">Assessment Rounds</h4>
 
                   {assessment.hr_enabled && (
-                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                    <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           HR Round
                         </span>
-                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded-lg">
+                        <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
                           {assessment.hr_percentage}%
                         </span>
                       </div>
@@ -479,12 +481,12 @@ export default function AssessmentDetailsView({
                         <div className="flex flex-wrap gap-2">
                           {(assessment.hr_topics || []).length > 0 ? (
                             (assessment.hr_topics || []).map((topic: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
                                 {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
-                            <span className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-slate-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs">
                               N/A
                             </span>
                           )}
@@ -494,12 +496,12 @@ export default function AssessmentDetailsView({
                   )}
 
                   {assessment.technical_enabled && (
-                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                    <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           Technical Round
                         </span>
-                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded-lg">
+                        <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
                           {assessment.technical_percentage}%
                         </span>
                       </div>
@@ -508,12 +510,12 @@ export default function AssessmentDetailsView({
                         <div className="flex flex-wrap gap-2">
                           {(assessment.technical_topics || []).length > 0 ? (
                             (assessment.technical_topics || []).map((topic: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
                                 {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
-                            <span className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-slate-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs">
                               N/A
                             </span>
                           )}
@@ -541,12 +543,12 @@ export default function AssessmentDetailsView({
                     if (!hasCompiler) return null;
 
                     return (
-                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                    <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           Coding Round
                         </span>
-                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded-lg">
+                        <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
                           {assessment.coding_percentage}%
                         </span>
                       </div>
@@ -555,12 +557,12 @@ export default function AssessmentDetailsView({
                         <div className="flex flex-wrap gap-2">
                           {(assessment.coding_topics || []).length > 0 ? (
                             (assessment.coding_topics || []).map((topic: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
                                 {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
-                            <span className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-slate-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs">
                               N/A
                             </span>
                           )}
@@ -572,27 +574,27 @@ export default function AssessmentDetailsView({
                 </div>
 
                 {/* Sections Details - Moved from Sections tab */}
-                <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="mt-8 pt-6 border-t border-gray-100">
                   <h4 className="text-sm font-medium text-gray-700 mb-4">Section Details</h4>
                   <div className="space-y-4">
                     {sections.length > 0 ? (
                       sections.map((section, index) => {
                         const SectionIcon = section.icon;
                         return (
-                          <div key={section.type} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                          <div key={section.type} className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-white">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white">
                                   <SectionIcon className="w-5 h-5" />
                                 </div>
                                 <div>
-                                  <h5 className="text-gray-900 font-medium">{section.name}</h5>
+                                  <h5 className="text-gray-900 font-medium tracking-tight">{section.name}</h5>
                                   <div className="text-xs text-gray-600 mt-0.5">
                                     {section.percentage}% of total score
                                   </div>
                                 </div>
                               </div>
-                              <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs font-medium">
+                              <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs font-medium">
                                 {section.percentage} points
                               </span>
                             </div>
@@ -609,7 +611,7 @@ export default function AssessmentDetailsView({
                                 <div className="text-xs text-gray-600 mb-2 font-medium">Topics Covered</div>
                                 <div className="flex flex-wrap gap-2">
                                   {section.topics.map((topic: any, i: number) => (
-                                    <span key={i} className="px-2 py-1 bg-white border border-gray-200 text-gray-700 rounded text-xs">
+                                    <span key={i} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
                                       {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                                     </span>
                                   ))}
@@ -623,7 +625,7 @@ export default function AssessmentDetailsView({
                                 <div className="text-xs text-gray-600 mb-2 font-medium">Programming Languages</div>
                                 <div className="flex flex-wrap gap-2">
                                   {section.languages.map((lang, i) => (
-                                    <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
+                                    <span key={i} className="px-2 py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-mono">
                                       {lang}
                                     </span>
                                   ))}
@@ -632,19 +634,19 @@ export default function AssessmentDetailsView({
                             )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                              <div className="p-2 bg-white rounded border border-gray-200">
+                              <div className="p-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                                 <div className="text-xs text-gray-600 mb-1">Question Type</div>
                                 <div className="text-xs text-gray-900 font-medium">
                                   {section.type === 'coding' ? 'Code Challenge' : 'Mixed Format'}
                                 </div>
                               </div>
-                              <div className="p-2 bg-white rounded border border-gray-200">
+                              <div className="p-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                                 <div className="text-xs text-gray-600 mb-1">Time Allocation</div>
                                 <div className="text-xs text-gray-900 font-medium">
                                   {Math.round((assessment.duration_minutes || 30) * (section.percentage / 100))} min
                                 </div>
                               </div>
-                              <div className="p-2 bg-white rounded border border-gray-200">
+                              <div className="p-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                                 <div className="text-xs text-gray-600 mb-1">Weightage</div>
                                 <div className="text-xs text-gray-900 font-medium">{section.percentage}%</div>
                               </div>
@@ -653,8 +655,8 @@ export default function AssessmentDetailsView({
                         );
                       })
                     ) : (
-                      <div className="bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
-                        <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <div className="bg-slate-50 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 text-center">
+                        <FileText className="w-12 h-12 text-brand-blue/40 mx-auto mb-3" />
                         <p className="text-gray-600 text-sm">No sections configured</p>
                       </div>
                     )}
@@ -662,12 +664,12 @@ export default function AssessmentDetailsView({
                 </div>
 
                 {/* Analytics - Moved from Analytics tab */}
-                <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="mt-8 pt-6 border-t border-gray-100">
                   <h4 className="text-sm font-medium text-gray-700 mb-4">Performance Analytics</h4>
 
                   {analyticsData.completed === 0 ? (
-                    <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-                      <TrendingUp className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
+                      <TrendingUp className="w-10 h-10 text-brand-blue/30 mx-auto mb-2" />
                       <p className="text-gray-600 text-sm mb-1">No performance data available yet</p>
                       <p className="text-xs text-gray-500">Data will appear after candidates complete the assessment</p>
                     </div>
@@ -675,20 +677,20 @@ export default function AssessmentDetailsView({
                     <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'md:grid-cols-2' : ''} gap-6`}>
                       {/* Technical Performance */}
                       {assessment.technical_enabled && (
-                        <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
-                          <h5 className="text-sm font-semibold text-gray-900 mb-4">Technical Performance</h5>
+                        <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                          <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Technical Performance</h5>
                           <div className="space-y-3">
                             {/* Passed (≥70%) */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                <span className="text-sm font-semibold text-gray-800">
+                                <span className="text-sm font-semibold text-green-700">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-gray-700 h-2 rounded-full transition-all"
+                                  className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -698,13 +700,13 @@ export default function AssessmentDetailsView({
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Average (50-69%)</span>
-                                <span className="text-sm font-semibold text-gray-600">
+                                <span className="text-sm font-semibold text-brand-orange-deep">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-gray-500 h-2 rounded-full transition-all"
+                                  className="bg-gradient-to-r from-brand-orange to-brand-orange-deep h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -718,9 +720,9 @@ export default function AssessmentDetailsView({
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) < 50).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-red-500 h-2 rounded-full transition-all"
+                                  className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) < 50).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -731,20 +733,20 @@ export default function AssessmentDetailsView({
 
                       {/* Coding Performance */}
                       {assessment.coding_enabled && (
-                        <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
-                          <h5 className="text-sm font-semibold text-gray-900 mb-4">Coding Performance</h5>
+                        <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                          <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Coding Performance</h5>
                           <div className="space-y-3">
                             {/* Passed (≥70%) */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                <span className="text-sm font-semibold text-gray-800">
+                                <span className="text-sm font-semibold text-green-700">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-gray-700 h-2 rounded-full transition-all"
+                                  className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -754,13 +756,13 @@ export default function AssessmentDetailsView({
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Average (50-69%)</span>
-                                <span className="text-sm font-semibold text-gray-600">
+                                <span className="text-sm font-semibold text-brand-orange-deep">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-gray-500 h-2 rounded-full transition-all"
+                                  className="bg-gradient-to-r from-brand-orange to-brand-orange-deep h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -774,9 +776,9 @@ export default function AssessmentDetailsView({
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) < 50).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div
-                                  className="bg-red-500 h-2 rounded-full transition-all"
+                                  className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) < 50).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -791,15 +793,17 @@ export default function AssessmentDetailsView({
             </div>
 
             {/* Invitation Status Section */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2">
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                    <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                  </div>
                   Invitation Status
                 </h3>
                 <button
                   onClick={() => setActiveTab('activity')}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-700 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
                 >
                   <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Full Tracking
@@ -811,52 +815,52 @@ export default function AssessmentDetailsView({
                     Total Invited / Expired / Invite Failed / In Progress /
                     Completed / Completion Rate. */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                  <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-brand-blue text-xs mb-1.5 sm:mb-2">
                       <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Total Invited</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.totalInvites}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 tracking-tight">{analyticsData.totalInvites}</div>
                   </div>
 
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 text-xs mb-1.5 sm:mb-2">
+                  <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-brand-orange-deep text-xs mb-1.5 sm:mb-2">
                       <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Expired</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-amber-700">{analyticsData.expired}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-brand-orange-deep tracking-tight">{analyticsData.expired}</div>
                   </div>
 
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
                     <div className="flex items-center gap-1.5 sm:gap-2 text-red-600 text-xs mb-1.5 sm:mb-2">
                       <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Invite Failed</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-red-600">{analyticsData.failed}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-red-600 tracking-tight">{analyticsData.failed}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                  <div className="bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-brand-cyan/15 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-brand-cyan text-xs mb-1.5 sm:mb-2">
                       <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>In Progress</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.started}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 tracking-tight">{analyticsData.started}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-green-700 text-xs mb-1.5 sm:mb-2">
                       <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Completed</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.completed}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 tracking-tight">{analyticsData.completed}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                  <div className="bg-gradient-to-br from-brand-blue/5 to-brand-blue-2/5 border border-brand-blue/15 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-brand-blue text-xs mb-1.5 sm:mb-2">
                       <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Completion Rate</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.completionRate}%</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 tracking-tight">{analyticsData.completionRate}%</div>
                   </div>
                 </div>
 
@@ -865,12 +869,12 @@ export default function AssessmentDetailsView({
                   <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Recent Invitations</h4>
                   {activityLoading ? (
                     <div className="py-8 sm:py-12 text-center">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-2 sm:mb-3"></div>
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-2 sm:mb-3"></div>
                       <p className="text-gray-600 text-xs sm:text-sm">Loading invitations...</p>
                     </div>
                   ) : recentActivity.length === 0 ? (
-                    <div className="py-8 sm:py-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
-                      <Mail className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                    <div className="py-8 sm:py-12 text-center border-2 border-dashed border-brand-blue/20 rounded-xl">
+                      <Mail className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                       <p className="text-gray-600 mb-1 text-xs sm:text-sm">No invitations sent yet</p>
                       <p className="text-xs sm:text-sm text-gray-500">Invite candidates to start tracking their progress</p>
                     </div>
@@ -879,15 +883,15 @@ export default function AssessmentDetailsView({
                       {recentActivity.slice(0, 5).map((activity: any) => {
                         const getStatusBadge = () => {
                           if (activity.status === 'completed') {
-                            return { color: 'bg-gray-700 text-white', label: 'Completed' };
+                            return { color: 'bg-green-100 text-green-700 ring-1 ring-green-200', label: 'Completed' };
                           } else if (activity.status === 'in_progress') {
-                            return { color: 'bg-gray-400 text-white', label: 'In Progress' };
+                            return { color: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20', label: 'In Progress' };
                           } else if (activity.status === 'sent') {
-                            return { color: 'bg-gray-200 text-gray-700', label: 'Sent' };
+                            return { color: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20', label: 'Sent' };
                           } else if (activity.status === 'failed') {
-                            return { color: 'bg-red-100 text-red-700', label: 'Failed' };
+                            return { color: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Failed' };
                           }
-                          return { color: 'bg-gray-100 text-gray-700', label: 'Pending' };
+                          return { color: 'bg-slate-100 text-gray-700 ring-1 ring-gray-200', label: 'Pending' };
                         };
 
                         const statusBadge = getStatusBadge();
@@ -895,9 +899,9 @@ export default function AssessmentDetailsView({
                         const formattedDate = activityDate ? formatIST(activityDate) : 'N/A';
 
                         return (
-                          <div key={activity.id} className="bg-gray-50 rounded-lg p-2.5 sm:p-3 lg:p-4 hover:bg-gray-100 transition-colors">
+                          <div key={activity.id} className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-2.5 sm:p-3 lg:p-4 hover:bg-brand-blue/5 transition-colors">
                             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
-                              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs sm:text-sm">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs sm:text-sm">
                                 {activity.candidate_name?.charAt(0).toUpperCase() || 'U'}
                               </div>
                               <div className="flex-1 min-w-0">
@@ -942,9 +946,9 @@ export default function AssessmentDetailsView({
                                     <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
                                       <span>{activity.progress}% Complete</span>
                                     </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
                                       <div
-                                        className="bg-gray-600 h-2 rounded-full transition-all"
+                                        className="bg-gradient-to-r from-brand-blue to-brand-cyan h-2 rounded-full transition-all"
                                         style={{ width: `${activity.progress}%` }}
                                       ></div>
                                     </div>
@@ -965,19 +969,24 @@ export default function AssessmentDetailsView({
 
         {/* Activity Tab */}
         {activeTab === 'activity' && (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-              <h3 className="text-sm sm:text-base lg:text-lg text-gray-900">Recent Activity</h3>
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+              <h3 className="text-sm sm:text-base lg:text-lg text-gray-900 tracking-tight flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                  <BarChart className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                </div>
+                Recent Activity
+              </h3>
             </div>
 
             {activityLoading ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                <div className="w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
                 <p className="text-gray-600">Loading activity...</p>
               </div>
             ) : recentActivity.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-600 mb-1 text-sm">No activity recorded yet</p>
                 <p className="text-xs sm:text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
               </div>
@@ -995,20 +1004,20 @@ export default function AssessmentDetailsView({
                       const getActivityInfo = () => {
                         switch (activity._eventType) {
                           case 'completed':
-                            return { icon: CheckCircle, color: 'text-green-700 bg-green-100', label: 'Completed assessment' };
+                            return { icon: CheckCircle, color: 'text-green-700 bg-green-100 ring-1 ring-green-200', label: 'Completed assessment' };
                           case 'started':
-                            return { icon: Play, color: 'text-blue-700 bg-blue-100', label: 'Assessment started' };
+                            return { icon: Play, color: 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20', label: 'Assessment started' };
                           case 'opened':
-                            return { icon: Eye, color: 'text-purple-700 bg-purple-100', label: 'Link opened' };
+                            return { icon: Eye, color: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20', label: 'Link opened' };
                           case 'sent':
-                            return { icon: Mail, color: 'text-gray-700 bg-gray-100', label: 'Invitation email sent' };
+                            return { icon: Mail, color: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20', label: 'Invitation email sent' };
                           case 'bounced':
-                            return { icon: XCircle, color: 'text-red-700 bg-red-100', label: 'Email bounced' };
+                            return { icon: XCircle, color: 'text-red-700 bg-red-100 ring-1 ring-red-200', label: 'Email bounced' };
                           case 'expired':
-                            return { icon: XCircle, color: 'text-amber-700 bg-amber-100', label: 'Invitation expired' };
+                            return { icon: XCircle, color: 'text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20', label: 'Invitation expired' };
                           case 'invited':
                           default:
-                            return { icon: Mail, color: 'text-gray-600 bg-gray-100', label: 'Invited to assessment' };
+                            return { icon: Mail, color: 'text-gray-600 bg-slate-100 ring-1 ring-gray-200', label: 'Invited to assessment' };
                         }
                       };
 
@@ -1018,7 +1027,7 @@ export default function AssessmentDetailsView({
                       const showScores = activity._eventType === 'completed';
 
                       return (
-                        <div key={`${activity.id}-${activity._eventType}-${idx}`} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
+                        <div key={`${activity.id}-${activity._eventType}-${idx}`} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-brand-blue/5 transition-colors">
                           <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
                             <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${info.color}`}>
                               <ActivityIcon className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1047,7 +1056,7 @@ export default function AssessmentDetailsView({
                                     </div>
                                   )}
                                   {activity.passed != null && (
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-red-100 text-red-700 ring-1 ring-red-200'}`}>
                                       {activity.passed ? 'Passed' : 'Failed'}
                                     </span>
                                   )}
@@ -1062,7 +1071,7 @@ export default function AssessmentDetailsView({
 
                   {/* Pagination — 10 events per page. */}
                   {recentActivity.length > ACTIVITY_PAGE_SIZE && (
-                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex items-center justify-between text-xs sm:text-sm text-gray-600">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-100 flex items-center justify-between text-xs sm:text-sm text-gray-600">
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, recentActivity.length)} of {recentActivity.length}
                       </span>
@@ -1071,7 +1080,7 @@ export default function AssessmentDetailsView({
                           type="button"
                           onClick={() => setActivityPage(p => Math.max(1, p - 1))}
                           disabled={activityPage <= 1}
-                          className="px-3 py-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                          className="px-3 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           Previous
                         </button>
@@ -1082,7 +1091,7 @@ export default function AssessmentDetailsView({
                           type="button"
                           onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
                           disabled={activityPage >= totalPages}
-                          className="px-3 py-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                          className="px-3 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           Next
                         </button>
@@ -1097,23 +1106,25 @@ export default function AssessmentDetailsView({
 
         {/* Version History Tab */}
         {activeTab === 'versions' && (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                <h3 className="text-sm sm:text-base font-medium text-gray-900">Version History</h3>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                </div>
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
               </div>
               <p className="text-xs sm:text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
             </div>
 
             {versionsLoading ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                <div className="w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
                 <p className="text-gray-600">Loading version history...</p>
               </div>
             ) : versionHistory.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <Clock className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                <Clock className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-600 mb-1 text-sm">No version history available</p>
                 <p className="text-xs sm:text-sm text-gray-500">Version history will appear when the assessment is edited</p>
               </div>
@@ -1127,16 +1138,16 @@ export default function AssessmentDetailsView({
                     <div key={version.id} className="space-y-4">
                       {/* Version Header */}
                       <div className="flex items-start gap-2 sm:gap-3 lg:gap-4">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-br from-brand-cyan to-brand-teal shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                           <span className="text-white font-bold text-xs sm:text-sm">V{version.version}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                            <h4 className="text-sm sm:text-base font-semibold text-gray-900">
+                            <h4 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">
                               Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
                             </h4>
                             {isCurrentVersion && (
-                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gray-700 text-white text-xs font-medium rounded w-fit">
+                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs font-medium rounded w-fit">
                                 Current Version
                               </span>
                             )}
@@ -1159,13 +1170,13 @@ export default function AssessmentDetailsView({
                           </div>
 
                           {/* Configuration Details */}
-                          <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-3">
+                          <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-2.5 sm:p-3 lg:p-4">
+                            <div className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-3 tracking-tight">
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
                             <ul className="space-y-1.5 sm:space-y-2">
                               <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
-                                <span className="text-gray-600 mt-0.5">•</span>
+                                <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Assessment type: {[
                                   version.hr_enabled && 'HR',
                                   version.technical_enabled && 'Technical',
@@ -1173,17 +1184,17 @@ export default function AssessmentDetailsView({
                                 ].filter(Boolean).join(', ')}</span>
                               </li>
                               <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
-                                <span className="text-gray-600 mt-0.5">•</span>
+                                <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Duration set to {assessment.duration_minutes || 60} min</span>
                               </li>
                               {assessment.title && (
                                 <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
-                                  <span className="text-gray-600 mt-0.5">•</span>
+                                  <span className="text-brand-blue mt-0.5">•</span>
                                   <span>Linked to job posting: {assessment.title}</span>
                                 </li>
                               )}
                               <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
-                                <span className="text-gray-600 mt-0.5">•</span>
+                                <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Proctoring {assessment.proctoring_enabled ? 'enabled' : 'disabled'} with AI monitoring</span>
                               </li>
                             </ul>
@@ -1205,12 +1216,12 @@ export default function AssessmentDetailsView({
         };
         const complexityColor = (val: string | null | undefined) => {
           const map: Record<string, string> = {
-            low: 'bg-green-100 text-green-700 border-green-200',
-            medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-            high: 'bg-orange-100 text-orange-700 border-orange-200',
-            expert: 'bg-red-100 text-red-700 border-red-200',
+            low: 'bg-green-100 text-green-700 ring-1 ring-green-200',
+            medium: 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200',
+            high: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+            expert: 'bg-red-100 text-red-700 ring-1 ring-red-200',
           };
-          return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+          return val ? (map[val] || 'bg-slate-100 text-gray-700 ring-1 ring-gray-200') : 'bg-slate-100 text-gray-700 ring-1 ring-gray-200';
         };
         const expLabel = (val: string | null | undefined) => {
           const map: Record<string, string> = {
@@ -1220,13 +1231,13 @@ export default function AssessmentDetailsView({
         };
         const expColor = (val: string | null | undefined) => {
           const map: Record<string, string> = {
-            junior: 'bg-blue-100 text-blue-700 border-blue-200',
-            mid: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-            senior: 'bg-purple-100 text-purple-700 border-purple-200',
-            lead: 'bg-pink-100 text-pink-700 border-pink-200',
-            expert: 'bg-red-100 text-red-700 border-red-200',
+            junior: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
+            mid: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
+            senior: 'bg-brand-blue-2/15 text-brand-blue-2 ring-1 ring-brand-blue-2/25',
+            lead: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+            expert: 'bg-red-100 text-red-700 ring-1 ring-red-200',
           };
-          return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+          return val ? (map[val] || 'bg-slate-100 text-gray-700 ring-1 ring-gray-200') : 'bg-slate-100 text-gray-700 ring-1 ring-gray-200';
         };
 
         const skillDepth: any[] = assessment.jd_skill_depth || [];
@@ -1239,11 +1250,13 @@ export default function AssessmentDetailsView({
         const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
 
         return (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 mb-1">
-                <Info className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                <h3 className="text-sm sm:text-base font-medium text-gray-900">Assessment Info</h3>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                </div>
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
               </div>
               <p className="text-xs sm:text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
             </div>
@@ -1259,15 +1272,15 @@ export default function AssessmentDetailsView({
                 {/* Key Metadata Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
                   {/* Job Complexity Level */}
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 bg-gray-100 rounded-lg">
-                        <Layers className="w-4 h-4 text-gray-600" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <Layers className="w-4 h-4 text-brand-blue" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
                     </div>
                     {assessment.jd_complexity ? (
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${complexityColor(assessment.jd_complexity)}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${complexityColor(assessment.jd_complexity)}`}>
                         {complexityLabel(assessment.jd_complexity)}
                       </span>
                     ) : (
@@ -1276,15 +1289,15 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Experience Level */}
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 bg-gray-100 rounded-lg">
-                        <TrendingUp className="w-4 h-4 text-gray-600" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                        <TrendingUp className="w-4 h-4 text-brand-cyan" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
                     </div>
                     {assessment.jd_experience_level ? (
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${expColor(assessment.jd_experience_level)}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(assessment.jd_experience_level)}`}>
                         {expLabel(assessment.jd_experience_level)}
                       </span>
                     ) : (
@@ -1293,10 +1306,10 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Primary Domain */}
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 bg-gray-100 rounded-lg">
-                        <Globe className="w-4 h-4 text-gray-600" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <Globe className="w-4 h-4 text-brand-blue" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
                     </div>
@@ -1308,23 +1321,23 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Coding Requirement */}
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 bg-gray-100 rounded-lg">
-                        <Code className="w-4 h-4 text-gray-600" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                        <Code className="w-4 h-4 text-brand-cyan" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
                     </div>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${assessment.coding_enabled ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${assessment.coding_enabled ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200'}`}>
                       {assessment.coding_enabled ? 'Required' : 'Not Required'}
                     </span>
                   </div>
 
                   {/* Eligible Programming Languages */}
-                  <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
+                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 bg-gray-100 rounded-lg">
-                        <Zap className="w-4 h-4 text-gray-600" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                        <Zap className="w-4 h-4 text-brand-orange-deep" />
                       </div>
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
                     </div>
@@ -1333,7 +1346,7 @@ export default function AssessmentDetailsView({
                         {codingLanguages.map((lang, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
                           >
                             {lang}
                           </span>
@@ -1351,8 +1364,8 @@ export default function AssessmentDetailsView({
                 {skillDepth.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Star className="w-4 h-4 text-gray-600" />
-                      <h4 className="text-sm font-medium text-gray-900">Must-Have Skills</h4>
+                      <Star className="w-4 h-4 text-brand-blue" />
+                      <h4 className="text-sm font-medium text-gray-900 tracking-tight">Must-Have Skills</h4>
                       <span className="text-xs text-gray-500">(Required skills extracted from JD)</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1362,11 +1375,11 @@ export default function AssessmentDetailsView({
                         return (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-50 text-gray-800 border border-gray-200"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
                           >
                             {skillName}
                             {level && (
-                              <span className="text-xs text-gray-500 font-normal">· {level}</span>
+                              <span className="text-xs text-brand-blue/70 font-normal">· {level}</span>
                             )}
                           </span>
                         );
@@ -1382,8 +1395,8 @@ export default function AssessmentDetailsView({
                     recruiters think NHS support was missing). */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <Star className="w-4 h-4 text-blue-500" />
-                    <h4 className="text-sm font-medium text-gray-900">Nice-to-Have Skills</h4>
+                    <Star className="w-4 h-4 text-brand-cyan" />
+                    <h4 className="text-sm font-medium text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
                     <span className="text-xs text-gray-500">(Preferred skills extracted from JD)</span>
                   </div>
                   {niceToHaveSkills.length > 0 ? (
@@ -1394,11 +1407,11 @@ export default function AssessmentDetailsView({
                         return (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-50 text-blue-800 border border-blue-200"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/25"
                           >
                             {skillName}
                             {level && (
-                              <span className="text-xs text-blue-600 font-normal">· {level}</span>
+                              <span className="text-xs text-brand-cyan/80 font-normal">· {level}</span>
                             )}
                           </span>
                         );

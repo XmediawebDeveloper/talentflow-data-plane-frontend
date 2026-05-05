@@ -310,7 +310,7 @@ export default function ResumeTable({
       {/* FIX-008: Desktop Table View - hidden on mobile */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full min-w-[1100px]">
-        <thead className="bg-gray-50 sticky top-0">
+        <thead className="bg-slate-50 sticky top-0">
           <tr>
             {/* Drag handle column */}
             <th className="w-8 px-2 py-3">
@@ -325,7 +325,7 @@ export default function ResumeTable({
                     if (input) input.indeterminate = someSelected;
                   }}
                   onChange={(e) => onSelectAll(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                 />
               </th>
             )}
@@ -367,8 +367,8 @@ export default function ResumeTable({
               key={resume.id}
               resume={resume}
               selectedResumes={selectedResumes}
-              className={`hover:bg-gray-50 transition-colors ${
-                selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''
+              className={`hover:bg-brand-blue/5 transition-colors ${
+                selectedResumes.includes(resume.id) ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20' : ''
               }`}
               onViewDetails={onViewDetails}
             >
@@ -378,7 +378,7 @@ export default function ResumeTable({
                     type="checkbox"
                     checked={selectedResumes.includes(resume.id)}
                     onChange={() => onSelectResume(resume.id)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                    className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                   />
                 </td>
               )}
@@ -389,7 +389,7 @@ export default function ResumeTable({
                       {onViewDetails ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); onViewDetails(resume); }}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+                          className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline text-left transition-colors"
                         >
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                         </button>
@@ -399,7 +399,7 @@ export default function ResumeTable({
                         </div>
                       )}
                       {resume.isArchived && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                           <Archive className="w-3 h-3" />
                           Archived
                         </span>
@@ -428,13 +428,13 @@ export default function ResumeTable({
                   {resume.skills.slice(0, 4).map((skill, i) => (
                     <span
                       key={i}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-300"
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
                     >
                       {highlightQuery ? highlightText(skill, highlightQuery) : skill}
                     </span>
                   ))}
                   {resume.skills.length > 4 && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-blue-600">
+                    <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-brand-blue font-medium">
                       +{resume.skills.length - 4} more
                     </span>
                   )}
@@ -443,10 +443,10 @@ export default function ResumeTable({
               <td className="px-4 py-4 text-sm text-gray-700">{resume.experience}</td>
               <td className="px-4 py-4">
                 <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ${
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ring-1 ${
                     resume.source === 'Manual'
-                      ? 'bg-gray-100 text-gray-700'
-                      : 'bg-blue-50 text-blue-600'
+                      ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20'
+                      : 'bg-brand-blue/10 text-brand-blue-2 ring-brand-blue/20'
                   }`}
                 >
                   {resume.source === 'Manual' ? (
@@ -467,16 +467,16 @@ export default function ResumeTable({
                 <button
                   onClick={() => handleShowVersionHistory(resume)}
                   disabled={isLoadingVersions}
-                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 transition-colors group disabled:opacity-50"
+                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-brand-blue transition-colors group disabled:opacity-50"
                 >
                   <div className="flex items-center gap-1">
                     <Paperclip className="w-4 h-4" />
                     <span>{resume.attachments}</span>
                   </div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border group-hover:bg-blue-200 transition-colors ${
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ring-1 group-hover:bg-brand-blue/15 transition-colors ${
                     (resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1)
-                      ? 'bg-blue-100 text-blue-700 border-blue-200'
-                      : 'bg-gray-100 text-gray-600 border-gray-200'
+                      ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                      : 'bg-slate-100 text-gray-600 ring-gray-200'
                   }`}>
                     v{resume.version || 1}
                   </span>
@@ -492,7 +492,7 @@ export default function ResumeTable({
                           onApplySelected();
                         }
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+                      className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Briefcase className="w-4 h-4" />
                       Apply to Job
@@ -501,7 +501,7 @@ export default function ResumeTable({
                     <>
                       <button
                         onClick={() => onQuickView(resume)}
-                        className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                        className="p-1.5 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded transition-colors"
                         title="Preview Resume"
                       >
                         <Eye className="w-4 h-4" />
@@ -509,7 +509,7 @@ export default function ResumeTable({
                       {onApplyToJob && (
                         <button
                           onClick={() => handleApplyToJob(resume)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1.5 text-brand-blue hover:bg-brand-blue/10 rounded transition-colors"
                           title="Apply to Job"
                         >
                           <Briefcase className="w-4 h-4" />
@@ -536,7 +536,7 @@ export default function ResumeTable({
                               toast.error('Failed to download resume', { id: 'download' });
                             }
                           }}
-                          className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1.5 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded transition-colors"
                           title="Download Resume"
                         >
                           <Download className="w-4 h-4" />
@@ -559,7 +559,7 @@ export default function ResumeTable({
                             });
                             setActiveMenu(resume.id);
                           }}
-                          className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1.5 text-gray-700 hover:bg-slate-100 hover:text-gray-900 rounded transition-colors"
                           title="More Options"
                         >
                           <MoreHorizontal className="w-4 h-4" />
@@ -571,7 +571,7 @@ export default function ResumeTable({
                               onClick={() => setActiveMenu(null)}
                             />
                             <div
-                              className="fixed w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-[101]"
+                              className="fixed w-56 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-[101]"
                               style={menuPosition.openUp
                                 ? { bottom: window.innerHeight - menuPosition.top, right: menuPosition.right }
                                 : { top: menuPosition.top, right: menuPosition.right }
@@ -585,7 +585,7 @@ export default function ResumeTable({
                                     setShowShareModal(true);
                                     setActiveMenu(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-3 transition-colors"
                                 >
                                   <Share2 className="w-4 h-4 text-green-600" />
                                   Share Resume
@@ -599,7 +599,7 @@ export default function ResumeTable({
                                     setShowAddTagsModal(true);
                                     setActiveMenu(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-3 transition-colors"
                                 >
                                   <Tag className="w-4 h-4 text-cyan-600" />
                                   Add Tags
@@ -614,9 +614,9 @@ export default function ResumeTable({
                                     setShowArchiveModal(true);
                                     setActiveMenu(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-gray-700 hover:bg-gray-50"
+                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-gray-700 hover:bg-brand-orange/5 hover:text-brand-orange-deep transition-colors"
                                 >
-                                  <Archive className="w-4 h-4 text-gray-600" />
+                                  <Archive className="w-4 h-4 text-brand-orange" />
                                   Archive Resume
                                 </button>
                               )}
@@ -653,8 +653,8 @@ export default function ResumeTable({
         {paginatedItems.map((resume) => (
           <div
             key={resume.id}
-            className={`bg-white border rounded-lg p-4 ${
-              selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+            className={`bg-white border rounded-xl p-4 ring-1 transition-all ${
+              selectedResumes.includes(resume.id) ? 'border-brand-blue/40 bg-brand-blue/5 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-100 ring-black/[0.02] shadow-sm shadow-brand-blue/5'
             }`}
           >
             {/* Card Header */}
@@ -664,14 +664,14 @@ export default function ResumeTable({
                   type="checkbox"
                   checked={selectedResumes.includes(resume.id)}
                   onChange={() => onSelectResume(resume.id)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600 mt-1"
+                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 mt-1"
                 />
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="font-medium text-gray-900 truncate">{resume.name}</div>
                   {resume.isArchived && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 flex-shrink-0">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
                       <Archive className="w-3 h-3" />
                     </span>
                   )}
@@ -697,7 +697,7 @@ export default function ResumeTable({
               {resume.skills && resume.skills.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {resume.skills.slice(0, 3).map((skill, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">
+                    <span key={i} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20">
                       {skill}
                     </span>
                   ))}
@@ -712,7 +712,7 @@ export default function ResumeTable({
             <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
               <button
                 onClick={() => onQuickView(resume)}
-                className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1"
+                className="flex-1 px-3 py-2 text-sm text-gray-700 bg-slate-100 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg flex items-center justify-center gap-1 transition-colors"
               >
                 <Eye className="w-4 h-4" />
                 View
@@ -720,7 +720,7 @@ export default function ResumeTable({
               {onApplyToJob && (
                 <button
                   onClick={() => handleApplyToJob(resume)}
-                  className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
+                  className="flex-1 px-3 py-2 text-sm text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg transition-all flex items-center justify-center gap-1 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   <Briefcase className="w-4 h-4" />
                   Apply
@@ -758,8 +758,8 @@ export default function ResumeTable({
       {/* Loading indicator for version fetch */}
       {isLoadingVersions && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 flex items-center gap-3 shadow-xl">
-            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="bg-white rounded-xl p-6 flex items-center gap-3 shadow-xl shadow-brand-blue/20 ring-1 ring-brand-blue/10">
+            <div className="w-5 h-5 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
             <span className="text-gray-700">Loading versions...</span>
           </div>
         </div>
@@ -780,8 +780,8 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Edit3 className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <Edit3 className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Edit Candidate Details</h2>
               </div>
@@ -796,7 +796,7 @@ export default function ResumeTable({
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.name}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div>
@@ -804,7 +804,7 @@ export default function ResumeTable({
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.title}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div>
@@ -812,7 +812,7 @@ export default function ResumeTable({
                   <input
                     type="email"
                     defaultValue={selectedResumeForAction.email}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div>
@@ -820,7 +820,7 @@ export default function ResumeTable({
                   <input
                     type="tel"
                     defaultValue={selectedResumeForAction.phone}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div className="col-span-1 sm:col-span-2">
@@ -828,7 +828,7 @@ export default function ResumeTable({
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.skills.join(', ')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div>
@@ -836,7 +836,7 @@ export default function ResumeTable({
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.experience}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div>
@@ -844,7 +844,7 @@ export default function ResumeTable({
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.location}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
               </div>
@@ -854,7 +854,7 @@ export default function ResumeTable({
                     setShowEditModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -864,7 +864,7 @@ export default function ResumeTable({
                     setShowEditModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Save Changes
                 </button>
@@ -880,8 +880,8 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Share2 className="w-5 h-5 text-green-600" />
+                <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan to-brand-teal rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                  <Share2 className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Share Resume</h2>
               </div>
@@ -895,7 +895,7 @@ export default function ResumeTable({
                 <input
                   type="text"
                   placeholder="john@company.com, jane@company.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
               <div className="mb-6">
@@ -903,7 +903,7 @@ export default function ResumeTable({
                 <textarea
                   rows={3}
                   placeholder="Add a message..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
               <div className="flex gap-3">
@@ -912,7 +912,7 @@ export default function ResumeTable({
                     setShowShareModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -922,7 +922,7 @@ export default function ResumeTable({
                     setShowShareModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
                 >
                   <Mail className="w-4 h-4" />
                   Share
@@ -939,8 +939,8 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center">
-                  <Tag className="w-5 h-5 text-cyan-600" />
+                <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan to-brand-teal rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                  <Tag className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Add Tags</h2>
               </div>
@@ -954,7 +954,7 @@ export default function ResumeTable({
                 <input
                   type="text"
                   placeholder="Enter tags (comma separated)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <p className="text-xs text-gray-500 mt-1">Example: high-priority, senior-level, remote</p>
               </div>
@@ -964,7 +964,7 @@ export default function ResumeTable({
                   {['High Priority', 'Remote', 'Senior Level', 'Immediate Start', 'Contract'].map((tag) => (
                     <button
                       key={tag}
-                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs hover:bg-gray-200 transition-colors border border-gray-300"
+                      className="px-3 py-1 bg-brand-blue/5 text-brand-blue rounded-full text-xs hover:bg-brand-blue/10 transition-colors ring-1 ring-brand-blue/20"
                     >
                       + {tag}
                     </button>
@@ -977,7 +977,7 @@ export default function ResumeTable({
                     setShowAddTagsModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -987,7 +987,7 @@ export default function ResumeTable({
                     setShowAddTagsModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
                 >
                   <Tag className="w-4 h-4" />
                   Add Tags
@@ -1004,8 +1004,8 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Archive className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-orange-deep rounded-xl flex items-center justify-center shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+                  <Archive className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Archive Resume</h2>
               </div>
@@ -1014,7 +1014,7 @@ export default function ResumeTable({
               </p>
             </div>
             <div className="p-6">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-4 mb-6">
                 <p className="text-sm text-gray-800">
                   <strong>What happens when you archive?</strong>
                 </p>
@@ -1031,7 +1031,7 @@ export default function ResumeTable({
                     setShowArchiveModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1051,7 +1051,7 @@ export default function ResumeTable({
                     setShowArchiveModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
                 >
                   <Archive className="w-4 h-4" />
                   Archive

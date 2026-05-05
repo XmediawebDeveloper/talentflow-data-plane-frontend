@@ -16,6 +16,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  ShoppingCart,
+  Sparkles,
+  Receipt,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
@@ -264,77 +268,81 @@ export default function AddSeatsModal({
   const addonDisplayName = (pricing?.addon_name || 'User Seat Pack').replace(/\s*-?\s*Pro$/i, '').trim();
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
         {/* Header */}
-        <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex-shrink-0 overflow-hidden">
-          <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/5 rounded-full" />
-          <div className="absolute -bottom-8 -left-4 w-24 h-24 bg-white/5 rounded-full" />
+        <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-r from-brand-blue to-brand-blue-2 flex-shrink-0 overflow-hidden">
+          <div className="absolute -top-8 -right-6 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
+          <div className="absolute -bottom-10 -left-6 w-28 h-28 bg-brand-cyan/25 rounded-full blur-2xl" />
           <div className="relative flex items-center gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center flex-shrink-0 border border-white/20">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/25 shadow-lg shadow-brand-blue/40">
               <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
+              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-bold text-white">Add User Seats</h2>
-                <span className="text-[10px] font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">INSTANT</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30 backdrop-blur-sm">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  INSTANT
+                </span>
               </div>
-              <p className="text-xs sm:text-sm text-gray-400">Add seats to your team capacity</p>
+              <p className="text-xs sm:text-sm text-white/80">Add seats to your team capacity</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center hover:bg-white/15 rounded-xl transition-colors"
+            className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 backdrop-blur-sm transition-colors"
           >
-            <X className="w-5 h-5 text-gray-300" />
+            <X className="w-5 h-5 text-white" />
           </button>
         </div>
 
         {/* Scrollable Body */}
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 bg-white">
           <div className="p-5 sm:p-7 space-y-5">
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+                <p className="text-sm text-gray-500">Loading pricing...</p>
               </div>
             ) : (
               <>
                 {/* Success */}
                 {purchaseSuccess && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-xl ring-1 ring-green-100 flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                    <div className="w-9 h-9 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-green-500/25 ring-1 ring-white/10">
                       <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-green-800 text-sm">Purchase Successful!</p>
-                      <p className="text-xs text-green-600 mt-0.5">{purchaseSuccess}</p>
+                      <p className="text-xs text-green-700 mt-0.5">{purchaseSuccess}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Error */}
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl ring-1 ring-red-100 flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                    <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-red-500/25 ring-1 ring-white/10">
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-red-800 text-sm">Purchase Failed</p>
-                      <p className="text-xs text-red-600 mt-0.5">{error}</p>
+                      <p className="text-xs text-red-700 mt-0.5">{error}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Addon Details Card */}
                 {pricing && (
-                  <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-2xl p-4 sm:p-5 overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-gray-200/40 rounded-full -translate-y-8 translate-x-8" />
+                  <div className="relative bg-white border border-gray-200 rounded-xl p-4 sm:p-5 overflow-hidden shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all">
+                    <div className="absolute top-0 right-0 w-28 h-28 bg-brand-blue/5 rounded-full -translate-y-10 translate-x-10" />
                     <div className="relative flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-200 flex-shrink-0">
-                          <Users className="w-6 h-6 sm:w-7 sm:h-7 text-gray-700" />
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                          <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
                           <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight truncate">
@@ -345,7 +353,7 @@ export default function AddSeatsModal({
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs text-gray-500">Per pack</p>
-                        <p className="text-lg font-bold text-gray-900">₹{pricePerPack}</p>
+                        <p className="text-lg font-bold text-brand-blue">₹{pricePerPack}</p>
                       </div>
                     </div>
                   </div>
@@ -355,14 +363,14 @@ export default function AddSeatsModal({
                 {pricing && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-semibold text-gray-700">Select Quantity</label>
-                      <span className="text-xs text-gray-400">Max {maxPacks} packs</span>
+                      <label className="text-sm font-semibold text-gray-800">Select Quantity</label>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-gray-200 bg-gray-50 text-gray-600">Max {maxPacks} packs</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center bg-gray-100 rounded-2xl border border-gray-200 p-1 gap-1">
+                      <div className="flex items-center bg-white rounded-xl border border-gray-200 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-white rounded-xl flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all font-bold text-lg text-gray-700 shadow-sm border border-gray-200"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           −
                         </button>
@@ -376,16 +384,16 @@ export default function AddSeatsModal({
                         />
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-white rounded-xl flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all font-bold text-lg text-gray-700 shadow-sm border border-gray-200"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           +
                         </button>
                       </div>
                       {/* Total seats panel */}
-                      <div className="flex-1 bg-gray-900 text-white rounded-2xl px-4 py-2.5 flex items-center justify-between">
-                        <span className="text-xs text-gray-400">Total seats</span>
+                      <div className="flex-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-xl px-4 py-2.5 flex items-center justify-between shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+                        <span className="text-xs text-white/80">Total seats</span>
                         <div className="flex items-center gap-1.5">
-                          <Users className="w-4 h-4 text-gray-300" />
+                          <Users className="w-4 h-4 text-white/90" />
                           <span className="font-bold text-lg">+{totalSeats}</span>
                         </div>
                       </div>
@@ -395,10 +403,15 @@ export default function AddSeatsModal({
 
                 {/* Order Summary */}
                 {pricing && (
-                  <div className="border border-gray-200 rounded-2xl overflow-hidden">
-                    <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                      <h4 className="font-semibold text-gray-700 text-sm">Order Summary</h4>
-                      <span className="text-xs text-gray-400">{quantity} pack{quantity > 1 ? 's' : ''}</span>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                          <Receipt className="w-4 h-4 text-white" />
+                        </div>
+                        <h4 className="font-semibold text-gray-800 text-sm">Order Summary</h4>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan">{quantity} pack{quantity > 1 ? 's' : ''}</span>
                     </div>
                     <div className="p-4 sm:p-5 space-y-3">
                       <div className="flex justify-between items-center text-sm">
@@ -420,10 +433,10 @@ export default function AddSeatsModal({
                       <div className="mt-1 pt-3 border-t border-gray-200 flex justify-between items-center">
                         <div>
                           <p className="font-semibold text-gray-900 text-sm">Total Amount</p>
-                          <p className="text-xs text-gray-400">Incl. all taxes</p>
+                          <p className="text-xs text-gray-500">Incl. all taxes</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl sm:text-3xl font-bold text-gray-900">₹{total.toFixed(2)}</p>
+                          <p className="text-2xl sm:text-3xl font-bold text-brand-blue">₹{total.toFixed(2)}</p>
                         </div>
                       </div>
                     </div>
@@ -440,14 +453,14 @@ export default function AddSeatsModal({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-5 py-3 border border-gray-200 rounded-2xl text-gray-600 font-semibold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all"
+              className="px-5 py-3 border border-gray-200 rounded-lg text-gray-700 font-semibold text-sm hover:bg-gray-50 hover:border-brand-blue/30 hover:text-brand-blue transition-all"
             >
               Cancel
             </button>
             <button
               onClick={handlePurchase}
               disabled={isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess}
-              className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-semibold text-sm hover:bg-gray-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20"
+              className="flex-1 py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               {isPurchasing || razorpayProcessing ? (
                 <>
@@ -462,8 +475,8 @@ export default function AddSeatsModal({
               )}
             </button>
           </div>
-          <p className="text-center text-[11px] text-gray-400 mt-3 flex items-center justify-center gap-1">
-            <span>🔒</span>
+          <p className="text-center text-[11px] text-gray-500 mt-3 flex items-center justify-center gap-1.5">
+            <ShieldCheck className="w-3 h-3 text-brand-cyan" />
             <span>Secured by Razorpay · 256-bit SSL encryption</span>
           </p>
         </div>

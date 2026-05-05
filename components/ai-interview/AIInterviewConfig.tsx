@@ -357,8 +357,8 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
   const color = category === 'mth'
-    ? { tag: 'bg-purple-50 text-purple-700 border-purple-200', accent: 'text-purple-700' }
-    : { tag: 'bg-indigo-50 text-indigo-700 border-indigo-200', accent: 'text-indigo-700' };
+    ? { tag: 'bg-brand-blue/10 text-brand-blue border-brand-blue/20', accent: 'text-brand-blue' }
+    : { tag: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20', accent: 'text-brand-cyan' };
 
   // hideClustersView: clusters are kept in state for save integrity but not rendered here
   const hasClusters = !hideClustersView && config.clusters.length > 0;
@@ -419,9 +419,9 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   };
 
   const SKILL_TYPE_COLORS: Record<SkillType, string> = {
-    'Skill': 'bg-gray-100 text-gray-600 border-gray-200',
-    'Command': 'bg-blue-50 text-blue-600 border-blue-200',
-    'Certification': 'bg-green-50 text-green-600 border-green-200',
+    'Skill': 'bg-slate-100 text-gray-700 border-gray-200',
+    'Command': 'bg-brand-blue/10 text-brand-blue border-brand-blue/20',
+    'Certification': 'bg-green-50 text-green-700 border-green-200',
   };
 
   const renderSkillTag = (skill: SkillEntry) => {
@@ -431,7 +431,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
       <div key={skill.name} className="group">
         <div className="flex items-center gap-2">
           <span className={`flex-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border ${
-            fromJd ? color.tag : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            fromJd ? color.tag : 'bg-green-50 text-green-700 border-green-200'
           }`}>
             {skill.name}
             {fromJd && <span className="text-[10px] opacity-60">JD</span>}
@@ -450,7 +450,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               title={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
               onClick={() => onMoveSkill(skill.name)}
-              className="p-1 text-gray-300 hover:text-indigo-500 transition-colors opacity-0 group-hover:opacity-100"
+              className="p-1 text-gray-300 hover:text-brand-blue transition-colors opacity-0 group-hover:opacity-100"
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
             </button>
@@ -472,7 +472,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
               value={skill.comment}
               onChange={e => updateComment(skill.name, e.target.value)}
               placeholder="Add interviewer note for this skill (not shown to candidate)…"
-              className="flex-1 px-3 py-1.5 text-xs border border-amber-200 rounded-lg bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder-amber-300"
+              className="flex-1 px-3 py-1.5 text-xs border border-brand-orange/30 rounded-lg bg-brand-orange/5 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 placeholder-brand-orange/50"
             />
             <button
               onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
@@ -488,19 +488,23 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   };
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white">
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <Brain className={`w-4 h-4 ${color.accent}`} />
-          <span className="font-semibold text-gray-900 text-sm">{title}</span>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${
+            category === 'mth' ? 'from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15' : 'from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15'
+          }`}>
+            <Brain className={`w-5 h-5 ${color.accent}`} />
+          </div>
+          <span className="font-semibold text-gray-900 text-sm tracking-tight">{title}</span>
           {mode === 'fixed' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
               {questionCount} questions
             </span>
           )}
           {mode === 'flexible' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-purple-50 text-purple-600 border border-purple-200">
+            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
               ~{flexibleMinutes} min
             </span>
           )}
@@ -524,12 +528,12 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                   }
                 }}
                 onBlur={() => { if (config.percentage < 10) setWeightError(true); }}
-                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
-                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
+                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-2 ${
+                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
-              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
-                weightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
+              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-slate-50 ${
+                weightError ? 'border-red-400 text-red-600' : 'border-gray-200 text-gray-600'
               }`}>%</span>
             </div>
             {weightError && <span className="text-[11px] text-red-500 ml-1">Min 10%</span>}
@@ -553,16 +557,16 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
         {/* Flexible mode: locked notice replaces the add-skill input */}
         {mode === 'flexible' && isLocked ? (
-          <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg shadow-sm shadow-brand-orange/5">
             <div className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-              <span className="text-xs text-amber-700">Skills locked after cluster generation.</span>
+              <Lock className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
+              <span className="text-xs text-brand-orange-deep">Skills locked after cluster generation.</span>
             </div>
             {onResetClusters && (
               <button
                 type="button"
                 onClick={onResetClusters}
-                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+                className="text-xs font-medium text-brand-orange-deep hover:text-brand-orange underline whitespace-nowrap"
               >
                 Reset clusters to edit
               </button>
@@ -589,8 +593,8 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                   }
                 }}
                 placeholder={category === 'mth' ? 'Add a must-have skill' : 'Add a nice-to-have skill'}
-                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
-                  addSkillError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
+                  addSkillError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {addSkillError && (
@@ -600,7 +604,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               type="button"
               onClick={addSkill}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -614,7 +618,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5 text-purple-500" />
+                <Layers className="w-3.5 h-3.5 text-brand-blue" />
                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skill Clusters</span>
               </div>
               <span className="text-xs text-gray-400">
@@ -633,11 +637,11 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                   );
 
                   return (
-                    <div key={cluster.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div key={cluster.id} className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
                       {/* Cluster header */}
                       <button
                         onClick={() => toggleCluster(cluster.id)}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-50 hover:bg-brand-blue/5 transition-colors text-left"
                       >
                         {isCollapsed
                           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -666,13 +670,13 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
               {/* Unclustered skills */}
               {unclusteredSkills.length > 0 && (
-                <div className="border border-dashed border-amber-300 rounded-lg overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                    <span className="flex-1 text-sm font-medium text-amber-700">Unassigned Skills</span>
-                    <span className="text-[11px] text-amber-500">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
+                <div className="border border-dashed border-brand-orange/40 rounded-lg overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-brand-orange/5">
+                    <AlertCircle className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
+                    <span className="flex-1 text-sm font-medium text-brand-orange-deep">Unassigned Skills</span>
+                    <span className="text-[11px] text-brand-orange">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="px-3 py-2.5 space-y-1.5 border-t border-amber-200">
+                  <div className="px-3 py-2.5 space-y-1.5 border-t border-brand-orange/20">
                     {unclusteredSkills.map(skill => renderSkillTag(skill))}
                   </div>
                 </div>
@@ -792,25 +796,27 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
   };
 
   return (
-    <div className={`border rounded-lg transition-all ${enabled ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}>
+    <div className={`rounded-xl transition-all ${enabled ? 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5' : 'border border-gray-100 bg-slate-50 opacity-60'}`}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" checked={enabled} onChange={onToggle} className="sr-only peer" />
-            <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gray-800 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+            <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
           </label>
-          <Users className="w-4 h-4 text-blue-600" />
-          <span className="font-semibold text-gray-900 text-sm">HR Round</span>
-          <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-medium">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+            <Users className="w-5 h-5 text-brand-blue" />
+          </div>
+          <span className="font-semibold text-gray-900 text-sm tracking-tight">HR Round</span>
+          <span className="px-2 py-0.5 text-[11px] rounded-full bg-brand-blue/10 text-brand-blue border border-brand-blue/20 font-medium">
             Qualitative Only — Non-Scoring
           </span>
           {enabled && mode === 'fixed' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
               {questionCount} questions
             </span>
           )}
           {enabled && mode === 'flexible' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-purple-50 text-purple-600 border border-purple-200">
+            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
               ~{flexibleMinutes} min
             </span>
           )}
@@ -839,12 +845,12 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                   }
                 }}
                 onBlur={() => { setHrWeightError(enabled && mode === 'flexible' && percentage < 10); }}
-                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
-                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
+                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-2 ${
+                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
-              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
-                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
+              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-slate-50 ${
+                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-200 text-gray-600'
               }`}>%</span>
             </div>
             {hrWeightError && <span className="text-[11px] text-red-500 ml-1">HR round must be at least 10%</span>}
@@ -891,10 +897,10 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                     key={q.id}
                     className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-colors ${
                       isSelected
-                        ? 'border-blue-200 bg-blue-50 cursor-pointer'
+                        ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 cursor-pointer'
                         : isDisabled
-                          ? 'border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed'
-                          : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50 cursor-pointer'
+                          ? 'border-gray-100 bg-slate-50 opacity-40 cursor-not-allowed'
+                          : 'border-gray-100 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
                     }`}
                   >
                     <input
@@ -902,7 +908,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                       checked={isSelected}
                       disabled={isDisabled}
                       onChange={() => toggleQuestion(q.id)}
-                      className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 disabled:cursor-not-allowed"
+                      className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
@@ -915,7 +921,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
 
           {/* Add Question — available in both modes, persists to HR Question Bank */}
           {addingQuestion ? (
-            <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+            <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-slate-50 ring-1 ring-black/[0.02]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
                 <span className="text-[11px] text-gray-400">Saved to database</span>
@@ -929,8 +935,8 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                   if (questionError) setQuestionError('');
                 }}
                 placeholder="Enter question text…"
-                className={`w-full text-xs border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 resize-none bg-white ${
-                  questionError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                className={`w-full text-xs border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 resize-none bg-white ${
+                  questionError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {questionError && (
@@ -952,7 +958,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 <button
                   onClick={saveNewQuestion}
                   disabled={savingQ || !newQText.trim()}
-                  className="flex items-center gap-1 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Save
@@ -962,7 +968,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
           ) : (
             <button
               onClick={() => setAddingQuestion(true)}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-gray-400 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-blue border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               Add Question
@@ -970,9 +976,9 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
           )}
 
           {/* Info */}
-          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100">
-            <Info className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-amber-700">
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/5">
+            <Info className="w-3.5 h-3.5 text-brand-orange flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-brand-orange-deep">
               HR responses are stored separately for recruiter review only.
               They do <strong>not</strong> impact the technical evaluation score.
             </p>
@@ -2079,9 +2085,9 @@ export default function AIInterviewConfig() {
   /* ── Loading / null guards ── */
   if (loadingJd) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
           <p className="text-sm text-gray-500">Loading configuration…</p>
         </div>
       </div>
@@ -2095,16 +2101,19 @@ export default function AIInterviewConfig() {
   /* ─────────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
       <div className="w-full">
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={handleBackClick} disabled={savingDraft} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={handleBackClick} disabled={savingDraft} className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+            <Brain className="w-5 h-5 text-brand-blue" />
+          </div>
           <div>
-            <h1 className="text-gray-900 text-xl font-semibold">AI Interview Configuration</h1>
+            <h1 className="text-gray-900 text-xl font-semibold tracking-tight">AI Interview Configuration</h1>
             <p className="text-sm text-gray-500">Configure skills, clusters, and weightage for this interview</p>
           </div>
         </div>
@@ -2119,15 +2128,15 @@ export default function AIInterviewConfig() {
               <React.Fragment key={step}>
                 {i > 0 && <div className="w-8 h-px bg-gray-200" />}
                 {isCompleted ? (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                   </div>
                 ) : (
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${
-                    isCurrent ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'
+                    isCurrent ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-slate-100 text-gray-400'
                   }`}>{stepNum}</div>
                 )}
-                <span className={`text-sm ${isCurrent ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{step}</span>
+                <span className={`text-sm ${isCurrent ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>{step}</span>
               </React.Fragment>
             );
           })}
@@ -2139,40 +2148,42 @@ export default function AIInterviewConfig() {
           <div className="lg:col-span-2 space-y-5">
 
             {/* Selected JD */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl shadow-sm shadow-brand-blue/10">
               <div>
-                <p className="text-xs text-gray-400 mb-0.5">Job Description</p>
-                <p className="font-semibold text-gray-900">{selectedJd.title}</p>
+                <p className="text-xs text-brand-blue mb-0.5 font-medium">Job Description</p>
+                <p className="font-semibold text-gray-900 tracking-tight">{selectedJd.title}</p>
                 {selectedJd.department && <p className="text-xs text-gray-500">{selectedJd.department}</p>}
               </div>
-              <button onClick={() => router.push('/recruitment/ai-interviews/jd-selection')} className="text-sm text-gray-500 hover:text-gray-700">
+              <button onClick={() => router.push('/recruitment/ai-interviews/jd-selection')} className="text-sm text-gray-600 hover:text-brand-blue px-3 py-1.5 rounded-md hover:bg-brand-blue/5 transition-colors">
                 Change
               </button>
             </div>
 
             {/* ── Interview Mode + Make Clusters ── */}
-            <div className="border border-gray-200 rounded-lg bg-white p-4 space-y-4">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <Clock className="w-4 h-4 text-gray-600" />
-                  <span className="font-semibold text-gray-900 text-sm">Interview Mode</span>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                    <Clock className="w-5 h-5 text-brand-blue" />
+                  </div>
+                  <span className="font-semibold text-gray-900 text-sm tracking-tight">Interview Mode</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {/* Fixed */}
                   <button
                     onClick={() => { setMode('fixed'); setBufferEnabled(false); }}
-                    className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
-                      mode === 'fixed' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
+                    className={`relative flex flex-col gap-1 p-4 rounded-xl border-2 text-left transition-all ${
+                      mode === 'fixed' ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Timer className={`w-4 h-4 ${mode === 'fixed' ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-semibold text-sm">Timed Mode — 30 min</span>
+                      <Timer className={`w-4 h-4 ${mode === 'fixed' ? 'text-brand-blue' : 'text-gray-600'}`} />
+                      <span className={`font-semibold text-sm tracking-tight ${mode === 'fixed' ? 'text-brand-blue' : 'text-gray-900'}`}>Timed Mode — 30 min</span>
                     </div>
-                    <p className={`text-xs ${mode === 'fixed' ? 'text-gray-300' : 'text-gray-500'}`}>
+                    <p className={`text-xs ${mode === 'fixed' ? 'text-gray-700' : 'text-gray-500'}`}>
                       Candidate response time is capped. AI narration excluded.
                     </p>
-                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-400' : 'text-gray-400'}`}>
+                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-600' : 'text-gray-400'}`}>
                       <div>Must-to-Have → {timedQDist.mth} questions</div>
                       {nth.enabled && <div>Nice-to-Have → {timedQDist.nth} questions</div>}
                       {hrEnabled && <div>HR Round → {timedQDist.hr} questions</div>}
@@ -2182,18 +2193,18 @@ export default function AIInterviewConfig() {
                   {/* Flexible */}
                   <button
                     onClick={() => setMode('flexible')}
-                    className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
-                      mode === 'flexible' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
+                    className={`relative flex flex-col gap-1 p-4 rounded-xl border-2 text-left transition-all ${
+                      mode === 'flexible' ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Timer className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-semibold text-sm">Conversational — 30 min</span>
+                      <Timer className={`w-4 h-4 ${mode === 'flexible' ? 'text-brand-blue' : 'text-gray-600'}`} />
+                      <span className={`font-semibold text-sm tracking-tight ${mode === 'flexible' ? 'text-brand-blue' : 'text-gray-900'}`}>Conversational — 30 min</span>
                     </div>
-                    <p className={`text-xs ${mode === 'flexible' ? 'text-gray-300' : 'text-gray-500'}`}>
+                    <p className={`text-xs ${mode === 'flexible' ? 'text-gray-700' : 'text-gray-500'}`}>
                       No per-question timer. AI adapts based on candidate responses.
                     </p>
-                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-400' : 'text-gray-400'}`}>
+                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-600' : 'text-gray-400'}`}>
                       <div>Must-to-Have → {mth.percentage}% weight</div>
                       {nth.enabled && <div>Nice-to-Have → {nth.percentage}% weight</div>}
                       {hrEnabled && <div>HR Round → {hrPct}% weight</div>}
@@ -2207,7 +2218,7 @@ export default function AIInterviewConfig() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900">Buffer Time</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">+5 min</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">+5 min</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {bufferEnabled
@@ -2219,7 +2230,7 @@ export default function AIInterviewConfig() {
                       type="button"
                       onClick={() => setBufferEnabled(prev => !prev)}
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        bufferEnabled ? 'bg-gray-900' : 'bg-gray-200'
+                        bufferEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-200'
                       }`}
                       role="switch"
                       aria-checked={bufferEnabled}
@@ -2253,7 +2264,7 @@ export default function AIInterviewConfig() {
             />
 
             {/* ── NTH ── */}
-            <div className="border border-gray-200 rounded-lg bg-white">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -2276,10 +2287,12 @@ export default function AIInterviewConfig() {
                         setHrPct(newHr);
                       }
                     }} className="sr-only peer" />
-                    <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gray-800 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                    <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                   </label>
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span className="font-semibold text-gray-900 text-sm">Nice-To-Have Skills</span>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15">
+                    <Sparkles className="w-5 h-5 text-brand-cyan" />
+                  </div>
+                  <span className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</span>
                 </div>
               </div>
 
@@ -2341,10 +2354,12 @@ export default function AIInterviewConfig() {
 
 
             {/* Introduction Video (Optional) */}
-            <div className="px-1 space-y-2">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Video className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Introduction Video</span>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                  <Video className="w-5 h-5 text-brand-blue" />
+                </div>
+                <span className="text-sm font-medium text-gray-900 tracking-tight">Introduction Video</span>
                 <span className="text-xs text-gray-400">(Optional · max 1 min)</span>
               </div>
               <p className="text-xs text-gray-500">
@@ -2352,8 +2367,8 @@ export default function AIInterviewConfig() {
               </p>
 
               {introVideoFile || introVideoUrl ? (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                  <Video className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-gray-100 rounded-lg ring-1 ring-black/[0.02]">
+                  <Video className="w-5 h-5 text-brand-blue flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
                     {introVideoFile && (
@@ -2361,7 +2376,7 @@ export default function AIInterviewConfig() {
                     )}
                   </div>
                   {uploadingVideo ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                    <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                   ) : (
                     <div className="flex items-center gap-1">
                       <button
@@ -2379,12 +2394,12 @@ export default function AIInterviewConfig() {
                             }
                           }
                         }}
-                        className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                        className="p-1 text-gray-400 hover:text-brand-blue transition-colors"
                         title="Preview video"
                       >
                         <Play className="w-4 h-4" />
                       </button>
-                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors" title="Remove video">
+                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Remove video">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -2398,8 +2413,8 @@ export default function AIInterviewConfig() {
                       onClick={() => setVideoMode('upload')}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
                         videoMode === 'upload'
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
+                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                          : 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                       }`}
                     >
                       <Upload className="w-3.5 h-3.5" />
@@ -2409,8 +2424,8 @@ export default function AIInterviewConfig() {
                       onClick={() => setVideoMode('record')}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors border-l border-gray-200 ${
                         videoMode === 'record'
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
+                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                          : 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                       }`}
                     >
                       <Camera className="w-3.5 h-3.5" />
@@ -2420,8 +2435,8 @@ export default function AIInterviewConfig() {
 
                   {videoMode === 'upload' ? (
                     <div>
-                      <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
-                        <Upload className="w-4 h-4 text-gray-400" />
+                      <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors">
+                        <Upload className="w-4 h-4 text-brand-blue" />
                         <span className="text-sm text-gray-500">Click to upload a video (max 1 min)</span>
                         <input
                           type="file"
@@ -2501,7 +2516,7 @@ export default function AIInterviewConfig() {
                         {!cameraReady && !isRecording && !recordedPreviewUrl && (
                           <button
                             onClick={startCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <Camera className="w-3.5 h-3.5" />
                             Open Camera
@@ -2519,7 +2534,7 @@ export default function AIInterviewConfig() {
                         {isRecording && (
                           <button
                             onClick={stopRecordingAndSave}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <span className="w-2.5 h-2.5 rounded-sm bg-white" />
                             Stop & Save
@@ -2532,7 +2547,7 @@ export default function AIInterviewConfig() {
                               setRecordingSeconds(0);
                               startCamera();
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                           >
                             Re-record
                           </button>
@@ -2540,7 +2555,7 @@ export default function AIInterviewConfig() {
                         {cameraReady && !isRecording && (
                           <button
                             onClick={stopCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                           >
                             <X className="w-3.5 h-3.5" />
                             Cancel
@@ -2555,10 +2570,12 @@ export default function AIInterviewConfig() {
             </div>
 
             {/* Candidate Languages */}
-            <div className="px-1 space-y-2">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Candidate Languages</span>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                  <Globe className="w-5 h-5 text-brand-blue" />
+                </div>
+                <span className="text-sm font-medium text-gray-900 tracking-tight">Candidate Languages</span>
               </div>
               <p className="text-xs text-gray-500">
                 Select which languages the candidate can choose for the interview. The AI will conduct the interview in their chosen language.
@@ -2569,13 +2586,13 @@ export default function AIInterviewConfig() {
                 {availableLanguages.map(lang => (
                   <span
                     key={lang}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 border border-gray-200"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
                   >
                     {lang}
                     {lang !== 'English' && (
                       <button
                         onClick={() => setAvailableLanguages(prev => prev.filter(l => l !== lang))}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-brand-blue/60 hover:text-brand-blue"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -2592,13 +2609,13 @@ export default function AIInterviewConfig() {
           <div className="space-y-4">
 
             {/* Weightage distribution */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 lg:sticky lg:top-6">
-              <h3 className="font-semibold text-gray-900 text-sm mb-4">Configuration Summary</h3>
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 lg:sticky lg:top-6">
+              <h3 className="font-semibold text-gray-900 text-sm mb-4 tracking-tight">Configuration Summary</h3>
 
               {/* Job Details */}
-              <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                  <span className="text-xs font-medium text-gray-500">Job Details</span>
+              <div className="border border-gray-100 rounded-lg overflow-hidden mb-4 ring-1 ring-black/[0.02]">
+                <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+                  <span className="text-xs font-medium text-brand-blue">Job Details</span>
                 </div>
                 <div className="divide-y divide-gray-50">
                   <div className="px-3 py-2 flex items-start justify-between gap-2">
@@ -2624,10 +2641,10 @@ export default function AIInterviewConfig() {
                       <span className="text-xs text-gray-500 block mb-1.5">Domain Context</span>
                       <div className="flex flex-wrap gap-1">
                         {selectedJd.domain_keywords.slice(0, 6).map(kw => (
-                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-700">{kw}</span>
+                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
                         ))}
                         {selectedJd.domain_keywords.length > 6 && (
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500">+{selectedJd.domain_keywords.length - 6}</span>
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-gray-500 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
                         )}
                       </div>
                     </div>
@@ -2641,7 +2658,7 @@ export default function AIInterviewConfig() {
                   {mode === 'flexible' && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-shrink-0">Buffer Time</span>
-                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
+                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-400'}`}>
                         {bufferEnabled ? 'Enabled (+5 min)' : 'Disabled'}
                       </span>
                     </div>
@@ -2660,9 +2677,9 @@ export default function AIInterviewConfig() {
               {/* Fixed mode: question budget + time allocation (combined) */}
               {mode === 'fixed' && (
                 <div className="space-y-3 mb-4">
-                  <div className="border border-gray-100 rounded-lg overflow-hidden">
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                      <span className="text-xs font-medium text-gray-500">Question Budget (Total: 15)</span>
+                  <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
+                    <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 flex items-center justify-between">
+                      <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
                     <table className="w-full text-xs">
@@ -2714,16 +2731,16 @@ export default function AIInterviewConfig() {
                       </span>
                     </div>
                     {[
-                      { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-purple-500' },
-                      ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-indigo-400' }] : []),
-                      ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-blue-400' }] : []),
+                      { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-gradient-to-r from-brand-blue to-brand-blue-2' },
+                      ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-gradient-to-r from-brand-cyan to-brand-teal' }] : []),
+                      ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-gradient-to-r from-brand-orange to-brand-orange-deep' }] : []),
                     ].map(({ label, pct, color }) => (
                       <div key={label}>
                         <div className="flex items-center justify-between text-xs mb-0.5">
                           <span className="text-gray-600">{label}</span>
                           <span className="font-medium text-gray-900">{pct}%</span>
                         </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
@@ -2736,9 +2753,9 @@ export default function AIInterviewConfig() {
                     </div>
                   )}
                   {pctValid && (
-                    <div className="border border-gray-100 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-500">Time Allocation</span>
+                    <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
+                      <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-medium text-brand-blue">Time Allocation</span>
                         <span className="text-xs font-semibold text-gray-700">
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
@@ -2772,14 +2789,14 @@ export default function AIInterviewConfig() {
                             </tr>
                           )}
                           {bufferEnabled && (
-                            <tr className="border-b border-gray-50 bg-blue-50">
-                              <td className="px-3 py-2 text-blue-600 font-medium">Buffer Time</td>
+                            <tr className="border-b border-gray-50 bg-brand-blue/5">
+                              <td className="px-3 py-2 text-brand-blue font-medium">Buffer Time</td>
                               <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-semibold text-blue-600">+5 min</td>
+                              <td className="px-3 py-2 text-right font-semibold text-brand-blue">+5 min</td>
                             </tr>
                           )}
                           {bufferEnabled && (
-                            <tr className="bg-gray-50">
+                            <tr className="bg-slate-50">
                               <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
                               <td className="px-3 py-2 text-right text-gray-400">—</td>
                               <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
@@ -2802,8 +2819,8 @@ export default function AIInterviewConfig() {
                     aria-disabled={!canContinueToClusters}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       canContinueToClusters
-                        ? 'bg-gray-900 text-white hover:bg-gray-800'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        : 'bg-slate-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
                     {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
@@ -2819,7 +2836,7 @@ export default function AIInterviewConfig() {
                 <button
                   onClick={handleSaveAsDraft}
                   disabled={savingDraft}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {savingDraft ? 'Saving…' : 'Save as Draft'}
@@ -2833,9 +2850,16 @@ export default function AIInterviewConfig() {
       {/* Video Preview Dialog */}
       <Dialog open={showVideoPreview} onOpenChange={setShowVideoPreview}>
         <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="text-sm font-semibold">Video Preview</DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">Introduction video for candidates</DialogDescription>
+          <DialogHeader className="px-4 pt-4 pb-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                <Video className="w-5 h-5 text-brand-blue" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-semibold tracking-tight">Video Preview</DialogTitle>
+                <DialogDescription className="text-xs text-gray-500">Introduction video for candidates</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <div className="px-4 pb-4">
             <div className="rounded-lg overflow-hidden bg-black aspect-video">
@@ -2857,14 +2881,14 @@ export default function AIInterviewConfig() {
       <Dialog open={showUnsavedDialog} onOpenChange={open => !open && setShowUnsavedDialog(false)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogTitle className="tracking-tight">Unsaved Changes</DialogTitle>
             <DialogDescription>Save your configuration as a draft before leaving?</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <button onClick={handleDiscardAndNavigate} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+            <button onClick={handleDiscardAndNavigate} className="px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors">
               Discard
             </button>
-            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
               {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {savingDraft ? 'Saving…' : 'Save Draft'}
             </button>

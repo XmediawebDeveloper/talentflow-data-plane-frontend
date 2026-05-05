@@ -118,10 +118,12 @@ function PriorityBadge({ p }: { p: number }) {
 
 function SectionCard({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 bg-gray-50/50">
-        <Icon className="w-4 h-4 text-gray-500" />
-        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 bg-slate-50/60">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <Icon className="w-5 h-5 text-brand-blue" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -270,9 +272,9 @@ export default function AIInterviewPreview() {
   /* ───────────── Loading state ───────────── */
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60vh] bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
           <p className="text-sm text-gray-500">Loading preview...</p>
         </div>
       </div>
@@ -281,12 +283,12 @@ export default function AIInterviewPreview() {
 
   if (!interview) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60vh] bg-slate-50">
         <div className="text-center">
           <p className="text-gray-600 mb-4">Interview configuration not found.</p>
           <button
             onClick={() => router.push('/recruitment/ai-interviews')}
-            className="text-sm text-gray-900 underline"
+            className="text-sm text-brand-blue underline"
           >
             Go to AI Interviews
           </button>
@@ -297,7 +299,7 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Preview mode ───────────── */
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto"><div className="w-full pb-28">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50"><div className="w-full pb-28">
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8">
         {STEPS.map((label, i) => {
@@ -308,19 +310,19 @@ export default function AIInterviewPreview() {
             <React.Fragment key={label}>
               {isCompleted ? (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                   </div>
                   <span className="text-sm text-gray-400">{label}</span>
                 </>
               ) : isCurrent ? (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-900 text-white text-sm font-medium">{stepNum}</div>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
                   <span className="text-sm text-gray-900 font-medium">{label}</span>
                 </>
               ) : (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 text-gray-400 text-sm">{stepNum}</div>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 text-gray-400 text-sm ring-1 ring-gray-200">{stepNum}</div>
                   <span className="text-sm text-gray-400">{label}</span>
                 </>
               )}
@@ -334,29 +336,38 @@ export default function AIInterviewPreview() {
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={goBack}
-          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-brand-blue/5 transition-colors"
           title="Back to Clusters"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Review &amp; Publish</h1>
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <CheckCircle className="w-5 h-5 text-brand-blue" />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Review &amp; Publish</h1>
       </div>
 
       <div className="space-y-5">
         {/* ── JD Info Card ── */}
-        <div className="rounded-xl overflow-hidden border border-gray-200">
-          <div className="bg-gray-800 px-5 py-4">
+        <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-5 py-4 ring-1 ring-white/10">
             <div className="flex items-center gap-2 mb-1">
               <FileText className="w-4 h-4 text-white/80" />
               <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Job Description</span>
             </div>
-            <h2 className="text-lg font-bold text-white">{position}</h2>
+            <h2 className="text-lg font-bold text-white tracking-tight">{position}</h2>
           </div>
           <div className="bg-white px-5 py-4">
             <div className="grid grid-cols-4 gap-4">
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">JD ID</p>
-                <p className="text-sm font-medium text-gray-900">{interview.jd_short_id ?? '—'}</p>
+                {interview.jd_short_id ? (
+                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-mono font-semibold bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    {interview.jd_short_id}
+                  </span>
+                ) : (
+                  <p className="text-sm font-medium text-gray-900">—</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">JD Title</p>
@@ -379,8 +390,8 @@ export default function AIInterviewPreview() {
           <div className="flex items-center gap-3">
             {mode === 'fixed' ? (
               <>
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Timer className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                  <Timer className="w-5 h-5 text-brand-cyan" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Fixed — {duration} min</p>
@@ -389,14 +400,14 @@ export default function AIInterviewPreview() {
               </>
             ) : (
               <>
-                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-gray-900">Flexible — {bufferEnabled ? 35 : 30} min</p>
                     {bufferEnabled && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                         <Timer className="w-3 h-3" />
                         +5 min buffer
                       </span>
@@ -414,10 +425,10 @@ export default function AIInterviewPreview() {
         {/* ── Time Allocation Table (fixed mode only) ── */}
         {mode === 'fixed' && enabledRounds.length > 0 && (
           <SectionCard title="Time Allocation" icon={Clock}>
-            <div className="overflow-hidden rounded-lg border border-gray-200">
+            <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-left">
+                  <tr className="bg-slate-50 text-left">
                     <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
@@ -435,15 +446,19 @@ export default function AIInterviewPreview() {
                     return (
                       <tr key={r.type}>
                         <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">{previewQuestions}</td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">
+                          <span className="inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{previewQuestions}</span>
+                        </td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">{previewMin} min</td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">{previewMin} min</span>
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-gray-50 font-semibold">
+                  <tr className="bg-slate-50 font-semibold">
                     <td className="px-4 py-2.5 text-gray-900">Total</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">
                       {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
@@ -471,7 +486,7 @@ export default function AIInterviewPreview() {
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Must-To-Have Clusters</h4>
                   <div className="space-y-3">
                     {mthClusters.map(cluster => (
-                      <div key={cluster.id} className="border border-gray-200 rounded-lg p-4">
+                      <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white hover:border-brand-blue/30 hover:shadow-sm hover:shadow-brand-blue/10 transition-all">
                         <div className="flex items-center gap-2 mb-2">
                           <PriorityBadge p={cluster.priority} />
                           <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
@@ -483,7 +498,7 @@ export default function AIInterviewPreview() {
                           {cluster.skills.map(skill => (
                             <span
                               key={skill}
-                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20"
                             >
                               {skill}
                             </span>
@@ -501,7 +516,7 @@ export default function AIInterviewPreview() {
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Nice-To-Have Clusters</h4>
                   <div className="space-y-3">
                     {nthClusters.map(cluster => (
-                      <div key={cluster.id} className="border border-gray-200 rounded-lg p-4">
+                      <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white hover:border-brand-cyan/30 hover:shadow-sm hover:shadow-brand-cyan/10 transition-all">
                         <div className="flex items-center gap-2 mb-2">
                           <PriorityBadge p={cluster.priority} />
                           <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
@@ -513,7 +528,7 @@ export default function AIInterviewPreview() {
                           {cluster.skills.map(skill => (
                             <span
                               key={skill}
-                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-cyan/10 text-xs text-brand-cyan ring-1 ring-brand-cyan/20"
                             >
                               {skill}
                             </span>
@@ -541,8 +556,8 @@ export default function AIInterviewPreview() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Selected HR Questions</p>
               <ol className="space-y-2">
                 {((hrRound as any).hr_questions as { id: string; question_text: string; answer_type: string }[]).map((q, idx) => (
-                  <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50 border border-gray-100">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
+                  <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-50 border border-gray-100">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-[10px] font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-800">{q.question_text}</p>
                       <span className="text-[10px] text-gray-400 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
@@ -561,7 +576,7 @@ export default function AIInterviewPreview() {
               label="Recording"
               value={
                 interview.recording_enabled ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200">
                     <Video className="w-3 h-3" /> Enabled
                   </span>
                 ) : (
@@ -594,9 +609,9 @@ export default function AIInterviewPreview() {
                   {languages.map(lang => (
                     <span
                       key={lang}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20"
                     >
-                      <Globe className="w-3 h-3 text-gray-400" />
+                      <Globe className="w-3 h-3 text-brand-blue" />
                       {lang}
                     </span>
                   ))}
@@ -608,12 +623,12 @@ export default function AIInterviewPreview() {
       </div>
 
       {/* ── Sticky Footer ── */}
-      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-200 z-40">
+      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
         <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={goBack}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700 flex items-center gap-2"
+              className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Clusters
@@ -628,14 +643,14 @@ export default function AIInterviewPreview() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveAsDraft}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+              className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium"
             >
               Save as Draft
             </button>
             <button
               onClick={() => setShowConfirm(true)}
               disabled={publishing}
-              className="px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {publishing ? (
                 <>

@@ -24,6 +24,22 @@ function DetailsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Prev/Next navigation: AssessmentResults stores the visible candidate list
+  // in sessionStorage when the user opens the details view, so the user can
+  // step through candidates without going back to the list every time.
+  const [navList, setNavList] = useState<{ id: string; cid: string }[]>([]);
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('assessmentResultNavList');
+      if (stored) setNavList(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+  const navIndex = navList.findIndex(n => n.id === candidateId);
+  const prev = navIndex > 0 ? navList[navIndex - 1] : null;
+  const next = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
+  const buildNavUrl = (entry: { id: string; cid: string }) =>
+    `/recruitment/assessments/${assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}`;
+
   useEffect(() => {
     const fetchAssessmentInfo = async () => {
       try {
@@ -62,7 +78,7 @@ function DetailsContent() {
         <div className="text-red-500 text-lg">No candidate selected</div>
         <button
           onClick={handleBack}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+          className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
         >
           Back to Results
         </button>
@@ -72,8 +88,8 @@ function DetailsContent() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="flex items-center justify-center h-64 bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
       </div>
     );
   }
@@ -84,7 +100,7 @@ function DetailsContent() {
         <div className="text-red-500 text-lg">{error}</div>
         <button
           onClick={handleBack}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+          className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
         >
           Back to Results
         </button>
@@ -103,6 +119,10 @@ function DetailsContent() {
       jdTitle={jdTitle}
       jdId={jdId}
       assessmentVersion={assessmentVersion}
+      currentIndex={navIndex >= 0 ? navIndex : undefined}
+      totalCount={navList.length || undefined}
+      onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
+      onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
     />
   );
 }

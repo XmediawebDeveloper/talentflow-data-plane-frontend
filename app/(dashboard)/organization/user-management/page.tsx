@@ -3,5 +3,9 @@
 import UserManagement from '@/components/users/UserManagement';
 
 export default function UserManagementPage() {
-  return <UserManagement />;
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <UserManagement />
+    </div>
+  );
 }

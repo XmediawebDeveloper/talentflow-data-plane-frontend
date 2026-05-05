@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users } from 'lucide-react';
+import { X, Users, Shield, Briefcase, FileText } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
@@ -15,75 +15,87 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
   if (!isOpen || !team) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-3xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
-        {/* Modal Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Team Details</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5 sm:max-h-[calc(100dvh-3rem)]">
+        <div className="sticky top-0 z-10 overflow-hidden border-b border-white/10 bg-gradient-to-r from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5 text-white">
+          <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                <Shield className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Team Details</h2>
+                <p className="mt-1 text-sm text-white/80">Review team composition, lead ownership, and core activity indicators.</p>
+              </div>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
               aria-label="Close modal"
             >
-              <X className="w-5 h-5 text-gray-500" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 space-y-6">
-          {/* Team Info */}
+        <div className="space-y-6 p-6">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{team.name}</h3>
-            {team.description && (
-              <p className="text-gray-600 mb-4">{team.description}</p>
-            )}
+            <h3 className="text-2xl font-semibold tracking-tight text-gray-900">{team.name}</h3>
+            {team.description && <p className="mt-2 text-sm text-gray-600">{team.description}</p>}
+          </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Members</p>
-                <p className="text-2xl font-bold text-gray-900">{team.member_count}</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                <Users className="h-5 w-5 text-brand-blue" />
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Active Jobs</p>
-                <p className="text-2xl font-bold text-gray-900">{team.active_jobs_count}</p>
+              <p className="text-sm text-gray-500">Members</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">{team.member_count}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
+                <Briefcase className="h-5 w-5 text-brand-cyan" />
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Resumes</p>
-                <p className="text-2xl font-bold text-gray-900">{team.resumes_count}</p>
+              <p className="text-sm text-gray-500">Active Jobs</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">{team.active_jobs_count}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                <FileText className="h-5 w-5 text-brand-teal" />
               </div>
+              <p className="text-sm text-gray-500">Resumes</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">{team.resumes_count}</p>
             </div>
           </div>
 
-          {/* Team Lead */}
           {team.team_lead && (
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Team Lead</h4>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-semibold">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm ring-1 ring-black/[0.02]">
+              <h4 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-gray-500">Team Lead</h4>
+              <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-blue/[0.04] to-transparent p-4 ring-1 ring-brand-blue/10">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-semibold text-white shadow-sm">
                   {team.team_lead.initials || 'TL'}
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{team.team_lead.name}</p>
                   <p className="text-sm text-gray-500">{team.team_lead.email}</p>
                 </div>
-                <span className="text-xs px-2 py-1 bg-gray-800 text-white rounded">Lead</span>
+                <span className="rounded-full bg-brand-cyan/10 px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-cyan/20">
+                  Lead
+                </span>
               </div>
             </div>
           )}
 
-          {/* Team Members */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm ring-1 ring-black/[0.02]">
+            <h4 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-gray-500">
               Team Members ({team.members?.length || 0})
             </h4>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-3 max-h-72 overflow-y-auto">
               {team.members && team.members.length > 0 ? (
                 team.members.map((member) => (
-                  <div key={member.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center text-white font-semibold">
+                  <div key={member.id} className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-semibold text-white">
                       {member.initials || 'U'}
                     </div>
                     <div className="flex-1">
@@ -91,46 +103,42 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
                       <p className="text-sm text-gray-500">{member.email}</p>
                     </div>
                     {member.role && (
-                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
                         {member.role}
                       </span>
                     )}
                     {team.team_lead?.id === member.id && (
-                      <span className="text-xs px-2 py-1 bg-gray-800 text-white rounded ml-1">
+                      <span className="rounded-full bg-brand-blue text-white px-3 py-1 text-xs font-medium">
                         Lead
                       </span>
                     )}
                   </div>
                 ))
               ) : (
-                <div className="flex items-center justify-center py-8 text-gray-500">
-                  <Users className="w-6 h-6 mr-2" />
+                <div className="flex items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-10 text-gray-500">
+                  <Users className="mr-2 h-5 w-5" />
                   <p className="text-sm">No members</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Timestamps */}
-          <div className="pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Created</p>
-                <p className="text-gray-900">{formatISTDate(team.created_at)}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Last Updated</p>
-                <p className="text-gray-900">{formatISTDate(team.updated_at)}</p>
-              </div>
+          <div className="grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
+            <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
+              <p className="text-gray-500">Created</p>
+              <p className="mt-1 font-medium text-gray-900">{formatISTDate(team.created_at)}</p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
+              <p className="text-gray-500">Last Updated</p>
+              <p className="mt-1 font-medium text-gray-900">{formatISTDate(team.updated_at)}</p>
             </div>
           </div>
         </div>
 
-        {/* Modal Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
+        <div className="sticky bottom-0 border-t border-gray-100 bg-white/95 px-6 py-4 backdrop-blur-sm">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium"
+            className="w-full rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
           >
             Close
           </button>

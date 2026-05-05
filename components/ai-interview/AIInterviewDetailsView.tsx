@@ -33,10 +33,12 @@ const ROUND_LABELS: Record<string, string> = {
 
 function SectionCard({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 bg-gray-50/50">
-        <Icon className="w-4 h-4 text-gray-500" />
-        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <Icon className="w-4 h-4 text-brand-blue" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -364,14 +366,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'published': return 'bg-green-100 text-green-700';
-      case 'draft': return 'bg-gray-100 text-gray-600';
-      case 'completed': return 'bg-blue-100 text-blue-700';
-      case 'cancelled': return 'bg-red-100 text-red-700';
-      case 'archived': return 'bg-orange-100 text-orange-700';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-700';
-      case 'invited': return 'bg-purple-100 text-purple-700';
-      default: return 'bg-gray-100 text-gray-600';
+      case 'published': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+      case 'draft': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+      case 'completed': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+      case 'cancelled': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+      case 'archived': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+      case 'in_progress': return 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200';
+      case 'invited': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
+      default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
     }
   };
 
@@ -416,44 +418,42 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   }
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto">
+    <div className="flex-1 bg-slate-50 overflow-y-auto">
       {/* Loading overlay for candidate fetch */}
       {candidateLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
       )}
       {/* Header (sticky on lg+, scrolls on mobile to avoid covering content) */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b border-gray-700 lg:sticky lg:top-0 z-20 shadow-md">
+      <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 lg:sticky lg:top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-3.5">
           <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5 flex-wrap">
             <button
               onClick={onBack}
-              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm min-h-[36px] -ml-1.5 px-1.5 rounded"
+              aria-label="Back"
+              className="w-9 h-9 sm:w-10 sm:h-10 bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 rounded-lg flex items-center justify-center text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="hidden xs:inline sm:hidden">Back</span>
-              <span className="hidden sm:inline">Back to AI Interviews</span>
-              <span className="xs:hidden sm:hidden">Back</span>
             </button>
             {totalCount != null && totalCount > 0 && (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={onPrev}
                   disabled={!onPrev || currentIndex === 0}
-                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   aria-label="Previous"
                 >
                   <ChevronLeft className="w-4 h-4 flex-shrink-0" />
                   <span className="hidden sm:inline">Previous</span>
                 </button>
-                <span className="text-xs sm:text-sm text-white/80 font-medium px-1 tabular-nums">
+                <span className="text-xs sm:text-sm text-white/90 font-medium px-1 tabular-nums">
                   {(currentIndex ?? 0) + 1} / {totalCount}
                 </span>
                 <button
                   onClick={onNext}
                   disabled={!onNext || currentIndex === totalCount - 1}
-                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   aria-label="Next"
                 >
                   <span className="hidden sm:inline">Next</span>
@@ -465,54 +465,54 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
             <div className="flex items-start gap-2 sm:gap-2.5 lg:gap-3 min-w-0 flex-1">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/15 backdrop-blur-sm ring-1 ring-white/25 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Video className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0 flex-1">
                 {/* Line 1: AI-002  Title  v1  Status */}
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-1.5 flex-wrap">
                   {config.display_id && (
-                    <span className="px-1.5 sm:px-2 py-0.5 bg-white/90 text-gray-900 rounded text-[10px] sm:text-xs font-bold">
+                    <span className="px-1.5 sm:px-2 py-0.5 bg-white/95 text-brand-blue rounded text-[10px] sm:text-xs font-bold ring-1 ring-white/40 shadow-sm">
                       {config.display_id}
                     </span>
                   )}
-                  <h1 className="text-sm sm:text-base lg:text-lg text-white font-semibold break-words min-w-0 flex-1 sm:flex-initial">
+                  <h1 className="text-sm sm:text-base lg:text-lg text-white font-semibold break-words min-w-0 flex-1 sm:flex-initial tracking-tight">
                     {config.jd_title || config.position || 'Untitled'}
                   </h1>
                   {config.jd_version && (
-                    <span className="px-1.5 py-0.5 text-[10px] bg-white/20 text-white rounded border border-white/30">
+                    <span className="px-1.5 py-0.5 text-[10px] bg-white/15 text-white rounded ring-1 ring-white/25">
                       v{config.jd_version}
                     </span>
                   )}
-                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium bg-gray-200/30 text-gray-100 border border-gray-300/30">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm">
                     {getStatusLabel(config.status)}
                   </span>
                 </div>
 
                 {/* Line 2: Linked to JD */}
                 {config.jd_short_id && (
-                  <div className="text-[11px] sm:text-xs text-gray-100/90 mb-1.5">
+                  <div className="text-[11px] sm:text-xs text-white/85 mb-1.5">
                     <span className="font-medium">Linked to: {config.jd_short_id}</span>
                     {config.jd_title && (
                       <span> · {config.jd_title}</span>
                     )}
                     {config.jd_version && (
-                      <span className="ml-1 text-gray-300">v{config.jd_version}</span>
+                      <span className="ml-1 text-white/70">v{config.jd_version}</span>
                     )}
                   </div>
                 )}
 
                 {/* Line 3: Stats */}
-                <div className="text-[11px] sm:text-xs text-gray-100 flex items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-wrap">
+                <div className="text-[11px] sm:text-xs text-white/90 flex items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-wrap">
                   {config.jd_experience_level && <span>{config.jd_experience_level}</span>}
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {formattedDuration}
                   </span>
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-medium rounded-full border ${
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-medium rounded-full ring-1 ${
                     interviewMode === 'flexible'
-                      ? 'bg-blue-400/20 text-blue-100 border-blue-300/30'
-                      : 'bg-orange-400/20 text-orange-100 border-orange-300/30'
+                      ? 'bg-white/15 text-white ring-white/25 backdrop-blur-sm'
+                      : 'bg-brand-orange/25 text-white ring-brand-orange/40 backdrop-blur-sm'
                   }`}>
                     {interviewMode === 'flexible' ? (
                       <><Zap className="w-2.5 h-2.5" /> Flexible</>
@@ -524,7 +524,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <span className="flex items-center gap-1 flex-wrap">
                       <Layers className="w-3 h-3 shrink-0" />
                       {enabledRounds.map((r, i) => (
-                        <span key={i} className="px-1.5 py-0.5 text-[10px] sm:text-[11px] bg-white/10 text-white rounded-full border border-white/20">
+                        <span key={i} className="px-1.5 py-0.5 text-[10px] sm:text-[11px] bg-white/15 text-white rounded-full ring-1 ring-white/25 backdrop-blur-sm">
                           {ROUND_LABELS[r.type] || r.type}
                         </span>
                       ))}
@@ -552,7 +552,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
                     router.push(url);
                   }}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 min-h-[40px] text-xs sm:text-sm bg-white text-gray-900 hover:bg-gray-50 rounded-lg transition-colors font-medium"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 min-h-[40px] text-xs sm:text-sm bg-white text-brand-blue hover:bg-white/90 rounded-lg transition-colors font-medium shadow-sm ring-1 ring-white/40"
                 >
                   <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="hidden sm:inline">Continue Editing</span>
@@ -563,7 +563,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 onClick={handleExportCSV}
                 title="Export clusters & HR questions to CSV"
                 aria-label="Export to CSV"
-                className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 rounded-lg transition-colors"
               >
                 <Download className="w-4 h-4" />
               </button>
@@ -571,7 +571,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <button
                   onClick={onRefresh}
                   aria-label="Refresh"
-                  className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                  className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -582,7 +582,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       </div>
 
       {/* Tab bar (scrolls with content; horizontally scrollable on small screens) */}
-      <div className="bg-white border-b border-gray-200 z-10">
+      <div className="bg-white border-b border-gray-100 z-10">
         <div className="px-3 sm:px-5 lg:px-8">
           <div className="flex gap-1 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide -mb-px">
             {([
@@ -598,8 +598,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   onClick={() => setActiveTab(t.key)}
                   className={`py-3 sm:py-4 px-2 sm:px-0 min-h-[44px] text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     isActive
-                      ? 'border-gray-900 text-gray-900 font-semibold'
-                      : 'border-transparent text-gray-600 hover:text-gray-900 font-medium'
+                      ? 'border-brand-blue text-brand-blue font-semibold'
+                      : 'border-transparent text-gray-600 hover:text-brand-blue font-medium'
                   }`}
                 >
                   {t.label}
@@ -656,13 +656,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             <div className="space-y-5">
 
               {/* JD Info Card */}
-              <div className="rounded-xl overflow-hidden border border-gray-200">
-                <div className="bg-gray-800 px-5 py-4">
+              <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
+                <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-5 py-4 ring-1 ring-white/10">
                   <div className="flex items-center gap-2 mb-1">
-                    <FileText className="w-4 h-4 text-white/80" />
-                    <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Job Description</span>
+                    <FileText className="w-4 h-4 text-white/90" />
+                    <span className="text-xs font-medium text-white/90 uppercase tracking-wide">Job Description</span>
                   </div>
-                  <h2 className="text-lg font-bold text-white">{position}</h2>
+                  <h2 className="text-lg font-bold text-white tracking-tight">{position}</h2>
                 </div>
                 <div className="bg-white px-5 py-4">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -691,8 +691,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <div className="flex items-center gap-3">
                   {mode === 'fixed' ? (
                     <>
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <Timer className="w-5 h-5 text-gray-600" />
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                        <Timer className="w-5 h-5 text-brand-orange-deep" />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">Fixed — {duration} min</p>
@@ -701,8 +701,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     </>
                   ) : (
                     <>
-                      <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <Zap className="w-5 h-5 text-blue-600" />
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-brand-blue" />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">Flexible</p>
@@ -720,10 +720,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-sm text-gray-700 font-medium">Must-To-Have</span>
-                        <span className="text-sm font-semibold text-gray-900">{roundPercentage(mthRound)}%</span>
+                        <span className="text-sm font-semibold text-brand-blue">{roundPercentage(mthRound)}%</span>
                       </div>
                       <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gray-700 rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }} />
+                        <div className="h-full bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }} />
                       </div>
                     </div>
                   )}
@@ -731,10 +731,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-sm text-gray-700 font-medium">Nice-To-Have</span>
-                        <span className="text-sm font-semibold text-gray-900">{roundPercentage(nthRound)}%</span>
+                        <span className="text-sm font-semibold text-brand-cyan">{roundPercentage(nthRound)}%</span>
                       </div>
                       <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }} />
+                        <div className="h-full bg-gradient-to-r from-brand-cyan to-brand-teal rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }} />
                       </div>
                     </div>
                   )}
@@ -742,10 +742,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-sm text-gray-700 font-medium">HR Round</span>
-                        <span className="text-sm font-semibold text-gray-900">{roundPercentage(hrRound)}%</span>
+                        <span className="text-sm font-semibold text-brand-orange-deep">{roundPercentage(hrRound)}%</span>
                       </div>
                       <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }} />
+                        <div className="h-full bg-gradient-to-r from-brand-orange to-brand-orange-deep rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }} />
                       </div>
                     </div>
                   )}
@@ -756,10 +756,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Time Allocation Table (fixed mode only) */}
               {mode === 'fixed' && enabledRounds.length > 0 && (
                 <SectionCard title="Time Allocation" icon={Clock}>
-                  <div className="overflow-hidden rounded-lg border border-gray-200">
+                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 text-left">
+                        <tr className="bg-slate-50 text-left border-b border-gray-100">
                           <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
                           <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Weight</th>
                           <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
@@ -776,7 +776,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           const questions = timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0;
                           const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
                           return (
-                            <tr key={r.type}>
+                            <tr key={r.type} className="hover:bg-brand-blue/5 transition-colors">
                               <td className="px-4 py-2.5 text-gray-900">{label}</td>
                               <td className="px-4 py-2.5 text-gray-700 text-right">{roundPercentage(r)}%</td>
                               <td className="px-4 py-2.5 text-gray-700 text-right">{questions}</td>
@@ -787,9 +787,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         })}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-gray-50 font-semibold">
+                        <tr className="bg-slate-50 font-semibold border-t border-gray-100">
                           <td className="px-4 py-2.5 text-gray-900">Total</td>
-                          <td className="px-4 py-2.5 text-gray-900 text-right">{totalPercentage}%</td>
+                          <td className="px-4 py-2.5 text-brand-blue text-right">{totalPercentage}%</td>
                           <td className="px-4 py-2.5 text-gray-900 text-right">
                             {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
                           </td>
@@ -810,10 +810,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <div className="space-y-6">
                     {mthClusters.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Must-To-Have Clusters</h4>
+                        <h4 className="text-xs font-semibold text-brand-blue uppercase tracking-wide mb-3">Must-To-Have Clusters</h4>
                         <div className="space-y-3">
                           {mthClusters.map(cluster => (
-                            <div key={cluster.id} className="border border-gray-200 rounded-lg p-4">
+                            <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-blue/20 transition-shadow">
                               <div className="flex items-center gap-2 mb-2">
                                 <PriorityBadge p={cluster.priority} />
                                 <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
@@ -821,7 +821,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {cluster.skills.map(skill => (
-                                  <span key={skill} className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">{skill}</span>
+                                  <span key={skill} className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20">{skill}</span>
                                 ))}
                               </div>
                             </div>
@@ -831,10 +831,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     )}
                     {nthClusters.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Nice-To-Have Clusters</h4>
+                        <h4 className="text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-3">Nice-To-Have Clusters</h4>
                         <div className="space-y-3">
                           {nthClusters.map(cluster => (
-                            <div key={cluster.id} className="border border-gray-200 rounded-lg p-4">
+                            <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-cyan/20 transition-shadow">
                               <div className="flex items-center gap-2 mb-2">
                                 <PriorityBadge p={cluster.priority} />
                                 <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
@@ -842,7 +842,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {cluster.skills.map(skill => (
-                                  <span key={skill} className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">{skill}</span>
+                                  <span key={skill} className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-cyan/5 text-xs text-brand-cyan ring-1 ring-brand-cyan/20">{skill}</span>
                                 ))}
                               </div>
                             </div>
@@ -865,14 +865,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   )}
                   {(hrRound as any).hr_questions?.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Selected HR Questions</p>
+                      <p className="text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-2">Selected HR Questions</p>
                       <ol className="space-y-2">
                         {((hrRound as any).hr_questions as { id: string; question_text: string; answer_type: string }[]).map((q, idx) => (
-                          <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50 border border-gray-100">
-                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
+                          <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
+                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-brand-cyan to-brand-teal text-white text-[10px] font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-gray-800">{q.question_text}</p>
-                              <span className="text-[10px] text-gray-400 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                              <span className="text-[10px] text-gray-500 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
                             </div>
                           </li>
                         ))}
@@ -889,7 +889,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     label="Recording"
                     value={
                       config.recording_enabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200">
                           <Video className="w-3 h-3" /> Enabled
                         </span>
                       ) : (
@@ -900,7 +900,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   {config.introduction_video_url ? (
                     <div className="py-3">
                       <p className="text-sm text-gray-500 mb-2">Introduction Video</p>
-                      <video src={config.introduction_video_url} controls className="w-full max-w-md rounded-lg border border-gray-200 bg-black" style={{ maxHeight: '240px' }}>
+                      <video src={config.introduction_video_url} controls className="w-full max-w-md rounded-lg border border-gray-100 ring-1 ring-black/[0.02] bg-black" style={{ maxHeight: '240px' }}>
                         Your browser does not support the video tag.
                       </video>
                     </div>
@@ -912,8 +912,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     value={
                       <div className="flex flex-wrap gap-1.5 justify-end">
                         {languages.map(lang => (
-                          <span key={lang} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-                            <Globe className="w-3 h-3 text-gray-400" />{lang}
+                          <span key={lang} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20">
+                            <Globe className="w-3 h-3 text-brand-blue" />{lang}
                           </span>
                         ))}
                       </div>
@@ -925,16 +925,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Invitation Stats */}
               <SectionCard title="Invitation Stats" icon={Users}>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-gray-900">{invitationStats.total}</div>
+                  <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 ring-1 ring-brand-blue/15 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-semibold text-brand-blue tracking-tight">{invitationStats.total}</div>
                     <div className="text-xs text-gray-500 mt-1">Total Invited</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-green-600">{invitationStats.completed}</div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-50 ring-1 ring-green-200 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-semibold text-green-600 tracking-tight">{invitationStats.completed}</div>
                     <div className="text-xs text-gray-500 mt-1">Completed</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-yellow-600">{invitationStats.inProgress}</div>
+                  <div className="bg-gradient-to-br from-brand-orange/5 to-brand-orange-deep/5 ring-1 ring-brand-orange/20 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-semibold text-brand-orange-deep tracking-tight">{invitationStats.inProgress}</div>
                     <div className="text-xs text-gray-500 mt-1">In Progress</div>
                   </div>
                 </div>
@@ -946,16 +946,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
           {/* Recent Activity Tab */}
           {activeTab === 'activity' && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
               {activityLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : recentActivity.length === 0 ? (
                 <div className="text-center py-12">
-                  <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-500 mb-2">No candidate activity yet</p>
-                  <p className="text-sm text-gray-400">Invite candidates to see their activity here</p>
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-10 h-10 text-brand-blue" />
+                  </div>
+                  <p className="text-gray-700 font-medium mb-2">No candidate activity yet</p>
+                  <p className="text-sm text-gray-500">Invite candidates to see their activity here</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -963,8 +965,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     const statusIcon = () => {
                       switch (activity.status) {
                         case 'completed': return <CheckCircle className="w-5 h-5 text-green-500" />;
-                        case 'in_progress': return <Play className="w-5 h-5 text-yellow-500" />;
-                        case 'invited': return <Mail className="w-5 h-5 text-blue-500" />;
+                        case 'in_progress': return <Play className="w-5 h-5 text-brand-orange-deep" />;
+                        case 'invited': return <Mail className="w-5 h-5 text-brand-blue" />;
                         case 'cancelled': return <XCircle className="w-5 h-5 text-red-500" />;
                         default: return <Mail className="w-5 h-5 text-gray-400" />;
                       }
@@ -974,7 +976,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <div
                         key={activity.id}
                         onClick={() => handleCandidateClick(activity.id)}
-                        className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg cursor-pointer hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors"
                       >
                         <div className="flex-shrink-0">{statusIcon()}</div>
                         <div className="flex-1 min-w-0">
@@ -992,7 +994,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           <div className="text-xs text-gray-400">
                             {formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}
                           </div>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <ChevronRight className="w-4 h-4 text-brand-blue" />
                         </div>
                       </div>
                     );
@@ -1004,23 +1006,27 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
           {/* Version History Tab */}
           {activeTab === 'versions' && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock className="w-5 h-5 text-gray-600" />
-                  <h3 className="text-sm font-medium text-gray-900">Version History</h3>
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-brand-blue" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900 tracking-tight">Version History</h3>
                 </div>
                 <p className="text-sm text-gray-600">Complete timeline of all changes made to this interview</p>
               </div>
               {versionsLoading ? (
                 <div className="px-6 py-12 text-center">
-                  <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                  <div className="w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
                   <p className="text-gray-600">Loading version history...</p>
                 </div>
               ) : versionHistory.length === 0 ? (
                 <div className="px-6 py-12 text-center">
-                  <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-600 mb-1 text-sm">No version history available</p>
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                    <Clock className="w-10 h-10 text-brand-blue" />
+                  </div>
+                  <p className="text-gray-700 font-medium mb-1 text-sm">No version history available</p>
                   <p className="text-sm text-gray-500">Version history will appear when the interview is edited</p>
                 </div>
               ) : (
@@ -1034,16 +1040,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     return (
                       <div key={version.id} className="space-y-4">
                         <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
+                          <div className="w-12 h-12 bg-gradient-to-br from-brand-cyan to-brand-teal rounded-full flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-cyan/25 ring-1 ring-white/20">
                             <span className="text-white font-bold text-sm">V{version.version}</span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                              <h4 className="text-base font-semibold text-gray-900">
+                              <h4 className="text-base font-semibold text-gray-900 tracking-tight">
                                 Version {version.version} {isFirstVersion ? 'Published' : 'Updated'}
                               </h4>
                               {isCurrentVersion && (
-                                <span className="px-2.5 py-1 bg-gray-700 text-white text-xs font-medium rounded w-fit">
+                                <span className="px-2.5 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white text-xs font-medium rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 w-fit">
                                   Current Version
                                 </span>
                               )}
@@ -1052,39 +1058,39 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               {isFirstVersion ? 'Initial interview configuration created' : (version.change_summary || 'Interview configuration updated')}
                             </p>
                             <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
-                              <Users className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                              <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
                               <span className="font-medium">{version.changed_by_name || 'Unknown User'}</span>
                               <span className="text-gray-400">•</span>
                               <span className="text-gray-600">Lead Recruiter</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-                              <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                              <Calendar className="w-4 h-4 text-brand-blue flex-shrink-0" />
                               <span>Published on {versionDate} IST (UTC+5:30)</span>
                             </div>
-                            <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                            <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 border border-gray-100 ring-1 ring-brand-blue/10 rounded-lg p-4">
                               <div className="text-sm font-medium text-gray-900 mb-3">
                                 {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                               </div>
                               <ul className="space-y-2">
                                 {version.rounds_config && version.rounds_config.filter((r: any) => r.enabled !== false).length > 0 && (
                                   <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-gray-600 mt-0.5">•</span>
+                                    <span className="text-brand-blue mt-0.5">•</span>
                                     <span>Interview rounds: {version.rounds_config.filter((r: any) => r.enabled !== false).map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}</span>
                                   </li>
                                 )}
                                 <li className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-gray-600 mt-0.5">•</span>
+                                  <span className="text-brand-blue mt-0.5">•</span>
                                   <span>Duration set to {version.duration_minutes || config.duration_minutes || 30} min</span>
                                 </li>
                                 {version.jd_title && (
                                   <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-gray-600 mt-0.5">•</span>
+                                    <span className="text-brand-blue mt-0.5">•</span>
                                     <span>Linked to job posting: {version.jd_title}</span>
                                   </li>
                                 )}
                                 {version.total_questions && (
                                   <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-gray-600 mt-0.5">•</span>
+                                    <span className="text-brand-blue mt-0.5">•</span>
                                     <span>Total questions: {version.total_questions}</span>
                                   </li>
                                 )}
@@ -1109,22 +1115,24 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             };
             const expColor = (val: string | null | undefined) => {
               const map: Record<string, string> = {
-                junior: 'bg-blue-100 text-blue-700 border-blue-200',
-                mid: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-                senior: 'bg-purple-100 text-purple-700 border-purple-200',
-                lead: 'bg-pink-100 text-pink-700 border-pink-200',
-                expert: 'bg-red-100 text-red-700 border-red-200',
+                junior: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
+                mid: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
+                senior: 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
+                lead: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+                expert: 'bg-red-100 text-red-700 ring-1 ring-red-200',
               };
-              return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+              return val ? (map[val] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200') : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
             };
             const mthSkills: string[] = config.jd_must_have_skills || [];
             const nthSkills: string[] = config.jd_nice_to_have_skills || [];
             return (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                    <h3 className="text-sm sm:text-base font-medium text-gray-900">AI Interview Info</h3>
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                  <div className="flex items-center gap-2.5 mb-1">
+                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                      <Briefcase className="w-4 h-4 text-brand-blue" />
+                    </div>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">AI Interview Info</h3>
                   </div>
                   <p className="text-xs sm:text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
                 </div>
@@ -1132,15 +1140,15 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   {/* Key Metadata Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Experience Level */}
-                    <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                          <Layers className="w-4 h-4 text-gray-600" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <Layers className="w-4 h-4 text-brand-blue" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
                       </div>
                       {config.jd_experience_level ? (
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${expColor(config.jd_experience_level)}`}>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(config.jd_experience_level)}`}>
                           {expLabel(config.jd_experience_level) || config.jd_experience_level}
                         </span>
                       ) : (
@@ -1149,23 +1157,23 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     </div>
 
                     {/* Interview Mode */}
-                    <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                          <Timer className="w-4 h-4 text-gray-600" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                          <Timer className="w-4 h-4 text-brand-orange-deep" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Interview Mode</span>
                       </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${interviewMode === 'fixed' ? 'bg-gray-100 text-gray-700 border-gray-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${interviewMode === 'fixed' ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'}`}>
                         {interviewMode === 'fixed' ? `Fixed — ${config.duration_minutes} min` : 'Flexible'}
                       </span>
                     </div>
 
                     {/* Industry */}
-                    <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                          <Globe className="w-4 h-4 text-gray-600" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                          <Globe className="w-4 h-4 text-brand-cyan" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Industry</span>
                       </div>
@@ -1177,23 +1185,23 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     </div>
 
                     {/* Recording */}
-                    <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                          <Video className="w-4 h-4 text-gray-600" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <Video className="w-4 h-4 text-brand-blue" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Recording</span>
                       </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${config.recording_enabled ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.recording_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
                         {config.recording_enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </div>
 
                     {/* AI Voice Language */}
-                    <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                          <Globe className="w-4 h-4 text-gray-600" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                          <Globe className="w-4 h-4 text-brand-cyan" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">AI Voice Language</span>
                       </div>
@@ -1201,17 +1209,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     </div>
 
                     {/* Candidate Languages */}
-                    <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                          <Globe className="w-4 h-4 text-gray-600" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <Globe className="w-4 h-4 text-brand-blue" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Candidate Languages</span>
                       </div>
                       {languages.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {languages.map((lang, i) => (
-                            <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">{lang}</span>
+                            <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{lang}</span>
                           ))}
                         </div>
                       ) : (
@@ -1224,13 +1232,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   {mthSkills.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <Brain className="w-4 h-4 text-purple-600" />
-                        <h4 className="text-sm font-medium text-gray-900">Must-Have Skills</h4>
+                        <Brain className="w-4 h-4 text-brand-blue" />
+                        <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Must-Have Skills</h4>
                         <span className="text-xs text-gray-500">({mthSkills.length})</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {mthSkills.map((skill: string) => (
-                          <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-50 text-purple-700 border border-purple-200">{skill}</span>
+                          <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{skill}</span>
                         ))}
                       </div>
                     </div>
@@ -1240,13 +1248,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   {nthSkills.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="w-4 h-4 text-indigo-500" />
-                        <h4 className="text-sm font-medium text-gray-900">Nice-to-Have Skills</h4>
+                        <Sparkles className="w-4 h-4 text-brand-cyan" />
+                        <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
                         <span className="text-xs text-gray-500">({nthSkills.length})</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {nthSkills.map((skill: string) => (
-                          <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-50 text-indigo-700 border border-indigo-200">{skill}</span>
+                          <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20">{skill}</span>
                         ))}
                       </div>
                     </div>
@@ -1260,22 +1268,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{confirmAction.title}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-blue/30 backdrop-blur-sm p-4 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2 tracking-tight">{confirmAction.title}</h3>
             <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmAction.onConfirm}
                 disabled={actionLoading}
-                className={`px-4 py-2 text-sm text-white rounded-md transition-colors disabled:opacity-50 ${
-                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-800 hover:bg-gray-900'
+                className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 ring-1 ring-white/10 ${
+                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25'
                 }`}
               >
                 {actionLoading ? 'Processing...' : 'Confirm'}
