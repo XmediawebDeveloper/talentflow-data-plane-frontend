@@ -52,7 +52,7 @@ export default function ResumePreviewModal({
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -64,7 +64,7 @@ export default function ResumePreviewModal({
               onClick={handleZoomOut}
               disabled={zoomLevel <= 50}
               className="p-2 text-gray-700 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Zoom Out"
+              aria-label="Zoom Out" title="Zoom Out"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
@@ -75,7 +75,7 @@ export default function ResumePreviewModal({
               onClick={handleZoomIn}
               disabled={zoomLevel >= 150}
               className="p-2 text-gray-700 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Zoom In"
+              aria-label="Zoom In" title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
             </button>

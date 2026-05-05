@@ -36,6 +36,7 @@ import {
   Info,
   ExternalLink,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -106,7 +107,7 @@ function getUsagePct(consumed: number, allocated: number): number {
 
 function getBarColor(pct: number): string {
   if (pct >= 90) return 'bg-gradient-to-r from-red-500 to-red-600';
-  if (pct >= 70) return 'bg-gradient-to-r from-brand-orange to-brand-orange-deep';
+  if (pct >= 70) return 'bg-brand-orange';
   return 'bg-gradient-to-r from-brand-blue to-brand-cyan';
 }
 
@@ -198,7 +199,7 @@ function Pagination({
             <button
               key={pageNum}
               onClick={() => onPageChange(pageNum)}
-              className={`w-8 h-8 text-sm rounded-lg transition-all ${pageNum === page ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
+              className={`w-8 h-8 text-sm rounded-lg transition-all ${pageNum === page ? 'bg-brand-blue text-white font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
             >
               {pageNum}
             </button>
@@ -231,14 +232,14 @@ function ExportModal({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-t-2xl">
+        <div className="flex items-center justify-between p-5 bg-brand-blue rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
               <Download className="w-5 h-5 text-white" />
             </div>
             <h3 className="text-base font-semibold text-white">Export Usage History</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20">
+          <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -262,7 +263,7 @@ function ExportModal({
             disabled={isExporting}
             className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-md transition-all group disabled:opacity-50"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-emerald-500 text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div className="text-left">
@@ -371,7 +372,7 @@ function AnalyticsCards({
         return (
           <div className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-orange to-brand-orange-deep text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
                 <FileText className="w-5 h-5" />
               </div>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
@@ -488,7 +489,7 @@ function FeatureWiseTab({
   if (!items.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Layers className="w-7 h-7 text-brand-blue" />
         </div>
         <p className="text-gray-700 font-semibold">No usage records found</p>
@@ -520,7 +521,7 @@ function FeatureWiseTab({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                       <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
@@ -661,7 +662,7 @@ function UserWiseTab({
   if (!users.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Users className="w-7 h-7 text-brand-blue" />
         </div>
         <p className="text-gray-700 font-semibold">No user usage data found</p>
@@ -699,7 +700,7 @@ function UserWiseTab({
                 <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                       <span className="text-xs font-bold">{u.userName.charAt(0).toUpperCase()}</span>
                     </div>
                     <div>
@@ -769,7 +770,7 @@ function TeamWiseTab({
   if (!teamsData?.teams?.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Users className="w-7 h-7 text-brand-blue" />
         </div>
         <p className="text-gray-700 font-semibold">No team usage data found</p>
@@ -965,7 +966,7 @@ function InlineTeamMembersUsage({
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03]">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
             <Users className="w-4 h-4" />
           </div>
           <div>
@@ -1080,7 +1081,7 @@ function RefundsTab({
   if (!items.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <RefreshCw className="w-7 h-7 text-brand-blue" />
         </div>
         <p className="text-gray-700 font-semibold">No refunds or adjustments found</p>
@@ -1218,7 +1219,7 @@ export default function UsageHistory() {
   if (!isTenantAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mb-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Shield className="w-8 h-8 text-brand-blue" />
         </div>
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Access Restricted</h2>
@@ -1399,20 +1400,26 @@ export default function UsageHistory() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
       {/* ── Page Header ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-blue via-brand-blue-2 to-brand-blue text-white shadow-lg shadow-brand-blue/20 ring-1 ring-white/10">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-cyan/20 blur-3xl" />
-        <div className="absolute -bottom-12 right-24 h-40 w-40 rounded-full bg-brand-orange/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
         <div className="relative flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 backdrop-blur">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
               <TrendingDown className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Usage History</h1>
-              <p className="text-white/80 mt-1 text-sm max-w-2xl">
-                Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3 w-3 text-brand-orange" />
+                Usage analytics
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Usage History</h1>
+              <p className="text-white/80 mt-2 text-sm max-w-2xl sm:text-base">
+                Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization.
               </p>
             </div>
           </div>
@@ -1447,7 +1454,7 @@ export default function UsageHistory() {
       {/* ── Filters ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
             <Filter className="w-4 h-4" />
           </div>
           <div>
@@ -1622,7 +1629,7 @@ export default function UsageHistory() {
 
       {/* ── Audit note ── */}
       <div className="flex items-start gap-3 text-xs text-gray-600 bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl p-4 border border-brand-blue/15 ring-1 ring-brand-blue/5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
           <Info className="w-3.5 h-3.5" />
         </div>
         <p className="pt-1">All dashboard access and exports are audit-logged with your Tenant ID, User ID, and timestamp in compliance with platform policies.</p>
@@ -1635,6 +1642,7 @@ export default function UsageHistory() {
         onExport={handleExport}
         isExporting={isExporting}
       />
+      </div>
     </div>
   );
 }

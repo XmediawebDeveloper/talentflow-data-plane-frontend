@@ -157,9 +157,9 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
               <Edit2 className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -172,7 +172,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -295,7 +295,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               </h3>
               <button
                 onClick={addSection}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Section
@@ -307,7 +307,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 {editedAssessment.sections.map((section: any, index: number) => (
                   <div key={index} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 hover:border-brand-blue/30 transition-colors">
                     <div className="flex items-start gap-4">
-                      <div className="w-8 h-8 bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center text-white font-medium flex-shrink-0">
+                      <div className="w-8 h-8 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center text-white font-medium flex-shrink-0">
                         {index + 1}
                       </div>
                       
@@ -366,7 +366,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 <p className="text-gray-600 mb-3">No sections added yet</p>
                 <button
                   onClick={addSection}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add First Section
@@ -408,7 +408,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             <button
               onClick={() => handleSave(false)}
               disabled={isSaving}
-              className="px-6 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+              className="px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save Changes'}

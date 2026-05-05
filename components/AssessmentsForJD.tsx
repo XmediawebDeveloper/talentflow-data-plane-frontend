@@ -198,7 +198,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <ClipboardList className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
@@ -216,7 +216,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
               className={`p-2 rounded transition-colors ${
                 viewMode === 'list' ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15' : 'hover:text-brand-blue'
               }`}
-              title="List View"
+              aria-label="List View" title="List View"
             >
               <List className="w-4 h-4" />
             </button>
@@ -225,7 +225,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
               className={`p-2 rounded transition-colors ${
                 viewMode === 'grid' ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15' : 'hover:text-brand-blue'
               }`}
-              title="Grid View"
+              aria-label="Grid View" title="Grid View"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
@@ -235,7 +235,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && assessmentAvailable && (
             <button
               onClick={handleCreateAssessment}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-4 h-4" />
               Create Assessment
@@ -276,7 +276,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       {/* Empty State */}
       {filteredAssessments.length === 0 && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
             <ClipboardList className="w-10 h-10 text-brand-blue" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">
@@ -290,7 +290,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && assessmentAvailable && activeTab !== 'archived' && (
             <button
               onClick={handleCreateAssessment}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-4 h-4" />
               Create Assessment
@@ -335,7 +335,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                     <tr key={assessment.id} className="hover:bg-brand-blue/5 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center">
+                          <div className="flex-shrink-0 w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center">
                             <ClipboardList className="w-5 h-5 text-brand-blue" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -393,7 +393,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                           <button
                             onClick={() => handleViewResults(assessment)}
                             className="p-2 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-                            title="View Results"
+                            aria-label="View Results" title="View Results"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
@@ -556,7 +556,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                   <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
                     <button
                       onClick={() => handleViewResults(assessment)}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Eye className="w-4 h-4" />
                       View Results

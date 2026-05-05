@@ -195,8 +195,8 @@ function SkillWeightPanel({
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <SlidersHorizontal className="w-3.5 h-3.5 text-brand-blue" />
         </div>
         <span className="text-sm font-semibold text-gray-900 tracking-tight">Skill Importance</span>
@@ -254,8 +254,8 @@ function TimeAllocationSummary({
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <Clock className="w-3.5 h-3.5 text-brand-blue" />
         </div>
         <span className="text-sm font-semibold text-gray-900 tracking-tight">Estimated Time per Cluster</span>
@@ -323,7 +323,7 @@ function DraggableClusterSkill({
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(skillName, clusterId); }}
           className="ml-0.5 text-gray-400 transition-colors hover:text-red-500"
-        >
+         aria-label="Close">
           <X className="w-3 h-3" />
         </button>
       )}
@@ -642,7 +642,7 @@ function CategorySection({
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
         <div className="flex items-center gap-2.5">
           {icon}
           <h2 className="text-base font-semibold text-gray-900 tracking-tight">{title}</h2>
@@ -671,7 +671,7 @@ function CategorySection({
             className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
               atLimit
                 ? 'text-gray-400 border border-gray-200 cursor-not-allowed bg-gray-50'
-                : 'text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                : 'text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -707,7 +707,7 @@ function CategorySection({
                 type="button"
                 onClick={() => onRemoveSkillFromPool?.(name)}
                 className="ml-0.5 hover:text-red-500 transition-colors"
-                title="Remove"
+                aria-label="Remove" title="Remove"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -774,7 +774,7 @@ function CategorySection({
       <div className="p-4 space-y-2.5">
         {clusters.length === 0 ? (
           <div className="py-10 text-center border-2 border-dashed border-brand-blue/20 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
+            <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
               <Layers className="w-7 h-7 text-brand-blue" />
             </div>
             <p className="text-sm text-gray-600">
@@ -1810,7 +1810,7 @@ export default function AIInterviewClusters() {
                       </>
                     ) : isCurrent ? (
                       <>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
                         <span className="text-sm text-brand-blue font-medium">{label}</span>
                       </>
                     ) : (
@@ -1835,7 +1835,7 @@ export default function AIInterviewClusters() {
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Layers className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div>
@@ -1862,7 +1862,7 @@ export default function AIInterviewClusters() {
                   <button
                     onClick={handleGenerateClusters}
                     disabled={generating || saving}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {generating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1964,7 +1964,7 @@ export default function AIInterviewClusters() {
               <CategorySection
                 title="Must-To-Have Skills"
                 icon={(
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Shield className="w-4 h-4 text-brand-blue" />
                   </div>
                 )}
@@ -1993,7 +1993,7 @@ export default function AIInterviewClusters() {
                 <CategorySection
                   title="Nice-To-Have Skills"
                   icon={(
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
                   )}
@@ -2041,7 +2041,7 @@ export default function AIInterviewClusters() {
               {/* Job Details */}
               {config && (
                 <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                  <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
                     <span className="text-xs font-medium text-brand-blue">Job Details</span>
                   </div>
                   <div className="divide-y divide-gray-50">
@@ -2068,7 +2068,7 @@ export default function AIInterviewClusters() {
               {/* Question Budget + Clusters */}
               {isFixed && (
                 <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                  <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 flex items-center justify-between">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                     <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
                     <span className="text-xs text-gray-500">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
@@ -2111,7 +2111,7 @@ export default function AIInterviewClusters() {
 
               {/* Cluster progress */}
               <div className="border border-gray-100 rounded-lg overflow-hidden">
-                <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs font-medium text-brand-blue">Cluster Progress</span>
                 </div>
                 <div className="divide-y divide-gray-50">
@@ -2171,7 +2171,7 @@ export default function AIInterviewClusters() {
             <button
               onClick={handleContinue}
               disabled={saving || generating}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {saving ? 'Saving...' : 'Continue to Preview'}

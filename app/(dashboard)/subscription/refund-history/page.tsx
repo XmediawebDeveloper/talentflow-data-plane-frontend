@@ -1,6 +1,6 @@
 'use client';
 
-import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Filter, Calendar } from 'lucide-react';
+import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Calendar, Sparkles, X, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
@@ -8,6 +8,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -200,15 +201,16 @@ export default function RefundHistoryPage() {
       case 'refunded':
       case 'completed':
       case 'success':
-        return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+      case 'paid':
+        return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
       case 'pending':
       case 'processing':
-        return <Clock className="w-4 h-4 text-yellow-600" />;
+        return <Clock className="h-3.5 w-3.5 text-amber-600" />;
       case 'failed':
       case 'rejected':
-        return <XCircle className="w-4 h-4 text-red-600" />;
+        return <XCircle className="h-3.5 w-3.5 text-red-600" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-600" />;
+        return <Clock className="h-3.5 w-3.5 text-gray-500" />;
     }
   };
 
@@ -217,15 +219,16 @@ export default function RefundHistoryPage() {
       case 'refunded':
       case 'completed':
       case 'success':
-        return 'bg-green-100 text-green-700 border-green-200';
+      case 'paid':
+        return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
       case 'pending':
       case 'processing':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
       case 'failed':
       case 'rejected':
-        return 'bg-red-100 text-red-700 border-red-200';
+        return 'bg-red-100 text-red-700 ring-1 ring-red-200';
       default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
     }
   };
 
@@ -282,88 +285,122 @@ export default function RefundHistoryPage() {
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg">
-                <RotateCcw className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        {/* SaaS Hero Header */}
+        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                Refunds &amp; reversals
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Refund History</h1>
-                <p className="text-sm text-gray-600">View your refund transactions and download receipts</p>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <RotateCcw className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Refund History</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+                    Review every refund issued against your subscription and addons, download receipts, and track processing status.
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {canExportRefundHistory && (
                 <button
                   onClick={handleExportCSV}
                   disabled={loading || filteredRefunds.length === 0}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15 disabled:translate-y-0 disabled:opacity-60"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                   Export CSV
                 </button>
               )}
               <button
                 onClick={fetchRefundData}
                 disabled={loading}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Total Refunded</p>
-              <p className="text-2xl font-bold text-green-600">{formatAmount(stats.total_amount)}</p>
-              <p className="text-xs text-gray-500 mt-1">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Total Refunded</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{formatAmount(stats.total_amount)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                  <RotateCcw className="h-5 w-5 text-brand-teal" />
+                </span>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Completed</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.completed_count}</p>
-              <p className="text-xs text-gray-500 mt-1">Processed successfully</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Completed</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">{stats.completed_count}</p>
+                  <p className="mt-1 text-xs text-gray-500">Processed successfully</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                  <CheckCircle2 className="h-5 w-5 text-brand-blue" />
+                </span>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.pending_count}</p>
-              <p className="text-xs text-gray-500 mt-1">Being processed</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Pending</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.pending_count}</p>
+                  <p className="mt-1 text-xs text-gray-500">Being processed</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                  <Clock className="h-5 w-5 text-brand-orange-deep" />
+                </span>
+              </div>
             </div>
           </div>
         )}
 
         {/* Filters Section */}
-        <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Filters</span>
+        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <Filter className="h-3.5 w-3.5 text-brand-blue" />
+            </span>
+            <span className="text-sm font-semibold text-gray-900">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="ml-auto text-xs text-blue-600 hover:text-blue-800"
+                className="ml-auto inline-flex items-center gap-1 rounded-full bg-brand-blue/[0.06] px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 transition-colors hover:bg-brand-blue/[0.12]"
               >
                 Clear all
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search refunds..."
+                placeholder="Search refunds"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
 
@@ -372,34 +409,35 @@ export default function RefundHistoryPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 appearance-none bg-white"
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 pr-9 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               >
                 {STATUS_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             </div>
 
             {/* Start Date */}
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 placeholder="From date"
               />
             </div>
 
             {/* End Date */}
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 placeholder="To date"
               />
             </div>
@@ -408,28 +446,25 @@ export default function RefundHistoryPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-medium text-red-700">{error}</p>
           </div>
         )}
 
         {/* Loading State */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="w-10 h-10 text-gray-400 animate-spin" />
-            <p className="mt-4 text-gray-500">Loading refund history...</p>
-          </div>
-        )}
+        {loading && <TableSkeleton rows={6} columns={6} />}
 
         {/* Empty State */}
         {!loading && !error && filteredRefunds.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-              <RotateCcw className="w-8 h-8 text-green-600" />
+          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+              <RotateCcw className="h-7 w-7 text-brand-teal" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Refunds</h3>
-            <p className="text-gray-600 max-w-md mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900">No Refunds</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
               {hasActiveFilters
                 ? 'No refunds match your filter criteria. Try adjusting your filters.'
                 : 'You have no refund transactions. Refunds will appear here when you cancel a subscription or request a refund.'}
@@ -437,7 +472,7 @@ export default function RefundHistoryPage() {
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="mt-4 text-sm text-blue-600 hover:text-blue-800"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-2 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/[0.08]"
               >
                 Clear all filters
               </button>
@@ -447,78 +482,83 @@ export default function RefundHistoryPage() {
 
         {/* Refunds Table */}
         {!loading && !error && filteredRefunds.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Showing {filteredRefunds.length} refund{filteredRefunds.length !== 1 ? 's' : ''}
-                {hasActiveFilters && ` (filtered from ${refunds.length})`}
-              </p>
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Refunds</h2>
+                <p className="text-xs text-gray-500">
+                  Showing {filteredRefunds.length} refund{filteredRefunds.length !== 1 ? 's' : ''}
+                  {hasActiveFilters && ` (filtered from ${refunds.length})`}
+                </p>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px]">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[160px]">Refund #</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">Original Plan</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">Reason</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Amount</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[140px]">Actions</th>
+                <thead className="bg-gray-50/80">
+                  <tr className="text-left">
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[160px]">Refund #</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Date</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[150px]">Original Invoice</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[180px]">Reason</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Amount</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[140px]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {paginatedRefunds.map((refund, index) => (
-                    <tr key={refund.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                <tbody className="divide-y divide-gray-100">
+                  {paginatedRefunds.map((refund) => (
+                    <tr key={refund.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <RotateCcw className="w-4 h-4 text-green-500 flex-shrink-0" />
-                          <span className="text-sm font-medium text-gray-900 truncate" title={refund.invoice_number || ''}>
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15">
+                            <RotateCcw className="h-4 w-4 text-brand-teal" />
+                          </span>
+                          <span className="truncate text-sm font-semibold text-gray-900" title={refund.invoice_number || ''}>
                             {refund.invoice_number || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">{formatISTDate(refund.issue_date)}</div>
+                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
+                        {formatISTDate(refund.issue_date)}
                       </td>
                       <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900 truncate" title={refund.metadata?.original_invoice_number || ''}>
+                        <div className="truncate font-mono text-sm text-gray-900" title={refund.metadata?.original_invoice_number || ''}>
                           {refund.metadata?.original_invoice_number || '-'}
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="text-sm text-gray-600 truncate" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
+                        <div className="truncate text-sm text-gray-600" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
                           {refund.metadata?.reason || refund.line_items?.[0]?.description || '-'}
                         </div>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <span className="text-sm font-semibold text-green-600">
+                        <span className="text-sm font-semibold text-brand-teal">
                           +{formatAmount(Math.abs(refund.total_amount_inr || 0))}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusStyles(refund.status || 'unknown')}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(refund.status || 'unknown')}`}>
                           {getStatusIcon(refund.status || 'unknown')}
                           {refund.status || '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setSelectedRefund(refund)}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="View Details"
+                            className="inline-flex items-center gap-1 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-2.5 py-1.5 text-xs font-medium text-brand-blue transition-all hover:-translate-y-0.5 hover:bg-brand-blue/[0.08]"
+                            aria-label="View Details" title="View Details"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <ExternalLink className="h-3.5 w-3.5" />
                             View
                           </button>
                           <button
                             onClick={() => handleDownloadRefund(refund)}
                             disabled={downloadingId === refund.id}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Download Receipt"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:translate-y-0 disabled:opacity-50"
+                            aria-label="Download Receipt" title="Download Receipt"
                           >
-                            {downloadingId === refund.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            {downloadingId === refund.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                           </button>
                         </div>
                       </td>
@@ -544,76 +584,85 @@ export default function RefundHistoryPage() {
 
         {/* Refund Detail Modal */}
         {selectedRefund && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-green-50 rounded-t-xl">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Refund Details</h2>
-                  <p className="text-sm text-gray-600">{selectedRefund.invoice_number}</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+              <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
+                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                      <RotateCcw className="h-5 w-5 text-white" />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-semibold">Refund Details</h2>
+                      <p className="mt-0.5 font-mono text-sm text-white/75">{selectedRefund.invoice_number}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedRefund(null)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setSelectedRefund(null)}
-                  className="p-2 hover:bg-green-100 rounded-lg transition-colors"
-                >
-                  <XCircle className="w-5 h-5 text-gray-500" />
-                </button>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase">Issue Date</p>
-                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedRefund.issue_date)}</p>
+              <div className="max-h-[calc(90vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Issue Date</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedRefund.issue_date)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase">Original Invoice</p>
-                    <p className="text-sm font-medium text-gray-900 font-mono">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Original Invoice</p>
+                    <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase">Status</p>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyles(selectedRefund.status)}`}>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Status</p>
+                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedRefund.status)}`}>
                       {getStatusIcon(selectedRefund.status)}
                       {selectedRefund.status}
                     </span>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase">Refund Method</p>
-                    <p className="text-sm font-medium text-gray-900">{selectedRefund.metadata?.refund_method || '-'}</p>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Refund Method</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{selectedRefund.metadata?.refund_method || '-'}</p>
                   </div>
                   {selectedRefund.payment_method && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Payment Method</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedRefund.payment_method}</p>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Payment Method</p>
+                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900">{selectedRefund.payment_method}</p>
                     </div>
                   )}
                   {selectedRefund.paid_at && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Paid At</p>
-                      <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedRefund.paid_at)}</p>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Paid At</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedRefund.paid_at)}</p>
                     </div>
                   )}
                 </div>
 
-                <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                    <p className="text-xs font-medium text-gray-500 uppercase">Refund Details</p>
+                <div className="overflow-hidden rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
+                  <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Refund Details</p>
                   </div>
-                  <div className="p-4 space-y-3">
-                    <div className="flex justify-between">
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-4">
                       <span className="text-sm text-gray-600">Description</span>
-                      <span className="text-sm font-medium text-gray-900">{selectedRefund.line_items?.[0]?.description || '-'}</span>
+                      <span className="text-right text-sm font-medium text-gray-900">{selectedRefund.line_items?.[0]?.description || '-'}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex items-start justify-between gap-4">
                       <span className="text-sm text-gray-600">Reason</span>
-                      <span className="text-sm font-medium text-gray-900">{selectedRefund.metadata?.reason || '-'}</span>
+                      <span className="text-right text-sm font-medium text-gray-900">{selectedRefund.metadata?.reason || '-'}</span>
                     </div>
                     {selectedRefund.metadata?.refund_percentage && (
-                      <div className="flex justify-between">
+                      <div className="flex items-center justify-between gap-4">
                         <span className="text-sm text-gray-600">Refund Percentage</span>
                         <span className="text-sm font-medium text-gray-900">{selectedRefund.metadata.refund_percentage}%</span>
                       </div>
                     )}
                     {selectedRefund.metadata?.processed_by && (
-                      <div className="flex justify-between">
+                      <div className="flex items-center justify-between gap-4">
                         <span className="text-sm text-gray-600">Processed By</span>
                         <span className="text-sm font-medium text-gray-900">{selectedRefund.metadata.processed_by}</span>
                       </div>
@@ -621,44 +670,45 @@ export default function RefundHistoryPage() {
                   </div>
                 </div>
 
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold text-gray-900">Refund Amount</span>
-                    <span className="text-2xl font-bold text-green-600">
+                <div className="relative overflow-hidden rounded-xl bg-brand-teal p-4 text-white shadow-md shadow-brand-teal/20 ring-1 ring-white/10">
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/15 blur-3xl" />
+                  <div className="relative flex items-center justify-between">
+                    <span className="text-base font-semibold">Refund Amount</span>
+                    <span className="text-2xl font-bold">
                       +{formatAmount(Math.abs(selectedRefund.total_amount_inr || 0))}
                     </span>
                   </div>
                 </div>
 
                 {selectedRefund.metadata?.notes && (
-                  <div className="p-3 bg-gray-50 rounded-lg mb-6">
-                    <p className="text-xs text-gray-600 font-medium">Notes</p>
-                    <p className="text-sm text-gray-900">{selectedRefund.metadata.notes}</p>
+                  <div className="rounded-xl border border-gray-100 bg-slate-50 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Notes</p>
+                    <p className="mt-1 text-sm text-gray-800">{selectedRefund.metadata.notes}</p>
                   </div>
                 )}
 
                 {selectedRefund.metadata?.razorpay_refund_id && (
-                  <div className="p-3 bg-blue-50 rounded-lg mb-6">
-                    <p className="text-xs text-blue-600 font-medium">Razorpay Refund ID</p>
-                    <p className="text-sm text-blue-900 font-mono">{selectedRefund.metadata.razorpay_refund_id}</p>
+                  <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Refund ID</p>
+                    <p className="mt-1 break-all font-mono text-sm text-gray-900">{selectedRefund.metadata.razorpay_refund_id}</p>
                   </div>
                 )}
 
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:gap-3">
                   <button
                     onClick={() => handleDownloadRefund(selectedRefund)}
                     disabled={downloadingId === selectedRefund.id}
-                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {downloadingId === selectedRefund.id ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Generating PDF...</>
                     ) : (
-                      <><Download className="w-4 h-4" /> Download Receipt</>
+                      <><Download className="h-4 w-4" /> Download Receipt</>
                     )}
                   </button>
                   <button
                     onClick={() => setSelectedRefund(null)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
                   >
                     Close
                   </button>

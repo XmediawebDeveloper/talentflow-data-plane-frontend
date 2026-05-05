@@ -118,7 +118,7 @@ function DroppableFolderItem({
           className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
             hasMenu ? 'opacity-100 bg-blue-100' : ''
           }`}
-          title="Folder actions"
+          aria-label="Folder actions" title="Folder actions"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>

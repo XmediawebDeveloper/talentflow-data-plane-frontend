@@ -356,7 +356,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+             aria-label="Close">
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
@@ -471,7 +471,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                         <button
                           onClick={() => removeFile(index)}
                           className="p-1.5 hover:bg-gray-200 rounded-md transition-colors flex-shrink-0"
-                        >
+                         aria-label="Close">
                           <X className="w-4 h-4 text-gray-500" />
                         </button>
                       </div>
@@ -596,7 +596,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                 <button
                   onClick={() => setShowNoFilesError(false)}
                   className="p-1 hover:bg-red-100 rounded"
-                >
+                 aria-label="Close">
                   <X className="w-4 h-4 text-red-600" />
                 </button>
               </div>

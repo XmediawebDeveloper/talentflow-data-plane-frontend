@@ -17,7 +17,7 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5 sm:max-h-[calc(100dvh-3rem)]">
-        <div className="sticky top-0 z-10 overflow-hidden border-b border-white/10 bg-gradient-to-r from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5 text-white">
+        <div className="sticky top-0 z-10 overflow-hidden border-b border-white/10 bg-brand-blue px-6 py-5 text-white">
           <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
           <div className="relative flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -47,21 +47,21 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                 <Users className="h-5 w-5 text-brand-blue" />
               </div>
               <p className="text-sm text-gray-500">Members</p>
               <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">{team.member_count}</p>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
                 <Briefcase className="h-5 w-5 text-brand-cyan" />
               </div>
               <p className="text-sm text-gray-500">Active Jobs</p>
               <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">{team.active_jobs_count}</p>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                 <FileText className="h-5 w-5 text-brand-teal" />
               </div>
               <p className="text-sm text-gray-500">Resumes</p>
@@ -72,7 +72,7 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
           {team.team_lead && (
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm ring-1 ring-black/[0.02]">
               <h4 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-gray-500">Team Lead</h4>
-              <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-blue/[0.04] to-transparent p-4 ring-1 ring-brand-blue/10">
+              <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-4 ring-1 ring-brand-blue/10">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-semibold text-white shadow-sm">
                   {team.team_lead.initials || 'TL'}
                 </div>
@@ -138,7 +138,7 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
         <div className="sticky bottom-0 border-t border-gray-100 bg-white/95 px-6 py-4 backdrop-blur-sm">
           <button
             onClick={onClose}
-            className="w-full rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            className="w-full rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
           >
             Close
           </button>

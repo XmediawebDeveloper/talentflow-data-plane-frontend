@@ -46,7 +46,7 @@ export const toast = {
           <button
             onClick={() => sonnerToast.dismiss(t)}
             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -86,7 +86,7 @@ export const toast = {
           <button
             onClick={() => sonnerToast.dismiss(t)}
             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -126,7 +126,7 @@ export const toast = {
           <button
             onClick={() => sonnerToast.dismiss(t)}
             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -166,7 +166,7 @@ export const toast = {
           <button
             onClick={() => sonnerToast.dismiss(t)}
             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>

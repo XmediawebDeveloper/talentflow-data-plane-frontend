@@ -46,7 +46,7 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>

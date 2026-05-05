@@ -55,7 +55,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           <button
             onClick={onOpenShortcuts}
             className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 hover:border-gray-400"
-            title="Keyboard Shortcuts (Cmd/Ctrl + /)"
+            aria-label="Keyboard Shortcuts (Cmd/Ctrl + /)" title="Keyboard Shortcuts (Cmd/Ctrl + /)"
           >
             <Command className="w-5 h-5" />
           </button>
@@ -66,7 +66,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           <button
             onClick={onOpenTour}
             className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 hover:shadow-lg transition-all duration-200 flex items-center gap-2 group"
-            title="Take a quick tour"
+            aria-label="Take a quick tour" title="Take a quick tour"
           >
             <Zap className="w-4 h-4 group-hover:animate-pulse" />
             <span className="text-sm font-medium">Quick Tour</span>
@@ -85,7 +85,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               setShowUserMenu(false);
             }}
             className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Help & Support"
+            aria-label="Help & Support" title="Help & Support"
           >
             <HelpCircle className="w-5 h-5" />
           </button>
@@ -213,7 +213,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               setShowUserMenu(false);
             }}
             className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Notifications"
+            aria-label="Notifications" title="Notifications"
           >
             <Bell className="w-5 h-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>

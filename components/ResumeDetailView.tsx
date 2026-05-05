@@ -97,7 +97,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-          >
+           aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -475,7 +475,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                               ? 'text-blue-600 hover:bg-blue-100'
                               : 'text-gray-600 hover:bg-gray-200'
                           }`}
-                          title="Download this version"
+                          aria-label="Download this version" title="Download this version"
                         >
                           <Download className="w-4 h-4" />
                         </button>

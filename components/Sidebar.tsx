@@ -67,11 +67,11 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
   // RBAC01-07: Extended role badge colors
   const roleBadgeColors: Record<UserRole, string> = {
-    tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white border-purple-600',
-    recruiter: 'bg-blue-100 text-blue-800 border-blue-200',
-    viewer: 'bg-gray-100 text-gray-600 border-gray-200',
-    billing_manager: 'bg-green-100 text-green-800 border-green-200',
-    standard_user: 'bg-gray-100 text-gray-700 border-gray-200',
+    tenant_admin: 'bg-brand-blue text-white',
+    recruiter: 'bg-brand-blue/10 text-brand-blue',
+    viewer: 'bg-gray-100 text-gray-600',
+    billing_manager: 'bg-brand-teal/10 text-brand-teal',
+    standard_user: 'bg-gray-100 text-gray-700',
   };
 
   // RBAC role checks
@@ -325,11 +325,11 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm h-screen">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
       {/* Logo - matches header height h-[72px] */}
       <div className="h-[72px] px-6 border-b border-gray-200 flex items-center">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md">
+          <div className="w-10 h-10 bg-brand-blue rounded-lg flex items-center justify-center">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <span className="text-xl font-bold text-gray-900">TalentFlow</span>
@@ -339,23 +339,23 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4">
         {visibleNavItems.map((item) => (
-          <div key={item.id} className="mb-1">
+          <div key={item.id} className="mb-1 px-2">
             {item.children ? (
               <>
                 <button
                   onClick={() => toggleSection(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
                     isParentActive(item)
-                      ? 'text-gray-800 bg-gray-50'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'text-brand-blue bg-brand-blue/10'
+                      : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                   }`}
                 >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
+                  <item.icon className={`w-5 h-5 flex-shrink-0 ${isParentActive(item) ? 'text-brand-blue' : ''}`} />
                   <span className="flex-1 text-sm font-medium">{item.label}</span>
                   {expandedSections.includes(item.id) ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <ChevronDown className={`w-4 h-4 ${isParentActive(item) ? 'text-brand-blue' : 'text-gray-400'}`} />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className={`w-4 h-4 ${isParentActive(item) ? 'text-brand-blue' : 'text-gray-400'}`} />
                   )}
                 </button>
 
@@ -365,13 +365,13 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
                       <button
                         key={child.id}
                         onClick={() => onSectionChange(child.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-2 pl-6 text-sm transition-colors ${
+                        className={`w-full flex items-center gap-3 px-3 py-2 pl-5 ml-1 rounded-md text-sm transition-colors ${
                           isActive(child.id)
-                            ? 'text-gray-800 bg-gray-50 font-medium border-l-2 border-gray-800 -ml-px'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            ? 'text-brand-blue bg-brand-blue/10 font-medium'
+                            : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                         }`}
                       >
-                        <child.icon className="w-4 h-4 flex-shrink-0" />
+                        <child.icon className={`w-4 h-4 flex-shrink-0 ${isActive(child.id) ? 'text-brand-blue' : ''}`} />
                         <span>{child.label}</span>
                       </button>
                     ))}
@@ -381,13 +381,13 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
             ) : (
               <button
                 onClick={() => onSectionChange(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                   isActive(item.id)
-                    ? 'text-gray-800 bg-gray-50 font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'text-brand-blue bg-brand-blue/10 font-medium'
+                    : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                 }`}
               >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
+                <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive(item.id) ? 'text-brand-blue' : ''}`} />
                 <span className="text-sm font-medium">{item.label}</span>
               </button>
             )}
@@ -397,7 +397,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200">
-        <p className="text-xs text-gray-500 text-center">
+        <p className="text-xs text-gray-400 text-center">
           {tenant?.name || 'TalentFlow'} v1.0
         </p>
       </div>

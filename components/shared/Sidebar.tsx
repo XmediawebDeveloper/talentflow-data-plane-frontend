@@ -352,9 +352,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   };
 
   return (
-    <aside className="w-64 sm:w-72 lg:w-64 bg-gray-50 border-r border-gray-200 flex flex-col shadow-xl lg:shadow-sm h-screen">
+    <aside className="relative w-64 sm:w-72 lg:w-64 bg-white border-r border-gray-100 flex flex-col shadow-xl lg:shadow-sm h-screen">
       {/* Logo + Close Button */}
-      <div className="h-14 sm:h-16 lg:h-[72px] px-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+      <div className="h-14 sm:h-16 lg:h-[72px] px-4 border-b border-gray-100 flex items-center justify-between shrink-0">
         <Link href="/dashboard" prefetch={false} className="flex items-center justify-center flex-1">
          <img
               src="/logos/talent_flow_logo.png"
@@ -366,10 +366,10 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
         {onClose && (
           <button
             onClick={onClose}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
             aria-label="Close menu"
           >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -377,18 +377,18 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 min-h-0 scrollbar-auto-hide">
+      <nav className="flex-1 overflow-y-auto py-4 min-h-0 scrollbar-auto-hide">
         {visibleSections.map((section) => (
-          <div key={section.id} className="mb-3">
+          <div key={section.id} className="mb-5 px-3">
             {/* Section Header */}
-            <div className="px-4 pt-1 pb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.08em]">
+            <div className="px-3 pb-2">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.1em]">
                 {section.label}
               </span>
             </div>
 
             {/* Section Items */}
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {section.items.map((item) => {
                 // CRITICAL: Suspended accounts can ONLY access current-plan page
                 // Suspended blocks ALL navigation except current-plan
@@ -398,8 +398,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                     return (
                       <div
                         key={item.id}
-                        className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-red-400 cursor-not-allowed opacity-40"
-                        style={{ width: 'calc(100% - 16px)' }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-400 cursor-not-allowed opacity-40"
                         title="Account suspended - Contact support for assistance"
                       >
                         <item.icon className="w-4 h-4 flex-shrink-0 text-red-300" />
@@ -422,8 +421,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                   return (
                     <div
                       key={item.id}
-                      className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
-                      style={{ width: 'calc(100% - 16px)' }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
                       title="Renew your subscription to access this feature"
                     >
                       <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />
@@ -445,17 +443,13 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                         setTimeout(() => onClose(), 150);
                       }
                     }}
-                    className={`relative w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm sm:text-[15px] lg:text-sm transition-all duration-150 ${
+                    className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${
                       active
-                        ? 'bg-gray-800 text-white font-medium shadow-sm'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'bg-brand-blue text-white font-medium'
+                        : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                     }`}
-                    style={{ width: 'calc(100% - 16px)' }}
                   >
-                    {active && (
-                      <span aria-hidden="true" className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-white/80" />
-                    )}
-                    <item.icon className={`w-4 h-4 sm:w-[18px] sm:h-[18px] lg:w-4 lg:h-4 flex-shrink-0 ${active ? 'text-white' : 'text-gray-500'}`} />
+                    <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-white' : 'text-gray-500'}`} />
                     <span className="truncate">{item.label}</span>
                   </Link>
                 );
@@ -466,7 +460,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-gray-200 bg-white shrink-0">
+      <div className="px-4 py-3 border-t border-gray-100 shrink-0">
         <p className="text-[11px] text-gray-400 text-center font-medium tracking-wide">
           {tenant?.name || 'TalentFlow'} <span className="opacity-60">·</span> v1.0
         </p>

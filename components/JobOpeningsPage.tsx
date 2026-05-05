@@ -357,7 +357,7 @@ export default function JobOpeningsPage() {
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-500 hover:text-gray-900'
                 }`}
-                title="Grid View"
+                aria-label="Grid View" title="Grid View"
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>
@@ -368,7 +368,7 @@ export default function JobOpeningsPage() {
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-500 hover:text-gray-900'
                 }`}
-                title="List View"
+                aria-label="List View" title="List View"
               >
                 <List className="w-4 h-4" />
               </button>
@@ -666,7 +666,7 @@ export default function JobOpeningsPage() {
                         <button
                           onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
                           className="flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-xs sm:text-sm text-gray-600 hover:bg-gray-100 rounded transition-colors border border-gray-200"
-                          title="View"
+                          aria-label="View" title="View"
                         >
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span className="hidden sm:inline">View</span>
@@ -679,7 +679,7 @@ export default function JobOpeningsPage() {
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
                             className="p-1 sm:p-2 hover:bg-gray-100 rounded transition-colors border border-gray-200"
-                            title="More actions"
+                            aria-label="More actions" title="More actions"
                           >
                             <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
                           </button>

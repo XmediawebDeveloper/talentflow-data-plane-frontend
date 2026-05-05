@@ -6,7 +6,7 @@ import {
   Inbox, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
   Search, ArrowLeft, Filter, CheckCircle2, Circle, Clock3, XCircle,
   User, Calendar, Loader2, HelpCircle, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal,
-  UserCheck, Users, BarChart3, RefreshCw
+  UserCheck, Users, BarChart3, RefreshCw, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketCategory, InternalTicketPriority, InternalTicketStatus } from '@/lib/services';
@@ -278,79 +278,97 @@ export default function InternalTicketAdmin() {
   const totalTickets = stats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-full">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl shadow-lg">
-                <Inbox className="w-6 h-6 text-white" />
+    <div className="flex-1 bg-slate-50 min-h-full">
+      {/* SaaS Hero Header */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
+        <div className="mx-auto max-w-7xl">
+          <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+            <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <Inbox className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                    <Sparkles className="h-3 w-3 text-brand-orange" />
+                    Internal helpdesk
+                  </div>
+                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Team Support Tickets</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage help requests from your team members in one place.</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">Team Support Tickets</h1>
-                <p className="text-sm text-gray-600">Manage help requests from your team members</p>
-              </div>
+              <button
+                onClick={() => { fetchTickets(); fetchStats(); }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </button>
             </div>
-
-            <button
-              onClick={() => { fetchTickets(); fetchStats(); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </button>
-          </div>
+          </section>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8 mx-auto max-w-7xl">
         {/* Overview */}
         {view === 'overview' && (
           <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Open</span>
-                  <Circle className="w-5 h-5 text-blue-600" />
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 sm:gap-5">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Open</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                    <Circle className="w-4 h-4" />
+                  </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{openTickets}</div>
                 <div className="text-xs text-gray-500">Awaiting action</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">In Progress</span>
-                  <Clock3 className="w-5 h-5 text-yellow-600" />
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">In Progress</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-100">
+                    <Clock3 className="w-4 h-4" />
+                  </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{inProgressTickets}</div>
                 <div className="text-xs text-gray-500">Being handled</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Resolved</span>
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Resolved</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{resolvedTickets}</div>
                 <div className="text-xs text-gray-500">Successfully resolved</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Unassigned</span>
-                  <Users className="w-5 h-5 text-orange-600" />
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Unassigned</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15">
+                    <Users className="w-4 h-4" />
+                  </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{unassignedTickets}</div>
                 <div className="text-xs text-gray-500">Need assignment</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Total</span>
-                  <Ticket className="w-5 h-5 text-gray-600" />
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Total</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-blue/10 text-brand-blue ring-1 ring-brand-cyan/15">
+                    <Ticket className="w-4 h-4" />
+                  </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{totalTickets}</div>
                 <div className="text-xs text-gray-500">All time</div>
@@ -379,34 +397,38 @@ export default function InternalTicketAdmin() {
             )}
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
               <button
                 onClick={() => { setFilterAssignment('unassigned'); setView('tickets'); }}
-                className="bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl shadow-lg p-6 text-left hover:from-orange-600 hover:to-red-600 transition-all"
+                className="group relative overflow-hidden rounded-2xl bg-brand-orange text-white shadow-lg shadow-brand-orange/25 ring-1 ring-white/10 p-6 text-left transition-all hover:-translate-y-0.5 hover:shadow-xl"
               >
-                <Users className="w-8 h-8 mb-3" />
-                <h3 className="text-lg font-semibold text-white mb-1">Unassigned Tickets</h3>
-                <p className="text-sm text-orange-100">
+                <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/15 blur-2xl" />
+                <Users className="relative w-8 h-8 mb-3" />
+                <h3 className="relative text-lg font-semibold text-white mb-1">Unassigned Tickets</h3>
+                <p className="relative text-sm text-white/85">
                   {unassignedTickets} tickets need attention
                 </p>
               </button>
 
               <button
                 onClick={() => { setFilterAssignment('mine'); setView('tickets'); }}
-                className="bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-xl shadow-lg p-6 text-left hover:from-gray-800 hover:to-black transition-all"
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal text-white shadow-lg shadow-brand-blue/25 ring-1 ring-white/10 p-6 text-left transition-all hover:-translate-y-0.5 hover:shadow-xl"
               >
-                <UserCheck className="w-8 h-8 mb-3" />
-                <h3 className="text-lg font-semibold text-white mb-1">My Assigned Tickets</h3>
-                <p className="text-sm text-gray-300">
+                <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-brand-cyan/20 blur-2xl" />
+                <UserCheck className="relative w-8 h-8 mb-3" />
+                <h3 className="relative text-lg font-semibold text-white mb-1">My Assigned Tickets</h3>
+                <p className="relative text-sm text-white/85">
                   View tickets assigned to you
                 </p>
               </button>
 
               <button
                 onClick={() => { setFilterAssignment('all'); setView('tickets'); }}
-                className="bg-white border-2 border-gray-200 rounded-xl shadow-sm p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
+                className="group rounded-2xl border border-gray-100 bg-white p-6 text-left shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
               >
-                <Ticket className="w-8 h-8 text-gray-700 mb-3" />
+                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                  <Ticket className="w-5 h-5" />
+                </span>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">All Team Tickets</h3>
                 <p className="text-sm text-gray-600">
                   View all team support requests

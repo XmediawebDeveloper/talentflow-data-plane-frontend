@@ -995,16 +995,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
       <div className="w-full">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div className="flex items-start gap-3">
-            <div className="hidden sm:flex w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
-              <ClipboardList className="w-5 h-5 text-brand-blue" />
+            <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
+              <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl text-gray-900 mb-1 sm:mb-2 tracking-tight font-semibold">Assessment Management</h1>
+              <h1 className="text-lg sm:text-xl text-gray-900 mb-0.5 tracking-tight font-semibold">Assessment Management</h1>
               <p className="text-xs sm:text-sm text-gray-600">
                 Create and manage skill assessments for candidates
               </p>
@@ -1017,7 +1017,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <button
                       onClick={() => router.push('/recruitment/assessments')}
                       className="ml-1 hover:bg-brand-blue/10 rounded p-0.5 transition-colors"
-                      title="Clear filter"
+                      aria-label="Clear filter" title="Clear filter"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1029,7 +1029,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
             {totalUnits > 0 && (
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ring-1 shadow-sm ${
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 shadow-sm ${
                 isUnlimited
                   ? 'bg-brand-blue/5 ring-brand-blue/20 shadow-brand-blue/5'
                   : (totalUnits - stats.units_consumed) <= 0
@@ -1074,9 +1074,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {onOpenCandidateView && (
               <button
                 onClick={onOpenCandidateView}
-                className="flex items-center gap-2 border border-brand-blue/30 text-brand-blue bg-white px-6 py-2.5 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm"
+                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
               >
-                <Eye className="w-5 h-5" />
+                <Eye className="w-4 h-4" />
                 Preview Candidate View
               </button>
             )}
@@ -1091,13 +1091,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 }}
                 disabled={!canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)}
                 title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
-                className={`flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg transition-all shadow-md text-sm sm:text-base ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all shadow-md text-sm ${
                   !canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 shadow-none'
-                    : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-brand-blue/25 ring-1 ring-white/10'
+                    : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-brand-blue/25 ring-1 ring-white/10'
                 }`}
               >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Sparkles className="w-4 h-4" />
                 <span className="hidden sm:inline">Create Assessment</span>
                 <span className="sm:hidden">Create</span>
               </button>
@@ -1156,7 +1156,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         {/* AI-Powered Assessments Banner */}
         <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 shadow-sm shadow-brand-blue/10">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -1214,7 +1214,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:shadow-md hover:shadow-brand-blue/10 transition-shadow">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-3.5 h-3.5 text-brand-blue" />
                 </div>
                 <span className="text-xs text-gray-500">Total Assessments</span>
@@ -1238,7 +1238,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:shadow-md hover:shadow-brand-blue/10 transition-shadow">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Users className="w-3.5 h-3.5 text-brand-cyan" />
                 </div>
                 <span className="text-xs text-gray-500">Candidates Assessed</span>
@@ -1257,7 +1257,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="flex gap-3 sm:gap-5 overflow-x-auto pr-16 sm:pr-20 scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('all')}
-                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'all'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -1268,7 +1268,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
                 <button
                   onClick={() => setActiveTab('active')}
-                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'active'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -1278,7 +1278,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
                 <button
                   onClick={() => setActiveTab('draft')}
-                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'draft'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -1288,7 +1288,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
                 {/* <button
                   onClick={() => setActiveTab('completed')}
-                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'completed'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -1326,7 +1326,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 )}
                 {/* <button
                   onClick={() => setActiveTab('archived')}
-                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'archived'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -1355,7 +1355,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
                       : 'text-gray-400 hover:text-brand-blue'
                   }`}
-                  title="Grid View"
+                  aria-label="Grid View" title="Grid View"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
@@ -1366,7 +1366,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
                       : 'text-gray-400 hover:text-brand-blue'
                   }`}
-                  title="List View"
+                  aria-label="List View" title="List View"
                 >
                   <List className="w-4 h-4" />
                 </button>
@@ -1471,14 +1471,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
                           <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                 <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-blue" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                                 <h4 className="text-[11px] sm:text-sm font-medium text-gray-900">HR</h4>
                                 <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                   topicSettings.hr_enabled
-                                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                     : 'bg-slate-200 text-gray-600'
                                 }`}>
                                   {topicSettings.hr_enabled ? 'On' : 'Off'}
@@ -1497,7 +1497,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 disabled={isSavingTopics}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
-                                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25'
+                                    ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
                                 } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
@@ -1518,14 +1518,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
                           <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                                 <Brain className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-cyan" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                                 <h4 className="text-[11px] sm:text-sm font-medium text-gray-900">Technical</h4>
                                 <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                   topicSettings.technical_enabled
-                                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                     : 'bg-slate-200 text-gray-600'
                                 }`}>
                                   {topicSettings.technical_enabled ? 'On' : 'Off'}
@@ -1544,7 +1544,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 disabled={isSavingTopics}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
-                                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25'
+                                    ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
                                 } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
@@ -1565,14 +1565,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
                           <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                                 <Code className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-orange" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                                 <h4 className="text-[11px] sm:text-sm font-medium text-gray-900">Coding</h4>
                                 <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                   topicSettings.coding_enabled
-                                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                     : 'bg-slate-200 text-gray-600'
                                 }`}>
                                   {topicSettings.coding_enabled ? 'On' : 'Off'}
@@ -1591,7 +1591,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 disabled={isSavingTopics}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
-                                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25'
+                                    ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
                                 } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
@@ -1637,7 +1637,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <p className="text-sm text-red-600 mb-3 sm:mb-4 text-center">{proctoringError}</p>
                     <button
                       onClick={loadProctoringData}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Retry
@@ -1646,7 +1646,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 ) : proctoringSettings && (
                   <>
                     {/* Settings Header with Status */}
-                    <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-xl p-3 sm:p-4 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    <div className="bg-brand-blue rounded-xl p-3 sm:p-4 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 sm:gap-3">
                           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -1689,14 +1689,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {/* Top row: icon + title + toggle */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                               <Video className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
                               <h4 className="text-xs sm:text-sm font-medium text-gray-900">Proctoring Mode</h4>
                               <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                 proctoringSettings.proctoring_enabled
-                                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                   : 'bg-slate-200 text-gray-600'
                               }`}>
                                 {proctoringSettings.proctoring_enabled ? 'Enabled' : 'Disabled'}
@@ -1713,7 +1713,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               disabled={isSavingProctoring}
                               className={`relative w-10 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                 proctoringSettings.proctoring_enabled
-                                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25'
+                                  ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                   : 'bg-gray-300'
                               } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
@@ -1793,7 +1793,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <h3 className="text-sm font-medium text-gray-900 mb-4 tracking-tight">Masking</h3>
                       <div className="flex items-start justify-between p-4 bg-slate-50 rounded-lg">
                         <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                             <Mail className="w-4 h-4 text-brand-blue" />
                           </div>
                           <div>
@@ -1939,7 +1939,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ) : filteredAssessments.length === 0 ? (
               /* Empty State */
               <div className="text-center py-12">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-10 h-10 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No assessments yet</h3>
@@ -1957,7 +1957,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-lg transition-all ${
                     !canCreateAssessment
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                      : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   }`}
                 >
                   <Sparkles className="w-5 h-5" />
@@ -1986,7 +1986,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   >
                     {/* Grid Card Header */}
                     <div className="flex items-start mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                         <FileText className="w-5 h-5 text-brand-blue" />
                       </div>
                     </div>
@@ -1995,7 +1995,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <div className="mb-3">
                       {/* Line 1: AS-022 SQL Developer - Assessment V1 [AI] [Active] */}
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                        <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                           {assessment.short_id}
                         </span>
                         <h3 className="text-sm font-medium text-gray-900 line-clamp-1">
@@ -2076,7 +2076,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
                             assessment.status === 'Draft'
                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                              : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                           }`}
                           title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
                         >
@@ -2283,13 +2283,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4">
                       {/* Left Side - Icon + Info */}
                       <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                           <FileText className="w-5 h-5 text-brand-blue" />
                         </div>
                         <div className="flex-1 min-w-0">
                           {/* Line 1: AS-022 SQL Developer - Assessment V1 */}
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                            <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                               {assessment.short_id}
                             </span>
                             <h3 className="text-sm font-medium text-gray-900">
@@ -2376,7 +2376,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
                                 assessment.status === 'Draft'
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                  : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                               }`}
                               title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
                             >
@@ -2389,8 +2389,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {assessment.candidates > 0 && (
                             <button
                               onClick={() => handleTrackInvites(assessment)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
-                              title="Track invitation status"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                              aria-label="Track invitation status" title="Track invitation status"
                             >
                               <Mail className="w-3.5 h-3.5" />
                               <span className="hidden xl:inline">Track Invites ({assessment.candidates})</span>
@@ -2679,10 +2679,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 sm:ring-1 sm:ring-black/[0.02] w-full sm:max-w-5xl max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex items-center justify-between flex-shrink-0">
+            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div className="min-w-0">
@@ -2697,7 +2697,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <button
                 onClick={closeTrackInvitesModal}
                 className="p-2 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
-              >
+               aria-label="Close">
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
@@ -2855,7 +2855,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm">
+                              <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm">
                                 {initials}
                               </div>
                               <div>
@@ -3022,7 +3022,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
                                       disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail}
-                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                                     >
                                       <Send className="w-3 h-3" />
                                       {isSendingChangeEmail ? 'Sending…' : 'Send'}
@@ -3047,7 +3047,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
                               <button
                                 onClick={() => setResendTargetInvitation(invitation)}
-                                title="Revoke old link and send a new invitation"
+                                aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
                                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
                                   invitation.status === 'failed'
                                     ? 'bg-red-600 text-white hover:bg-red-700'
@@ -3110,7 +3110,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 )}
                 <button
                   onClick={closeTrackInvitesModal}
-                  className="px-4 py-2 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="px-4 py-2 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Close
                 </button>

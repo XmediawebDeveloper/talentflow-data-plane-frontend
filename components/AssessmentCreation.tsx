@@ -569,7 +569,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         <div className="w-full max-w-5xl rounded-2xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10">
           <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
             <h3 className="text-2xl font-semibold text-gray-900 tracking-tight">Add New Question</h3>
-            <button type="button" onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-brand-blue transition-colors">
+            <button type="button" onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-brand-blue transition-colors" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -657,7 +657,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               type="button"
               onClick={handleSaveHRQuestion}
               disabled={isSavingHRQuestion}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-6 py-3 text-lg font-semibold disabled:opacity-60 transition-all"
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-6 py-3 text-lg font-semibold disabled:opacity-60 transition-all"
             >
               <FileText className="w-5 h-5" />
               {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
@@ -1603,7 +1603,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </p>
           </div>
 
-          <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
+          <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
             <div>
               <div className="text-xs sm:text-sm text-brand-blue font-medium mb-1">AI-Powered Assessment Generation</div>
@@ -1625,7 +1625,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {canCreateJd && (
                   <button
                     onClick={handleCreateNewJD}
-                    className="px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 text-sm flex-shrink-0"
+                    className="px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 text-sm flex-shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                     <span className="hidden sm:inline">Create New Job</span>
@@ -1669,7 +1669,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     >
                       <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
                         {/* Icon */}
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                           <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                         </div>
 
@@ -1678,7 +1678,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {/* Title Row */}
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {job.job_id && (
-                              <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-medium">
+                              <span className="px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-medium">
                                 {job.job_id}
                               </span>
                             )}
@@ -1768,7 +1768,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               <span className="sm:hidden">Created</span>
                             </span>
                           ) : (
-                            <button className="px-3 py-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs transition-all">
+                            <button className="px-3 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs transition-all">
                               Select
                             </button>
                           )}
@@ -1786,7 +1786,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     {canCreateJd && (
                       <button
                         onClick={handleCreateNewJD}
-                        className="mt-4 px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"
+                        className="mt-4 px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"
                       >
                         <Plus className="w-4 h-4" />
                         Create New Job
@@ -1805,7 +1805,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-[98vw] sm:w-[95vw] h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Modal Header */}
-              <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0 rounded-t-xl sm:rounded-t-2xl">
+              <div className="bg-brand-blue px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0 rounded-t-xl sm:rounded-t-2xl">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 ring-1 ring-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -1818,7 +1818,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <button
                   onClick={() => setShowJDCreation(false)}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                  title="Close"
+                  aria-label="Close" title="Close"
                 >
                   <X className="w-5 h-5 text-white" />
                 </button>
@@ -1892,7 +1892,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${hrEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                           <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                         </div>
                         <div className="min-w-0">
@@ -1917,7 +1917,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         aria-pressed={hrEnabled}
                         onClick={handleHRToggle}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                          hrEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
+                          hrEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
                         }`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1931,7 +1931,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                           <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                         </div>
                         <div className="min-w-0">
@@ -1943,7 +1943,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </div>
                       <button
                         onClick={() => handleTechnicalToggle()}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
@@ -1960,7 +1960,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       <div className={`p-3 sm:p-4 border rounded-xl transition-all ${codingEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                               <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep" />
                             </div>
                             <div className="min-w-0">
@@ -1982,7 +1982,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           </div>
                           <button
                             onClick={() => handleCodingToggle()}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
                           >
                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
@@ -2044,7 +2044,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   const codeSection = sections.find(s => s.name === 'Coding');
 
                   return (
-                    <div className="mt-3 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3">
+                    <div className="mt-3 bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3">
                       <p className="text-xs font-medium text-brand-blue mb-2">Auto-calculated from JD:</p>
                       <div className="space-y-1.5 text-xs">
                         <div className="flex items-center justify-between text-brand-blue/80">
@@ -2238,7 +2238,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               readOnly
                               className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
                             />
-                            <span className="w-5 h-5 flex items-center justify-center bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
+                            <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
                             <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
                               q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
@@ -2326,7 +2326,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           />
                           <button
                             onClick={() => addTopic(section.name)}
-                            className="px-3 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
+                            className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
                           >
                             <Plus className="w-4 h-4" />
                             <span className="hidden sm:inline">Add Topic</span>
@@ -2340,7 +2340,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               className="px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1.5"
                             >
                               {topic}
-                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2">
+                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2" aria-label="Close">
                                 <X className="w-3 h-3" />
                               </button>
                             </span>
@@ -2485,7 +2485,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <button
                     onClick={() => handleGenerateAssessment(false)}
                     disabled={!isPercentageValid || isGenerating}
-                    className="flex-1 px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
+                    className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     {isGenerating ? 'Publishing...' : 'Publish'}
@@ -2501,9 +2501,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
               {/* Header */}
-              <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
+              <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-gray-50 border-b border-brand-blue/15'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 ${codingPopupMode === 'disable' ? 'bg-red-100' : 'bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15'} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 ${codingPopupMode === 'disable' ? 'bg-red-100' : 'bg-brand-blue/10 ring-1 ring-brand-blue/15'} rounded-xl flex items-center justify-center flex-shrink-0`}>
                     <Code className={`w-4 h-4 sm:w-5 sm:h-5 ${codingPopupMode === 'disable' ? 'text-red-600' : 'text-brand-blue'}`} />
                   </div>
                   <div className="min-w-0">
@@ -2554,7 +2554,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               onClick={() => toggleLanguageSelection(lang)}
                               className={`px-3 py-1.5 rounded-full text-sm transition-all ${
                                 selectedCodingLanguages.includes(lang)
-                                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                                   : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
                             >
@@ -2587,7 +2587,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   className={`flex-1 px-4 py-2 rounded-lg text-sm sm:text-base transition-all disabled:bg-gray-300 disabled:cursor-not-allowed ${
                     codingPopupMode === 'disable'
                       ? 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10'
-                      : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   }`}
                 >
                   {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
@@ -2625,7 +2625,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               <div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl">
                 <button
                   onClick={() => setShowMinRoundPopup(false)}
-                  className="w-full px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all"
+                  className="w-full px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all"
                 >
                   Got it
                 </button>
@@ -2704,7 +2704,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
               <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 truncate tracking-tight">{generatedAssessment?.title}</h2>
-              <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-semibold flex-shrink-0">
+              <span className="px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-semibold flex-shrink-0">
                 V{generatedAssessment?.version || 1}
               </span>
             </div>
@@ -2717,7 +2717,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <div className="text-xs sm:text-sm text-green-700 mb-1 font-medium">Sections</div>
                 <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{generatedAssessment?.sections.length}</div>
               </div>
-              <div className="p-3 sm:p-4 bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl">
+              <div className="p-3 sm:p-4 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl">
                 <div className="text-xs sm:text-sm text-brand-orange-deep mb-1 font-medium">Difficulty</div>
                 <div className="text-lg sm:text-2xl text-gray-900 truncate font-semibold tracking-tight">{selectedJob?.experience}</div>
               </div>
@@ -2725,7 +2725,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
 
           {/* Scoring Rules Summary */}
-          <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
               <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
               <div>
@@ -2808,7 +2808,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
 
                 {/* Note: Questions NOT generated yet */}
-                <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4">
+                <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4">
                   <div className="text-xs sm:text-sm text-gray-700">
                     <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>
@@ -2829,7 +2829,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 // Let parent handle navigation to avoid double router.push()
                 onCreateAssessment(generatedAssessment);
               }}
-              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Done - Go to Assessments</span>

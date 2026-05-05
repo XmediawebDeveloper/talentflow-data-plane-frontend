@@ -7,7 +7,7 @@ export default function HRQuestionBankRoute() {
   return (
     <FeatureGate feature="assessment">
       <div className="min-h-screen bg-slate-50">
-        <div className="p-4 sm:p-6">
+        <div className="p-4 md:p-8">
           <HRQuestionBank />
         </div>
       </div>

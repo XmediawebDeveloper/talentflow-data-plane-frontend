@@ -380,7 +380,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -733,7 +733,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               <Eye className="w-5 h-5 text-blue-600" />
               <h3 className="font-semibold text-gray-900">{previewTitle}</h3>
             </div>
-            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>

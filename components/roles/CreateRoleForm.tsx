@@ -318,7 +318,7 @@ export default function CreateRoleForm() {
       onClick={onClick}
       className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
         isSelected
-          ? 'border-brand-blue bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/20'
+          ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
           : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
       }`}
     >
@@ -338,7 +338,7 @@ export default function CreateRoleForm() {
 
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent p-4 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 ring-1 ring-black/[0.02]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">Permission Library</h3>
@@ -351,7 +351,7 @@ export default function CreateRoleForm() {
               onClick={handleSelectAll}
               className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
                 allSelected
-                  ? 'border-brand-blue bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/20'
+                  ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
                   : someSelected
                   ? 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-blue'
                   : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
@@ -376,7 +376,7 @@ export default function CreateRoleForm() {
               key={category.id}
               className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
             >
-              <div className="flex flex-col gap-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] to-transparent px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="flex items-start gap-3">
                   <button
                     type="button"
@@ -591,7 +591,7 @@ export default function CreateRoleForm() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <div className="border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent px-5 py-4 sm:px-6">
+            <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
               <h2 className="text-lg font-semibold text-gray-900">Role Details</h2>
               <p className="text-sm text-gray-500">Start with the role identity, then configure the access surface below.</p>
             </div>
@@ -688,7 +688,7 @@ export default function CreateRoleForm() {
               <button
                 onClick={handleSubmit}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-blue to-brand-blue-2 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
                 Create Role
@@ -699,7 +699,7 @@ export default function CreateRoleForm() {
           <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
               <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                 </span>
                 <div>

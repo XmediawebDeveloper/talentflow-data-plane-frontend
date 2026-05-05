@@ -139,7 +139,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 onClick={() => setViewMode('tree')}
                 className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
                   viewMode === 'tree'
-                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                     : 'text-gray-600 hover:text-brand-blue'
                 }`}
               >
@@ -149,7 +149,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 onClick={() => setViewMode('matrix')}
                 className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
                   viewMode === 'matrix'
-                    ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                     : 'text-gray-600 hover:text-brand-blue'
                 }`}
               >
@@ -159,7 +159,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
             <button
               onClick={onClose}
               className="p-1.5 sm:p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors"
-            >
+             aria-label="Close">
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
@@ -192,7 +192,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                           onClick={() => setSelectedFeature(selectedFeature === node.code ? null : node.code)}
                           className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border text-xs sm:text-sm font-medium transition-all ${
                             selectedFeature === node.code
-                              ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white border-brand-blue shadow-sm shadow-brand-blue/25'
+                              ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
                               : 'bg-white text-gray-700 border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/[0.04] hover:shadow-sm'
                           }`}
                         >
@@ -240,7 +240,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                           >
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
                               <div className="flex items-center gap-2 min-w-0">
-                                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 flex items-center justify-center flex-shrink-0">
+                                <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center flex-shrink-0">
                                   <Link2 className="w-3.5 h-3.5 text-brand-blue" />
                                 </div>
                                 <span className="font-semibold text-gray-900 text-sm sm:text-base truncate">{node.name}</span>
@@ -266,7 +266,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                                 <span
                                   className={`text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded-full font-medium ring-1 ${
                                     selectedFeature === dep
-                                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white ring-brand-blue/40 shadow-sm'
+                                      ? 'bg-brand-blue text-white ring-brand-blue/40 shadow-sm'
                                       : 'bg-gray-50 text-gray-700 ring-gray-200'
                                   }`}
                                 >
@@ -390,7 +390,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
           {selectedFeatureInfo && (
             <div className="w-full lg:w-72 xl:w-80 border-t lg:border-t-0 lg:border-l border-gray-200 p-3 sm:p-4 bg-gradient-to-b from-brand-blue/[0.03] to-white overflow-auto flex-shrink-0">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
                   <Layers className="w-4 h-4 text-white" />
                 </div>
                 <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{selectedFeatureInfo.name}</h3>
@@ -460,7 +460,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
           </div>
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-xs sm:text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
+            className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-xs sm:text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
           >
             Close
           </button>

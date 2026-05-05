@@ -1,6 +1,6 @@
 'use client';
 
-import { Palette, Upload, Save, Eye, Check, Loader2, X, ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Palette, Upload, Save, Eye, Check, Loader2, X, ShieldCheck, ShieldAlert, RefreshCw, Sparkles, Image as ImageIcon, Globe, Layers } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
@@ -139,44 +139,61 @@ export default function BrandingPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
-          <p className="text-gray-600">Loading branding settings...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+          <p className="font-medium text-gray-600">Loading branding settings...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-4 sm:mb-6 lg:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2.5 sm:gap-3">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-pink-600 to-pink-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <Palette className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <div className="max-w-5xl mx-auto">
+        {/* SaaS Hero Header */}
+        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                <Palette className="h-6 w-6 text-white" />
               </div>
-              <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">Branding & White Label</h1>
-                <p className="text-xs sm:text-sm text-gray-600">Customize your platform appearance</p>
+              <div>
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                  <Sparkles className="h-3 w-3 text-brand-orange" />
+                  White-label studio
+                </div>
+                <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Branding & White Label</h1>
+                <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Customize your portal&apos;s look — logo, colors, custom domain.</p>
               </div>
             </div>
             {canManage && (
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors flex-shrink-0 w-full sm:w-auto"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60"
               >
-                {saved ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : isSaving ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                {saved ? <Check className="w-4 h-4" /> : isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
               </button>
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Logo</h2>
+        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <ImageIcon className="h-5 w-5 text-brand-blue" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Logo</h2>
+              <p className="text-xs text-gray-500">Visual identity used across the portal.</p>
+            </div>
+          </div>
+          <div className="p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
             <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 flex-shrink-0 relative overflow-hidden">
               {branding.logo_url ? (
@@ -211,7 +228,7 @@ export default function BrandingPage() {
                   <button
                     onClick={() => setBranding(prev => ({ ...prev, logo_url: '' }))}
                     className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-                    title="Remove logo"
+                    aria-label="Remove logo" title="Remove logo"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -220,17 +237,27 @@ export default function BrandingPage() {
               <p className="text-xs sm:text-sm text-gray-600 mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
             </div>
           </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Brand Colors</h2>
+        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue-2/15 shadow-sm shadow-brand-blue/10">
+              <Palette className="h-5 w-5 text-brand-blue-2" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Brand Colors</h2>
+              <p className="text-xs text-gray-500">Primary and secondary color used throughout your portal.</p>
+            </div>
+          </div>
+          <div className="p-5 sm:p-6">
           <p className="text-xs sm:text-sm text-gray-700 mb-2 sm:mb-3">Color Presets</p>
           <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 sm:mb-6">
             {colorPresets.map((preset) => (
               <button
                 key={preset.name}
                 onClick={() => setBranding({ ...branding, primary_color: preset.primary, secondary_color: preset.secondary })}
-                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 rounded-xl bg-white hover:border-brand-blue/30 hover:bg-brand-cyan/[0.04] transition-colors"
               >
                 <div className="flex flex-shrink-0">
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full" style={{ backgroundColor: preset.primary }} />
@@ -254,7 +281,7 @@ export default function BrandingPage() {
                   type="text"
                   value={branding.primary_color}
                   onChange={(e) => setBranding({ ...branding, primary_color: e.target.value })}
-                  className="flex-1 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                  className="flex-1 rounded-xl border border-gray-200 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 />
               </div>
             </div>
@@ -271,28 +298,35 @@ export default function BrandingPage() {
                   type="text"
                   value={branding.secondary_color}
                   onChange={(e) => setBranding({ ...branding, secondary_color: e.target.value })}
-                  className="flex-1 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                  className="flex-1 rounded-xl border border-gray-200 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 />
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Custom Domain</h2>
+        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+              <Globe className="h-5 w-5 text-brand-teal" />
+            </span>
+            <div className="flex-1">
+              <h2 className="text-base font-semibold text-gray-900">Custom Domain</h2>
+              <p className="text-xs text-gray-500">Use your own domain for the candidate portal.</p>
+            </div>
             {domainVerified && branding.custom_domain && (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/15 px-2.5 py-1 rounded-full">
                 <ShieldCheck className="w-3.5 h-3.5" /> Verified
               </span>
             )}
             {!domainVerified && branding.custom_domain && (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1 rounded-full">
                 <ShieldAlert className="w-3.5 h-3.5" /> Not verified
               </span>
             )}
           </div>
-          <div>
+          <div className="p-5 sm:p-6">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Domain URL</label>
             <div className="flex gap-2">
               <input
@@ -305,12 +339,12 @@ export default function BrandingPage() {
                   setCloudflareProxied(false);
                 }}
                 placeholder="careers.yourcompany.com"
-                className="flex-1 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none placeholder-gray-500"
+                className="flex-1 rounded-xl border border-gray-200 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue placeholder-gray-400"
               />
               <button
                 onClick={handleVerifyDomain}
                 disabled={isVerifyingDomain || !branding.custom_domain?.trim() || !canManage}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 hover:bg-brand-blue/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isVerifyingDomain ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" />Checking...</>
@@ -323,20 +357,20 @@ export default function BrandingPage() {
             </div>
 
             {/* DNS Instructions */}
-            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <p className="text-xs font-medium text-gray-700 mb-2">DNS Setup Instructions:</p>
+            <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5">
+              <p className="text-xs font-semibold text-brand-blue mb-2">DNS Setup Instructions:</p>
               <div className="space-y-1 text-xs text-gray-600 font-mono">
                 <div className="flex gap-3">
                   <span className="text-gray-400 w-12">Type</span>
-                  <span className="font-semibold text-gray-800">CNAME</span>
+                  <span className="font-semibold text-gray-900">CNAME</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-gray-400 w-12">Name</span>
-                  <span className="font-semibold text-gray-800">{branding.custom_domain || 'careers'}</span>
+                  <span className="font-semibold text-gray-900">{branding.custom_domain || 'careers'}</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-gray-400 w-12">Value</span>
-                  <span className="font-semibold text-blue-700">{cnameTarget || 'loading...'}</span>
+                  <span className="font-semibold text-brand-blue">{cnameTarget || 'loading...'}</span>
                 </div>
               </div>
             </div>
@@ -366,7 +400,7 @@ export default function BrandingPage() {
               </p>
             )}
             {domainVerified && (
-              <p className="mt-2 text-xs text-green-600 flex items-center gap-1">
+              <p className="mt-2 text-xs text-brand-teal flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 DNS verified. Your custom domain is active.
               </p>
@@ -374,19 +408,26 @@ export default function BrandingPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Preview</h2>
+        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+              <Layers className="h-5 w-5 text-brand-orange-deep" />
+            </span>
+            <div className="flex-1">
+              <h2 className="text-base font-semibold text-gray-900">Preview</h2>
+              <p className="text-xs text-gray-500">See your candidate-facing portal at a glance.</p>
+            </div>
             <button
               onClick={() => setShowPreviewModal(true)}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 font-semibold"
             >
               <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
               <span className="hidden sm:inline">Open Full Preview</span>
               <span className="sm:hidden">Preview</span>
             </button>
           </div>
-          <div className="bg-gray-100 rounded-lg p-4 sm:p-6 flex items-center justify-center h-36 sm:h-48">
+          <div className="p-5 sm:p-6">
+          <div className="bg-slate-100 rounded-xl p-4 sm:p-6 flex items-center justify-center h-36 sm:h-48">
             <div className="text-center">
               <div
                 className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl mx-auto mb-2 sm:mb-3 flex items-center justify-center"
@@ -398,13 +439,14 @@ export default function BrandingPage() {
               <p className="text-xs sm:text-sm text-gray-600">Your branded career portal</p>
             </div>
           </div>
+          </div>
         </div>
       </div>
 
       {/* Full Preview Modal */}
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
               <div>
@@ -414,7 +456,7 @@ export default function BrandingPage() {
               <button
                 onClick={() => setShowPreviewModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
+               aria-label="Close">
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>

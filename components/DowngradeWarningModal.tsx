@@ -57,7 +57,7 @@ export default function DowngradeWarningModal({
             onClick={onClose}
             disabled={isDowngrading}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-          >
+           aria-label="Close">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>

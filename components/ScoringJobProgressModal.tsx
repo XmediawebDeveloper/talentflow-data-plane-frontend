@@ -281,7 +281,7 @@ export default function ScoringJobProgressModal({
                 <button
                   onClick={onMinimize}
                   className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                  title="Minimize"
+                  aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -289,7 +289,7 @@ export default function ScoringJobProgressModal({
               <button
                 onClick={onClose}
                 className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                title="Close"
+                aria-label="Close" title="Close"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -420,7 +420,7 @@ export default function ScoringJobProgressModal({
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
                       }`}
-                      title="Retry scoring"
+                      aria-label="Retry scoring" title="Retry scoring"
                     >
                       {retryingItems.has(item.resumeId) ? (
                         <>

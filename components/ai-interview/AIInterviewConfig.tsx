@@ -460,7 +460,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               onClick={() => setSkillToDelete(skill.name)}
               className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-            >
+             aria-label="Close">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -476,7 +476,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             />
             <button
               onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
-              title="Clear & close"
+              aria-label="Clear & close" title="Clear & close"
               className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
             >
               <X className="w-3.5 h-3.5" />
@@ -604,7 +604,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               type="button"
               onClick={addSkill}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -803,7 +803,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
             <input type="checkbox" checked={enabled} onChange={onToggle} className="sr-only peer" />
             <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
           </label>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
             <Users className="w-5 h-5 text-brand-blue" />
           </div>
           <span className="font-semibold text-gray-900 text-sm tracking-tight">HR Round</span>
@@ -958,7 +958,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 <button
                   onClick={saveNewQuestion}
                   disabled={savingQ || !newQText.trim()}
-                  className="flex items-center gap-1 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 text-xs bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Save
@@ -2109,7 +2109,7 @@ export default function AIInterviewConfig() {
           <button onClick={handleBackClick} disabled={savingDraft} className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <Brain className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
@@ -2133,7 +2133,7 @@ export default function AIInterviewConfig() {
                   </div>
                 ) : (
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${
-                    isCurrent ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-slate-100 text-gray-400'
+                    isCurrent ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-slate-100 text-gray-400'
                   }`}>{stepNum}</div>
                 )}
                 <span className={`text-sm ${isCurrent ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>{step}</span>
@@ -2148,7 +2148,7 @@ export default function AIInterviewConfig() {
           <div className="lg:col-span-2 space-y-5">
 
             {/* Selected JD */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl shadow-sm shadow-brand-blue/10">
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl shadow-sm shadow-brand-blue/10">
               <div>
                 <p className="text-xs text-brand-blue mb-0.5 font-medium">Job Description</p>
                 <p className="font-semibold text-gray-900 tracking-tight">{selectedJd.title}</p>
@@ -2163,7 +2163,7 @@ export default function AIInterviewConfig() {
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Clock className="w-5 h-5 text-brand-blue" />
                   </div>
                   <span className="font-semibold text-gray-900 text-sm tracking-tight">Interview Mode</span>
@@ -2230,7 +2230,7 @@ export default function AIInterviewConfig() {
                       type="button"
                       onClick={() => setBufferEnabled(prev => !prev)}
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        bufferEnabled ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25' : 'bg-gray-200'
+                        bufferEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-200'
                       }`}
                       role="switch"
                       aria-checked={bufferEnabled}
@@ -2289,7 +2289,7 @@ export default function AIInterviewConfig() {
                     }} className="sr-only peer" />
                     <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                   </label>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
                     <Sparkles className="w-5 h-5 text-brand-cyan" />
                   </div>
                   <span className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</span>
@@ -2356,7 +2356,7 @@ export default function AIInterviewConfig() {
             {/* Introduction Video (Optional) */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <Video className="w-5 h-5 text-brand-blue" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 tracking-tight">Introduction Video</span>
@@ -2399,7 +2399,7 @@ export default function AIInterviewConfig() {
                       >
                         <Play className="w-4 h-4" />
                       </button>
-                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Remove video">
+                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" aria-label="Remove video" title="Remove video">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -2413,7 +2413,7 @@ export default function AIInterviewConfig() {
                       onClick={() => setVideoMode('upload')}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
                         videoMode === 'upload'
-                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                           : 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                       }`}
                     >
@@ -2424,7 +2424,7 @@ export default function AIInterviewConfig() {
                       onClick={() => setVideoMode('record')}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors border-l border-gray-200 ${
                         videoMode === 'record'
-                          ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25'
+                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                           : 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                       }`}
                     >
@@ -2516,7 +2516,7 @@ export default function AIInterviewConfig() {
                         {!cameraReady && !isRecording && !recordedPreviewUrl && (
                           <button
                             onClick={startCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <Camera className="w-3.5 h-3.5" />
                             Open Camera
@@ -2534,7 +2534,7 @@ export default function AIInterviewConfig() {
                         {isRecording && (
                           <button
                             onClick={stopRecordingAndSave}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <span className="w-2.5 h-2.5 rounded-sm bg-white" />
                             Stop & Save
@@ -2572,7 +2572,7 @@ export default function AIInterviewConfig() {
             {/* Candidate Languages */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <Globe className="w-5 h-5 text-brand-blue" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 tracking-tight">Candidate Languages</span>
@@ -2593,7 +2593,7 @@ export default function AIInterviewConfig() {
                       <button
                         onClick={() => setAvailableLanguages(prev => prev.filter(l => l !== lang))}
                         className="text-brand-blue/60 hover:text-brand-blue"
-                      >
+                       aria-label="Close">
                         <X className="w-3 h-3" />
                       </button>
                     )}
@@ -2614,7 +2614,7 @@ export default function AIInterviewConfig() {
 
               {/* Job Details */}
               <div className="border border-gray-100 rounded-lg overflow-hidden mb-4 ring-1 ring-black/[0.02]">
-                <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs font-medium text-brand-blue">Job Details</span>
                 </div>
                 <div className="divide-y divide-gray-50">
@@ -2678,7 +2678,7 @@ export default function AIInterviewConfig() {
               {mode === 'fixed' && (
                 <div className="space-y-3 mb-4">
                   <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
-                    <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 flex items-center justify-between">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
@@ -2731,9 +2731,9 @@ export default function AIInterviewConfig() {
                       </span>
                     </div>
                     {[
-                      { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-gradient-to-r from-brand-blue to-brand-blue-2' },
-                      ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-gradient-to-r from-brand-cyan to-brand-teal' }] : []),
-                      ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-gradient-to-r from-brand-orange to-brand-orange-deep' }] : []),
+                      { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-brand-blue' },
+                      ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-brand-cyan' }] : []),
+                      ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-brand-orange' }] : []),
                     ].map(({ label, pct, color }) => (
                       <div key={label}>
                         <div className="flex items-center justify-between text-xs mb-0.5">
@@ -2754,7 +2754,7 @@ export default function AIInterviewConfig() {
                   )}
                   {pctValid && (
                     <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
-                      <div className="px-3 py-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 flex items-center justify-between">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                         <span className="text-xs font-medium text-brand-blue">Time Allocation</span>
                         <span className="text-xs font-semibold text-gray-700">
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
@@ -2819,7 +2819,7 @@ export default function AIInterviewConfig() {
                     aria-disabled={!canContinueToClusters}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       canContinueToClusters
-                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-slate-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -2850,9 +2850,9 @@ export default function AIInterviewConfig() {
       {/* Video Preview Dialog */}
       <Dialog open={showVideoPreview} onOpenChange={setShowVideoPreview}>
         <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100">
+          <DialogHeader className="px-4 pt-4 pb-2 bg-gray-50 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Video className="w-5 h-5 text-brand-blue" />
               </div>
               <div>
@@ -2888,7 +2888,7 @@ export default function AIInterviewConfig() {
             <button onClick={handleDiscardAndNavigate} className="px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors">
               Discard
             </button>
-            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
               {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {savingDraft ? 'Saving…' : 'Save Draft'}
             </button>

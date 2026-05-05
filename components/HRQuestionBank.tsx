@@ -357,7 +357,7 @@ export default function HRQuestionBank() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {!canViewHRQuestionBank ? (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
           You do not have permission to view the HR Question Bank.
@@ -365,14 +365,14 @@ export default function HRQuestionBank() {
       ) : (
         <>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 shrink-0">
-            <MessageSquare className="w-6 h-6" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 shrink-0">
+            <MessageSquare className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">HR Question Bank</h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">HR Question Bank</h2>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
               Manage reusable HR questions for assessments. These questions can be used across multiple assessments.
             </p>
           </div>
@@ -380,7 +380,7 @@ export default function HRQuestionBank() {
         {canCreateHRQuestionBank && (
           <button
             onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shrink-0 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+            className="flex items-center gap-1.5 px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shrink-0 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
           >
             <Plus className="w-4 h-4" />
             Add Question
@@ -406,14 +406,14 @@ export default function HRQuestionBank() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search questions..."
-          className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white shadow-sm transition-all"
+          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white shadow-sm transition-all"
         />
       </div>
 
       {/* Add/Edit Form */}
       {showAddForm && (editingId ? canUpdateHRQuestionBank : canCreateHRQuestionBank) && (
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white">
+          <div className="flex items-center justify-between px-6 py-4 bg-brand-blue text-white">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 backdrop-blur-sm ring-1 ring-white/25">
                 {editingId ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -425,7 +425,7 @@ export default function HRQuestionBank() {
             <button
               onClick={() => { setShowAddForm(false); setEditingId(null); setFormData(EMPTY_QUESTION); }}
               className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors ring-1 ring-white/25"
-            >
+             aria-label="Close">
               <X className="w-4 h-4 text-white" />
             </button>
           </div>
@@ -516,7 +516,7 @@ export default function HRQuestionBank() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Save className="w-4 h-4" />
                 {saving ? 'Saving...' : editingId ? 'Update Question' : 'Save Question'}
@@ -530,34 +530,34 @@ export default function HRQuestionBank() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-              <MessageSquare className="w-5 h-5" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <MessageSquare className="w-4 h-4" />
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Questions</p>
-              <p className="text-2xl font-semibold text-gray-900 leading-tight">{questions.length}</p>
+              <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.length}</p>
             </div>
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-cyan/40 transition-all">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
-              <FileText className="w-5 h-5" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+              <FileText className="w-4 h-4" />
             </div>
             <div>
               <p className="text-xs text-gray-500">Text Answer</p>
-              <p className="text-2xl font-semibold text-gray-900 leading-tight">{questions.filter(q => q.answer_type !== 'yes_no').length}</p>
+              <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.filter(q => q.answer_type !== 'yes_no').length}</p>
             </div>
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange/40 transition-all">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-orange to-brand-orange-deep text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
             <div>
               <p className="text-xs text-gray-500">Yes / No</p>
-              <p className="text-2xl font-semibold text-gray-900 leading-tight">{questions.filter(q => q.answer_type === 'yes_no').length}</p>
+              <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.filter(q => q.answer_type === 'yes_no').length}</p>
             </div>
           </div>
         </div>
@@ -571,7 +571,7 @@ export default function HRQuestionBank() {
         </div>
       ) : filteredQuestions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 mb-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">
             <AlertCircle className="w-7 h-7 text-brand-blue" />
           </div>
           <p className="text-gray-700 text-sm font-medium mb-1">
@@ -592,7 +592,7 @@ export default function HRQuestionBank() {
               <div className="flex items-start gap-3 p-4">
                 <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 mt-0.5 shadow-sm ring-1 ring-white/10 ${
                   question.answer_type === 'yes_no'
-                    ? 'bg-gradient-to-br from-brand-orange to-brand-orange-deep text-white shadow-brand-orange/20'
+                    ? 'bg-brand-orange text-white shadow-brand-orange/20'
                     : 'bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-brand-cyan/20'
                 }`}>
                   {question.answer_type === 'yes_no' ? <CheckCircle2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
@@ -621,7 +621,7 @@ export default function HRQuestionBank() {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEdit(question); }}
                       className="p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors"
-                      title="Edit question"
+                      aria-label="Edit question" title="Edit question"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -630,7 +630,7 @@ export default function HRQuestionBank() {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(question.id); }}
                       className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                      title="Delete question"
+                      aria-label="Delete question" title="Delete question"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

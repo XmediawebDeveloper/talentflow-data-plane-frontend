@@ -311,7 +311,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
           <button onClick={onBack} className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <Brain className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
@@ -328,7 +328,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
           {['select-jd', 'configure'].map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step === s ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' :
+                step === s ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' :
                 ['select-jd', 'configure'].indexOf(step) > i ? 'bg-green-100 text-green-700' :
                 'bg-slate-100 text-gray-400'
               }`}>
@@ -359,7 +359,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
               />
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
                 Create New JD
@@ -378,7 +378,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 <p className="text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
                 <button
                   onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   Create Job Description
@@ -587,14 +587,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                                 className={`p-0.5 rounded transition-colors ${
                                                   round.topicComments[topic] ? 'text-brand-blue' : 'text-gray-300 hover:text-gray-500'
                                                 }`}
-                                                title="Add comment"
+                                                aria-label="Add comment" title="Add comment"
                                               >
                                                 <MessageCircle className="w-3.5 h-3.5" />
                                               </button>
                                               <button
                                                 onClick={() => handleRemoveTopic(index, topic)}
                                                 className="p-0.5 text-gray-300 hover:text-red-500 transition-colors"
-                                              >
+                                               aria-label="Close">
                                                 <X className="w-3.5 h-3.5" />
                                               </button>
                                             </div>
@@ -728,7 +728,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     {uploadingVideo ? (
                       <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     ) : (
-                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors" aria-label="Close">
                         <X className="w-4 h-4" />
                       </button>
                     )}
@@ -862,7 +862,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     disabled={!percentageValid || enabledRounds.length === 0 || publishing}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       percentageValid && enabledRounds.length > 0 && !publishing
-                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >

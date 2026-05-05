@@ -724,7 +724,7 @@ export function MultiLanguageCodeEditor({
                     <button
                       onClick={() => copyToClipboard(question.sample_input || '')}
                       className="text-gray-400 hover:text-gray-600 p-1"
-                      title="Copy input"
+                      aria-label="Copy input" title="Copy input"
                     >
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     </button>
@@ -982,7 +982,7 @@ export function MultiLanguageCodeEditor({
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
-              title="Custom input"
+              aria-label="Custom input" title="Custom input"
             >
               <Terminal className="w-4 h-4" />
             </button>

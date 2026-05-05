@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ScrollText, CheckCircle, Loader2, AlertCircle, Eye, X, FileText, Shield, Cookie } from 'lucide-react';
+import { ScrollText, CheckCircle, Loader2, AlertCircle, Eye, X, FileText, Shield, Cookie, Sparkles } from 'lucide-react';
 import { termsService } from '@/lib/services/termsService';
 import type { DocumentType } from '@/lib/services/termsService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -85,31 +85,44 @@ export default function LegalCompliancePage() {
   const DocIcon = viewingDocType ? DOCUMENT_TYPE_ICON[viewingDocType] : FileText;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center">
-            <ScrollText className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-5xl space-y-6">
+      {/* SaaS Hero Header */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+        <div className="relative flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+            <ScrollText className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Legal & Compliance</h1>
-            <p className="text-sm text-gray-500">Legal documents acceptance history</p>
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <Sparkles className="h-3 w-3 text-brand-orange" />
+              Compliance trail
+            </div>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Legal & Compliance</h1>
+            <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Audit trail of all legal document acceptances for your organization.</p>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Content */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Acceptance History</h2>
-          <p className="text-sm text-gray-500 mt-1">Record of all legal document acceptances for your organization</p>
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <FileText className="h-5 w-5 text-brand-blue" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Acceptance History</h2>
+            <p className="text-xs text-gray-500">Record of all legal document acceptances for your organization.</p>
+          </div>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-            <span className="ml-2 text-gray-500">Loading history...</span>
+            <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+            <span className="ml-2 font-medium text-gray-600">Loading history...</span>
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-16 text-red-500">
@@ -118,7 +131,9 @@ export default function LegalCompliancePage() {
           </div>
         ) : history.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <ScrollText className="w-10 h-10 mb-3" />
+            <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <ScrollText className="w-6 h-6 text-brand-blue" />
+            </span>
             <p className="text-sm">No acceptance records found</p>
           </div>
         ) : (
@@ -126,19 +141,21 @@ export default function LegalCompliancePage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Version</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Title</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Accepted By</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Accepted On</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Status</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Document</th>
+                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Version</th>
+                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Title</th>
+                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted By</th>
+                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted On</th>
+                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Status</th>
+                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Document</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {paginatedHistory.map((record) => (
-                  <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.terms_version}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{record.terms_title || '—'}</td>
+                  <tr key={record.id} className="hover:bg-brand-cyan/[0.04] transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <span className="inline-flex items-center rounded-full bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{record.terms_title || '—'}</td>
                     <td className="px-6 py-4">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{record.accepted_by || record.accepted_by_name}</p>
@@ -149,7 +166,7 @@ export default function LegalCompliancePage() {
                       {formatIST(record.accepted_at)}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
                         <CheckCircle className="w-3.5 h-3.5" />
                         Accepted
                       </span>
@@ -158,7 +175,7 @@ export default function LegalCompliancePage() {
                       {TITLE_TO_DOCUMENT_TYPE[record.terms_title || ''] ? (
                         <button
                           onClick={() => handleView(record)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/[0.06] hover:bg-brand-blue/[0.12] ring-1 ring-brand-blue/15 rounded-lg transition-colors"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           View
@@ -189,25 +206,26 @@ export default function LegalCompliancePage() {
 
       {/* Document View Modal — same style as TermsAcceptanceModal */}
       {(docLoading || viewingDoc || docError) && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5 flex items-center justify-between shrink-0">
+              <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-2xl" />
+              <div className="relative flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
                   <DocIcon className="w-5 h-5 text-white" />
-                </div>
+                </span>
                 <div>
-                  <h2 className="text-lg font-bold text-white">{viewingTitle}</h2>
-                  {viewingDoc && <p className="text-blue-100 text-sm">Version {viewingDoc.version}</p>}
+                  <h2 className="text-base font-semibold text-white">{viewingTitle}</h2>
+                  {viewingDoc && <p className="text-white/85 text-xs">Version {viewingDoc.version}</p>}
                 </div>
               </div>
               <button
                 onClick={closeModal}
-                className="p-2 rounded-lg hover:bg-white/20 transition-colors"
+                className="relative p-1.5 rounded-lg bg-white/10 ring-1 ring-white/20 hover:bg-white/20 transition-colors"
                 aria-label="Close"
               >
-                <X className="w-5 h-5 text-white" />
+                <X className="w-4 h-4 text-white" />
               </button>
             </div>
 
@@ -215,8 +233,8 @@ export default function LegalCompliancePage() {
             <div className="flex-1 overflow-y-auto px-6 py-5 prose prose-sm max-w-none">
               {docLoading ? (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-                  <span className="ml-2 text-gray-500">Loading document...</span>
+                  <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  <span className="ml-2 font-medium text-gray-600">Loading document...</span>
                 </div>
               ) : docError ? (
                 <div className="flex items-center justify-center py-16 text-red-500">
@@ -230,14 +248,15 @@ export default function LegalCompliancePage() {
 
             {/* Footer */}
             {viewingDoc && (
-              <div className="border-t border-gray-200 px-6 py-3 flex items-center justify-between text-xs text-gray-400 shrink-0">
-                <span>Version: {viewingDoc.version}</span>
+              <div className="border-t border-gray-100 bg-slate-50/50 px-6 py-3 flex items-center justify-between text-xs text-gray-500 shrink-0">
+                <span>Version: <span className="font-semibold text-brand-blue">{viewingDoc.version}</span></span>
                 <span>Effective: {formatIST(viewingDoc.effective_date)}</span>
               </div>
             )}
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

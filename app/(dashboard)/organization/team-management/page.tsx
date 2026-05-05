@@ -312,7 +312,7 @@ export default function TeamManagementPage() {
       <main className="flex-1 bg-slate-50">
         <div className="p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
-            <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+            <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
               <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
               <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
               <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
@@ -340,7 +340,7 @@ export default function TeamManagementPage() {
       <main className="flex-1 bg-slate-50">
         <div className="p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
-            <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+            <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
               <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
               <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
               <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
@@ -352,12 +352,12 @@ export default function TeamManagementPage() {
                     Team operations workspace
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                      <Users className="h-6 w-6 text-white" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                      <Users className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Team Management</h1>
-                      <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+                      <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Team Management</h1>
+                      <p className="mt-1 max-w-2xl text-xs sm:text-sm text-white/80">
                         Organize departments, assign leads, and monitor team usage with the same polished dashboard language used across the platform.
                       </p>
                     </div>
@@ -378,7 +378,7 @@ export default function TeamManagementPage() {
                   {canCreateTeams && (
                     <button
                       onClick={handleOpenCreateModal}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       <Plus className="h-4 w-4" />
                       Create Team
@@ -393,9 +393,9 @@ export default function TeamManagementPage() {
               <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('teams')}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                     activeTab === 'teams'
-                      ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                      ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                       : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                   }`}
                 >
@@ -405,9 +405,9 @@ export default function TeamManagementPage() {
                 {canViewUsageTab && (
                   <button
                     onClick={() => setActiveTab('usage')}
-                    className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                       activeTab === 'usage'
-                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                         : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                     }`}
                   >
@@ -418,9 +418,9 @@ export default function TeamManagementPage() {
                 {canViewAnalyticsTab && (
                   <button
                     onClick={() => setActiveTab('analytics')}
-                    className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                       activeTab === 'analytics'
-                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                         : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                     }`}
                   >
@@ -431,9 +431,9 @@ export default function TeamManagementPage() {
                 {isTenantAdmin && (
                   <button
                     onClick={() => setActiveTab('history')}
-                    className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                       activeTab === 'history'
-                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                         : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                     }`}
                   >
@@ -460,7 +460,7 @@ export default function TeamManagementPage() {
 
                 <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5 lg:p-6">
                   <div className="flex gap-3 sm:gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                       <Info className="w-5 h-5 text-brand-orange-deep" />
                     </div>
                     <div>
@@ -527,7 +527,7 @@ export default function TeamManagementPage() {
 
                   {teams.length > 0 && filteredTeams.length === 0 && (
                     <div className="col-span-full rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                         <Search className="h-6 w-6 text-brand-blue" />
                       </div>
                       <h3 className="mb-2 text-lg font-semibold text-gray-900">No teams found</h3>
@@ -566,7 +566,7 @@ export default function TeamManagementPage() {
                             onClick={() => setCurrentPage(page)}
                             className={`h-10 w-10 rounded-xl font-medium transition-all ${
                               currentPage === page
-                                ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/25'
+                                ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                                 : 'text-gray-700 hover:bg-brand-blue/[0.04]'
                             }`}
                           >

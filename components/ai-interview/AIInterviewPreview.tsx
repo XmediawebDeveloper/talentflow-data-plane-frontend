@@ -120,7 +120,7 @@ function SectionCard({ title, icon: Icon, children }: { title: string; icon: Rea
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 bg-slate-50/60">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <Icon className="w-5 h-5 text-brand-blue" />
         </div>
         <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
@@ -317,7 +317,7 @@ export default function AIInterviewPreview() {
                 </>
               ) : isCurrent ? (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
                   <span className="text-sm text-gray-900 font-medium">{label}</span>
                 </>
               ) : (
@@ -337,11 +337,11 @@ export default function AIInterviewPreview() {
         <button
           onClick={goBack}
           className="p-1.5 rounded-lg hover:bg-brand-blue/5 transition-colors"
-          title="Back to Clusters"
+          aria-label="Back to Clusters" title="Back to Clusters"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+        <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <CheckCircle className="w-5 h-5 text-brand-blue" />
         </div>
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">Review &amp; Publish</h1>
@@ -350,7 +350,7 @@ export default function AIInterviewPreview() {
       <div className="space-y-5">
         {/* ── JD Info Card ── */}
         <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-5 py-4 ring-1 ring-white/10">
+          <div className="bg-brand-blue px-5 py-4 ring-1 ring-white/10">
             <div className="flex items-center gap-2 mb-1">
               <FileText className="w-4 h-4 text-white/80" />
               <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Job Description</span>
@@ -362,7 +362,7 @@ export default function AIInterviewPreview() {
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">JD ID</p>
                 {interview.jd_short_id ? (
-                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-mono font-semibold bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     {interview.jd_short_id}
                   </span>
                 ) : (
@@ -390,7 +390,7 @@ export default function AIInterviewPreview() {
           <div className="flex items-center gap-3">
             {mode === 'fixed' ? (
               <>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
                   <Timer className="w-5 h-5 text-brand-cyan" />
                 </div>
                 <div>
@@ -400,7 +400,7 @@ export default function AIInterviewPreview() {
               </>
             ) : (
               <>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Zap className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div className="flex-1">
@@ -650,7 +650,7 @@ export default function AIInterviewPreview() {
             <button
               onClick={() => setShowConfirm(true)}
               disabled={publishing}
-              className="px-6 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {publishing ? (
                 <>

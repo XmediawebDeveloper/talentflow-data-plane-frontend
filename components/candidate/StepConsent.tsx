@@ -406,7 +406,7 @@ export default function StepConsent({
                 type="button"
                 onClick={() => setShowConsentModal(false)}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
