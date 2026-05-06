@@ -92,9 +92,9 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-5xl h-[calc(100dvh-2rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -113,7 +113,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
             <button
               onClick={onClose}
               className="p-2 text-gray-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5"
-            >
+             aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -174,7 +174,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 <p className="text-gray-600">Preview not available</p>
                 <button
                   onClick={handleDownload}
-                  className="mt-4 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="mt-4 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Download Instead
                 </button>

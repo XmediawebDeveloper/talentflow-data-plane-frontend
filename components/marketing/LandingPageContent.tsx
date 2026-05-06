@@ -178,7 +178,7 @@ export function LandingPageContent() {
                 <button
                   onClick={() => setDemoModalOpen(false)}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-6 h-6 text-white" />
                 </button>
               </div>

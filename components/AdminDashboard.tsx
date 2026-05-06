@@ -165,7 +165,7 @@ export default function AdminDashboard({
               <span className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${
                 quotaData?.is_trial
                   ? 'bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/15 ring-brand-orange/20'
-                  : 'bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/15 ring-brand-blue/20'
+                  : 'bg-brand-blue/15 ring-brand-blue/20'
               }`}>
                 {quotaData?.is_trial ? (
                   <Sparkles className="w-4.5 h-4.5 text-brand-orange-deep" />
@@ -182,7 +182,7 @@ export default function AdminDashboard({
               onClick={() => router.push('/subscription/current-plan')}
               className={`text-sm font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${
                 quotaData?.is_trial
-                  ? 'text-white bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange shadow-md shadow-brand-orange/25'
+                  ? 'text-white bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange shadow-md shadow-brand-orange/25'
                   : 'text-brand-blue hover:bg-brand-blue/5'
               }`}
             >
@@ -332,7 +332,7 @@ export default function AdminDashboard({
                 </span>
               </div>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/10">
+            <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/10">
               <FileText className="w-6 h-6 text-brand-blue" />
             </div>
           </div>
@@ -373,7 +373,7 @@ export default function AdminDashboard({
               </div>
             </div>
             <div
-              className="w-12 h-12 bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 shadow-sm shadow-brand-cyan/10"
+              className="w-12 h-12 bg-brand-cyan/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 shadow-sm shadow-brand-cyan/10"
               onClick={() => router.push('/recruitment/job-openings')}
             >
               <Briefcase className="w-6 h-6 text-brand-cyan" />
@@ -393,7 +393,7 @@ export default function AdminDashboard({
               <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_users || 0}</p>
               <p className="text-xs text-green-600 font-medium mt-1">{stats?.active_users || 0} Active</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-teal/10">
+            <div className="w-12 h-12 bg-brand-teal/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-teal/10">
               <Users className="w-6 h-6 text-brand-teal" />
             </div>
           </div>
@@ -420,7 +420,7 @@ export default function AdminDashboard({
                   )}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-orange/10">
+              <div className="w-12 h-12 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-orange/10">
                 <Award className="w-6 h-6 text-brand-orange-deep" />
               </div>
             </div>
@@ -432,7 +432,7 @@ export default function AdminDashboard({
       {subscriptionUnits && (
         <div className="mb-8">
           <div className="flex items-center gap-2.5 mb-4">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Layers className="w-4 h-4 text-brand-blue" />
             </span>
             <h2 className="text-lg font-semibold text-gray-900">Available Units</h2>
@@ -445,7 +445,7 @@ export default function AdminDashboard({
                 onClick={() => router.push('/recruitment/my-resumes')}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Upload className="w-5 h-5 text-brand-blue" />
                   </div>
                 </div>
@@ -460,7 +460,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-blue to-brand-blue-2'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-blue'}`}
                         style={{ width: `${Math.min(subscriptionUnits.RU.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -476,7 +476,7 @@ export default function AdminDashboard({
                 onClick={() => router.push('/recruitment/resume-scoring')}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-brand-cyan/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Zap className="w-5 h-5 text-brand-cyan" />
                   </div>
                 </div>
@@ -491,7 +491,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-cyan to-brand-teal'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-cyan'}`}
                         style={{ width: `${Math.min(subscriptionUnits.RS.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -507,7 +507,7 @@ export default function AdminDashboard({
                 onClick={() => router.push('/recruitment/assessments')}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <ClipboardCheck className="w-5 h-5 text-brand-orange-deep" />
                   </div>
                 </div>
@@ -522,7 +522,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-gradient-to-r from-brand-orange to-brand-orange-deep'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-brand-orange'}`}
                         style={{ width: `${Math.min(subscriptionUnits.AS.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -553,7 +553,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-blue-2 to-brand-blue'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-blue'}`}
                         style={{ width: `${Math.min(subscriptionUnits.AIU.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -569,7 +569,7 @@ export default function AdminDashboard({
                 onClick={() => canManageUsers && onNavigateToUsers?.()}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-brand-teal/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <UserCheck className="w-5 h-5 text-brand-teal" />
                   </div>
                 </div>
@@ -584,7 +584,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-brand-orange' : 'bg-gradient-to-r from-brand-teal to-brand-cyan'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-teal'}`}
                         style={{ width: `${Math.min(subscriptionUnits.max_seats.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -612,7 +612,7 @@ export default function AdminDashboard({
               {filteredJdRecentActivity.map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gradient-to-r from-brand-blue/[0.03] to-transparent rounded-xl border border-gray-100 hover:border-brand-blue/20 hover:shadow-sm hover:shadow-brand-blue/5 transition-all"
+                  className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-brand-blue/20 hover:shadow-sm hover:shadow-brand-blue/5 transition-all"
                 >
                   <div className="flex items-start sm:items-center gap-3 min-w-0">
                     <div className="w-8 h-8 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center flex-shrink-0">
@@ -640,7 +640,7 @@ export default function AdminDashboard({
         {/* Quick Actions */}
         <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6">
           <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900 mb-4">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan/15 to-brand-teal/15 ring-1 ring-brand-cyan/20">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-cyan/15 ring-1 ring-brand-cyan/20">
               <Sparkles className="w-4 h-4 text-brand-teal" />
             </span>
             Quick Actions
@@ -702,7 +702,7 @@ export default function AdminDashboard({
 
         {/* Recent Activity - Last 24 hours only, max 10 items - Feed View */}
         <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] md:col-span-2 overflow-hidden">
-          <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent">
+          <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50">
             <div className="min-w-0">
               <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -830,7 +830,7 @@ export default function AdminDashboard({
                           )}
                           <div className="mt-1.5 flex items-center gap-2">
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 pl-0.5 pr-2 py-0.5 text-[11px] font-medium text-brand-blue">
-                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 text-[9px] font-semibold text-white shadow-sm">
+                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-blue text-[9px] font-semibold text-white shadow-sm">
                                 {initials}
                               </span>
                               {userLabel}

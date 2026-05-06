@@ -57,7 +57,7 @@ export default function AIInterviewJDSelection() {
               <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Briefcase className="w-5 h-5 text-brand-blue" />
               </div>
               <div>
@@ -96,7 +96,7 @@ export default function AIInterviewJDSelection() {
           </div>
         ) : filteredJds.length === 0 ? (
           <div className="text-center py-10 sm:py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-4">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">
               <Briefcase className="w-10 h-10 text-brand-blue" />
             </div>
             <p className="text-gray-700 mb-2 text-sm font-medium">No published job descriptions found</p>
@@ -104,7 +104,7 @@ export default function AIInterviewJDSelection() {
             {canCreateJD && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                 Create Job Description
@@ -128,14 +128,14 @@ export default function AIInterviewJDSelection() {
                 >
                   {/* Left: icon + info */}
                   <div className="flex items-start gap-4 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Building2 className="w-5 h-5 text-brand-blue" />
                     </div>
                     <div className="flex-1 min-w-0">
                       {/* Title row */}
                       <div className="flex items-center gap-2 flex-wrap">
                         {jd.job_id && (
-                          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                             {jd.job_id}
                           </span>
                         )}
@@ -202,7 +202,7 @@ export default function AIInterviewJDSelection() {
                     ) : canCreateAIInterviews ? (
                       <button
                         onClick={() => handleSelectJd(jd)}
-                        className="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                        className="px-4 py-1.5 text-sm font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                       >
                         Select
                       </button>

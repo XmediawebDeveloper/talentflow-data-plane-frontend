@@ -701,7 +701,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   <button
                     onClick={() => setShowExportModal(false)}
                     className="text-gray-400 hover:text-gray-600"
-                  >
+                   aria-label="Close">
                     <X className="w-5 h-5" />
                   </button>
                 </div>

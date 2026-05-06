@@ -1985,7 +1985,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 type="button"
                 onClick={() => setShowTermsConsentModal(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
+               aria-label="Close">
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>

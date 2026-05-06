@@ -1345,7 +1345,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       setExportStep('format');
                     }}
                     className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
-                  >
+                   aria-label="Close">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -1412,7 +1412,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       setExportStep('format');
                     }}
                     className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
-                  >
+                   aria-label="Close">
                     <X className="w-5 h-5" />
                   </button>
                 </div>

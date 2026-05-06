@@ -289,7 +289,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               <button
                 onClick={() => setIsCreateModalOpen(false)}
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>

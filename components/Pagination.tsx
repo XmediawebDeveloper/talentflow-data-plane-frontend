@@ -96,7 +96,7 @@ export default function Pagination({
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
           className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-          title="First page"
+          aria-label="First page" title="First page"
         >
           <ChevronsLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
@@ -106,7 +106,7 @@ export default function Pagination({
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-          title="Previous page"
+          aria-label="Previous page" title="Previous page"
         >
           <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
@@ -140,7 +140,7 @@ export default function Pagination({
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-          title="Next page"
+          aria-label="Next page" title="Next page"
         >
           <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
@@ -150,7 +150,7 @@ export default function Pagination({
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
           className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-          title="Last page"
+          aria-label="Last page" title="Last page"
         >
           <ChevronsRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>

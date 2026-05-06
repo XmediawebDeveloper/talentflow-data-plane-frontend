@@ -24,8 +24,22 @@ import {
   Upload,
   Star,
   Activity,
+  TrendingUp,
+  BarChart3,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ReTooltip,
+  Cell,
+} from 'recharts';
 import { useRouter } from 'next/navigation';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -460,6 +474,44 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     return !isNaN(ts) && ts >= Date.now() - 24 * 60 * 60 * 1000;
   });
 
+  // 7-day activity trend (derived from already-fetched userActivity, no new API call)
+  const activityTrend = useMemo(() => {
+    const days: { date: string; label: string; count: number }[] = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      days.push({
+        date: d.toISOString().slice(0, 10),
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        count: 0,
+      });
+    }
+    for (const a of userActivity) {
+      const ts = new Date(a.created_at).getTime();
+      if (isNaN(ts)) continue;
+      const key = new Date(ts).toISOString().slice(0, 10);
+      const bucket = days.find((x) => x.date === key);
+      if (bucket) bucket.count += 1;
+    }
+    return days;
+  }, [userActivity]);
+
+  const activityTotal = activityTrend.reduce((s, d) => s + d.count, 0);
+
+  // JD distribution by status (derived from already-fetched jdStatusCounts)
+  const jdStatusBars = useMemo(
+    () => [
+      { name: 'Published', value: jdStatusCounts.published, fill: '#16a34a' },
+      { name: 'Draft', value: jdStatusCounts.draft, fill: '#ed881c' },
+      { name: 'Disabled', value: jdStatusCounts.disabled, fill: '#dc2626' },
+      { name: 'Archived', value: jdStatusCounts.archived, fill: '#6b7280' },
+    ],
+    [jdStatusCounts],
+  );
+  const jdStatusTotal = jdStatusBars.reduce((s, b) => s + b.value, 0);
+
   const handleViewJobDetails = (jd: JDResponse) => {
     if (jd.status === 'draft') {
       const stage = jd.creation_stage || 'create';
@@ -485,7 +537,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15">
+              <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Briefcase className="h-4.5 w-4.5 text-brand-blue" />
               </div>
               <div>
@@ -498,7 +550,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {canCreateJD && (
               <Button
                 onClick={() => router.push('/recruitment/jd-creation')}
-                className="bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
+                className="bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
               >
                 <Briefcase className="mr-2 h-4 w-4" />
                 Create Job
@@ -586,6 +638,172 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </div>
         </CardContent>
       </Card>
+
+      {/* Insights — line + bar charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Activity trend (last 7 days) */}
+        <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-start gap-3">
+                <span className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                  <TrendingUp className="h-4 w-4 text-brand-blue" />
+                </span>
+                <div>
+                  <CardTitle className="text-lg font-semibold text-gray-900">Activity Trend</CardTitle>
+                  <CardDescription className="text-gray-600">
+                    Your actions over the last 7 days
+                  </CardDescription>
+                </div>
+              </div>
+              <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm self-start sm:self-auto">
+                {activityTotal} total
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingActivity ? (
+              <div className="h-64 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
+              </div>
+            ) : activityTotal === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center px-6">
+                <div className="mx-auto h-12 w-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mb-3">
+                  <Activity className="h-6 w-6 text-brand-blue" />
+                </div>
+                <p className="text-sm font-medium text-gray-900">No activity in the last 7 days</p>
+                <p className="text-xs text-gray-500 mt-1">Your daily activity will appear here</p>
+              </div>
+            ) : (
+              <div className="h-64" aria-label="Line chart of daily activity over the last 7 days">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={activityTrend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="activityStroke" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#0e3b98" />
+                        <stop offset="100%" stopColor="#079cc4" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      stroke="#9ca3af"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <YAxis
+                      stroke="#9ca3af"
+                      fontSize={12}
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      width={28}
+                    />
+                    <ReTooltip
+                      cursor={{ stroke: '#0f3c99', strokeOpacity: 0.15, strokeWidth: 2 }}
+                      contentStyle={{
+                        background: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
+                      }}
+                      labelStyle={{ color: '#0f172a', fontWeight: 600 }}
+                      formatter={(v: number) => [`${v}`, 'Actions']}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="count"
+                      stroke="url(#activityStroke)"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: '#0f3c99', strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: '#0f3c99', stroke: '#ffffff', strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Jobs by status */}
+        <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-start gap-3">
+                <span className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15">
+                  <BarChart3 className="h-4 w-4 text-brand-orange-deep" />
+                </span>
+                <div>
+                  <CardTitle className="text-lg font-semibold text-gray-900">Jobs by Status</CardTitle>
+                  <CardDescription className="text-gray-600">
+                    Distribution of all your job descriptions
+                  </CardDescription>
+                </div>
+              </div>
+              <span className="inline-flex items-center rounded-full border border-brand-orange/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-orange-deep shadow-sm self-start sm:self-auto">
+                {jdStatusTotal} total
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingJDs ? (
+              <div className="h-64 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-brand-orange" />
+              </div>
+            ) : jdStatusTotal === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center px-6">
+                <div className="mx-auto h-12 w-12 rounded-full bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center mb-3">
+                  <Briefcase className="h-6 w-6 text-brand-orange-deep" />
+                </div>
+                <p className="text-sm font-medium text-gray-900">No jobs yet</p>
+                <p className="text-xs text-gray-500 mt-1">Create your first job to see the breakdown</p>
+              </div>
+            ) : (
+              <div className="h-64" aria-label="Bar chart of job descriptions grouped by status">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={jdStatusBars} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      stroke="#9ca3af"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <YAxis
+                      stroke="#9ca3af"
+                      fontSize={12}
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      width={28}
+                    />
+                    <ReTooltip
+                      cursor={{ fill: '#0f3c99', fillOpacity: 0.06 }}
+                      contentStyle={{
+                        background: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
+                      }}
+                      labelStyle={{ color: '#0f172a', fontWeight: 600 }}
+                      formatter={(v: number) => [`${v}`, 'Jobs']}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56}>
+                      {jdStatusBars.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -780,7 +998,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan/15 to-brand-teal/15 ring-1 ring-brand-cyan/20">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-cyan/15 ring-1 ring-brand-cyan/20">
                 <Sparkles className="h-4 w-4 text-brand-teal" />
               </span>
               Quick Actions
@@ -844,7 +1062,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
       {/* Recent Activity */}
       <Card className="border-gray-100 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] overflow-hidden">
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] via-brand-cyan/[0.03] to-transparent">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4 border-b border-gray-100 bg-gray-50">
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">

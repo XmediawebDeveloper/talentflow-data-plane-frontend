@@ -774,7 +774,7 @@ Best regards`);
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
@@ -849,7 +849,7 @@ Best regards`);
           {canApplyResumeToJob && (
             <button
               onClick={handleApplyToJob}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Send className="w-4 h-4" />
               Apply to Job
@@ -917,7 +917,7 @@ Best regards`);
           {detailedResume.summary && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
@@ -930,7 +930,7 @@ Best regards`);
           {detailedResume.experience.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
@@ -938,7 +938,7 @@ Best regards`);
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
                   <div key={index} className="relative pl-6 pb-6 border-l-2 border-brand-blue/30 last:pb-0">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-2 border-2 border-white shadow-sm shadow-brand-blue/30"></div>
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-brand-blue border-2 border-white shadow-sm shadow-brand-blue/30"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -1001,7 +1001,7 @@ Best regards`);
           {detailedResume.education.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <GraduationCap className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
@@ -1032,7 +1032,7 @@ Best regards`);
                         <span className="text-gray-700">GPA: {edu.gpa}</span>
                       )}
                       {edu.honors && (
-                        <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded text-xs shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                        <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                           {edu.honors}
                         </span>
                       )}
@@ -1047,7 +1047,7 @@ Best regards`);
           {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
@@ -1087,7 +1087,7 @@ Best regards`);
           {detailedResume.certifications.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
@@ -1121,7 +1121,7 @@ Best regards`);
           {detailedResume.languages.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Languages className="w-4 h-4 text-brand-cyan" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
@@ -1141,7 +1141,7 @@ Best regards`);
           {resume.projects && resume.projects.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
@@ -1181,7 +1181,7 @@ Best regards`);
           {resume.awards && resume.awards.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
@@ -1215,7 +1215,7 @@ Best regards`);
           {resume.achievements && resume.achievements.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
@@ -1235,7 +1235,7 @@ Best regards`);
           {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand-cyan" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
@@ -1262,7 +1262,7 @@ Best regards`);
           {resume.hobbies && resume.hobbies.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-orange" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
@@ -1281,7 +1281,7 @@ Best regards`);
           {(resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl) && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Globe className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Social & Portfolio Links</h3>
@@ -1319,7 +1319,7 @@ Best regards`);
           {resume.objective && resume.objective !== resume.professionalSummary && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
@@ -1332,7 +1332,7 @@ Best regards`);
           {resume.additionalInfo && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
@@ -1350,7 +1350,7 @@ Best regards`);
           {resume.versions && resume.versions.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <History className="w-4 h-4 text-brand-blue" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Version History</h3>
@@ -1363,7 +1363,7 @@ Best regards`);
                     disabled={compareChecked.length !== 2}
                     className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       compareChecked.length === 2
-                        ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-slate-100 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -1417,7 +1417,7 @@ Best regards`);
                                     Version {versionNumber}
                                   </span>
                                   {isLatest && (
-                                    <span className="px-2 py-0.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                                    <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                                       Latest
                                     </span>
                                   )}
@@ -1460,7 +1460,7 @@ Best regards`);
                                     ? 'text-brand-blue hover:bg-brand-blue/10'
                                     : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                                 }`}
-                                title="View resume"
+                                aria-label="View resume" title="View resume"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
@@ -1504,7 +1504,7 @@ Best regards`);
           {/* File Properties */}
           <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <File className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 tracking-tight">File Properties</h3>
@@ -1714,9 +1714,9 @@ Best regards`);
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className={`bg-white rounded-2xl shadow-2xl w-full ${compareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85vh] flex flex-col overflow-hidden transition-all duration-300`}>
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <History className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -1768,7 +1768,7 @@ Best regards`);
                       setCompareChecked([]);
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
+                   aria-label="Close">
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
                 </div>
@@ -1882,7 +1882,7 @@ Best regards`);
                     setShowCompareModal(false);
                     setCompareChecked([]);
                   }}
-                  className="px-5 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="px-5 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Close
                 </button>
@@ -1925,9 +1925,9 @@ Best regards`);
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Eye className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -1942,7 +1942,7 @@ Best regards`);
                     setFetchedPreviewText(null);
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -1998,9 +1998,9 @@ Best regards`);
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <History className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -2011,7 +2011,7 @@ Best regards`);
               <button
                 onClick={() => setShowVersionSelectModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
+               aria-label="Close">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -2119,7 +2119,7 @@ Best regards`);
               <button
                 onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
                 disabled={!selectedVersionForApply}
-                className="px-4 py-2 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="px-4 py-2 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Send className="w-4 h-4" />
                 Continue to Job Selection
@@ -2149,7 +2149,7 @@ Best regards`);
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -2163,7 +2163,7 @@ Best regards`);
                     setShareEmail('');
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -2226,7 +2226,7 @@ Best regards`);
                 <button
                   onClick={handleSendEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}
-                  className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   {isSendingEmail ? (
                     <>

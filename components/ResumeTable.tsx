@@ -51,7 +51,7 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
       onClick={onViewDetails ? () => onViewDetails(resume) : undefined}
     >
       {/* Drag handle */}
-      <td className="w-8 px-2 py-4">
+      <td className="w-8 px-2 py-3">
         <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
           <GripVertical className="w-4 h-4 text-gray-400" />
         </div>
@@ -373,7 +373,7 @@ export default function ResumeTable({
               onViewDetails={onViewDetails}
             >
               {!hideCheckboxes && (
-                <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedResumes.includes(resume.id)}
@@ -382,7 +382,7 @@ export default function ResumeTable({
                   />
                 </td>
               )}
-              <td className="px-4 py-4">
+              <td className="px-4 py-3">
                 <div className="flex items-center">
                   <div>
                     <div className="flex items-center gap-2">
@@ -411,19 +411,19 @@ export default function ResumeTable({
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-4 text-sm text-gray-700">
+              <td className="px-4 py-3 text-sm text-gray-700">
                 {resume.email && resume.email !== 'No email'
                   ? (highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-4 text-sm text-gray-700">
+              <td className="px-4 py-3 text-sm text-gray-700">
                 {resume.phone && resume.phone !== 'No phone'
                   ? (highlightQuery ? highlightText(resume.phone, highlightQuery) : resume.phone)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-1">
                   {resume.skills.slice(0, 4).map((skill, i) => (
                     <span
@@ -440,8 +440,8 @@ export default function ResumeTable({
                   )}
                 </div>
               </td>
-              <td className="px-4 py-4 text-sm text-gray-700">{resume.experience}</td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-3 text-sm text-gray-700">{resume.experience}</td>
+              <td className="px-4 py-3">
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ring-1 ${
                     resume.source === 'Manual'
@@ -457,13 +457,13 @@ export default function ResumeTable({
                   {resume.source}
                 </span>
               </td>
-              <td className="px-4 py-4 text-sm text-gray-700">
+              <td className="px-4 py-3 text-sm text-gray-700">
                 {formatISTDate(resume.uploadDate)}
               </td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-3">
                 <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
               </td>
-              <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleShowVersionHistory(resume)}
                   disabled={isLoadingVersions}
@@ -482,7 +482,7 @@ export default function ResumeTable({
                   </span>
                 </button>
               </td>
-              <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   {selectionMode ? (
                     <button
@@ -492,7 +492,7 @@ export default function ResumeTable({
                           onApplySelected();
                         }
                       }}
-                      className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Briefcase className="w-4 h-4" />
                       Apply to Job
@@ -502,7 +502,7 @@ export default function ResumeTable({
                       <button
                         onClick={() => onQuickView(resume)}
                         className="p-1.5 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded transition-colors"
-                        title="Preview Resume"
+                        aria-label="Preview Resume" title="Preview Resume"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -510,7 +510,7 @@ export default function ResumeTable({
                         <button
                           onClick={() => handleApplyToJob(resume)}
                           className="p-1.5 text-brand-blue hover:bg-brand-blue/10 rounded transition-colors"
-                          title="Apply to Job"
+                          aria-label="Apply to Job" title="Apply to Job"
                         >
                           <Briefcase className="w-4 h-4" />
                         </button>
@@ -720,7 +720,7 @@ export default function ResumeTable({
               {onApplyToJob && (
                 <button
                   onClick={() => handleApplyToJob(resume)}
-                  className="flex-1 px-3 py-2 text-sm text-white bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue rounded-lg transition-all flex items-center justify-center gap-1 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="flex-1 px-3 py-2 text-sm text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg transition-all flex items-center justify-center gap-1 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   <Briefcase className="w-4 h-4" />
                   Apply
@@ -780,7 +780,7 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <Edit3 className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Edit Candidate Details</h2>
@@ -864,7 +864,7 @@ export default function ResumeTable({
                     setShowEditModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="flex-1 px-4 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Save Changes
                 </button>
@@ -880,7 +880,7 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan to-brand-teal rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                   <Share2 className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Share Resume</h2>
@@ -922,7 +922,7 @@ export default function ResumeTable({
                     setShowShareModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
+                  className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
                 >
                   <Mail className="w-4 h-4" />
                   Share
@@ -939,7 +939,7 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan to-brand-teal rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                   <Tag className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Add Tags</h2>
@@ -987,7 +987,7 @@ export default function ResumeTable({
                     setShowAddTagsModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-cyan to-brand-teal hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
+                  className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
                 >
                   <Tag className="w-4 h-4" />
                   Add Tags
@@ -1004,7 +1004,7 @@ export default function ResumeTable({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-orange-deep rounded-xl flex items-center justify-center shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+                <div className="w-10 h-10 bg-brand-orange rounded-xl flex items-center justify-center shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
                   <Archive className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-gray-900">Archive Resume</h2>
@@ -1051,7 +1051,7 @@ export default function ResumeTable({
                     setShowArchiveModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-brand-orange to-brand-orange-deep hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+                  className="flex-1 px-4 py-2.5 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
                 >
                   <Archive className="w-4 h-4" />
                   Archive

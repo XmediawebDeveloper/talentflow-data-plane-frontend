@@ -266,14 +266,14 @@ const DraggableSkill = ({
             <button
               onClick={onSaveEdit}
               className="text-green-600 hover:text-green-700 px-2"
-              title="Save"
+              aria-label="Save" title="Save"
             >
               <CheckCircle className="w-4 h-4" />
             </button>
             <button
               onClick={onCancelEdit}
               className="text-red-600 hover:text-red-700"
-              title="Cancel"
+              aria-label="Cancel" title="Cancel"
             >
               <X className="w-4 h-4" />
             </button>
@@ -305,7 +305,7 @@ const DraggableSkill = ({
               <button
                 onClick={() => onStartEdit(category, index, skill)}
                 className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Edit"
+                aria-label="Edit" title="Edit"
               >
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
@@ -319,7 +319,7 @@ const DraggableSkill = ({
               <button
                 onClick={() => onRemove(category, index)}
                 className="text-red-600 hover:text-red-700"
-                title="Delete"
+                aria-label="Delete" title="Delete"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -436,14 +436,14 @@ const DraggableComment = ({
             <button
               onClick={onSaveEdit}
               className="text-green-600 hover:text-green-700 px-2"
-              title="Save"
+              aria-label="Save" title="Save"
             >
               <CheckCircle className="w-4 h-4" />
             </button>
             <button
               onClick={onCancelEdit}
               className="text-red-600 hover:text-red-700"
-              title="Cancel"
+              aria-label="Cancel" title="Cancel"
             >
               <X className="w-4 h-4" />
             </button>
@@ -475,7 +475,7 @@ const DraggableComment = ({
               <button
                 onClick={() => onStartEdit(category, index, comment)}
                 className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Edit"
+                aria-label="Edit" title="Edit"
               >
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
@@ -489,7 +489,7 @@ const DraggableComment = ({
               <button
                 onClick={() => onRemove(category, index)}
                 className={isMustHave ? 'text-red-600 hover:text-red-700' : 'text-blue-600 hover:text-blue-700'}
-                title="Delete"
+                aria-label="Delete" title="Delete"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -5748,7 +5748,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           <button
                             onClick={() => handleRemoveLocation(index)}
                             className="text-red-600 hover:text-red-700 ml-2"
-                          >
+                           aria-label="Close">
                             <X className="w-4 h-4" />
                           </button>
                         )}
@@ -5866,7 +5866,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           <button
                             onClick={() => handleRemoveCertification(index)}
                             className="text-red-600 hover:text-red-700 ml-2"
-                          >
+                           aria-label="Close">
                             <X className="w-4 h-4" />
                           </button>
                         )}
@@ -5923,7 +5923,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           <button
                             onClick={() => handleRemoveDomainKeyword(index)}
                             className="text-red-600 hover:text-red-700 ml-2"
-                          >
+                           aria-label="Close">
                             <X className="w-4 h-4" />
                           </button>
                         )}

@@ -150,7 +150,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
           <button
             onClick={clearSearch}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
+           aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         )}

@@ -227,7 +227,7 @@ export default function SearchFilterBarCompact({
   return (
     <div className="bg-white border-b border-gray-200">
       {/* Main Search Bar */}
-      <div className="p-3 sm:p-4 flex gap-2 sm:gap-3 items-center">
+      <div className="p-3 flex gap-2 items-center">
         {/* Global Search Bar */}
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -236,7 +236,7 @@ export default function SearchFilterBarCompact({
             placeholder="Search by name, email, phone, skills, title, or company..."
             value={localSearchQuery}
             onChange={(e) => setLocalSearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400"
+            className="w-full h-9 pl-9 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400"
           />
           {localSearchQuery && (
             <button
@@ -245,7 +245,7 @@ export default function SearchFilterBarCompact({
                 onSearchChange('');
               }}
               className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
-            >
+             aria-label="Close">
               <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
             </button>
           )}
@@ -260,9 +260,9 @@ export default function SearchFilterBarCompact({
         <div className="relative" ref={filterPanelRef}>
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex items-center gap-1.5 h-9 px-3 rounded-lg font-medium text-sm transition-all ${
               activeFilterCount > 0
-                ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                 : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200'
             }`}
           >
@@ -303,7 +303,7 @@ export default function SearchFilterBarCompact({
                             })}
                             className={`px-3 py-2 text-xs sm:text-sm rounded-lg border transition-all ${
                               tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
-                                ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                                 : 'bg-white text-gray-700 border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/[0.02]'
                             }`}
                           >
@@ -516,7 +516,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   <button
                     onClick={handleApplyFilters}
-                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-xs sm:text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                   >
                     Apply Filters
                   </button>
@@ -530,7 +530,7 @@ export default function SearchFilterBarCompact({
         <div className="relative">
           <button
             onClick={() => setShowSort(!showSort)}
-            className="flex items-center gap-2 h-10 px-4 bg-slate-100 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+            className="flex items-center gap-1.5 h-9 px-3 bg-slate-100 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
           >
             <span className="hidden sm:inline text-sm text-gray-700 font-medium">Sort</span>
             <ChevronDown className="w-4 h-4 text-gray-500" />
@@ -554,7 +554,7 @@ export default function SearchFilterBarCompact({
                       onSortChange(option.value);
                       setShowSort(false);
                     }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-brand-blue/5 transition-colors ${
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-blue/5 transition-colors ${
                       sortBy === option.value ? 'text-brand-blue bg-brand-blue/10 font-medium' : 'text-gray-700'
                     }`}
                   >
@@ -574,20 +574,20 @@ export default function SearchFilterBarCompact({
           {getActiveFilterChips().map((chip) => (
             <div
               key={chip.key}
-              className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs sm:text-sm ring-1 ring-brand-blue/20"
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20"
             >
               <span className="truncate max-w-[120px] sm:max-w-none">{chip.label}</span>
               <button
                 onClick={chip.onRemove}
                 className="hover:bg-brand-blue/10 rounded-full p-0.5 transition-colors flex-shrink-0"
-              >
+               aria-label="Close">
                 <X className="w-3 h-3" />
               </button>
             </div>
           ))}
           <button
             onClick={handleClearFilters}
-            className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-red-600 hover:bg-red-50 rounded-full text-xs sm:text-sm transition-colors ml-1 sm:ml-2"
+            className="inline-flex items-center gap-1 px-2 py-0.5 text-red-600 hover:bg-red-50 rounded-full text-xs transition-colors ml-1 sm:ml-2"
           >
             <X className="w-3 h-3" />
             Clear all

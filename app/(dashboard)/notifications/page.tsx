@@ -149,15 +149,15 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+          <div className="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Bell className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">Notifications</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Notifications</h1>
             <p className="text-xs sm:text-sm text-gray-500">
               {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'} · {total} total
             </p>
@@ -167,16 +167,16 @@ export default function NotificationsPage() {
           <button
             onClick={() => fetchNotifications(true)}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Refresh"
+            aria-label="Refresh" title="Refresh"
           >
-            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+            <RefreshCw className="w-4 h-4" />
           </button>
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
-              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2"
+              className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5"
             >
-              <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Check className="w-4 h-4" />
               Mark All Read
             </button>
           )}
@@ -184,11 +184,11 @@ export default function NotificationsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-5">
         <div className="flex bg-gray-100 rounded-lg p-1">
           <button
             onClick={() => setFilter('all')}
-            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               filter === 'all'
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -198,7 +198,7 @@ export default function NotificationsPage() {
           </button>
           <button
             onClick={() => setFilter('unread')}
-            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               filter === 'unread'
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -227,8 +227,8 @@ export default function NotificationsPage() {
       {/* Notifications List */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-14 sm:py-16 text-center px-4">
@@ -292,7 +292,7 @@ export default function NotificationsPage() {
                             handleMarkAsRead(notification.id);
                           }}
                           className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                          title="Mark as read"
+                          aria-label="Mark as read" title="Mark as read"
                         >
                           <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
@@ -303,7 +303,7 @@ export default function NotificationsPage() {
                           handleDelete(notification.id);
                         }}
                         className="p-1 sm:p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete"
+                        aria-label="Delete" title="Delete"
                       >
                         <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </button>

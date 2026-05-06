@@ -148,7 +148,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
             <button
               onClick={onClose}
               className="text-gray-600 hover:bg-gray-200 rounded-lg p-2 transition-colors"
-            >
+             aria-label="Close">
               <X className="w-6 h-6" />
             </button>
           </div>

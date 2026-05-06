@@ -34,8 +34,8 @@ const ROUND_LABELS: Record<string, string> = {
 function SectionCard({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 bg-gray-50">
+        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <Icon className="w-4 h-4 text-brand-blue" />
         </div>
         <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
@@ -426,7 +426,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
         </div>
       )}
       {/* Header (sticky on lg+, scrolls on mobile to avoid covering content) */}
-      <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 lg:sticky lg:top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      <div className="bg-brand-blue lg:sticky lg:top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-3.5">
           <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5 flex-wrap">
             <button
@@ -657,7 +657,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
               {/* JD Info Card */}
               <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
-                <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 px-5 py-4 ring-1 ring-white/10">
+                <div className="bg-brand-blue px-5 py-4 ring-1 ring-white/10">
                   <div className="flex items-center gap-2 mb-1">
                     <FileText className="w-4 h-4 text-white/90" />
                     <span className="text-xs font-medium text-white/90 uppercase tracking-wide">Job Description</span>
@@ -691,7 +691,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <div className="flex items-center gap-3">
                   {mode === 'fixed' ? (
                     <>
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                         <Timer className="w-5 h-5 text-brand-orange-deep" />
                       </div>
                       <div>
@@ -701,7 +701,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     </>
                   ) : (
                     <>
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center">
                         <Zap className="w-5 h-5 text-brand-blue" />
                       </div>
                       <div>
@@ -723,7 +723,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <span className="text-sm font-semibold text-brand-blue">{roundPercentage(mthRound)}%</span>
                       </div>
                       <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }} />
+                        <div className="h-full bg-brand-blue rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }} />
                       </div>
                     </div>
                   )}
@@ -734,7 +734,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <span className="text-sm font-semibold text-brand-cyan">{roundPercentage(nthRound)}%</span>
                       </div>
                       <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-brand-cyan to-brand-teal rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }} />
+                        <div className="h-full bg-brand-cyan rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }} />
                       </div>
                     </div>
                   )}
@@ -745,7 +745,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <span className="text-sm font-semibold text-brand-orange-deep">{roundPercentage(hrRound)}%</span>
                       </div>
                       <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-brand-orange to-brand-orange-deep rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }} />
+                        <div className="h-full bg-brand-orange rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }} />
                       </div>
                     </div>
                   )}
@@ -869,7 +869,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <ol className="space-y-2">
                         {((hrRound as any).hr_questions as { id: string; question_text: string; answer_type: string }[]).map((q, idx) => (
                           <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
-                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-brand-cyan to-brand-teal text-white text-[10px] font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
+                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-[10px] font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-gray-800">{q.question_text}</p>
                               <span className="text-[10px] text-gray-500 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
@@ -953,7 +953,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </div>
               ) : recentActivity.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                  <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                     <Users className="w-10 h-10 text-brand-blue" />
                   </div>
                   <p className="text-gray-700 font-medium mb-2">No candidate activity yet</p>
@@ -1007,9 +1007,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {/* Version History Tab */}
           {activeTab === 'versions' && (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Clock className="w-4 h-4 text-brand-blue" />
                   </div>
                   <h3 className="text-sm font-semibold text-gray-900 tracking-tight">Version History</h3>
@@ -1023,7 +1023,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </div>
               ) : versionHistory.length === 0 ? (
                 <div className="px-6 py-12 text-center">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                  <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                     <Clock className="w-10 h-10 text-brand-blue" />
                   </div>
                   <p className="text-gray-700 font-medium mb-1 text-sm">No version history available</p>
@@ -1040,7 +1040,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     return (
                       <div key={version.id} className="space-y-4">
                         <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-brand-cyan to-brand-teal rounded-full flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-cyan/25 ring-1 ring-white/20">
+                          <div className="w-12 h-12 bg-brand-cyan rounded-full flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-cyan/25 ring-1 ring-white/20">
                             <span className="text-white font-bold text-sm">V{version.version}</span>
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1049,7 +1049,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                 Version {version.version} {isFirstVersion ? 'Published' : 'Updated'}
                               </h4>
                               {isCurrentVersion && (
-                                <span className="px-2.5 py-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white text-xs font-medium rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 w-fit">
+                                <span className="px-2.5 py-1 bg-brand-blue text-white text-xs font-medium rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 w-fit">
                                   Current Version
                                 </span>
                               )}
@@ -1127,9 +1127,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             const nthSkills: string[] = config.jd_nice_to_have_skills || [];
             return (
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5">
+                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-2.5 mb-1">
-                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Briefcase className="w-4 h-4 text-brand-blue" />
                     </div>
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">AI Interview Info</h3>
@@ -1142,7 +1142,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {/* Experience Level */}
                     <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                           <Layers className="w-4 h-4 text-brand-blue" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
@@ -1159,7 +1159,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {/* Interview Mode */}
                     <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                           <Timer className="w-4 h-4 text-brand-orange-deep" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Interview Mode</span>
@@ -1172,7 +1172,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {/* Industry */}
                     <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
                           <Globe className="w-4 h-4 text-brand-cyan" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Industry</span>
@@ -1187,7 +1187,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {/* Recording */}
                     <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                           <Video className="w-4 h-4 text-brand-blue" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Recording</span>
@@ -1200,7 +1200,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {/* AI Voice Language */}
                     <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
                           <Globe className="w-4 h-4 text-brand-cyan" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">AI Voice Language</span>
@@ -1211,7 +1211,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {/* Candidate Languages */}
                     <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                           <Globe className="w-4 h-4 text-brand-blue" />
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Candidate Languages</span>
@@ -1283,7 +1283,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 onClick={confirmAction.onConfirm}
                 disabled={actionLoading}
                 className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 ring-1 ring-white/10 ${
-                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25'
+                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25'
                 }`}
               >
                 {actionLoading ? 'Processing...' : 'Confirm'}

@@ -72,7 +72,7 @@ export default function BulkActionProgress({
             <button
               onClick={onClose}
               className="p-1 text-gray-400 hover:text-gray-600 rounded"
-            >
+             aria-label="Close">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -97,7 +97,7 @@ export default function BulkActionProgress({
             <button
               onClick={onClose}
               className="p-1 text-gray-400 hover:text-gray-600 rounded"
-            >
+             aria-label="Close">
               <X className="w-4 h-4" />
             </button>
           </div>

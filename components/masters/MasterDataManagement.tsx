@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Check, AlertCircle, Clock, GraduationCap, Factory } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Check, AlertCircle, Clock, GraduationCap, Factory, Sparkles, ArrowUpRight, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/enhanced-toast';
 import {
   masterDataService,
@@ -260,124 +260,142 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   };
 
   return (
-    <div className="p-4 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-            <Icon className="w-5 h-5 text-gray-800" />
+    <div className="bg-slate-50 p-4 sm:p-6 lg:p-8 min-h-screen">
+      {/* SaaS Hero Header */}
+      <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+              Master data
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                <Icon className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{config.title}</h1>
+                <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">{config.description}</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{config.title}</h1>
-            <p className="text-sm text-gray-500">{config.description}</p>
-          </div>
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <Plus className="h-4 w-4" />
+            Add New
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add New
-        </button>
-      </div>
+      </section>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
         {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin w-8 h-8 border-2 border-gray-800 border-t-transparent rounded-full mx-auto mb-2"></div>
-            <p className="text-gray-500">Loading...</p>
+          <div className="p-12 text-center">
+            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-brand-blue" />
+            <p className="font-medium text-gray-600">Loading...</p>
           </div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center">
-            <Icon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 mb-4">No items found</p>
+          <div className="p-12 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <Icon className="h-7 w-7 text-brand-blue" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">No items found</h3>
+            <p className="mt-1 text-sm text-gray-500">Add your first {config.title.slice(0, -1).toLowerCase()} to get started.</p>
             <button
               onClick={openCreateModal}
-              className="text-gray-800 hover:text-gray-900 font-medium"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
+              <Plus className="h-4 w-4" />
               Add your first item
             </button>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {config.columns.map((col) => (
-                  <th
-                    key={col}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {paginatedItems.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-gray-900">{item.label}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <code className="text-sm bg-gray-100 px-2 py-0.5 rounded">{item.code}</code>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {renderExtraColumn(item)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{item.sort_order}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        item.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50/80">
+                <tr className="text-left">
+                  {config.columns.map((col) => (
+                    <th
+                      key={col}
+                      className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500"
                     >
-                      {item.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {showDeleteConfirm === item.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-1.5 text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
-                            title="Confirm delete"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setShowDeleteConfirm(null)}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                            title="Cancel"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setShowDeleteConfirm(item.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                      {col}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {paginatedItems.map((item) => (
+                  <tr key={item.id} className="transition-colors hover:bg-brand-blue/[0.02]">
+                    <td className="px-4 py-4">
+                      <span className="text-sm font-semibold text-gray-900">{item.label}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <code className="rounded-md bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">{item.code}</code>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600">
+                      {renderExtraColumn(item)}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">{item.sort_order}</td>
+                    <td className="px-4 py-4">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                          item.is_active
+                            ? 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
+                            : 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'
+                        }`}
+                      >
+                        {item.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                          aria-label="Edit" title="Edit"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        {showDeleteConfirm === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm shadow-red-600/25 transition-all hover:-translate-y-0.5 hover:bg-red-700"
+                              aria-label="Confirm delete" title="Confirm delete"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setShowDeleteConfirm(null)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-all hover:bg-gray-50"
+                              aria-label="Cancel" title="Cancel"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setShowDeleteConfirm(item.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1]"
+                            aria-label="Delete" title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -392,147 +410,148 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
-                {editingItem ? 'Edit' : 'Add New'} {config.title.slice(0, -1)}
-              </h3>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+            <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
+              <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                    <Icon className="h-5 w-5 text-white" />
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      {editingItem ? 'Edit' : 'Add New'} {config.title.slice(0, -1)}
+                    </h3>
+                    <p className="mt-0.5 text-sm text-white/75">
+                      {editingItem ? 'Update the existing entry.' : 'Create a new master data entry.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Label <span className="text-red-500">*</span>
-                </label>
+            <div className="max-h-[calc(100dvh-200px)] space-y-4 overflow-y-auto p-5">
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-700">
+                  Label <span className="text-brand-orange">*</span>
+                </span>
                 <input
                   type="text"
                   value={formData.label}
                   onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                   placeholder="e.g., 5-7 years"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   autoFocus
                 />
-              </div>
+              </label>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-700">
                   Code <span className="text-gray-400">(optional, auto-generated)</span>
-                </label>
+                </span>
                 <input
                   type="text"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   placeholder="Auto-generated from label"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
-              </div>
+              </label>
 
               {type === 'experience' && (
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Min Years
-                    </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">Min Years</span>
                     <input
                       type="number"
                       value={formData.min_years}
                       onChange={(e) => setFormData({ ...formData, min_years: e.target.value })}
                       placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Max Years
-                    </label>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-700">Max Years</span>
                     <input
                       type="number"
                       value={formData.max_years}
                       onChange={(e) => setFormData({ ...formData, max_years: e.target.value })}
                       placeholder="5"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
-                  </div>
+                  </label>
                 </div>
               )}
 
               {type === 'education' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700">
                     Level <span className="text-gray-400">(numeric ranking)</span>
-                  </label>
+                  </span>
                   <input
                     type="number"
                     value={formData.level}
                     onChange={(e) => setFormData({ ...formData, level: e.target.value })}
                     placeholder="1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
-                </div>
+                </label>
               )}
 
               {type === 'industry' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Description</span>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Brief description of the industry"
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none"
+                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
-                </div>
+                </label>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sort Order
-                </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-700">Sort Order</span>
                 <input
                   type="number"
                   value={formData.sort_order}
                   onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })}
                   placeholder="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
-                <p className="text-xs text-gray-500 mt-1">Lower numbers appear first</p>
-              </div>
+                <p className="mt-1 text-xs text-gray-500">Lower numbers appear first</p>
+              </label>
             </div>
 
-            <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+            <div className="flex justify-end gap-2 border-t border-gray-100 bg-slate-50/60 px-5 py-4 sm:gap-3">
               <button
                 onClick={closeModal}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !formData.label.trim()}
-                className="px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-5 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSubmitting ? (
                   <>
-                    <span className="animate-spin">
-                      <svg className="w-4 h-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    </span>
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Saving...
                   </>
                 ) : (
                   <>
-                    <Check className="w-4 h-4" />
+                    <Check className="h-4 w-4" />
                     {editingItem ? 'Update' : 'Create'}
                   </>
                 )}

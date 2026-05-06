@@ -599,7 +599,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>See how TalentFlow transforms recruiting</p>
                 </div>
               </div>
-              <button onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close">
                 <X style={{ width: 24, height: 24, color: '#fff' }} />
               </button>
             </div>

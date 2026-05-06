@@ -488,18 +488,18 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
 
   const roleBadgeColors = {
-    tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white border-purple-600',
-    recruiter: 'bg-gray-100 text-gray-600 border-gray-200',
-    viewer: 'bg-gray-50 text-gray-500 border-gray-200',
+    tenant_admin: 'bg-brand-blue text-white',
+    recruiter: 'bg-brand-blue/10 text-brand-blue',
+    viewer: 'bg-gray-100 text-gray-600',
   };
-  
+
   return (
-    <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-8 shadow-sm">
+    <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-8">
       {/* Hamburger Menu Button - Only on Mobile */}
       {onMenuClick && (
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors mr-2"
+          className="lg:hidden p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors mr-2"
           aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
         >
           {isMobileMenuOpen ? (
@@ -522,7 +522,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           <Tooltip content="Keyboard Shortcuts (Cmd/Ctrl + /)" position="bottom">
             <button
               onClick={onOpenShortcuts}
-              className="hidden sm:block p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 hover:border-gray-400"
+              className="hidden sm:block p-2 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors border border-gray-200 hover:border-brand-blue/30"
               aria-label="Keyboard Shortcuts"
             >
               <Command className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -534,8 +534,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         {onOpenTour && (
           <button
             onClick={onOpenTour}
-            className="hidden lg:flex px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 hover:shadow-lg transition-all duration-200 items-center gap-2 group"
-            title="Take a quick tour"
+            className="hidden lg:flex px-3 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors duration-200 items-center gap-2 group"
+            aria-label="Take a quick tour" title="Take a quick tour"
           >
             <Zap className="w-4 h-4 group-hover:animate-pulse" />
             <span className="text-sm font-medium">Quick Tour</span>
@@ -552,10 +552,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 setShowNotifications(false);
                 setShowUserMenu(false);
               }}
-              className="flex items-center gap-2 lg:gap-3 px-2 sm:px-3 lg:px-4 py-2 lg:py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all"
+              className="flex items-center gap-2 lg:gap-3 px-2 sm:px-3 lg:px-4 py-2 lg:py-2.5 bg-white border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
             >
-              <div className="w-7 h-7 lg:w-9 lg:h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
-                <CreditCard className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600" />
+              <div className="w-7 h-7 lg:w-9 lg:h-9 bg-brand-blue/10 rounded-md flex items-center justify-center">
+                <CreditCard className="w-4 h-4 lg:w-5 lg:h-5 text-brand-blue" />
               </div>
               <div className="flex flex-col gap-0.5 min-w-0 text-left">
                 <span className="text-xs lg:text-sm font-semibold text-gray-900 truncate max-w-[100px] lg:max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
@@ -574,11 +574,11 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 )}
               </div>
               {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && totalUnits.limit > 0 && (
-                <div className="w-12 lg:w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
+                <div className="w-12 lg:w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       usagePercentage > 90 ? 'bg-red-500' :
-                      usagePercentage > 70 ? 'bg-yellow-500' : 'bg-gray-600'
+                      usagePercentage > 70 ? 'bg-brand-orange' : 'bg-brand-blue'
                     }`}
                     style={{ width: `${Math.min(usagePercentage, 100)}%` }}
                   />
@@ -597,12 +597,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="fixed inset-0 z-40" onClick={() => setShowPlanMenu(false)} />
                 <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
                   {/* Header */}
-                  <div className="px-4 py-3 bg-gray-800 text-white">
+                  <div className="px-4 py-3 bg-brand-blue text-white">
                     <h3 className="font-medium flex items-center gap-2 text-sm">
                       <CreditCard className="w-4 h-4" />
                       {planName}
                     </h3>
-                    <p className="text-xs text-gray-300 mt-0.5">Unit balance breakdown</p>
+                    <p className="text-xs text-white/80 mt-0.5">Unit balance breakdown</p>
                   </div>
 
                   {/* Quota rows */}
@@ -695,7 +695,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 setShowPlanMenu(false);
                 setShowUserMenu(false);
               }}
-              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="relative p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
               aria-label="Help & Support"
             >
               <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -708,13 +708,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowHelpMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
-                <div className="px-4 py-3 bg-gray-800 text-white">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
+                <div className="px-4 py-3 bg-brand-blue text-white">
                   <h3 className="font-medium flex items-center gap-2">
                     <HelpCircle className="w-5 h-5" />
                     Help & Support
                   </h3>
-                  <p className="text-sm text-gray-300 mt-1">Get the help you need</p>
+                  <p className="text-sm text-white/80 mt-1">Get the help you need</p>
                 </div>
 
                 <div className="p-4">
@@ -725,7 +725,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         setShowHelpMenu(false);
                         router.push('/help');
                       }}
-                      className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left"
+                      className="p-3 border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors group text-left"
                     >
                       <Book className="w-5 h-5 text-gray-700 mb-2" />
                       <div className="text-sm text-gray-900">Knowledge Base</div>
@@ -736,7 +736,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         setShowHelpMenu(false);
                         router.push('/help?article=getting-started');
                       }}
-                      className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left"
+                      className="p-3 border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors group text-left"
                     >
                       <FileText className="w-5 h-5 text-gray-600 mb-2" />
                       <div className="text-sm text-gray-900">Documentation</div>
@@ -753,7 +753,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           setShowHelpMenu(false);
                           router.push('/help?article=getting-started');
                         }}
-                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
                       >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -768,7 +768,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           setShowHelpMenu(false);
                           router.push('/help?article=upload-parse-resumes');
                         }}
-                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
                       >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -783,7 +783,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           setShowHelpMenu(false);
                           router.push('/help?article=create-job-description');
                         }}
-                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
                       >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -798,7 +798,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           setShowHelpMenu(false);
                           router.push('/help?article=create-assessments');
                         }}
-                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
                       >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -817,10 +817,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     <div className="space-y-2">
                       <a
                         href="mailto:support@talentflow.com"
-                        className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left"
+                        className="w-full flex items-center gap-3 p-2 hover:bg-brand-blue/5 rounded-lg transition-colors text-left"
                       >
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <Mail className="w-4 h-4 text-gray-600" />
+                        <div className="w-8 h-8 bg-brand-blue/10 rounded-md flex items-center justify-center">
+                          <Mail className="w-4 h-4 text-brand-blue" />
                         </div>
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">Email Support</div>
@@ -830,10 +830,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       </a>
                       <a
                         href="tel:+18001234567"
-                        className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left"
+                        className="w-full flex items-center gap-3 p-2 hover:bg-brand-blue/5 rounded-lg transition-colors text-left"
                       >
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <Phone className="w-4 h-4 text-gray-600" />
+                        <div className="w-8 h-8 bg-brand-blue/10 rounded-md flex items-center justify-center">
+                          <Phone className="w-4 h-4 text-brand-blue" />
                         </div>
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">Phone Support</div>
@@ -851,7 +851,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         setShowHelpMenu(false);
                         router.push('/support-tickets');
                       }}
-                      className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                      className="flex-1 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors text-sm font-medium"
                     >
                       Open Support Ticket
                     </button>
@@ -872,7 +872,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 setShowPlanMenu(false);
                 setShowUserMenu(false);
               }}
-              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="relative p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -893,8 +893,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
-                <div className="px-4 py-3 bg-gray-800 text-white">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20">
+                <div className="px-4 py-3 bg-brand-blue text-white">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium flex items-center gap-2">
                       {/* Real-time connection indicator */}
@@ -908,7 +908,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{unreadCount} new</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-300 mt-1">Stay updated with latest activities</p>
+                  <p className="text-sm text-white/80 mt-1">Stay updated with latest activities</p>
                 </div>
 
                 {/* Filter Tabs */}
@@ -917,8 +917,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     onClick={() => setActiveNotificationTab('all')}
                     className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                       activeNotificationTab === 'all'
-                        ? 'text-gray-900 border-b-2 border-gray-800 bg-white'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'text-brand-blue border-b-2 border-brand-blue bg-white'
+                        : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     All ({notifications.length})
@@ -927,8 +927,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     onClick={() => setActiveNotificationTab('unread')}
                     className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                       activeNotificationTab === 'unread'
-                        ? 'text-gray-900 border-b-2 border-gray-800 bg-white'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'text-brand-blue border-b-2 border-brand-blue bg-white'
+                        : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
                     Unread ({unreadCount})
@@ -955,7 +955,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           <button
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}
-                            className={`w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors ${
+                            className={`w-full text-left p-3 hover:bg-brand-blue/5 rounded-lg transition-colors ${
                               !notification.is_read ? `border-l-4 ${style.borderColor} ${style.bgTint}` : ''
                             }`}
                           >
@@ -990,7 +990,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   <button
                     onClick={handleMarkAllAsRead}
                     disabled={unreadCount === 0}
-                    className="flex-1 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-2 text-sm text-gray-700 bg-white border border-gray-200 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Mark All Read
                   </button>
@@ -999,7 +999,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       setShowNotifications(false);
                       router.push('/notifications');
                     }}
-                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                    className="flex-1 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors text-sm font-medium"
                   >
                     View All
                   </button>
@@ -1013,7 +1013,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         <Tooltip content={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'} position="bottom">
           <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
             aria-label="Toggle dark mode"
           >
             {resolvedTheme === 'dark'
@@ -1027,7 +1027,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         <Tooltip content="Settings" position="bottom">
           <button
             onClick={() => router.push('/settings/general-settings')}
-            className="hidden sm:block p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="hidden sm:block p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
             aria-label="Settings"
           >
             <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1042,9 +1042,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               setShowUserMenu(!showUserMenu);
               setShowPlanMenu(false);
             }}
-            className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-gray-100 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-brand-blue/5 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 transition-colors"
           >
-            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-gray-700 text-white flex items-center justify-center shadow-sm">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-brand-blue text-white flex items-center justify-center">
               <span className="text-xs sm:text-sm">{(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}</span>
             </div>
             <div className="hidden md:block text-left">
@@ -1062,21 +1062,15 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               ></div>
               <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
                 {/* User Profile Header */}
-                <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-5 py-4">
+                <div className="bg-brand-blue px-5 py-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-white/20 text-white flex items-center justify-center text-lg font-semibold ring-2 ring-white/30">
+                    <div className="w-14 h-14 rounded-full bg-white/15 text-white flex items-center justify-center text-lg font-semibold">
                       {(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white font-medium truncate">{user.name || 'User'}</p>
-                      <p className="text-gray-300 text-sm truncate">{user.email}</p>
-                      <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        user.role === 'tenant_admin'
-                          ? 'bg-purple-500/20 text-purple-200 border border-purple-400/30'
-                          : user.role === 'recruiter'
-                          ? 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
-                          : 'bg-gray-500/20 text-gray-200 border border-gray-400/30'
-                      }`}>
+                      <p className="text-white font-semibold truncate">{user.name || 'User'}</p>
+                      <p className="text-white/80 text-sm truncate">{user.email}</p>
+                      <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
                         <Shield className="w-3 h-3" />
                         {roleLabels[user.role]}
                       </span>
@@ -1097,28 +1091,28 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
                 {/* Quick Stats */}
                 <div className="px-5 py-3 border-b border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Your Permissions</p>
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Permissions</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
-                      user.permissions.can_manage_users ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
+                      user.permissions.can_manage_users ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
                     }`}>
                       <Users className="w-3.5 h-3.5" />
                       <span>Manage Users</span>
                     </div>
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
-                      user.permissions.can_view_analytics ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
+                      user.permissions.can_view_analytics ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
                     }`}>
                       <TrendingUp className="w-3.5 h-3.5" />
                       <span>Analytics</span>
                     </div>
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
-                      user.permissions.can_manage_settings ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
+                      user.permissions.can_manage_settings ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
                     }`}>
                       <Settings className="w-3.5 h-3.5" />
                       <span>Settings</span>
                     </div>
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
-                      user.is_tenant_admin ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
+                      user.is_tenant_admin ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
                     }`}>
                       <Shield className="w-3.5 h-3.5" />
                       <span>Admin Access</span>
@@ -1135,10 +1129,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       router.push('/settings/general-settings');
                     }}
                     disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
-                      <User className="w-4 h-4 text-gray-600" />
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                      <User className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">Profile Settings</p>
@@ -1152,10 +1146,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       router.push('/settings/security');
                     }}
                     disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
-                      <Shield className="w-4 h-4 text-gray-600" />
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                      <Shield className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">Security</p>
@@ -1169,10 +1163,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       router.push('/audits/activity');
                     }}
                     disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
-                      <Activity className="w-4 h-4 text-gray-600" />
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                      <Activity className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">Activity Log</p>
@@ -1185,10 +1179,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         setShowUserMenu(false);
                         router.push('/subscription/usage-quotas');
                       }}
-                      className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                      className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-brand-blue/5 transition-colors flex items-center gap-3 group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
-                        <Zap className="w-4 h-4 text-gray-600" />
+                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                        <Zap className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Usage & Billing</p>
@@ -1199,13 +1193,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 </div>
 
                 {/* Sign Out */}
-                <div className="border-t border-gray-100 p-3 bg-gray-50">
+                <div className="border-t border-gray-200 p-3 bg-gray-50">
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
                       onLogout();
                     }}
-                    className="w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-100 transition-colors flex items-center justify-center gap-2 rounded-lg font-medium"
+                    className="w-full px-4 py-2.5 text-sm text-red-600 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 transition-colors flex items-center justify-center gap-2 rounded-lg font-medium"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out

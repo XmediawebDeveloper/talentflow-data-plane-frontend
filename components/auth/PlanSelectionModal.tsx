@@ -359,7 +359,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
             }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isDark ? '#4B5563' : '#E5E7EB')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isDark ? '#374151' : '#F3F4F6')}
-            title="Close and go to pricing page"
+            aria-label="Close and go to pricing page" title="Close and go to pricing page"
           >
             <X className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }} />
           </button>

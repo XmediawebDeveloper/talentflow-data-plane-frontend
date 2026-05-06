@@ -79,7 +79,7 @@ export default function AssessmentsRoute() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
       </div>
     );
   }

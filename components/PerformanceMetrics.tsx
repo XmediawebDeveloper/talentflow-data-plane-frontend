@@ -124,7 +124,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
         <button
           onClick={() => setIsExpanded(true)}
           className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 hover:shadow-xl transition-all group"
-          title="Show performance metrics"
+          aria-label="Show performance metrics" title="Show performance metrics"
         >
           <Activity className="w-5 h-5 text-gray-800 group-hover:scale-110 transition-transform" />
         </button>

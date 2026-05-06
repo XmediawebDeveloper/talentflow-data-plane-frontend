@@ -481,7 +481,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             <button
               onClick={onClose}
               className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
-            >
+             aria-label="Close">
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
@@ -538,7 +538,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
-          >
+           aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>

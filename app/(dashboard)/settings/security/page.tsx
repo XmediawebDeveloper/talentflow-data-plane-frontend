@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound } from 'lucide-react';
+import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound, Sparkles } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
@@ -8,6 +8,7 @@ import { clearTokens } from '@/lib/services/api';
 import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 // Password strength validation
 const getPasswordStrength = (password: string) => {
@@ -271,34 +272,34 @@ export default function SecurityPage() {
   };
 
   if (isLoading) {
-    return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
-          <p className="text-gray-600">Loading security settings...</p>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   return (
-    <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-4 sm:mb-6 lg:mb-8">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600 to-red-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-              <Lock className="w-4 h-4 sm:w-7 sm:h-7 text-white" />
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <div className="max-w-5xl mx-auto">
+        {/* SaaS Hero Header */}
+        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+              <Lock className="h-6 w-6 text-white" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">Security Settings</h1>
-              <p className="text-xs sm:text-sm text-gray-600">Manage your account security</p>
+            <div>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <Sparkles className="h-3 w-3 text-brand-orange" />
+                Account protection
+              </div>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Security Settings</h1>
+              <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage password, two-factor auth, sessions, and trust controls.</p>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Password Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
           <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4">Password</h2>
           <div className="space-y-3 sm:space-y-4">
             <div>
@@ -313,7 +314,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-black text-xs sm:text-sm md:text-base"
+                  className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-black text-xs sm:text-sm md:text-base"
                 />
                 <button
                   type="button"
@@ -336,7 +337,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
+                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
                     passwordForm.newPassword
                       ? passwordStrength === 5
                         ? 'border-green-500'
@@ -367,7 +368,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
+                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
                     passwordForm.confirmPassword
                       ? passwordsMatch
                         ? 'border-green-500'
@@ -432,7 +433,7 @@ export default function SecurityPage() {
               <button
                 onClick={handleChangePassword}
                 disabled={isChangingPassword || (passwordForm.newPassword && passwordStrength < 3)}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:translate-y-0 disabled:cursor-not-allowed text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
               >
                 {isChangingPassword ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -448,7 +449,7 @@ export default function SecurityPage() {
         </div>
 
         {/* Two-Factor Authentication */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -492,7 +493,7 @@ export default function SecurityPage() {
                 <button
                   onClick={() => setShow2FASetup(false)}
                   className="p-1 hover:bg-gray-200 rounded"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -531,7 +532,7 @@ export default function SecurityPage() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
+                    className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -563,7 +564,7 @@ export default function SecurityPage() {
                     setDisable2FACode('');
                   }}
                   className="p-1 hover:bg-red-100 rounded"
-                >
+                 aria-label="Close">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -619,7 +620,7 @@ export default function SecurityPage() {
         </div>
 
         {/* Session Timeout */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
           <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
             <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
@@ -634,7 +635,7 @@ export default function SecurityPage() {
               value={settings.session_timeout_minutes?.toString() || '30'}
               onChange={(e) => handleSessionTimeoutChange(e.target.value)}
               disabled={!canManage || isSavingTimeout}
-              className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none bg-white disabled:opacity-50 text-black text-xs sm:text-sm md:text-base"
+              className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none bg-white disabled:opacity-50 text-black text-xs sm:text-sm md:text-base"
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>
@@ -652,7 +653,7 @@ export default function SecurityPage() {
 
         {/* SSO (Single Sign-On) */}
         <FeatureGate feature="sso" mode="section">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
             <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
               <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-600" />
@@ -671,7 +672,7 @@ export default function SecurityPage() {
         </FeatureGate>
 
         {/* Active Sessions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3 md:mb-4">
             <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Active Sessions</h2>
             {canManage && sessions.filter(s => !s.is_current).length > 0 && (
@@ -747,7 +748,7 @@ export default function SecurityPage() {
                 <button
                   onClick={() => setShowRevokeAllDialog(false)}
                   className="p-1 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
-                >
+                 aria-label="Close">
                   <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-500" />
                 </button>
               </div>

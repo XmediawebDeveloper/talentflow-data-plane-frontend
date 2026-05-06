@@ -50,9 +50,9 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-brand-blue/5 via-white to-brand-cyan/5 border-b border-gray-100 px-4 sm:px-6 py-4 sm:py-5 flex items-start sm:items-center justify-between gap-3">
+        <div className="bg-gray-50 border-b border-gray-100 px-4 sm:px-6 py-4 sm:py-5 flex items-start sm:items-center justify-between gap-3">
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0 flex-1">
@@ -71,7 +71,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors flex-shrink-0"
-          >
+           aria-label="Close">
             <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
@@ -264,7 +264,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
         <div className="border-t border-gray-100 px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 flex items-center justify-end">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm font-medium"
+            className="w-full sm:w-auto px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm font-medium"
           >
             Close
           </button>

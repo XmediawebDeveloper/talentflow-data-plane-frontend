@@ -77,7 +77,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
           <button
             onClick={onClose}
             className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-          >
+           aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>

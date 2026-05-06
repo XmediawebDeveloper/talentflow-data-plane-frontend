@@ -396,7 +396,7 @@ export default function BulkScoringProgressModal({
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
               }`}
-              title="Retry all failed resumes at once"
+              aria-label="Retry all failed resumes at once" title="Retry all failed resumes at once"
             >
               {bulkRetrying ? (
                 <><Loader className="w-3.5 h-3.5 animate-spin" /><span>Retrying...</span></>

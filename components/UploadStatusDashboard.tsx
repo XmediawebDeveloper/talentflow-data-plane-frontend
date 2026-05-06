@@ -224,7 +224,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <button
               onClick={onClose}
               className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-            >
+             aria-label="Close">
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
@@ -337,7 +337,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <button
                 onClick={() => setActiveFilter(null)}
                 className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
+               aria-label="Close">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

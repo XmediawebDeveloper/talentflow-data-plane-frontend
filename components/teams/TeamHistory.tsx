@@ -84,7 +84,7 @@ export default function TeamHistory() {
               onClick={() => handleFilterChange(entryFilter)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                 filter === entryFilter
-                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/20'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
                   : 'bg-gray-50 text-gray-600 ring-1 ring-gray-200 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
@@ -218,7 +218,7 @@ export default function TeamHistory() {
                           onClick={() => setPage(pageNumber as number)}
                           className={`h-9 w-9 rounded-xl text-sm font-medium transition-all ${
                             page === pageNumber
-                              ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white shadow-md shadow-brand-blue/20'
+                              ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
                               : 'text-gray-700 hover:bg-brand-blue/[0.04]'
                           }`}
                         >

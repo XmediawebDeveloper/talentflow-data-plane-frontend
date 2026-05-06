@@ -272,7 +272,7 @@ export default function AddSeatsModal({
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
         {/* Header */}
-        <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-r from-brand-blue to-brand-blue-2 flex-shrink-0 overflow-hidden">
+        <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-brand-blue flex-shrink-0 overflow-hidden">
           <div className="absolute -top-8 -right-6 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
           <div className="absolute -bottom-10 -left-6 w-28 h-28 bg-brand-cyan/25 rounded-full blur-2xl" />
           <div className="relative flex items-center gap-4">
@@ -293,7 +293,7 @@ export default function AddSeatsModal({
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 backdrop-blur-sm transition-colors"
-          >
+           aria-label="Close">
             <X className="w-5 h-5 text-white" />
           </button>
         </div>
@@ -341,7 +341,7 @@ export default function AddSeatsModal({
                     <div className="absolute top-0 right-0 w-28 h-28 bg-brand-blue/5 rounded-full -translate-y-10 translate-x-10" />
                     <div className="relative flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                           <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
@@ -370,7 +370,7 @@ export default function AddSeatsModal({
                       <div className="flex items-center bg-white rounded-xl border border-gray-200 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           −
                         </button>
@@ -384,13 +384,13 @@ export default function AddSeatsModal({
                         />
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           +
                         </button>
                       </div>
                       {/* Total seats panel */}
-                      <div className="flex-1 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-xl px-4 py-2.5 flex items-center justify-between shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+                      <div className="flex-1 bg-brand-blue text-white rounded-xl px-4 py-2.5 flex items-center justify-between shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                         <span className="text-xs text-white/80">Total seats</span>
                         <div className="flex items-center gap-1.5">
                           <Users className="w-4 h-4 text-white/90" />
@@ -460,7 +460,7 @@ export default function AddSeatsModal({
             <button
               onClick={handlePurchase}
               disabled={isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess}
-              className="flex-1 py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex-1 py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               {isPurchasing || razorpayProcessing ? (
                 <>

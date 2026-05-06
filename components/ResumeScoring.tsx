@@ -200,17 +200,17 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-8 py-6">
+        <div className="px-4 md:px-8 py-4">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-gray-900 mb-2">Resume Scoring Analysis</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 tracking-tight">Resume Scoring Analysis</h1>
               <p className="text-sm text-gray-600">
                 AI-powered match scoring for {resumes?.length || 0} resume{(resumes?.length || 0) !== 1 ? 's' : ''} {effectiveJobs.length > 1 ? `across ${effectiveJobs.length} job openings` : jobTitle ? `for ${jobTitle}` : ''}
               </p>
@@ -223,7 +223,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                   onComplete();
                 }
               }}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium w-full sm:w-auto"
             >
               {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
             </button>
@@ -232,16 +232,16 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
       </div>
 
       {/* Stats Cards */}
-      <div className="px-8 py-6">
-        <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="px-4 md:px-8 py-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-sm mb-1">Total Matches</div>
-                <div className="text-2xl text-gray-900">{scoringResults.length}</div>
+                <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{scoringResults.length}</div>
               </div>
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-gray-800" />
+              <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-4 h-4 text-gray-800" />
               </div>
             </div>
           </div>
@@ -250,12 +250,12 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-sm mb-1">Excellent Matches</div>
-                <div className="text-2xl text-gray-900">
+                <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {scoringResults.filter(r => r.matchType === 'excellent').length}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Award className="w-6 h-6 text-green-600" />
+              <div className="h-9 w-9 bg-green-100 rounded-lg flex items-center justify-center">
+                <Award className="w-4 h-4 text-green-600" />
               </div>
             </div>
           </div>
@@ -264,12 +264,12 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-sm mb-1">Good Matches</div>
-                <div className="text-2xl text-gray-900">
+                <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {scoringResults.filter(r => r.matchType === 'good').length}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-gray-800" />
+              <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-gray-800" />
               </div>
             </div>
           </div>
@@ -278,30 +278,30 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-sm mb-1">Avg. Score</div>
-                <div className="text-2xl text-gray-900">
+                <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {Math.round(scoringResults.reduce((acc, r) => acc + r.score, 0) / scoringResults.length)}%
                 </div>
               </div>
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-gray-800" />
+              <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-gray-800" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Scoring Results Table */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-5">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-6 py-3 text-xs text-gray-600">Candidate</th>
-                  <th className="text-left px-6 py-3 text-xs text-gray-600">Job Position</th>
-                  <th className="text-center px-6 py-3 text-xs text-gray-600">Match Score</th>
-                  <th className="text-left px-6 py-3 text-xs text-gray-600">Key Matches</th>
-                  <th className="text-left px-6 py-3 text-xs text-gray-600">Missing Skills</th>
-                  <th className="text-center px-6 py-3 text-xs text-gray-600">Status</th>
-                  <th className="text-center px-6 py-3 text-xs text-gray-600">Action</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Job Position</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Match Score</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Key Matches</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Missing Skills</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -314,46 +314,46 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
 
                   return (
                     <tr key={resultKey} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
+                          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs font-medium">
                             {(resume.name || resume.candidateName || 'U')?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                           </div>
                           <div>
-                            <div className="text-sm text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
+                            <div className="text-sm font-medium text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
                             <div className="text-xs text-gray-500">{resume.title || resume.experience || ''}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <div className="text-sm text-gray-900">{job.title}</div>
                         <div className="text-xs text-gray-500">{job.location}</div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           {getScoreIcon(result.matchType)}
-                          <span className="text-lg text-gray-900">{result.score}%</span>
+                          <span className="text-base font-semibold text-gray-900">{result.score}%</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
                           {result.keyMatches.map((skill, i) => (
                             <span
                               key={i}
-                              className="inline-flex items-center px-2 py-1 rounded-md bg-green-50 text-green-700 text-xs border border-green-200"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-green-50 text-green-700 text-xs border border-green-200"
                             >
                               {skill}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
                           {result.missingSkills.length > 0 ? (
                             result.missingSkills.map((skill, i) => (
                               <span
                                 key={i}
-                                className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs border border-gray-200"
+                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs border border-gray-200"
                               >
                                 {skill}
                               </span>
@@ -363,12 +363,12 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
                           {result.matchType.charAt(0).toUpperCase() + result.matchType.slice(1)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => setSelectedResultForDetail(resultKey)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
@@ -409,16 +409,16 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
               {/* This static table has been commented out as it shows hardcoded mock data */}
               {/* Real scoring data should come from API endpoint /api/v1/scoring/score */}
 
-              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <div className="text-sm text-gray-600">
                       Overall Match Score:
                     </div>
-                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-300">
+                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-gray-300">
                       {getScoreIcon(result.matchType)}
-                      <span className="text-xl font-bold text-gray-900">{result.score}%</span>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
+                      <span className="text-base font-bold text-gray-900">{result.score}%</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
                         {result.matchType.charAt(0).toUpperCase() + result.matchType.slice(1)} Match
                       </span>
                     </div>
@@ -436,18 +436,18 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
         })()}
 
         {/* Action Footer */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-gray-900 mb-1">Ready to Proceed?</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-1">Ready to Proceed?</h3>
               <p className="text-sm text-gray-600">
                 Review the scoring analysis above and click "Complete & Apply" to finalize the applications.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={onBack}
-                className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors"
               >
                 Cancel
               </button>
@@ -470,7 +470,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                     onComplete();
                   }
                 }}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
                 {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
               </button>

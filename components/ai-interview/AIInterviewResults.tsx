@@ -216,7 +216,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
           <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
               <Users className="w-4 h-4 text-brand-blue" />
             </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
@@ -234,7 +234,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
         </div>
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
           <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange/10 to-brand-orange-deep/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
               <Clock className="w-4 h-4 text-brand-orange-deep" />
             </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
@@ -243,7 +243,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
         </div>
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
           <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
               <BarChart3 className="w-4 h-4 text-brand-cyan" />
             </div>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
@@ -287,7 +287,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
             <Filter className="w-4 h-4" />
             Filters
             {hasActiveFilters && (
-              <span className="w-5 h-5 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white rounded-full text-xs flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <span className="w-5 h-5 bg-brand-blue text-white rounded-full text-xs flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 {[scoreMin || scoreMax ? 1 : 0, dateFrom || dateTo ? 1 : 0].reduce((a, b) => a + b, 0)}
               </span>
             )}
@@ -357,14 +357,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
           </div>
         ) : sessions.length === 0 ? (
           <div className="text-center py-16">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
               <Users className="w-10 h-10 text-brand-blue" />
             </div>
             <p className="text-gray-700 font-medium">
               {totalSessions === 0 && !hasActiveFilters ? 'No candidates invited yet' : 'No results match your filters'}
             </p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
+              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
                 Clear filters
               </button>
             )}
@@ -403,7 +403,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
                               {(session.candidate_name || 'U')[0].toUpperCase()}
                             </div>
                             <span className="font-medium text-gray-900 truncate max-w-[160px]">

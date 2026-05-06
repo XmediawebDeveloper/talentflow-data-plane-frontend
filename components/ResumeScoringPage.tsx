@@ -1111,8 +1111,8 @@ export default function ResumeScoringPage({
     return (
       <main className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <Loader className="w-8 h-8 animate-spin text-brand-blue mx-auto mb-3" />
-          <p className="text-gray-600">Loading scored candidates...</p>
+          <Loader className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
+          <p className="text-sm text-gray-600">Loading scored candidates...</p>
         </div>
       </main>
     );
@@ -1198,9 +1198,9 @@ export default function ResumeScoringPage({
     const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
 
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
         {/* Header with Back Button + Prev/Next nav */}
-        <div className="mb-6">
+        <div className="mb-5">
           {(() => {
             const _historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
             const _prevItem = _historyIdx > 0 ? scoredHistory[_historyIdx - 1] : null;
@@ -1219,9 +1219,9 @@ export default function ResumeScoringPage({
                     setSelectedHistoryItem(null);
                     setSelectedStatusFilter('all');
                   }}
-                  className="flex items-center gap-2 text-brand-blue hover:text-brand-blue-2 font-medium transition-colors hover:gap-3"
+                  className="flex items-center gap-2 text-sm text-brand-blue hover:text-brand-blue-2 font-medium transition-colors hover:gap-3"
                 >
-                  <ArrowLeft className="w-5 h-5" />
+                  <ArrowLeft className="w-4 h-4" />
                   Back to Scored Candidates
                 </button>
                 {scoredHistory.length > 1 && (
@@ -1251,24 +1251,24 @@ export default function ResumeScoringPage({
             );
           })()}
 
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div className="flex items-start gap-3 sm:gap-4">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                  <Target className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Target className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl text-gray-900 mb-1">{selectedHistoryItem.jobTitle}</h1>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
+                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 tracking-tight">{selectedHistoryItem.jobTitle}</h1>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                     <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
+                      <Clock className="w-3.5 h-3.5" />
                       {formatIST(selectedHistoryItem.scoredAt)}
                     </span>
                     <span className="flex items-center gap-1">
-                      <FileText className="w-4 h-4" />
+                      <FileText className="w-3.5 h-3.5" />
                       {selectedHistoryItem.totalScored} candidates scored
                     </span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
                       selectedHistoryItem.source === 'my-resumes'
                         ? 'bg-gray-100 text-gray-900'
                         : 'bg-gray-100 text-gray-900'
@@ -1292,7 +1292,7 @@ export default function ResumeScoringPage({
               {canRunScoring && (
                 <button
                   onClick={() => setViewMode('new')}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
                   <Target className="w-4 h-4" />
                   Score New Resumes
@@ -1330,7 +1330,7 @@ export default function ResumeScoringPage({
                 <button
                   onClick={handleBulkDownloadScorecards}
                   disabled={isBulkDownloading}
-                  className="px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isBulkDownloading ? (
                     <>
@@ -1529,41 +1529,41 @@ export default function ResumeScoringPage({
     ].filter(Boolean).length;
 
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+        <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           {/* Left: back + icon + title */}
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             {onBack && (
               <button
                 onClick={onBack}
                 className="p-2 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center shadow-sm border border-gray-200"
-                title="Back to Dashboard"
+                aria-label="Back to Dashboard" title="Back to Dashboard"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-700" />
+                <ArrowLeft className="w-4 h-4 text-gray-700" />
               </button>
             )}
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-              <History className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+            <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+              <History className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-gray-900 text-lg sm:text-xl font-semibold">Scored Candidates</h1>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">View and manage previously scored resumes</p>
+              <h1 className="text-gray-900 text-lg sm:text-xl font-semibold tracking-tight">Scored Candidates</h1>
+              <p className="text-sm text-gray-600 truncate">View and manage previously scored resumes</p>
             </div>
           </div>
 
           {/* Right: actions */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Available Units Display */}
             {availableUnits !== null && (
-              <div className="bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-3 py-2 flex items-center gap-2 sm:gap-3">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="w-4 h-4 text-white" />
+              <div className="bg-brand-blue rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-3 py-1.5 flex items-center gap-2">
+                <div className="h-7 w-7 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div>
                   <div className="text-[10px] text-blue-100 leading-tight">Available Units</div>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-base sm:text-lg font-bold text-white leading-tight">
+                    <span className="text-sm font-bold text-white leading-tight">
                       {availableUnits.toLocaleString()}
                     </span>
                     <span className="text-[10px] text-blue-100">units</span>
@@ -1599,7 +1599,7 @@ export default function ResumeScoringPage({
                   setFilterByJobId(undefined);
                   setShowProgressModal(true);
                 }}
-                className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-brand-cyan to-brand-teal text-white rounded-lg hover:from-brand-teal hover:to-brand-cyan transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-cyan/30"
+                className="px-3 py-2 bg-brand-cyan text-white rounded-lg hover:from-brand-teal hover:to-brand-cyan transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-cyan/30"
               >
                 <Clock className="w-4 h-4" />
                 <span>Progress Tables</span>
@@ -1612,9 +1612,9 @@ export default function ResumeScoringPage({
             {/* View All Candidates Button */}
             <button
               onClick={handleToggleGlobalView}
-              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md ${
+              className={`px-3 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md ${
                 isGlobalView
-                  ? 'bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25 ring-1 ring-white/10'
+                  ? 'bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25 ring-1 ring-white/10'
                   : 'bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
               }`}
             >
@@ -1631,7 +1631,7 @@ export default function ResumeScoringPage({
                   setResumeSource(null);
                   setSelectedResumes([]);
                 }}
-                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                className="px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
               >
                 <Target className="w-4 h-4" />
                 Score Resumes
@@ -1644,16 +1644,16 @@ export default function ResumeScoringPage({
         {isGlobalView ? (
           <div className="space-y-4">
             {isLoadingGlobal ? (
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-12 text-center">
-                <Loader className="w-8 h-8 animate-spin text-brand-blue mx-auto mb-3" />
-                <p className="text-gray-600">Loading all scored candidates...</p>
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
+                <Loader className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
+                <p className="text-sm text-gray-600">Loading all scored candidates...</p>
               </div>
             ) : globalScoredResumes.length === 0 ? (
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-12 text-center">
-                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                  <Search className="w-8 h-8 text-brand-blue" />
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
+                <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                  <Search className="w-5 h-5 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No Scored Candidates</h3>
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2 tracking-tight">No Scored Candidates</h3>
                 <p className="text-sm text-gray-600">Score resumes against jobs to see them here.</p>
               </div>
             ) : (
@@ -1683,7 +1683,7 @@ export default function ResumeScoringPage({
         ) : (
         <>
         {/* View Toggle and Download Bar */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1 sm:gap-2 bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
@@ -1723,7 +1723,7 @@ export default function ResumeScoringPage({
             {selectedHistoryItems.size > 0 && (
               <button
                 onClick={handleDownloadSelectedHistory}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30"
               >
                 <Download className="w-4 h-4" />
                 Download Selected ({selectedHistoryItems.size})
@@ -1733,31 +1733,31 @@ export default function ResumeScoringPage({
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-5 mb-6">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brand-blue/60" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
                 <input
                   type="text"
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
                   placeholder="Search by job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition-shadow text-gray-900"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition-shadow text-sm text-gray-900"
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowHistoryFilters(!showHistoryFilters)}
-                className={`flex-1 sm:flex-none px-3 sm:px-5 py-2.5 rounded-lg border transition-all flex items-center justify-center gap-2 font-medium text-sm sm:text-base ${
+                className={`flex-1 sm:flex-none px-3 py-2 rounded-lg border transition-all flex items-center justify-center gap-2 font-medium text-sm ${
                   activeFiltersCount > 0
                     ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue shadow-sm shadow-brand-blue/5'
                     : 'bg-brand-blue/5 border-brand-blue/10 text-gray-700 hover:bg-brand-blue/10 hover:border-brand-blue/20 hover:text-brand-blue'
                 }`}
               >
-                <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Filter className="w-4 h-4" />
                 <span className="hidden sm:inline">Filters</span>
                 {activeFiltersCount > 0 && (
                   <span className="px-2 py-0.5 bg-brand-blue text-white rounded-full text-xs font-medium">
@@ -1767,7 +1767,7 @@ export default function ResumeScoringPage({
                 <ChevronDown className={`w-4 h-4 transition-transform ${showHistoryFilters ? 'rotate-180' : ''}`} />
               </button>
 
-              <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 sm:px-4 py-2.5 rounded-lg whitespace-nowrap font-medium">
+              <div className="text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
                 <span className="text-brand-blue font-semibold">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
               </div>
             </div>
@@ -1779,12 +1779,12 @@ export default function ResumeScoringPage({
             const uniqueJobTypes = [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
             const uniqueIndustries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))];
             const uniqueCreators = [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
-            const selectCls = "w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-gray-900 text-sm";
-            const inputCls = "w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-gray-900 text-sm";
+            const selectCls = "w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-gray-900 text-sm";
+            const inputCls = "w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-gray-900 text-sm";
             const labelCls = "block text-xs font-medium text-gray-600 mb-1.5";
             return (
-            <div className="mt-5 pt-5 border-t border-brand-blue/10">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="mt-4 pt-4 border-t border-brand-blue/10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 
                 {/* Created By — dropdown with user names */}
                 <div>
@@ -1862,7 +1862,7 @@ export default function ResumeScoringPage({
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
           <>
-          <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-4'}>
+          <div className={historyViewMode === 'grid' ? 'grid gap-4' : 'space-y-3'}>
             {displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
@@ -1879,7 +1879,7 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer"
+                    className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer"
                     onClick={() => {
                       setSelectedHistoryItem(item);
                       setViewMode('details');
@@ -1890,21 +1890,21 @@ export default function ResumeScoringPage({
                       router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                     }}
                   >
-                    <div className="flex flex-col sm:flex-row items-start gap-4">
+                    <div className="flex flex-col sm:flex-row items-start gap-3">
                       {/* Scoring icon - like AI Talent Match */}
-                      <div className="w-12 h-12 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                        <Target className="w-6 h-6 text-white" />
+                      <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                        <Target className="w-4 h-4 text-white" />
                       </div>
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
                           {item.jdJobId && (
-                            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue rounded-md text-xs sm:text-sm font-bold font-mono border border-brand-blue/20 flex-shrink-0">
+                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
                               {item.jdJobId}
                             </span>
                           )}
                           <h3
-                            className="text-base sm:text-xl font-medium text-gray-900 truncate cursor-pointer hover:text-brand-blue transition-colors"
+                            className="text-sm sm:text-base font-medium text-gray-900 truncate cursor-pointer hover:text-brand-blue transition-colors"
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -1928,16 +1928,16 @@ export default function ResumeScoringPage({
                             };
                             const c = cfg[s] || cfg.published;
                             return (
-                              <span className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5 sm:gap-2 flex-shrink-0`}>
-                                <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${c.dot}`}></div>
+                              <span className={`px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5 flex-shrink-0`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
                                 {c.label}
                               </span>
                             );
                           })()}
                           {/* Version badge */}
                           {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
-                            <span className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0">
-                              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-gray-500"></div>
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
                               v{item.jdCurrentVersion}
                             </span>
                           )}
@@ -1945,56 +1945,56 @@ export default function ResumeScoringPage({
                           <button
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
                             className="p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
-                            title="Scoring History"
+                            aria-label="Scoring History" title="Scoring History"
                           >
                             <History className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
                         {/* Info row — matches JD list card exactly */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-5 text-sm sm:text-base text-gray-600 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 mb-2">
                           {item.jdDepartment && (
-                            <span className="flex items-center gap-1.5 sm:gap-2">
-                              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            <span className="flex items-center gap-1.5">
+                              <Briefcase className="w-4 h-4 text-gray-400" />
                               {item.jdDepartment}
                             </span>
                           )}
                           {item.jdIndustryType && (
-                            <span className="flex items-center gap-1.5 sm:gap-2">
-                              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-4 h-4 text-gray-400" />
                               {formatIndustryType(item.jdIndustryType)}
                             </span>
                           )}
                           {item.jdLocation && (
-                          <span className="flex items-center gap-1.5 sm:gap-2">
-                            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="w-4 h-4 text-gray-400" />
                             {item.jdLocation}
                           </span>
                           )}
                           {item.jdEmploymentType && (
-                            <span className="flex items-center gap-1.5 sm:gap-2">
-                              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="w-4 h-4 text-gray-400" />
                               {formatEmploymentType(item.jdEmploymentType)}
                             </span>
                           )}
                           {item.jdRemoteType && (
-                            <span className="flex items-center gap-1.5 sm:gap-2">
-                              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            <span className="flex items-center gap-1.5">
+                              <Users className="w-4 h-4 text-gray-400" />
                               <span className="capitalize">{item.jdRemoteType}</span>
                             </span>
                           )}
                           {item.scoredResumes?.[0]?.scoredBy && (
-                            <span className="flex items-center gap-1.5 sm:gap-2">
-                              <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            <span className="flex items-center gap-1.5">
+                              <User className="w-4 h-4 text-gray-400" />
                               Scored by {item.scoredResumes[0].scoredBy}
                             </span>
                           )}
-                          <span className="flex items-center gap-1.5 sm:gap-2">
-                            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                          <span className="flex items-center gap-1.5">
+                            <Calendar className="w-4 h-4 text-gray-400" />
                             {formatIST(item.scoredAt)}
                           </span>
-                          <span className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-50 rounded-lg">
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 rounded-lg">
+                            <FileText className="w-4 h-4 text-gray-400" />
                             {item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
                           </span>
                         </div>
@@ -2030,9 +2030,9 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-3 sm:px-4 py-2 bg-gradient-to-r from-brand-cyan to-brand-teal text-white rounded-lg hover:from-brand-teal hover:to-brand-cyan transition-all text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                          className="px-3 py-2 bg-brand-cyan text-white rounded-lg hover:from-brand-teal hover:to-brand-cyan transition-all text-sm font-medium flex items-center gap-1.5 justify-center w-full shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
                         >
-                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <Eye className="w-4 h-4" />
                           View Progress
                         </button>
                         <button
@@ -2046,7 +2046,7 @@ export default function ResumeScoringPage({
                             } catch (e) {}
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="px-3 sm:px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center w-full"
+                          className="px-3 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm font-medium flex items-center justify-center w-full"
                         >
                           View Details
                         </button>
@@ -2060,9 +2060,9 @@ export default function ResumeScoringPage({
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-6 group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
+                  className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
                 >
-                  <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+                  <div className="flex flex-col sm:flex-row items-start gap-3">
                     <div
                       className="flex-1 min-w-0 cursor-pointer w-full"
                       onClick={() => {
@@ -2073,11 +2073,11 @@ export default function ResumeScoringPage({
                       }}
                     >
                       {/* Card header — matches JD grid card */}
-                      <div className="p-0 mb-4">
+                      <div className="p-0 mb-3">
                         {/* Top: icon + badges */}
                         <div className="flex items-start justify-between mb-3">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Briefcase className="h-4 w-4 text-brand-blue" />
                           </div>
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
                             {(() => {
@@ -2092,15 +2092,15 @@ export default function ResumeScoringPage({
                               };
                               const c = cfg[s] || cfg.published;
                               return (
-                                <span className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5`}>
-                                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${c.dot}`}></div>
+                                <span className={`px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5`}>
+                                  <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
                                   {c.label}
                                 </span>
                               );
                             })()}
                             {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
-                              <span className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-gray-500"></div>
+                              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
                                 v{item.jdCurrentVersion}
                               </span>
                             )}
@@ -2108,7 +2108,7 @@ export default function ResumeScoringPage({
                             <button
                               onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
                               className="p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
-                              title="Scoring History"
+                              aria-label="Scoring History" title="Scoring History"
                             >
                               <History className="w-3.5 h-3.5" />
                             </button>
@@ -2118,11 +2118,11 @@ export default function ResumeScoringPage({
                         {/* job_id + title */}
                         <div className="flex items-center gap-2 mb-3">
                           {item.jdJobId && (
-                            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue rounded-md text-xs sm:text-sm font-bold font-mono border border-brand-blue/20">
+                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
                               {item.jdJobId}
                             </span>
                           )}
-                          <h3 className="text-base sm:text-xl font-medium text-gray-900 line-clamp-2">
+                          <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
                             {item.jobTitle}
                           </h3>
                         </div>
@@ -2131,48 +2131,48 @@ export default function ResumeScoringPage({
                         <div className="space-y-2">
                           {item.jdDepartment && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <span className="truncate">{item.jdDepartment}</span>
                             </div>
                           )}
                           {item.jdIndustryType && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <span className="truncate">{formatIndustryType(item.jdIndustryType)}</span>
                             </div>
                           )}
                           {item.jdLocation && (
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                            <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <span className="truncate">{item.jdLocation}</span>
                           </div>
                           )}
                           {item.jdEmploymentType && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <span className="truncate">{formatEmploymentType(item.jdEmploymentType)}</span>
                             </div>
                           )}
                           {item.jdRemoteType && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <span className="capitalize">{item.jdRemoteType}</span>
                             </div>
                           )}
                           {item.jdPublishedAt && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <span>Posted {formatISTDate(item.jdPublishedAt)}</span>
                             </div>
                           )}
                           {item.jdCreatedByName && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <span className="truncate">By {item.jdCreatedByName}</span>
                             </div>
                           )}
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <span>{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</span>
                           </div>
                         </div>
@@ -2204,8 +2204,8 @@ export default function ResumeScoringPage({
                     </div>
 
                     <div className="flex-shrink-0 text-center w-full sm:w-auto">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-2 font-medium">Avg Score</div>
-                      <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
+                      <div className="text-xs text-gray-600 mb-1 font-medium">Avg Score</div>
+                      <div className={`text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 tracking-tight ${getScoreColor(avgScore)}`}>
                         {avgScore}%
                       </div>
                       <div className="mt-4 flex flex-col gap-2 w-full">
@@ -2236,7 +2236,7 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-3 sm:px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full"
+                          className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center w-full"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           View Progress
@@ -2253,7 +2253,7 @@ export default function ResumeScoringPage({
                             }
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="flex-1 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer"
+                          className="flex-1 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer"
                         >
                           View Details
                           <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
@@ -2275,18 +2275,18 @@ export default function ResumeScoringPage({
           />
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-16 text-center">
-            <Loader className="w-8 h-8 animate-spin text-brand-blue mx-auto mb-3" />
-            <p className="text-gray-600">Loading scoring history...</p>
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+            <Loader className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
+            <p className="text-gray-600 text-sm">Loading scoring history...</p>
           </div>
         ) : scoredHistory.length === 0 ? (
-          <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-16 text-center">
+          <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                <History className="w-10 h-10 text-brand-blue" />
+              <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                <History className="w-5 h-5 text-brand-blue" />
               </div>
-              <h3 className="text-xl text-gray-900 mb-2 tracking-tight">No Scoring History Yet</h3>
-              <p className="text-gray-600 mb-6">
+              <h3 className="text-base sm:text-lg text-gray-900 mb-2 tracking-tight font-semibold">No Scoring History Yet</h3>
+              <p className="text-gray-600 text-sm mb-4">
                 Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit.
               </p>
               {canRunScoring && (
@@ -2297,22 +2297,22 @@ export default function ResumeScoringPage({
                     setResumeSource(null);
                     setSelectedResumes([]);
                   }}
-                  className="px-6 py-3 rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 inline-flex items-center gap-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  className="px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 inline-flex items-center gap-1.5 bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
-                  <Target className="w-5 h-5" />
+                  <Target className="w-4 h-4" />
                   Score Resumes Now
                 </button>
               )}
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-16 text-center">
+          <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                <Search className="w-10 h-10 text-brand-blue" />
+              <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                <Search className="w-5 h-5 text-brand-blue" />
               </div>
-              <h3 className="text-xl text-gray-900 mb-2 tracking-tight">No Results Found</h3>
-              <p className="text-gray-600 mb-6">
+              <h3 className="text-base sm:text-lg text-gray-900 mb-2 tracking-tight font-semibold">No Results Found</h3>
+              <p className="text-gray-600 text-sm mb-4">
                 No scored jobs match your current filters. Try adjusting your search criteria or clearing filters.
               </p>
               <button
@@ -2324,9 +2324,9 @@ export default function ResumeScoringPage({
                   setHistoryMinCandidates(0);
                   setHistoryAvgScoreMin(0);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2"
+                className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-1.5"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
                 Clear All Filters
               </button>
             </div>
@@ -2433,7 +2433,7 @@ export default function ResumeScoringPage({
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+                  <div className="w-9 h-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
                     <History className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div>
@@ -2441,7 +2441,7 @@ export default function ResumeScoringPage({
                     <p className="text-xs text-gray-500 truncate max-w-[260px]">{historyModalItem.jobTitle}</p>
                   </div>
                 </div>
-                <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
@@ -2486,7 +2486,7 @@ export default function ResumeScoringPage({
               </div>
               <div className="px-6 py-3 border-t border-gray-100 flex justify-between items-center bg-gray-50">
                 <span className="text-xs text-gray-500">{historyModalItem.totalScored} total resumes scored</span>
-                <button onClick={() => setHistoryModalItem(null)} className="px-4 py-1.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-xs font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
+                <button onClick={() => setHistoryModalItem(null)} className="px-4 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-xs font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
               </div>
             </div>
           </div>
@@ -2499,11 +2499,11 @@ export default function ResumeScoringPage({
 
   // New Scoring Flow
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
       <div className="max-w-6xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 sm:gap-4">
+      <div className="mb-5">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => {
               setViewMode('history');
@@ -2512,18 +2512,18 @@ export default function ResumeScoringPage({
               setSelectedResumes([]);
             }}
             className="p-2 bg-white border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex-shrink-0"
-            title="Back"
+            aria-label="Back" title="Back"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+            <ArrowLeft className="w-4 h-4 text-gray-600" />
           </button>
-          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-            <Target className="h-5 w-5 text-brand-blue" />
+          <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+            <Target className="h-4 w-4 text-brand-blue" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Score Resumes</h1>
               {availableUnits !== null && (
-                <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 text-xs sm:text-sm font-medium rounded-full w-fit">
+                <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 text-xs font-medium rounded-full w-fit">
                   {availableUnits.toLocaleString()} units
                 </span>
               )}
@@ -2534,8 +2534,8 @@ export default function ResumeScoringPage({
       </div>
 
       {/* Job Selection */}
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6 mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-3">
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Job Description
         </label>
 
@@ -2545,7 +2545,7 @@ export default function ResumeScoringPage({
           <button
             type="button"
             onClick={() => { setShowJobDropdown(v => !v); setJobDropdownSearch(''); }}
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-left flex items-center justify-between gap-3 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 hover:border-brand-blue/30 transition-colors"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-left flex items-center justify-between gap-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 hover:border-brand-blue/30 transition-colors"
           >
             {selectedJobData ? (
               <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
@@ -2609,7 +2609,7 @@ export default function ResumeScoringPage({
                         setShowResults(false);
                         setShowJobDropdown(false);
                       }}
-                      className={`w-full px-4 py-3 text-left hover:bg-brand-blue/5 transition-colors border-b border-gray-100 last:border-0 ${selectedJob === job.id ? 'bg-brand-blue/10 hover:bg-brand-blue/10' : ''}`}
+                      className={`w-full px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors border-b border-gray-100 last:border-0 ${selectedJob === job.id ? 'bg-brand-blue/10 hover:bg-brand-blue/10' : ''}`}
                     >
                       {/* JD ID + title + status + AI + version only */}
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -2656,11 +2656,11 @@ export default function ResumeScoringPage({
 
         {/* Selected Job Details */}
         {selectedJobData && (
-          <div className="mt-4 p-4 bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5 rounded-lg">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-brand-blue to-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                  <Briefcase className="w-5 h-5 text-white" />
+          <div className="mt-3 p-3 bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5 rounded-lg">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <Briefcase className="w-4 h-4 text-white" />
                 </div>
                 <div className="min-w-0">
                   {/* Row 1: JD ID + title + badges */}
@@ -2711,7 +2711,7 @@ export default function ResumeScoringPage({
               {canRunScoring && (
                 <button
                   onClick={() => setShowResumeSelectionModal(true)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
                   <Target className="w-4 h-4" />
                   Select Resumes

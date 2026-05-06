@@ -7,7 +7,7 @@ import {
   FileText, Upload, Trash2, Search, X, ArrowLeft, Filter, Download, ExternalLink,
   CheckCircle2, Circle, Clock3, XCircle, ChevronDown, Mail, Phone, Globe, Book,
   Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2, Inbox,
-  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal
+  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
@@ -715,84 +715,93 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = internalStats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-gray-50 h-screen overflow-auto">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="p-2 sm:p-3 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl shadow-lg">
-                <HelpCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+    <div className="flex-1 bg-slate-50 h-screen overflow-auto">
+      {/* SaaS Hero Header */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
+                  <HelpCircle className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                    <Sparkles className="h-3 w-3 text-brand-orange" />
+                    Help & support
+                  </div>
+                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Support Center</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+                    {activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Support Center</h1>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  {activeTab === 'external' ? 'Get help from TalentFlow support team' : 'Manage help requests from your team'}
-                </p>
+
+              <div className="flex items-center gap-2 sm:gap-3">
+                {activeTab === 'team' && isAdmin && (
+                  <button
+                    onClick={() => { fetchInternalTickets(); fetchInternalStats(); }}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </button>
+                )}
+                {activeTab === 'external' && view !== 'overview' && view !== 'submit' && (
+                  <button
+                    onClick={() => setView('submit')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    New Ticket
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              {activeTab === 'team' && isAdmin && (
+            {/* Tab Switcher - Only show for admins */}
+            {isAdmin && (
+              <div className="flex gap-1 mt-4 sm:mt-6 border-b border-white/15 overflow-x-auto">
                 <button
-                  onClick={() => { fetchInternalTickets(); fetchInternalStats(); }}
-                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+                  className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'external'
+                      ? 'text-white border-white'
+                      : 'text-white/70 border-transparent hover:text-white hover:border-white/40'
+                  }`}
                 >
-                  <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">Refresh</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">My Support Tickets</span>
+                    <span className="sm:hidden">My Tickets</span>
+                  </div>
                 </button>
-              )}
-              {activeTab === 'external' && view !== 'overview' && view !== 'submit' && (
                 <button
-                  onClick={() => setView('submit')}
-                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
+                  onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+                  className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'team'
+                      ? 'text-white border-white'
+                      : 'text-white/70 border-transparent hover:text-white hover:border-white/40'
+                  }`}
                 >
-                  <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  New Ticket
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <Inbox className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">Team Support Tickets</span>
+                    <span className="sm:hidden">Team</span>
+                    {internalUnassignedTickets > 0 && (
+                      <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs bg-brand-orange/30 text-white ring-1 ring-white/20 rounded-full font-semibold">
+                        {internalUnassignedTickets}
+                      </span>
+                    )}
+                  </div>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-
-          {/* Tab Switcher - Only show for admins */}
-          {isAdmin && (
-            <div className="flex gap-1 mt-4 sm:mt-6 border-b border-gray-200 -mb-4 sm:-mb-6 overflow-x-auto">
-              <button
-                onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-                className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === 'external'
-                    ? 'text-gray-900 border-gray-900'
-                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">My Support Tickets</span>
-                  <span className="sm:hidden">My Tickets</span>
-                </div>
-              </button>
-              <button
-                onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-                className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === 'team'
-                    ? 'text-gray-900 border-gray-900'
-                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <Inbox className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">Team Support Tickets</span>
-                  <span className="sm:hidden">Team</span>
-                  {internalUnassignedTickets > 0 && (
-                    <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs bg-orange-100 text-orange-700 rounded-full">
-                      {internalUnassignedTickets}
-                    </span>
-                  )}
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
+        </section>
       </div>
 
       {/* Content */}
@@ -804,7 +813,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div className="space-y-4 sm:space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
@@ -813,7 +822,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Awaiting response</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0" />
@@ -822,7 +831,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Being worked on</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
@@ -831,7 +840,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Successfully solved</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
@@ -867,7 +876,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Recent Tickets */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
                 <h3 className="text-sm sm:text-base text-gray-900 font-semibold">Recent Tickets</h3>
                 <button
@@ -1002,7 +1011,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 md:p-8">
               <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Submit Support Ticket</h2>
 
               <div className="space-y-4 sm:space-y-6">
@@ -1126,7 +1135,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <button
                     onClick={handleSubmitTicket}
                     disabled={submitting}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
+                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
                   >
                     {submitting ? (
                       <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
@@ -1152,7 +1161,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
               {/* Filters */}
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
@@ -1337,7 +1346,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 {/* Ticket Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
                     <div>
                       <span className="text-[10px] sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
@@ -1354,7 +1363,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 {/* Conversation */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h3 className="text-sm sm:text-base text-gray-900 font-semibold mb-4 sm:mb-6">Conversation</h3>
 
                   <div className="space-y-4 sm:space-y-6">
@@ -1406,7 +1415,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <button
                           onClick={handleSendReply}
                           disabled={!replyMessage.trim()}
-                          className="px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+                          className="px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
                         >
                           <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Send Reply
@@ -1420,7 +1429,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Sidebar */}
               <div className="space-y-4 sm:space-y-6">
                 {/* Ticket Info */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Ticket Information</h4>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -1455,7 +1464,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                  <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                     <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Update Priority</h4>
                     <select
                       value={selectedTicket.priority}
@@ -1470,7 +1479,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 )}
 
                 {/* Actions */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Actions</h4>
 
                   <div className="space-y-2">
@@ -1533,7 +1542,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 md:p-8">
               <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Knowledge Base</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
@@ -1563,7 +1572,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div className="space-y-4 sm:space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Open</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
@@ -1572,7 +1581,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Awaiting action</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0" />
@@ -1581,7 +1590,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Being handled</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
@@ -1590,7 +1599,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Successfully resolved</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Unassigned</span>
                   <Users className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 flex-shrink-0" />
@@ -1599,7 +1608,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-[10px] sm:text-xs text-gray-600">Need assignment</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Total</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
@@ -1611,7 +1620,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             {/* Category Breakdown */}
             {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">Tickets by Category</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
                   {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
@@ -1667,7 +1676,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Recent Team Tickets */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">Recent Team Tickets</h3>
                 <button
@@ -1743,7 +1752,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
               {/* Filters */}
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
@@ -1964,7 +1973,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 {/* Ticket Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
                     <div>
                       <span className="text-[10px] sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
@@ -1990,7 +1999,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 {/* Conversation */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-4 sm:mb-6">Conversation</h3>
 
                   <div className="space-y-4 sm:space-y-6">
@@ -2042,7 +2051,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <button
                           onClick={handleSendInternalReply}
                           disabled={!replyMessage.trim()}
-                          className="px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+                          className="px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
                         >
                           <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Send Reply
@@ -2056,7 +2065,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Sidebar */}
               <div className="space-y-4 sm:space-y-6">
                 {/* Ticket Info */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Ticket Information</h4>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -2093,7 +2102,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Update Priority */}
                 {selectedInternalTicket.status !== 'closed' && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                  <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Update Priority</h4>
                     <select
                       value={selectedInternalTicket.priority}
@@ -2108,7 +2117,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 )}
 
                 {/* Actions */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Actions</h4>
 
                   <div className="space-y-2">
@@ -2116,7 +2125,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <button
                         onClick={() => handleAssignInternalTicket(selectedInternalTicket.id)}
                         disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-400"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-400"
                       >
                         {internalActionLoading === selectedInternalTicket.id ? (
                           <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />

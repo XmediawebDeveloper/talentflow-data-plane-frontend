@@ -365,14 +365,14 @@ ${job.certifications?.join(', ') || 'N/A'}
               <button
                 onClick={handleCopy}
                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Copy"
+                aria-label="Copy" title="Copy"
               >
                 <Copy className="w-5 h-5" />
               </button>
               <button
                 onClick={handleDownload}
                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Download"
+                aria-label="Download" title="Download"
               >
                 <Download className="w-5 h-5" />
               </button>
