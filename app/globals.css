@@ -950,6 +950,127 @@ a:focus:not(:focus-visible) {
   outline-color: var(--text-muted);
 }
 
+/* ── Slate family (used heavily as page/card surfaces) ───── */
+.dark .bg-slate-200 { background-color: var(--surface-active); }
+.dark .bg-slate-900 { background-color: #0f172a; }
+.dark .bg-slate-950 { background-color: #020617; }
+.dark .bg-slate-50\/30  { background-color: rgba(17, 24, 39, 0.3); }
+.dark .bg-slate-50\/40  { background-color: rgba(17, 24, 39, 0.4); }
+.dark .bg-slate-50\/50  { background-color: rgba(17, 24, 39, 0.5); }
+.dark .bg-slate-50\/60  { background-color: rgba(17, 24, 39, 0.6); }
+.dark .bg-slate-50\/80  { background-color: rgba(17, 24, 39, 0.8); }
+.dark .bg-slate-50\/95  { background-color: rgba(17, 24, 39, 0.95); }
+.dark .bg-slate-900\/40 { background-color: rgba(15, 23, 42, 0.4); }
+.dark .bg-slate-900\/50 { background-color: rgba(15, 23, 42, 0.5); }
+.dark .bg-slate-900\/60 { background-color: rgba(15, 23, 42, 0.6); }
+.dark .bg-slate-900\/80 { background-color: rgba(15, 23, 42, 0.8); }
+.dark .bg-slate-950\/40 { background-color: rgba(2, 6, 23, 0.4); }
+.dark .hover\:bg-slate-50:hover  { background-color: var(--surface-hover); }
+.dark .hover\:bg-slate-100:hover { background-color: var(--surface-active); }
+.dark .hover\:bg-slate-200:hover { background-color: var(--border-dark); }
+.dark .text-slate-400 { color: var(--text-muted); }
+.dark .text-slate-500 { color: var(--text-muted); }
+.dark .text-slate-600 { color: var(--text-secondary); }
+.dark .text-slate-700 { color: var(--text-secondary); }
+.dark .text-slate-800 { color: var(--text-primary); }
+.dark .text-slate-900 { color: var(--text-primary); }
+.dark .border-slate-200 { border-color: var(--border); }
+.dark .border-slate-700 { border-color: var(--border-dark); }
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+.dark .ring-slate-200 { --tw-ring-color: var(--border); }
+.dark .ring-slate-200\/60 { --tw-ring-color: rgba(55, 65, 81, 0.6); }
+
+/* ── Violet family ─────────────────────────────────────── */
+.dark .bg-violet-50  { background-color: rgba(139, 92, 246, 0.15); }
+.dark .bg-violet-50\/30 { background-color: rgba(139, 92, 246, 0.08); }
+.dark .bg-violet-100 { background-color: rgba(139, 92, 246, 0.2); }
+.dark .bg-violet-300 { background-color: rgba(139, 92, 246, 0.5); }
+.dark .bg-violet-400 { background-color: rgba(139, 92, 246, 0.6); }
+.dark .bg-violet-500 { background-color: #8b5cf6; }
+.dark .bg-violet-600 { background-color: #7c3aed; }
+.dark .text-violet-400 { color: #c4b5fd; }
+.dark .text-violet-500 { color: #c4b5fd; }
+.dark .text-violet-600 { color: #a78bfa; }
+.dark .text-violet-700 { color: #c084fc; }
+.dark .text-violet-800 { color: #d8b4fe; }
+.dark .text-violet-900 { color: #ddd6fe; }
+.dark .hover\:text-violet-800:hover { color: #d8b4fe; }
+.dark .border-violet-200 { border-color: rgba(139, 92, 246, 0.35); }
+.dark .border-violet-300 { border-color: rgba(139, 92, 246, 0.5); }
+.dark .border-violet-400 { border-color: rgba(139, 92, 246, 0.6); }
+.dark .border-violet-500 { border-color: #8b5cf6; }
+
+/* ── Sky / Rose / Fuchsia / Lime (sparse usage) ──────────── */
+.dark .bg-sky-50    { background-color: rgba(14, 165, 233, 0.15); }
+.dark .bg-rose-100  { background-color: rgba(244, 63, 94, 0.2); }
+.dark .bg-fuchsia-100 { background-color: rgba(217, 70, 239, 0.2); }
+.dark .bg-fuchsia-600 { background-color: #c026d3; }
+.dark .bg-lime-100  { background-color: rgba(132, 204, 22, 0.2); }
+.dark .text-sky-500 { color: #38bdf8; }
+.dark .hover\:text-sky-500:hover { color: #38bdf8; }
+.dark .text-rose-700 { color: #fb7185; }
+.dark .text-fuchsia-700 { color: #e879f9; }
+.dark .text-lime-700 { color: #a3e635; }
+
+/* ── Dark text on light tinted backgrounds (800/900 variants) ──
+   In light mode these sit on bg-{color}-50/100. In dark mode the
+   surface becomes a translucent dark overlay, so the text needs
+   to brighten or it disappears. */
+.dark .text-blue-800   { color: #93c5fd; }
+.dark .text-blue-900   { color: #bfdbfe; }
+.dark .text-green-800  { color: #86efac; }
+.dark .text-green-900  { color: #bbf7d0; }
+.dark .text-emerald-800 { color: #6ee7b7; }
+.dark .text-indigo-800 { color: #a5b4fc; }
+.dark .text-indigo-900 { color: #c7d2fe; }
+.dark .text-purple-800 { color: #d8b4fe; }
+.dark .text-purple-900 { color: #e9d5ff; }
+.dark .text-yellow-800 { color: #fde047; }
+.dark .text-yellow-900 { color: #fef08a; }
+.dark .text-teal-800   { color: #5eead4; }
+.dark .text-teal-900   { color: #99f6e4; }
+.dark .text-pink-800   { color: #f9a8d4; }
+.dark .text-pink-900   { color: #fbcfe8; }
+.dark .text-cyan-800   { color: #67e8f9; }
+.dark .text-cyan-900   { color: #a5f3fc; }
+
+/* ── Mid-saturation text (red 500/600, orange 500/600, etc.) ── */
+.dark .text-red-500    { color: #f87171; }
+.dark .text-red-600    { color: #ef4444; }
+.dark .text-orange-500 { color: #fb923c; }
+.dark .text-orange-600 { color: #f97316; }
+
+/* ── Light text colors used on dark/saturated backgrounds ──
+   Already-light colors (100-400) stay readable in dark mode,
+   but we still want them to render slightly cooler/brighter. */
+.dark .text-amber-100  { color: #fef3c7; }
+.dark .text-amber-200  { color: #fde68a; }
+.dark .text-amber-300  { color: #fcd34d; }
+.dark .text-amber-400  { color: #fbbf24; }
+.dark .text-amber-500  { color: #f59e0b; }
+.dark .text-blue-100   { color: #dbeafe; }
+.dark .text-blue-300   { color: #93c5fd; }
+.dark .text-green-100  { color: #dcfce7; }
+.dark .text-green-300  { color: #86efac; }
+.dark .text-green-400  { color: #4ade80; }
+.dark .text-emerald-200 { color: #a7f3d0; }
+.dark .text-emerald-300 { color: #6ee7b7; }
+.dark .text-emerald-400 { color: #34d399; }
+.dark .text-indigo-100 { color: #e0e7ff; }
+.dark .text-indigo-400 { color: #818cf8; }
+.dark .text-indigo-500 { color: #6366f1; }
+.dark .text-orange-100 { color: #ffedd5; }
+.dark .text-orange-400 { color: #fb923c; }
+.dark .text-purple-200 { color: #e9d5ff; }
+.dark .text-purple-300 { color: #d8b4fe; }
+.dark .text-purple-400 { color: #c084fc; }
+.dark .text-red-100    { color: #fee2e2; }
+.dark .text-red-200    { color: #fecaca; }
+.dark .text-red-300    { color: #fca5a5; }
+.dark .text-red-400    { color: #f87171; }
+.dark .text-yellow-300 { color: #fde047; }
+.dark .text-yellow-400 { color: #facc15; }
+
 /* ============================================================
    SaaS UI UTILITY LAYER
    Reusable classes for hand-rolled modals, responsive tables,

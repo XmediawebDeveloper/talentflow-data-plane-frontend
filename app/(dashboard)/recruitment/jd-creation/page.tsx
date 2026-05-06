@@ -25,15 +25,15 @@ function AccessBlockedError({
       case 'ACCOUNT_SUSPENDED':
         return <XCircle className="w-12 h-12 sm:w-16 sm:h-16 text-red-600" />;
       case 'SUBSCRIPTION_INACTIVE':
-        return <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-orange-500" />;
+        return <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-brand-orange-deep" />;
       case 'INSUFFICIENT_UNITS':
-        return <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-orange-500" />;
+        return <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-brand-orange-deep" />;
       case 'UNAUTHORIZED':
-        return <ShieldX className="w-12 h-12 sm:w-16 sm:h-16 text-yellow-500" />;
+        return <ShieldX className="w-12 h-12 sm:w-16 sm:h-16 text-brand-orange" />;
       case 'UNAUTHENTICATED':
-        return <LogIn className="w-12 h-12 sm:w-16 sm:h-16 text-blue-500" />;
+        return <LogIn className="w-12 h-12 sm:w-16 sm:h-16 text-brand-blue" />;
       case 'JD_IN_USE':
-        return <AlertTriangle className="w-12 h-12 sm:w-16 sm:h-16 text-orange-500" />;
+        return <AlertTriangle className="w-12 h-12 sm:w-16 sm:h-16 text-brand-orange-deep" />;
       default:
         return <AlertTriangle className="w-12 h-12 sm:w-16 sm:h-16 text-red-500" />;
     }
@@ -61,49 +61,38 @@ function AccessBlockedError({
   };
 
   const getActionButton = () => {
+    const primaryClass =
+      'px-4 sm:px-5 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium text-sm';
+    const accentClass =
+      'px-4 sm:px-5 py-2 sm:py-2.5 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors font-medium text-sm';
     switch (errorCode) {
       case 'ACCOUNT_SUSPENDED':
         return (
-          <button
-            onClick={() => window.location.href = 'mailto:support@talentflow.com'}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm sm:text-base"
-          >
+          <button onClick={() => window.location.href = 'mailto:support@talentflow.com'} className={primaryClass}>
             Contact Support
           </button>
         );
       case 'SUBSCRIPTION_INACTIVE':
         return (
-          <button
-            onClick={() => window.location.href = '/subscription/current-plan'}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm sm:text-base"
-          >
+          <button onClick={() => window.location.href = '/subscription/current-plan'} className={primaryClass}>
             View Subscription
           </button>
         );
       case 'INSUFFICIENT_UNITS':
         return (
-          <button
-            onClick={() => window.location.href = '/subscription/usage-quotas'}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition-colors text-sm sm:text-base"
-          >
+          <button onClick={() => window.location.href = '/subscription/usage-quotas'} className={accentClass}>
             View Usage & Buy Units
           </button>
         );
       case 'UNAUTHORIZED':
         return (
-          <button
-            onClick={() => window.location.href = 'mailto:support@talentflow.com'}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-yellow-600 text-white rounded-lg font-medium hover:bg-yellow-700 transition-colors text-sm sm:text-base"
-          >
+          <button onClick={() => window.location.href = 'mailto:support@talentflow.com'} className={accentClass}>
             Contact Admin
           </button>
         );
       case 'UNAUTHENTICATED':
         return (
-          <button
-            onClick={() => window.location.href = '/login'}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm sm:text-base"
-          >
+          <button onClick={() => window.location.href = '/login'} className={primaryClass}>
             Sign In
           </button>
         );
@@ -113,12 +102,12 @@ function AccessBlockedError({
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-gray-50 p-4 sm:p-8">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-5 sm:p-8 text-center">
+    <div className="flex-1 flex items-center justify-center bg-slate-50 p-4 sm:p-8">
+      <div className="max-w-md w-full bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 p-5 sm:p-8 text-center">
         <div className="flex justify-center mb-4 sm:mb-6">
           {getErrorIcon()}
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3 tracking-tight">
           {getErrorTitle()}
         </h2>
         <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
@@ -127,7 +116,7 @@ function AccessBlockedError({
 
         {/* Show unit details if insufficient units */}
         {errorCode === 'INSUFFICIENT_UNITS' && accessCheck?.units && (
-          <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
+          <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
             <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Unit Availability:</p>
             <div className="space-y-1 text-sm text-gray-600">
               <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 font-medium' : ''}>
@@ -151,7 +140,7 @@ function AccessBlockedError({
 
         {/* Show job quota details if exceeded */}
         {errorCode === 'JOB_QUOTA_EXCEEDED' && accessCheck?.job_quota && (
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+          <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg p-4 mb-6 text-left">
             <p className="text-sm font-medium text-gray-700 mb-2">Job Quota:</p>
             <div className="text-sm text-gray-600">
               <p>Used: {accessCheck.job_quota.used} / {accessCheck.job_quota.is_unlimited ? '∞' : accessCheck.job_quota.limit}</p>
@@ -159,11 +148,11 @@ function AccessBlockedError({
           </div>
         )}
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {getActionButton()}
           <button
             onClick={onBack}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors text-sm sm:text-base"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors text-sm"
           >
             Go Back
           </button>
@@ -402,8 +391,8 @@ function JDCreationContent() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Checking access...</span>
       </div>
     );
@@ -439,8 +428,8 @@ function JDCreationContent() {
 export default function JDCreationPage() {
   return (
     <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading...</span>
       </div>
     }>

@@ -1198,7 +1198,8 @@ export default function ResumeScoringPage({
     const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
 
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1400px] mx-auto">
         {/* Header with Back Button + Prev/Next nav */}
         <div className="mb-5">
           {(() => {
@@ -1450,6 +1451,7 @@ export default function ResumeScoringPage({
           />
         )}
 
+        </div>
       </main>
     );
   }
@@ -1529,7 +1531,8 @@ export default function ResumeScoringPage({
     ].filter(Boolean).length;
 
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           {/* Left: back + icon + title */}
@@ -2493,14 +2496,15 @@ export default function ResumeScoringPage({
         );
       })()}
 
+      </div>
       </main>
     );
   }
 
   // New Scoring Flow
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
-      <div className="max-w-6xl mx-auto">
+    <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 sm:gap-3">

@@ -202,16 +202,16 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
   return (
     <>
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-50 to-white border-b border-orange-200 px-6 py-5">
+        <div className="bg-slate-50 border-b border-gray-100 px-6 py-5 flex-shrink-0">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="w-6 h-6 text-orange-600" />
+              <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-brand-orange" />
               </div>
               <div>
-                <h2 className="text-xl text-gray-900 mb-1">Duplicate Resume Detected</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">Duplicate Resume Detected</h2>
                 <p className="text-sm text-gray-600">
                   This candidate already exists in the system. Choose how to handle this duplicate.
                 </p>
@@ -220,8 +220,8 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                     File {currentIndex + 1} of {duplicateFiles.length}
                   </span>
                   <div className="flex-1 bg-gray-200 rounded-full h-1.5 max-w-xs">
-                    <div 
-                      className="bg-orange-500 h-1.5 rounded-full transition-all"
+                    <div
+                      className="bg-brand-orange h-1.5 rounded-full transition-all"
                       style={{ width: `${((currentIndex + 1) / duplicateFiles.length) * 100}%` }}
                     />
                   </div>
@@ -240,10 +240,10 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
           {/* Candidate Info */}
-          <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-gray-800" />
+              <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-brand-blue" />
               </div>
               <div>
                 <h3 className="text-lg text-gray-900">{currentFile.candidateName}</h3>
@@ -254,7 +254,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
             {/* Comparison Table */}
             <div className="grid grid-cols-2 gap-4">
               {/* Existing Resume */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="bg-slate-50 border border-gray-100 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <FileText className="w-4 h-4 text-gray-600" />
                   <span className="text-sm text-gray-900">Existing Resume</span>
@@ -285,7 +285,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 <button
                   onClick={() => currentFile.existingResumeId && handlePreviewExisting(currentFile.existingResumeId)}
                   disabled={!currentFile.existingResumeId || previewLoading === 'existing'}
-                  className="w-full mt-3 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full mt-3 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {previewLoading === 'existing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                   {previewLoading === 'existing' ? 'Loading...' : 'Preview Existing'}
@@ -293,10 +293,10 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               </div>
 
               {/* New Resume */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 border border-transparent rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <FileText className="w-4 h-4 text-gray-800" />
-                  <span className="text-sm text-gray-800">New Resume (Uploading)</span>
+                  <FileText className="w-4 h-4 text-brand-blue" />
+                  <span className="text-sm text-brand-blue">New Resume (Uploading)</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
@@ -324,7 +324,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 <button
                   onClick={() => currentFile.newFile && handlePreviewNew(currentFile.newFile)}
                   disabled={!currentFile.newFile || previewLoading === 'new'}
-                  className="w-full mt-3 px-3 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full mt-3 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {previewLoading === 'new' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                   {previewLoading === 'new' ? 'Loading...' : 'Preview New'}
@@ -334,12 +334,12 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
 
             {/* Content Changes Detected */}
             {currentFile.contentChanges && currentFile.contentChanges.length > 0 && (
-              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="mt-4 p-4 bg-brand-orange/5 ring-1 ring-brand-orange/20 border border-transparent rounded-lg">
                 <div className="flex items-start gap-2 mb-2">
-                  <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-brand-orange mt-0.5" />
                   <div>
-                    <div className="text-sm text-yellow-900 mb-1">Content Differences Detected</div>
-                    <ul className="text-xs text-yellow-700 space-y-1">
+                    <div className="text-sm text-brand-orange-deep mb-1">Content Differences Detected</div>
+                    <ul className="text-xs text-brand-orange-deep space-y-1">
                       {currentFile.contentChanges.map((change, index) => (
                         <li key={index}>• {change}</li>
                       ))}
@@ -397,18 +397,18 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               onClick={() => setSelectedAction('overwrite')}
               className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
                 selectedAction === 'overwrite'
-                  ? 'border-orange-500 bg-orange-50'
+                  ? 'border-brand-orange bg-brand-orange/5 ring-1 ring-brand-orange/20'
                   : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  selectedAction === 'overwrite' ? 'bg-orange-100' : 'bg-gray-100'
+                  selectedAction === 'overwrite' ? 'bg-brand-orange/10 ring-1 ring-brand-orange/20' : 'bg-gray-100'
                 }`}>
-                  <RefreshCw className={`w-5 h-5 ${selectedAction === 'overwrite' ? 'text-orange-600' : 'text-gray-600'}`} />
+                  <RefreshCw className={`w-5 h-5 ${selectedAction === 'overwrite' ? 'text-brand-orange' : 'text-gray-600'}`} />
                 </div>
                 <div className="flex-1">
-                  <div className={`text-sm mb-1 ${selectedAction === 'overwrite' ? 'text-orange-900' : 'text-gray-900'}`}>
+                  <div className={`text-sm mb-1 ${selectedAction === 'overwrite' ? 'text-brand-orange-deep' : 'text-gray-900'}`}>
                     2. Overwrite Existing Resume
                   </div>
                   <p className="text-xs text-gray-600">
@@ -417,11 +417,11 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className="flex items-center gap-4 mt-2">
                     <span className="text-xs text-gray-500">• Old resume: Deleted</span>
                     <span className="text-xs text-gray-500">• New resume: Saved</span>
-                    <span className="text-xs text-orange-600">• Consumes 1 upload unit</span>
+                    <span className="text-xs text-brand-orange-deep">• Consumes 1 upload unit</span>
                   </div>
                 </div>
                 {selectedAction === 'overwrite' && (
-                  <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-5 h-5 bg-brand-orange rounded-full flex items-center justify-center flex-shrink-0">
                     <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 12 12">
                       <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" fill="none"/>
                     </svg>
@@ -435,18 +435,18 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               onClick={() => setSelectedAction('version')}
               className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
                 selectedAction === 'version'
-                  ? 'border-green-500 bg-green-50'
+                  ? 'border-brand-cyan bg-brand-cyan/5 ring-1 ring-brand-cyan/15'
                   : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  selectedAction === 'version' ? 'bg-green-100' : 'bg-gray-100'
+                  selectedAction === 'version' ? 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15' : 'bg-gray-100'
                 }`}>
-                  <GitBranch className={`w-5 h-5 ${selectedAction === 'version' ? 'text-green-600' : 'text-gray-600'}`} />
+                  <GitBranch className={`w-5 h-5 ${selectedAction === 'version' ? 'text-brand-cyan' : 'text-gray-600'}`} />
                 </div>
                 <div className="flex-1">
-                  <div className={`text-sm mb-1 ${selectedAction === 'version' ? 'text-green-900' : 'text-gray-900'}`}>
+                  <div className={`text-sm mb-1 ${selectedAction === 'version' ? 'text-brand-cyan' : 'text-gray-900'}`}>
                     3. Save as New Version
                   </div>
                   <p className="text-xs text-gray-600">
@@ -455,11 +455,11 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className="flex items-center gap-4 mt-2">
                     <span className="text-xs text-gray-500">• Old resume: Kept</span>
                     <span className="text-xs text-gray-500">• New resume: Saved as v2</span>
-                    <span className="text-xs text-green-600">• Consumes 1 upload unit</span>
+                    <span className="text-xs text-brand-cyan">• Consumes 1 upload unit</span>
                   </div>
                 </div>
                 {selectedAction === 'version' && (
-                  <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-5 h-5 bg-brand-cyan rounded-full flex items-center justify-center flex-shrink-0">
                     <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 12 12">
                       <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" fill="none"/>
                     </svg>
@@ -470,10 +470,10 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           </div>
 
           {/* Warning */}
-          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="mt-6 p-4 bg-brand-blue/5 ring-1 ring-brand-blue/15 border border-transparent rounded-lg">
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-gray-800">
+              <AlertCircle className="w-4 h-4 text-brand-blue mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-brand-blue">
                 <strong>Note:</strong> All actions are fully audit logged. Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
               </div>
             </div>
@@ -481,25 +481,25 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-4 bg-white">
+        <div className="border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3 flex-shrink-0">
           <div className="flex justify-between items-center">
             <button
               onClick={handleSkipAll}
-              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              className="text-sm text-gray-600 hover:text-brand-blue transition-colors"
             >
               Discard All Remaining ({duplicateFiles.length - currentIndex})
             </button>
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className="px-5 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
               >
                 Cancel Upload
               </button>
               <button
                 onClick={handleNext}
                 disabled={!hasResolvedCurrent}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLastFile ? 'Complete & Upload' : 'Next File'}
                 {!isLastFile && <span className="text-xs opacity-75">({duplicateFiles.length - currentIndex - 1} remaining)</span>}
@@ -513,11 +513,11 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
     {/* Inline Preview Modal */}
     {showPreviewModal && (
       <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
-        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-[90vw] h-[85vh] max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-slate-50 flex-shrink-0">
             <div className="flex items-center gap-2">
-              <Eye className="w-5 h-5 text-blue-600" />
-              <h3 className="font-semibold text-gray-900">{previewTitle}</h3>
+              <Eye className="w-5 h-5 text-brand-blue" />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">{previewTitle}</h3>
             </div>
             <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
               <X className="w-5 h-5 text-gray-500" />

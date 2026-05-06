@@ -65,15 +65,15 @@ export default function VersionHistoryModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-3xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-3xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-100 bg-slate-50">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <History className="w-6 h-6 text-blue-600" />
+            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+              <History className="w-5 h-5 text-brand-blue" />
             </div>
             <div>
-              <h2 className="text-xl text-gray-900">Version History</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Version History</h2>
               <p className="text-sm text-gray-600 mt-0.5">
                 {displayTitle} • {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
               </p>
@@ -81,7 +81,7 @@ export default function VersionHistoryModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-gray-500 hover:text-gray-700 rounded-md hover:bg-white transition-colors"
+            className="p-1 text-gray-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
            aria-label="Close">
             <X className="w-5 h-5" />
           </button>
@@ -97,32 +97,32 @@ export default function VersionHistoryModal({
           ) : (
             <div className="space-y-4">
               {sortedVersions.map((version, index) => (
-                <div 
+                <div
                   key={version.id}
                   className="relative pl-8 pb-6 border-l-2 border-gray-200 last:border-l-0 last:pb-0"
                 >
                   {/* Timeline Dot */}
                   <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 ${
-                    index === 0 
-                      ? 'bg-blue-600 border-blue-600' 
+                    index === 0
+                      ? 'bg-brand-blue border-brand-blue'
                       : 'bg-white border-gray-300'
                   }`} />
 
                   {/* Version Card */}
-                  <div className={`bg-white rounded-lg border-2 transition-all hover:shadow-md ${
-                    index === 0 
-                      ? 'border-blue-200 bg-blue-50' 
-                      : 'border-gray-200 hover:border-blue-200'
+                  <div className={`bg-white rounded-xl border ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 transition-all hover:shadow-md ${
+                    index === 0
+                      ? 'border-brand-blue/20 bg-brand-blue/5'
+                      : 'border-gray-100 hover:border-brand-blue/30'
                   }`}>
                     <div className="p-4">
                       {/* Header Row */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`p-2 rounded-lg ${
-                            index === 0 ? 'bg-blue-100' : 'bg-gray-100'
+                          <div className={`p-2 rounded-lg ring-1 ${
+                            index === 0 ? 'bg-brand-blue/10 ring-brand-blue/15' : 'bg-gray-100 ring-gray-200/50'
                           }`}>
                             <FileText className={`w-5 h-5 ${
-                              index === 0 ? 'text-blue-600' : 'text-gray-600'
+                              index === 0 ? 'text-brand-blue' : 'text-gray-600'
                             }`} />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -131,7 +131,7 @@ export default function VersionHistoryModal({
                                 {version.name}
                               </h3>
                               {index === 0 && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-600 text-white flex-shrink-0">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-brand-blue text-white flex-shrink-0">
                                   Latest
                                 </span>
                               )}
@@ -156,8 +156,8 @@ export default function VersionHistoryModal({
                               onClick={() => onApplyToJob(version.id)}
                               className={`p-2 rounded-md transition-colors flex-shrink-0 ${
                                 index === 0
-                                  ? 'text-blue-600 hover:bg-blue-100'
-                                  : 'text-gray-600 hover:bg-gray-100'
+                                  ? 'text-brand-blue hover:bg-brand-blue/10'
+                                  : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
                               aria-label="Apply to Job" title="Apply to Job"
                             >
@@ -189,8 +189,8 @@ export default function VersionHistoryModal({
                             }}
                             className={`p-2 rounded-md transition-colors flex-shrink-0 ${
                               index === 0
-                                ? 'text-blue-600 hover:bg-blue-100'
-                                : 'text-gray-600 hover:bg-gray-100'
+                                ? 'text-brand-blue hover:bg-brand-blue/10'
+                                : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                             }`}
                             title="Download this version"
                           >
@@ -200,7 +200,7 @@ export default function VersionHistoryModal({
                       </div>
 
                       {/* Details Row */}
-                      <div className="flex items-center gap-4 pt-3 border-t border-gray-200">
+                      <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
                         <div className="flex items-center gap-2">
                           <User className="w-3.5 h-3.5 text-gray-500" />
                           <span className="text-xs text-gray-600">
@@ -221,18 +221,18 @@ export default function VersionHistoryModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <FileText className="w-4 h-4" />
             <span>
-              {isJobVersion 
-                ? 'Version history tracks all job description updates' 
+              {isJobVersion
+                ? 'Version history tracks all job description updates'
                 : 'Version history tracks all resume updates for this candidate'}
             </span>
           </div>
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             Close
           </button>

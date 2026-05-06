@@ -1824,7 +1824,8 @@ export default function UserManagement() {
   };
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -3086,6 +3087,7 @@ export default function UserManagement() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }

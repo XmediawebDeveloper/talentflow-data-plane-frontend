@@ -144,15 +144,15 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
   return (
     <>
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-100 bg-slate-50">
             <div>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <GitBranch className="w-6 h-6 text-gray-800" />
+                <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+                  <GitBranch className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div>
-                  <h2 className="text-xl text-gray-900">Version Upload</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Version Upload</h2>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Upload new versions of existing resumes
                   </p>
@@ -161,23 +161,23 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100"
+              className="p-1 text-gray-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5"
              aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="p-6">
+          <div className="flex-1 overflow-y-auto p-6">
             {/* Info Banner */}
-            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="mb-6 p-4 bg-brand-blue/5 border border-brand-blue/15 rounded-xl ring-1 ring-black/[0.02]">
               <div className="flex items-start gap-3">
-                <GitBranch className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
+                <GitBranch className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-sm text-gray-800 mb-1">Version Management</h3>
-                  <p className="text-xs text-gray-900">
+                  <h3 className="text-sm font-semibold text-brand-blue mb-1">Version Management</h3>
+                  <p className="text-xs text-gray-700">
                     Upload updated versions of candidate resumes. You'll be able to choose how to handle each version:
                   </p>
-                  <ul className="text-xs text-gray-900 mt-2 space-y-1 ml-4">
+                  <ul className="text-xs text-gray-700 mt-2 space-y-1 ml-4">
                     <li>• <strong>Discard New Resume</strong> - Keep only the existing version</li>
                     <li>• <strong>Overwrite Existing</strong> - Replace with the new version</li>
                     <li>• <strong>Save as New Version</strong> - Keep both versions</li>
@@ -192,13 +192,13 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+              className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
                 isDragging
-                  ? 'border-gray-800 bg-gray-50'
-                  : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                  ? 'border-brand-blue bg-brand-blue/5'
+                  : 'border-gray-200 bg-slate-50 hover:bg-brand-blue/5 hover:border-brand-blue/30'
               }`}
             >
-              <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-gray-800' : 'text-gray-400'}`} />
+              <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-brand-blue' : 'text-gray-400'}`} />
               <p className="text-gray-900 mb-2">
                 Drop updated resumes here or click to browse
               </p>
@@ -240,9 +240,9 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                   {selectedFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                      className="flex items-center gap-3 p-3 bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl"
                     >
-                      <File className="w-5 h-5 text-gray-800 flex-shrink-0" />
+                      <File className="w-5 h-5 text-brand-blue flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-900 truncate">{file.name}</div>
                         <div className="text-xs text-gray-500">{formatFileSize(file.size)}</div>
@@ -289,17 +289,17 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+          <div className="flex-shrink-0 flex items-center justify-end gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50">
             <button
               onClick={onClose}
-              className="px-6 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleProceedToResolution}
               disabled={selectedFiles.length === 0}
-              className="flex items-center gap-2 px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <GitBranch className="w-4 h-4" />
               Proceed to Version Resolution

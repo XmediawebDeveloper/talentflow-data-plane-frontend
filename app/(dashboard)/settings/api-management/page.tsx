@@ -124,10 +124,10 @@ export default function ApiManagementPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 flex items-center justify-center">
+        <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8 flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="font-medium text-gray-600">Loading API keys...</p>
+          <p className="font-semibold text-gray-600">Loading API keys...</p>
         </div>
       </main>
     );
@@ -135,31 +135,28 @@ export default function ApiManagementPage() {
 
   return (
     <FeatureGate feature="api_access">
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
-      <div className="max-w-7xl mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+        <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                <Key className="h-6 w-6 text-white" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <Key className="h-5 w-5 text-brand-blue" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Sparkles className="h-3 w-3 text-brand-orange" />
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+                  <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Developer access
                 </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight">API Management</h1>
-                <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
+                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900">API Management</h1>
+                <p className="mt-2 max-w-2xl text-sm text-gray-600 sm:text-base">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
               </div>
             </div>
             {canManage && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all"
               >
                 <Plus className="w-4 h-4" />
                 Create API Key
@@ -171,8 +168,8 @@ export default function ApiManagementPage() {
         {/* API Keys List */}
         <div className="space-y-4">
           {apiKeys.length === 0 ? (
-            <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-              <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+            <div className="rounded-xl border border-gray-100 bg-white p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+              <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Key className="w-6 h-6 text-brand-blue" />
               </span>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No API Keys</h3>
@@ -180,7 +177,7 @@ export default function ApiManagementPage() {
               {canManage && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md ring-1 ring-white/10 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Create API Key
@@ -191,26 +188,26 @@ export default function ApiManagementPage() {
             apiKeys.map((apiKey) => (
               <div
                 key={apiKey.id}
-                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md sm:p-6"
+                className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:shadow-md sm:p-6"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                      <span className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                         <Key className="w-4 h-4" />
                       </span>
                       <h3 className="font-semibold text-gray-900">{apiKey.name}</h3>
-                      <span className="px-2 py-0.5 bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15 rounded-full text-xs font-medium">
+                      <span className="px-2 py-0.5 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-semibold">
                         {apiKey.status}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-3">
-                      <code className="px-3 py-1.5 bg-brand-blue/[0.05] text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono">
+                      <code className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono">
                         {apiKey.key_prefix}
                       </code>
                       <button
                         onClick={() => copyKey(apiKey.key_prefix)}
-                        className="p-1.5 rounded-lg text-gray-500 transition hover:bg-brand-cyan/[0.06] hover:text-brand-blue"
+                        className="p-1.5 rounded-lg text-gray-500 transition hover:bg-brand-blue/5 hover:text-brand-blue"
                         aria-label="Copy key prefix" title="Copy key prefix"
                       >
                         <Copy className="w-4 h-4" />
@@ -232,7 +229,7 @@ export default function ApiManagementPage() {
                       <button
                         onClick={() => regenerateKey(apiKey.id)}
                         disabled={regeneratingId === apiKey.id}
-                        className="p-2 rounded-lg text-gray-500 transition hover:bg-brand-cyan/[0.06] hover:text-brand-blue disabled:opacity-50"
+                        className="p-2 rounded-lg text-gray-500 transition hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-50"
                         aria-label="Regenerate key" title="Regenerate key"
                       >
                         <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
@@ -240,7 +237,7 @@ export default function ApiManagementPage() {
                       <button
                         onClick={() => deleteKey(apiKey.id)}
                         disabled={deletingId === apiKey.id}
-                        className="p-2 rounded-lg text-brand-orange-deep transition hover:bg-brand-orange/10 disabled:opacity-50"
+                        className="p-2 rounded-lg text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                         aria-label="Delete key" title="Delete key"
                       >
                         {deletingId === apiKey.id ? (
@@ -258,10 +255,10 @@ export default function ApiManagementPage() {
         </div>
 
         {/* API Documentation Link */}
-        <div className="mt-8 rounded-2xl border border-brand-blue/15 bg-gray-50 p-6 ring-1 ring-brand-blue/5">
+        <div className="mt-8 rounded-xl border border-gray-100 bg-white p-6 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="flex items-start gap-4">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-              <BookOpen className="w-5 h-5" />
+            <span className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <BookOpen className="w-5 h-5 text-brand-blue" />
             </span>
             <div>
               <h3 className="text-sm font-semibold text-gray-900">API Documentation</h3>
@@ -279,22 +276,21 @@ export default function ApiManagementPage() {
       {/* Create API Key Modal — only renders if user has Manage permission */}
       {showCreateModal && canManage && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-3xl bg-white shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] max-w-md w-full overflow-hidden">
+          <div className="rounded-xl bg-white shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.03] border border-gray-100 max-w-md w-full overflow-hidden">
             {/* Modal Header */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5">
-              <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-2xl" />
+            <div className="relative overflow-hidden bg-slate-50 border-b border-gray-100 px-6 py-5">
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                    <Key className="w-5 h-5 text-white" />
+                  <span className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                    <Key className="w-5 h-5 text-brand-blue" />
                   </span>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className="text-base font-semibold text-gray-900">
                     {newlyCreatedKey ? 'API Key Created' : 'Create API Key'}
                   </h2>
                 </div>
                 <button
                   onClick={closeCreateModal}
-                  className="p-1.5 rounded-lg bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20 transition"
+                  className="p-1.5 rounded-lg bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-brand-blue/5 hover:text-brand-blue transition"
                  aria-label="Close">
                   <X className="w-4 h-4" />
                 </button>
@@ -304,22 +300,22 @@ export default function ApiManagementPage() {
             <div className="p-6">
             {newlyCreatedKey ? (
               <div>
-                <div className="rounded-xl border border-brand-orange/25 bg-brand-orange/[0.06] p-4 mb-4 ring-1 ring-brand-orange/10">
-                  <p className="text-sm text-brand-orange-deep font-medium">
+                <div className="rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 p-4 mb-4">
+                  <p className="text-sm text-brand-orange-deep font-semibold">
                     Save this key now — you won&apos;t be able to see it again!
                   </p>
                 </div>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Your API Key
                   </label>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-3 py-2 bg-brand-blue/[0.05] text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono break-all">
+                    <code className="flex-1 px-3 py-2 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono break-all">
                       {newlyCreatedKey}
                     </code>
                     <button
                       onClick={() => copyKey(newlyCreatedKey)}
-                      className="p-2 rounded-lg text-gray-500 hover:bg-brand-cyan/[0.06] hover:text-brand-blue transition flex-shrink-0"
+                      className="p-2 rounded-lg text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue transition flex-shrink-0"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -327,7 +323,7 @@ export default function ApiManagementPage() {
                 </div>
                 <button
                   onClick={closeCreateModal}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md ring-1 ring-white/10 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all"
                 >
                   Done
                 </button>
@@ -335,7 +331,7 @@ export default function ApiManagementPage() {
             ) : (
               <div>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                     Key Name
                   </label>
                   <input
@@ -343,17 +339,17 @@ export default function ApiManagementPage() {
                     value={newKeyName}
                     onChange={(e) => setNewKeyName(e.target.value)}
                     placeholder="e.g., Production API Key"
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                     Expiry (optional)
                   </label>
                   <select
                     value={newKeyExpiry || ''}
                     onChange={(e) => setNewKeyExpiry(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   >
                     <option value="">Never expires</option>
                     <option value="30">30 days</option>
@@ -365,14 +361,14 @@ export default function ApiManagementPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={closeCreateModal}
-                    className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                    className="flex-1 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleCreateKey}
                     disabled={isCreating || !newKeyName.trim()}
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md ring-1 ring-white/10 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all disabled:opacity-60"
                   >
                     {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
                     {isCreating ? 'Creating...' : 'Create Key'}

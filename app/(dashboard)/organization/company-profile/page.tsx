@@ -398,8 +398,8 @@ export default function CompanyProfilePage() {
   }
 
   return (
-    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
-      <div className="mx-auto max-w-5xl">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto w-full max-w-[1400px]">
 
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">

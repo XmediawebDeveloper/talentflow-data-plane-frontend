@@ -147,11 +147,11 @@ export default function ScoringVersionSelectionModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200">
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue ring-1 ring-white/10 shadow-md shadow-brand-blue/25 rounded-xl flex items-center justify-center flex-shrink-0">
               <Target className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
@@ -166,7 +166,7 @@ export default function ScoringVersionSelectionModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors flex-shrink-0"
            aria-label="Close">
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -182,12 +182,12 @@ export default function ScoringVersionSelectionModal({
           ) : (
             <>
               {/* Info Banner */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+              <div className="bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
                 <div className="flex items-start gap-2 sm:gap-3">
-                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
                   <div className="text-xs sm:text-sm">
-                    <p className="text-blue-900 font-semibold mb-1">Latest versions auto-selected</p>
-                    <p className="text-blue-800">
+                    <p className="text-brand-blue font-semibold mb-1">Latest versions auto-selected</p>
+                    <p className="text-gray-700">
                       {multiVersionResumes.length > 0
                         ? `${multiVersionResumes.length} candidate${multiVersionResumes.length > 1 ? 's have' : ' has'} multiple versions. Latest version is selected by default.`
                         : 'All candidates have only one version.'}
@@ -214,7 +214,7 @@ export default function ScoringVersionSelectionModal({
                           {/* Resume Header */}
                           <button
                             onClick={() => toggleExpand(resume.id)}
-                            className="w-full flex items-center justify-between p-3 sm:p-4 bg-gray-50 hover:bg-gray-100 transition-colors gap-2"
+                            className="w-full flex items-center justify-between p-3 sm:p-4 bg-gray-50 hover:bg-brand-blue/5 transition-colors gap-2"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               {isExpanded ? (
@@ -254,14 +254,14 @@ export default function ScoringVersionSelectionModal({
                                     onClick={() => selectVersion(resume.id, version.id)}
                                     className={`w-full text-left p-2.5 sm:p-3 rounded-lg border-2 transition-all ${
                                       isSelected
-                                        ? 'border-gray-800 bg-gray-50'
-                                        : 'border-gray-200 hover:border-gray-300'
+                                        ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                                        : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-2">
                                       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                                         <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                          isSelected ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
+                                          isSelected ? 'bg-brand-blue text-white shadow shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 text-gray-700'
                                         }`}>
                                           <span className="text-[10px] sm:text-xs font-bold">v{versionNumber}</span>
                                         </div>
@@ -289,7 +289,7 @@ export default function ScoringVersionSelectionModal({
                                         </div>
                                       </div>
                                       <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                        isSelected ? 'bg-gray-800' : 'bg-gray-200'
+                                        isSelected ? 'bg-brand-blue' : 'bg-gray-200'
                                       }`}>
                                         <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                                           isSelected ? 'text-white' : 'text-gray-400'
@@ -330,22 +330,22 @@ export default function ScoringVersionSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-brand-blue/[0.03]">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <p className="text-xs sm:text-sm text-gray-700 font-medium">
-              <span className="font-semibold text-gray-900">{resumesWithVersions.length}</span> resume{resumesWithVersions.length !== 1 ? 's' : ''} selected for scoring
+              <span className="font-semibold text-brand-blue">{resumesWithVersions.length}</span> resume{resumesWithVersions.length !== 1 ? 's' : ''} selected for scoring
             </p>
             <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <button
                 onClick={onClose}
-                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium text-sm"
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors font-medium text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={loading}
-                className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 text-sm"
               >
                 <Target className="w-4 h-4" />
                 Start Scoring

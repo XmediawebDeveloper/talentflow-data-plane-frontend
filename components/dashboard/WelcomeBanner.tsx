@@ -153,11 +153,11 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
             </div>
           </div>
           <div className="mt-3 sm:mt-0">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight capitalize">
               {greeting},{' '}
               <span className="inline-flex items-baseline" aria-label={firstName}>
-                <span className="text-brand-orange">{typedName}</span>
-                <span aria-hidden className="ml-0.5 inline-block w-[2px] self-stretch bg-brand-orange animate-caret-blink" />
+                <span className="text-white">{typedName}</span>
+                <span aria-hidden className="ml-0.5 inline-block w-[2px] self-stretch bg-white animate-caret-blink" />
               </span>
             </h1>
             <div className="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs sm:text-sm text-white/80">

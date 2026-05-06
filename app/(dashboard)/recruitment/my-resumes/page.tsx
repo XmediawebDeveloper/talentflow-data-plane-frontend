@@ -2306,7 +2306,8 @@ export default function MyResumesPage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-4 md:p-8 bg-slate-50">
+    <main className="flex-1 p-4 md:p-8 overflow-x-hidden bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto flex items-start gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -4626,6 +4627,7 @@ export default function MyResumesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </main>
     </DndProvider>
     </FeatureGate>

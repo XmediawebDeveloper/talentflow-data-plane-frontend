@@ -213,11 +213,11 @@ export default function BulkScoringProgressModal({
       case 'Queued':
         return <Clock className="w-4 h-4 text-gray-500" />;
       case 'Scoring in progress':
-        return <Loader className="w-4 h-4 text-gray-700 animate-spin" />;
+        return <Loader className="w-4 h-4 text-brand-blue animate-spin" />;
       case 'Scored successfully':
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case 'Already Scored - Skipped':
-        return <CheckCircle2 className="w-4 h-4 text-blue-500" />;
+        return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
       case 'Failed':
         return <XCircle className="w-4 h-4 text-red-500" />;
       default:
@@ -228,17 +228,17 @@ export default function BulkScoringProgressModal({
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'Queued':
-        return 'bg-gray-100 text-gray-700 border-gray-300';
+        return 'bg-gray-50 text-gray-700 border-gray-200';
       case 'Scoring in progress':
-        return 'bg-gray-100 text-gray-900 border-gray-300';
+        return 'bg-brand-blue/10 text-brand-blue border-brand-blue/20';
       case 'Scored successfully':
-        return 'bg-green-100 text-green-700 border-green-300';
+        return 'bg-green-50 text-green-700 border-green-200';
       case 'Already Scored - Skipped':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
       case 'Failed':
-        return 'bg-red-100 text-red-700 border-red-300';
+        return 'bg-red-50 text-red-700 border-red-200';
       default:
-        return 'bg-gray-100 text-gray-700 border-gray-300';
+        return 'bg-gray-50 text-gray-700 border-gray-200';
     }
   };
 
@@ -282,9 +282,9 @@ export default function BulkScoringProgressModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header with Overall Progress */}
-        <div className="p-4 sm:p-5 border-b border-gray-200 bg-gradient-to-r from-gray-900 to-gray-800 rounded-t-2xl">
+        <div className="p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-t-2xl">
           {/* Top row: icon+title and action buttons */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -329,28 +329,28 @@ export default function BulkScoringProgressModal({
 
           {/* Progress bar + ETA - below title */}
           <div className="mt-3 flex items-center gap-3">
-            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-white/15 rounded-full overflow-hidden">
               <div className="h-full flex">
                 <div
-                  className="bg-green-500 transition-[width] duration-500"
+                  className="bg-green-400 transition-[width] duration-500"
                   style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
                 />
                 <div
-                  className="bg-blue-400 transition-[width] duration-500"
+                  className="bg-brand-cyan transition-[width] duration-500"
                   style={{ width: `${totalResumes > 0 ? (skippedCount / totalResumes) * 100 : 0}%` }}
                 />
                 <div
-                  className="bg-red-500 transition-[width] duration-500"
+                  className="bg-red-400 transition-[width] duration-500"
                   style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
                 />
                 <div
-                  className="bg-gray-500 animate-pulse transition-[width] duration-500"
+                  className="bg-brand-orange animate-pulse transition-[width] duration-500"
                   style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
                 />
               </div>
             </div>
             {eta && !isAllComplete && (
-              <div className="flex items-center gap-1 text-blue-300 text-xs font-medium flex-shrink-0">
+              <div className="flex items-center gap-1 text-white/85 text-xs font-medium flex-shrink-0">
                 <Clock className="w-3 h-3" />
                 <span>{eta.remaining} Resume{eta.remaining !== 1 ? 's' : ''} Remaining</span>
               </div>
@@ -365,13 +365,13 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Stats Row - Clickable Boxes */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3 bg-gray-50 border-b border-gray-200">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3 bg-brand-blue/[0.03] border-b border-gray-100">
           {[
-            { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-3.5 h-3.5" />, activeClass: 'bg-gray-600 text-white ring-2 ring-gray-400', hoverClass: 'bg-white text-gray-600 hover:bg-gray-100' },
-            { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader className={`w-3.5 h-3.5 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, activeClass: 'bg-blue-600 text-white ring-2 ring-blue-400', hoverClass: 'bg-white text-gray-600 hover:bg-blue-50' },
-            { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-3.5 h-3.5" />, activeClass: 'bg-green-600 text-white ring-2 ring-green-400', hoverClass: 'bg-white text-gray-600 hover:bg-green-50' },
-            { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-3.5 h-3.5" />, activeClass: 'bg-blue-600 text-white ring-2 ring-blue-400', hoverClass: 'bg-white text-gray-600 hover:bg-blue-50' },
-            { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-3.5 h-3.5" />, activeClass: 'bg-red-600 text-white ring-2 ring-red-400', hoverClass: 'bg-white text-gray-600 hover:bg-red-50' },
+            { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-3.5 h-3.5" />, activeClass: 'bg-gray-700 text-white ring-2 ring-gray-300', hoverClass: 'bg-white text-gray-600 hover:bg-gray-100' },
+            { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader className={`w-3.5 h-3.5 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, activeClass: 'bg-brand-blue text-white ring-2 ring-brand-blue/40 shadow shadow-brand-blue/25', hoverClass: 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue' },
+            { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-3.5 h-3.5" />, activeClass: 'bg-green-600 text-white ring-2 ring-green-300 shadow shadow-green-600/25', hoverClass: 'bg-white text-gray-600 hover:bg-green-50' },
+            { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-3.5 h-3.5" />, activeClass: 'bg-brand-cyan text-white ring-2 ring-brand-cyan/40 shadow shadow-brand-cyan/25', hoverClass: 'bg-white text-gray-600 hover:bg-brand-cyan/5 hover:text-brand-cyan' },
+            { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-3.5 h-3.5" />, activeClass: 'bg-red-600 text-white ring-2 ring-red-300 shadow shadow-red-600/25', hoverClass: 'bg-white text-gray-600 hover:bg-red-50' },
           ].map(stat => (
             <button
               key={stat.key}
@@ -394,7 +394,7 @@ export default function BulkScoringProgressModal({
               className={`flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-all hover:shadow-md text-xs sm:text-sm font-medium ${
                 bulkRetrying
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                  : 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
               }`}
               aria-label="Retry all failed resumes at once" title="Retry all failed resumes at once"
             >
@@ -409,13 +409,13 @@ export default function BulkScoringProgressModal({
 
         {/* Preparing State - Show when all are queued and nothing started */}
         {totalResumes > 0 && queuedCount === totalResumes && inProgressCount === 0 && completedCount === 0 && (
-          <div className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="p-4 sm:p-6 border-b border-gray-100 bg-brand-blue/5">
             <div className="flex items-center justify-center gap-4">
               <div className="relative">
-                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Loader className="w-7 h-7 text-blue-600 animate-spin" />
+                <div className="w-14 h-14 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center">
+                  <Loader className="w-7 h-7 text-brand-blue animate-spin" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center animate-pulse">
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-brand-blue ring-1 ring-white/10 shadow shadow-brand-blue/25 rounded-full flex items-center justify-center animate-pulse">
                   <span className="text-white text-xs font-bold">{totalResumes}</span>
                 </div>
               </div>
@@ -441,7 +441,7 @@ export default function BulkScoringProgressModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-black text-xs sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black text-xs sm:text-sm"
               />
             </div>
 
@@ -452,7 +452,7 @@ export default function BulkScoringProgressModal({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-black text-xs sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black text-xs sm:text-sm"
               >
                 <option value="all">All Status</option>
                 <option value="queued">Queued</option>
@@ -470,7 +470,7 @@ export default function BulkScoringProgressModal({
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-black text-xs sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black text-xs sm:text-sm"
               >
                 <option value="all">All Sources</option>
                 {/* Only show Internal DB option if user has permission */}
@@ -581,7 +581,7 @@ export default function BulkScoringProgressModal({
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                 retryingItems.has(item.id)
                                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                                  : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 ring-1 ring-brand-blue/20'
                               }`}
                             >
                               {retryingItems.has(item.id) ? <><Loader className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
@@ -639,7 +639,7 @@ export default function BulkScoringProgressModal({
                           onClick={() => handleRetry(item)}
                           disabled={retryingItems.has(item.id)}
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
-                            retryingItems.has(item.id) ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            retryingItems.has(item.id) ? 'bg-gray-100 text-gray-400' : 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
                           }`}
                         >
                           {retryingItems.has(item.id) ? <><Loader className="w-3 h-3 animate-spin" />Retrying</> : <><RotateCcw className="w-3 h-3" />Retry</>}
@@ -666,10 +666,10 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+        <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-100 bg-brand-blue/[0.03] rounded-b-2xl">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            className="px-5 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors font-medium"
           >
             Close
           </button>

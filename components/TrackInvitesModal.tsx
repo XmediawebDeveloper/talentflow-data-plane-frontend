@@ -218,22 +218,24 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 w-full sm:max-w-5xl max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 sm:ring-1 sm:ring-black/[0.02] w-full sm:max-w-5xl max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Modal Header */}
-        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0" />
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-slate-50">
+          <div className="min-w-0 flex-1 flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+            </div>
+            <div className="min-w-0 flex-1">
               <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">
                 <span className="hidden sm:inline">Invite Status Tracking</span>
                 <span className="sm:hidden">Invite Status</span>
               </h2>
+              <p className="text-[10px] sm:text-sm text-gray-500 mt-0.5 truncate">{jdTitle}</p>
             </div>
-            <p className="text-[10px] sm:text-sm text-gray-500 mt-0.5 truncate">{jdTitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
+            className="p-1.5 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0 ml-2"
            aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -294,7 +296,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 sm:py-12">
-              <div className="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-purple-600 border-t-transparent rounded-full"></div>
+              <div className="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-brand-blue border-t-transparent rounded-full"></div>
             </div>
           ) : invitations.length === 0 ? (
             <div className="text-center py-8 sm:py-12 text-gray-500">
@@ -317,7 +319,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                     <div key={invitation.id} className="bg-white rounded-lg border border-gray-200 p-2.5">
                       {/* Candidate row */}
                       <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                        <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-medium text-[10px] flex-shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-[10px] flex-shrink-0">
                           {initials}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -329,7 +331,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
                       {/* CID + Assessment */}
                       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                        <span className="text-[9px] font-mono font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
+                        <span className="text-[9px] font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1 py-0.5 rounded">
                           {invitation.candidate_display_id || '-'}
                         </span>
                         <span className="text-[10px] text-gray-600 truncate">{invitation.assessment_title}</span>
@@ -388,7 +390,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                           {getEffectiveStatus(invitation) === 'completed' && (
                             <button
                               onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
-                              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
                             >
                               <Eye className="w-3 h-3" />
                               View
@@ -483,13 +485,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50">
                           <td className="py-3 px-3 lg:px-4">
-                            <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                            <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-2 py-1 rounded">
                               {invitation.candidate_display_id || '-'}
                             </span>
                           </td>
                           <td className="py-3 px-3 lg:px-4">
                             <div className="flex items-center gap-2 lg:gap-3">
-                              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-medium text-xs lg:text-sm flex-shrink-0">
+                              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-xs lg:text-sm flex-shrink-0">
                                 {initials}
                               </div>
                               <div className="min-w-0">
@@ -630,7 +632,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             {getEffectiveStatus(invitation) === 'completed' ? (
                               <button
                                 onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 rounded-lg transition-colors whitespace-nowrap"
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 View Results
@@ -699,13 +701,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 flex items-center justify-between bg-slate-50 flex-shrink-0">
           <p className="text-xs sm:text-sm text-gray-500">
             <strong>{invitations.length}</strong> invitation{invitations.length !== 1 ? 's' : ''}
           </p>
           <button
             onClick={onClose}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             Close
           </button>

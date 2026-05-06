@@ -37,33 +37,33 @@ export default function ResumePreviewModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-5xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-5xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-gray-700 to-gray-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-              <FileText className="w-5 h-5 text-white" />
+            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+              <FileText className="w-5 h-5 text-brand-blue" />
             </div>
             <div>
-              <h2 className="text-white">Resume Preview</h2>
-              <p className="text-gray-300 text-sm">{candidateName}</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Resume Preview</h2>
+              <p className="text-gray-600 text-sm">{candidateName}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            className="text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors"
            aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Toolbar */}
-        <div className="bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={handleZoomOut}
               disabled={zoomLevel <= 50}
-              className="p-2 text-gray-700 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Zoom Out" title="Zoom Out"
             >
               <ZoomOut className="w-4 h-4" />
@@ -74,7 +74,7 @@ export default function ResumePreviewModal({
             <button
               onClick={handleZoomIn}
               disabled={zoomLevel >= 150}
-              className="p-2 text-gray-700 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Zoom In" title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
@@ -83,14 +83,14 @@ export default function ResumePreviewModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-white transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
               Print
             </button>
             <button
               onClick={handleDownload}
-              className="px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download

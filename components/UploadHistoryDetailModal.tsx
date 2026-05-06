@@ -87,7 +87,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
         {/* Header */}
         <div className={`flex items-start justify-between p-4 sm:p-6 border-b ${config.borderColor} bg-gradient-to-r ${config.bgColor}`}>
           <div className="flex items-start gap-2.5 sm:gap-4 min-w-0">
@@ -147,17 +147,17 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
           )}
 
           {item.status === 'versioned' && (
-            <div className="p-3 sm:p-4 bg-purple-50 border border-purple-200 rounded-xl mb-4 sm:mb-6">
+            <div className="p-3 sm:p-4 bg-brand-cyan/5 ring-1 ring-brand-cyan/20 rounded-xl mb-4 sm:mb-6">
               <div className="flex items-start gap-2.5 sm:gap-3">
-                <GitBranch className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 mt-0.5 flex-shrink-0" />
+                <GitBranch className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
-                  <h4 className="text-sm sm:text-base font-medium text-purple-900 mb-0.5 sm:mb-1">New Version Created</h4>
-                  <p className="text-xs sm:text-sm text-purple-800">
+                  <h4 className="text-sm sm:text-base font-medium text-brand-cyan mb-0.5 sm:mb-1">New Version Created</h4>
+                  <p className="text-xs sm:text-sm text-gray-700">
                     This resume was recognized as an update for an existing candidate. A new version has been created to preserve the resume history.
                   </p>
                   {item.candidateName && (
-                    <p className="text-xs sm:text-sm text-purple-700 mt-1.5 sm:mt-2">
-                      Candidate: <span className="font-medium">{item.candidateName}</span>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1.5 sm:mt-2">
+                      Candidate: <span className="font-medium text-gray-900">{item.candidateName}</span>
                     </p>
                   )}
                 </div>
@@ -200,19 +200,19 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50">
           <button
             onClick={onClose}
-            className="px-4 sm:px-5 py-2 sm:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium text-sm sm:text-base"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             Close
           </button>
           {(item.status === 'completed' || item.status === 'versioned') && item.resumeId && (
             <button
               onClick={handleViewResume}
-              className="px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
             >
-              <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <ExternalLink className="w-4 h-4" />
               View Resume
             </button>
           )}

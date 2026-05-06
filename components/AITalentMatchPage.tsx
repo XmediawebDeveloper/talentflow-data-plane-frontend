@@ -1632,7 +1632,8 @@ export default function AITalentMatchPage({
   // View: History List
   if (viewMode === 'history') {
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="mb-5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
@@ -2016,6 +2017,7 @@ export default function AITalentMatchPage({
             </div>
           </div>
         )}
+        </div>
       </main>
     );
   }

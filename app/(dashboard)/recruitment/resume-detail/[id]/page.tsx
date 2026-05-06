@@ -195,9 +195,11 @@ export default function ResumeDetailPage() {
   if (loading) {
     return (
       <main className="flex-1 bg-gray-50 min-h-screen">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-          <span className="ml-3 text-gray-600">Loading resume details...</span>
+        <div className="w-full max-w-[1400px] mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+            <span className="ml-3 text-gray-600">Loading resume details...</span>
+          </div>
         </div>
       </main>
     );
@@ -206,15 +208,17 @@ export default function ResumeDetailPage() {
   if (!resume) {
     return (
       <main className="flex-1 bg-gray-50 min-h-screen p-8">
-        <div className="text-center py-12">
-          <h2 className="text-xl text-gray-900 mb-2">Resume not found</h2>
-          <p className="text-gray-600 mb-4">The resume you're looking for doesn't exist or has been deleted.</p>
-          <button
-            onClick={() => router.push('/recruitment/my-resumes')}
-            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
-          >
-            Back to My Resumes
-          </button>
+        <div className="w-full max-w-[1400px] mx-auto">
+          <div className="text-center py-12">
+            <h2 className="text-xl text-gray-900 mb-2">Resume not found</h2>
+            <p className="text-gray-600 mb-4">The resume you're looking for doesn't exist or has been deleted.</p>
+            <button
+              onClick={() => router.push('/recruitment/my-resumes')}
+              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+            >
+              Back to My Resumes
+            </button>
+          </div>
         </div>
       </main>
     );
@@ -225,10 +229,10 @@ export default function ResumeDetailPage() {
     <main className="flex-1 bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full max-w-[1400px] mx-auto">
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-brand-blue mb-3 sm:mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -240,7 +244,7 @@ export default function ResumeDetailPage() {
             </div>
             <button
               onClick={handleDownload}
-              className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors self-end sm:self-auto"
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors self-end sm:self-auto"
             >
               <Download className="w-4 h-4" />
               Download
@@ -250,7 +254,7 @@ export default function ResumeDetailPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full">
+      <div className="flex-1 flex flex-col lg:flex-row w-full max-w-[1400px] mx-auto">
         {/* Sidebar - desktop tabs / mobile horizontal scroll */}
         <div className="lg:w-60 lg:border-r border-b lg:border-b-0 border-gray-200 bg-gray-50 p-2 sm:p-3 lg:p-4">
           <div className="flex lg:flex-col gap-1 overflow-x-auto scrollbar-hide">
@@ -258,8 +262,8 @@ export default function ResumeDetailPage() {
               onClick={() => setActiveTab('preview')}
               className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm transition-colors whitespace-nowrap flex-shrink-0 lg:w-full ${
                 activeTab === 'preview'
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
               }`}
             >
               <FileText className="w-4 h-4" />
@@ -269,8 +273,8 @@ export default function ResumeDetailPage() {
               onClick={() => setActiveTab('details')}
               className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm transition-colors whitespace-nowrap flex-shrink-0 lg:w-full ${
                 activeTab === 'details'
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
               }`}
             >
               <User className="w-4 h-4" />
@@ -280,8 +284,8 @@ export default function ResumeDetailPage() {
               onClick={() => setActiveTab('history')}
               className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm transition-colors whitespace-nowrap flex-shrink-0 lg:w-full ${
                 activeTab === 'history'
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
               }`}
             >
               <History className="w-4 h-4" />
@@ -295,22 +299,22 @@ export default function ResumeDetailPage() {
           {activeTab === 'preview' && (
             <div className="h-full min-h-[600px]">
               {loadingPdf ? (
-                <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+                <div className="flex items-center justify-center h-full bg-slate-50 rounded-xl">
                   <div className="text-center">
-                    <Loader2 className="w-8 h-8 mx-auto mb-4 text-gray-600 animate-spin" />
+                    <Loader2 className="w-8 h-8 mx-auto mb-4 text-brand-blue animate-spin" />
                     <p className="text-gray-600">Loading PDF preview...</p>
                   </div>
                 </div>
               ) : pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  className="w-full h-full min-h-[700px] rounded-lg border border-gray-200"
+                  className="w-full h-full min-h-[700px] rounded-xl border border-gray-100 ring-1 ring-black/[0.02]"
                   title="Resume Preview"
                   style={{ height: 'calc(100vh - 250px)' }}
                 />
               ) : extractedText ? (
-                <div className="h-full overflow-y-auto bg-gray-100 rounded-lg p-6" style={{ height: 'calc(100vh - 250px)' }}>
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
+                <div className="h-full overflow-y-auto bg-slate-50 rounded-xl p-6" style={{ height: 'calc(100vh - 250px)' }}>
+                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 max-w-3xl mx-auto">
                     {extractedText.split('\n').map((line, idx, lines) => {
                       const trimmed = line.trim();
                       if (!trimmed) return <div key={idx} className="h-3" />;
@@ -321,12 +325,12 @@ export default function ResumeDetailPage() {
                       ) && trimmed.length < 50;
 
                       if (isHeader) {
-                        return <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">{trimmed}</h3>;
+                        return <h3 key={idx} className="text-base font-semibold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-200 uppercase tracking-wide">{trimmed}</h3>;
                       }
 
                       const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
                       if (idx === firstNonEmpty) {
-                        return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>;
+                        return <h2 key={idx} className="text-xl font-semibold text-gray-900 mb-1">{trimmed}</h2>;
                       }
 
                       if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
@@ -338,13 +342,13 @@ export default function ResumeDetailPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg min-h-[600px]">
+                <div className="flex items-center justify-center h-full bg-slate-50 rounded-xl min-h-[600px]">
                   <div className="text-center">
                     <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                     <p className="text-gray-600">Preview not available</p>
                     <button
                       onClick={handleDownload}
-                      className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                      className="mt-4 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       Download Instead
                     </button>
@@ -410,7 +414,7 @@ export default function ResumeDetailPage() {
                     resume.skills.map((skill, index) => (
                       <span
                         key={index}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm border border-gray-300"
+                        className="px-3 py-1.5 bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue rounded-full text-sm"
                       >
                         {skill}
                       </span>
@@ -431,7 +435,7 @@ export default function ResumeDetailPage() {
                         className={`inline-flex items-center px-2.5 py-1 rounded text-xs ${
                           resume.source === 'Manual'
                             ? 'bg-gray-100 text-gray-700'
-                            : 'bg-gray-50 text-gray-800'
+                            : 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                         }`}
                       >
                         {resume.source}
@@ -464,7 +468,7 @@ export default function ResumeDetailPage() {
                 <h3 className="text-gray-900 mb-4 pb-2 border-b border-gray-200">Activity History</h3>
                 <div className="space-y-4">
                   <div className="flex items-start gap-4">
-                    <div className="w-2 h-2 rounded-full bg-gray-800 mt-2" />
+                    <div className="w-2 h-2 rounded-full bg-brand-blue mt-2" />
                     <div className="flex-1">
                       <div className="text-sm text-gray-900">Resume uploaded</div>
                       <div className="text-xs text-gray-500 mt-1">
@@ -492,25 +496,25 @@ export default function ResumeDetailPage() {
 
                 {loadingVersions ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
                   </div>
                 ) : versions.length > 0 ? (
                   <div className="space-y-3">
                     {versions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((version, index) => (
                       <div
                         key={version.id}
-                        className={`rounded-lg border-2 p-4 ${
+                        className={`rounded-xl p-4 ${
                           index === 0
-                            ? 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200'
-                            : 'bg-white border-gray-200 hover:border-gray-300 transition-colors'
+                            ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15 border border-brand-blue/20'
+                            : 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 transition-colors'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex items-start gap-3 flex-1">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                              index === 0 ? 'bg-gray-800' : 'bg-gray-100'
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              index === 0 ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15' : 'bg-gray-100'
                             }`}>
-                              <FileText className={`w-5 h-5 ${index === 0 ? 'text-white' : 'text-gray-600'}`} />
+                              <FileText className={`w-5 h-5 ${index === 0 ? 'text-brand-blue' : 'text-gray-600'}`} />
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
@@ -518,7 +522,7 @@ export default function ResumeDetailPage() {
                                   {index === 0 ? 'Current Version' : `Version ${version.version}`}
                                 </span>
                                 {index === 0 && (
-                                  <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full">Latest</span>
+                                  <span className="px-2 py-0.5 bg-brand-blue text-white text-xs rounded-full">Latest</span>
                                 )}
                                 {index !== 0 && (
                                   <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">Older</span>
@@ -539,7 +543,7 @@ export default function ResumeDetailPage() {
                             <button
                               onClick={() => handleDownloadVersion(version)}
                               className={`p-2 rounded-lg transition-colors ${
-                                index === 0 ? 'text-gray-800 hover:bg-gray-100' : 'text-gray-600 hover:bg-gray-100'
+                                index === 0 ? 'text-brand-blue hover:bg-brand-blue/10' : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
                               aria-label="Download" title="Download"
                             >
@@ -551,16 +555,16 @@ export default function ResumeDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-2 border-gray-200 p-4">
+                  <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 border border-brand-blue/20 rounded-xl p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
-                        <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
-                          <FileText className="w-5 h-5 text-white" />
+                        <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-5 h-5 text-brand-blue" />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm text-gray-900">Current Version</span>
-                            <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full">Latest</span>
+                            <span className="px-2 py-0.5 bg-brand-blue text-white text-xs rounded-full">Latest</span>
                           </div>
                           <div className="text-xs text-gray-600 mb-2">
                             {resume.fileName || `${resume.name.replace(' ', '_')}_Resume.pdf`}
@@ -577,7 +581,7 @@ export default function ResumeDetailPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleDownload}
-                          className="p-2 text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                          className="p-2 text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors"
                           aria-label="Download" title="Download"
                         >
                           <Download className="w-4 h-4" />
@@ -588,13 +592,13 @@ export default function ResumeDetailPage() {
                 )}
 
                 {/* Info Banner */}
-                <div className="mt-4 bg-gray-50 rounded-lg border border-gray-200 p-3 flex items-start gap-3">
-                  <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="mt-4 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-xl border border-brand-blue/20 p-3 flex items-start gap-3">
+                  <div className="w-5 h-5 bg-brand-blue rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-xs">i</span>
                   </div>
                   <div>
-                    <h4 className="text-sm text-gray-800 mb-1">Version history</h4>
-                    <p className="text-xs text-gray-900">
+                    <h4 className="text-sm text-brand-blue mb-1 font-semibold">Version history</h4>
+                    <p className="text-xs text-gray-700">
                       All previous versions are stored securely and can be accessed anytime. Click download to get any version.
                     </p>
                   </div>

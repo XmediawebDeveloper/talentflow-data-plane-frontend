@@ -62,31 +62,34 @@ export default function Pagination({
     return pages;
   };
 
+  const navBtnClass =
+    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
+
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-6 py-3 sm:py-4 border-t border-border bg-card">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-white">
       {/* Left: Items per page */}
       {showItemsPerPage && (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Show</span>
+          <span className="text-sm text-gray-600">Show</span>
           <select
             value={itemsPerPage}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="h-8 px-2 sm:px-3 text-sm border border-border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 bg-background text-foreground"
+            className="h-8 px-2 sm:px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
           >
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <span className="text-sm text-muted-foreground">per page</span>
+          <span className="text-sm text-gray-600">per page</span>
         </div>
       )}
 
       {/* Center: Page info */}
-      <div className="text-xs sm:text-sm text-muted-foreground text-center">
-        Showing <span className="text-foreground font-medium">{startItem}</span> to{' '}
-        <span className="text-foreground font-medium">{endItem}</span> of{' '}
-        <span className="text-foreground font-medium">{totalItems}</span> results
+      <div className="text-xs sm:text-sm text-gray-600 text-center">
+        Showing <span className="text-brand-blue font-semibold">{startItem}</span> to{' '}
+        <span className="text-brand-blue font-semibold">{endItem}</span> of{' '}
+        <span className="text-brand-blue font-semibold">{totalItems}</span> results
       </div>
 
       {/* Right: Pagination controls */}
@@ -95,7 +98,7 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          className={navBtnClass}
           aria-label="First page" title="First page"
         >
           <ChevronsLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -105,7 +108,7 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          className={navBtnClass}
           aria-label="Previous page" title="Previous page"
         >
           <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -118,12 +121,12 @@ export default function Pagination({
               key={index}
               onClick={() => typeof page === 'number' && onPageChange(page)}
               disabled={page === '...'}
-              className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 text-sm font-medium rounded-md transition-colors ${
+              className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 text-sm font-medium rounded-lg transition-colors ${
                 page === currentPage
-                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   : page === '...'
-                  ? 'cursor-default text-muted-foreground'
-                  : 'border border-border text-foreground hover:bg-accent/50'
+                  ? 'cursor-default text-gray-400'
+                  : 'border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
               }`}
             >
               {page}
@@ -131,15 +134,15 @@ export default function Pagination({
           ))}
         </div>
         {/* Mobile: Show current page / total */}
-        <span className="sm:hidden text-sm text-muted-foreground px-2 font-medium">
-          {currentPage} / {totalPages}
+        <span className="sm:hidden text-sm text-gray-600 px-2 font-medium">
+          <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
         </span>
 
         {/* Next page */}
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          className={navBtnClass}
           aria-label="Next page" title="Next page"
         >
           <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -149,7 +152,7 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-border text-foreground hover:bg-accent/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          className={navBtnClass}
           aria-label="Last page" title="Last page"
         >
           <ChevronsRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

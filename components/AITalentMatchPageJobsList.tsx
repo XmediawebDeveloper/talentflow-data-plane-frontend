@@ -109,7 +109,8 @@ export default function AITalentMatchPageJobsList({
   );
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
@@ -254,128 +255,140 @@ export default function AITalentMatchPageJobsList({
             <p className="text-xs sm:text-sm text-gray-600">Click any job to run AI matching</p>
           </div>
 
-          <div className="grid gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginatedJobs.map((job) => {
               const jobHistory = getJobMatchHistory(job.id);
               const hasHistory = jobHistory.length > 0;
               const latestMatch = hasHistory ? jobHistory[jobHistory.length - 1] : null;
+              const isSelected = selectedJobs.includes(job.id);
 
               return (
                 <div
                   key={job.id}
-                  className={`bg-white rounded-xl border transition-all p-3 sm:p-4 lg:p-6 ${
-                    selectedJobs.includes(job.id)
+                  className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer flex flex-col ${
+                    isSelected
                       ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30'
-                      : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 duration-150'
+                      : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
                   }`}
+                  onClick={() => onSelectJob(job.id)}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 lg:gap-6">
-                    {/* Checkbox + Job Icon row on mobile */}
-                    <div className="flex items-start gap-3 sm:contents">
-                      {/* Checkbox */}
-                      <div className="flex items-center pt-1 sm:pt-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedJobs.includes(job.id)}
-                          onChange={() => handleSelectJob(job.id)}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40 cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Job Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-3 sm:gap-4 mb-2 sm:mb-3">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-brand-blue" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                              {job.jobId && (
-                                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-bold font-mono bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
-                                  {job.jobId}
-                                </span>
-                              )}
-                              {job.currentVersion && (
-                                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
-                                  v{job.currentVersion}
-                                </span>
-                              )}
-                              {job.currentVersion && (
-                                <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium border ${
-                                  job.currentVersion > 1
-                                    ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
-                                    : 'bg-green-50 text-green-700 border-green-200'
-                                }`}>
-                                  {job.currentVersion > 1 ? 'Republished' : 'Published'}
-                                </span>
-                              )}
-                            </div>
-                            <h3 className="text-sm sm:text-base lg:text-xl text-gray-900 mb-1.5 sm:mb-2 line-clamp-2">
-                              {job.title}
-                            </h3>
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm text-gray-600">
-                              <span className="flex items-center gap-1 sm:gap-1.5">
-                                <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                <span className="truncate max-w-[120px] sm:max-w-none">{job.location}</span>
-                              </span>
-                              {job.department && (
-                                <span className="flex items-center gap-1 sm:gap-1.5">
-                                  <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                  <span className="truncate max-w-[120px] sm:max-w-none">{job.department}</span>
-                                </span>
-                              )}
-                              <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/5 border border-brand-blue/15 rounded-full text-brand-blue font-medium">
-                                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                {job.applicants} applicants
-                              </span>
-                              {job.employmentType && (
-                                <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-gray-50 border border-gray-200 rounded-full text-gray-700 text-[10px] sm:text-xs font-medium">
-                                  {job.employmentType}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                  {/* Card Header */}
+                  <div className="p-4 border-b border-gray-100">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                          className="flex-shrink-0"
+                          title={isSelected ? 'Deselect' : 'Select'}
+                          aria-label={isSelected ? 'Deselect job' : 'Select job'}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            readOnly
+                            className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40 cursor-pointer pointer-events-none"
+                          />
+                        </button>
+                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="h-4 w-4 text-brand-blue" />
                         </div>
-
-                        {/* Match History Badge */}
-                        {hasHistory && latestMatch && (
-                          <div className="mt-2 sm:mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                            <div className="flex-1 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-2.5 sm:p-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Matched</div>
-                                  <div className="flex items-center gap-1.5 sm:gap-2">
-                                    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-                                    <span className="text-xs sm:text-sm text-gray-700 font-medium">
-                                      {formatISTDate(latestMatch.matchedAt.toISOString())}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Candidates</div>
-                                  <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-700">{latestMatch.totalMatches}</div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="px-3 py-1.5 bg-brand-blue/5 border border-brand-blue/15 rounded-lg text-xs font-medium text-brand-blue text-center sm:text-left">
-                              Matched {jobHistory.length}x
-                            </div>
-                          </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {job.currentVersion && (
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-brand-cyan"></div>
+                            v{job.currentVersion}
+                          </span>
+                        )}
+                        {job.currentVersion && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs flex items-center gap-1.5 border ${
+                            job.currentVersion > 1
+                              ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
+                              : 'bg-green-50 text-green-700 border-green-200'
+                          }`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${job.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
+                            {job.currentVersion > 1 ? 'Republished' : 'Published'}
+                          </span>
                         )}
                       </div>
                     </div>
-
-                    {/* Action Button */}
-                    <div className="flex-shrink-0 flex items-center justify-center sm:justify-end">
-                      <button
-                        onClick={() => onSelectJob(job.id)}
-                        className="w-full sm:w-auto px-4 sm:px-5 lg:px-6 py-2.5 sm:py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm sm:text-base"
-                      >
-                        <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                        Run AI Match
-                        <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {job.jobId && (
+                        <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
+                          {job.jobId}
+                        </span>
+                      )}
+                      <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0">
+                        {job.title}
+                      </h3>
                     </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-4 flex-1 flex flex-col">
+                    <div className="space-y-2 mb-4">
+                      {job.department && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{job.department}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span className="truncate">{job.location && job.location.trim() ? job.location : '-'}</span>
+                      </div>
+                      {job.employmentType && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{job.employmentType}</span>
+                        </div>
+                      )}
+                      {job.experience && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span>{job.experience}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Applicants */}
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg mb-3">
+                      <User className="w-4 h-4 text-brand-blue" />
+                      <span className="text-sm text-brand-blue font-medium">
+                        {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
+                      </span>
+                    </div>
+
+                    {/* Match History */}
+                    {hasHistory && latestMatch && (
+                      <div className="bg-green-50 ring-1 ring-green-200 rounded-lg p-2.5 mb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <div className="text-[10px] text-gray-600 mb-0.5">Last Matched</div>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                              <span className="text-xs text-gray-700 font-medium truncate">
+                                {formatISTDate(latestMatch.matchedAt.toISOString())}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-center flex-shrink-0 ml-2">
+                            <div className="text-[10px] text-gray-600 mb-0.5">Candidates</div>
+                            <div className="text-base font-bold text-green-700">{latestMatch.totalMatches}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Button - pinned to bottom */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSelectJob(job.id); }}
+                      className="mt-auto w-full px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Run AI Match
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );
@@ -455,6 +468,7 @@ export default function AITalentMatchPageJobsList({
             </li>
           </ul>
         </div>
+      </div>
       </div>
     </main>
   );

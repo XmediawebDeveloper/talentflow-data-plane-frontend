@@ -715,7 +715,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = internalStats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-slate-50 h-screen overflow-auto">
+    <div className="flex-1 bg-slate-50 h-screen overflow-x-hidden overflow-y-auto">
+      <div className="w-full max-w-[1400px] mx-auto">
       {/* SaaS Hero Header */}
       <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
@@ -2186,6 +2187,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
