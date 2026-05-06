@@ -294,6 +294,7 @@ function DraggableClusterSkill({
   onRemove,
   isReadOnly = false,
   chipClass,
+  isAiDerived = false,
 }: {
   skillName: string;
   clusterId: string;
@@ -303,6 +304,11 @@ function DraggableClusterSkill({
   /** Tailwind classes for the chip's background/border/text — used by
    * ClusterRow to color-code Skill / Command / Certification badges. */
   chipClass?: string;
+  /** True when the skill name didn't come from the recruiter's typed list
+   * (i.e. it was merged/renamed by /refine-clusters or expanded by
+   * /expand-skills). Renders a sparkle marker so recruiters can see
+   * exactly what AI added. */
+  isAiDerived?: boolean;
 }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: DND_TYPES.CLUSTER_SKILL,
@@ -313,11 +319,13 @@ function DraggableClusterSkill({
   return (
     <span
       ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
+      title={isAiDerived ? 'Merged or added by AI from your skills' : undefined}
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-all ${
         isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-40' : 'opacity-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'}`}
+      } ${isDragging ? 'opacity-40' : 'opacity-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'} ${isAiDerived ? 'italic' : ''}`}
     >
       {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 text-gray-300" />}
+      {isAiDerived && <Sparkles className="w-3 h-3 flex-shrink-0 opacity-70" />}
       {skillName}
       {!isReadOnly && (
         <button
@@ -370,11 +378,14 @@ function ClusterRow({
   const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
   const rowRef = useRef<HTMLDivElement>(null);
 
-  // Filter out auto-derived sub-skills so the cluster only renders recruiter-typed
-  // entries, matching the same rule applied at the pool level.
-  const visibleClusterSkills = mainSkillSet && mainSkillSet.size > 0
-    ? cluster.skills.filter(s => mainSkillSet.has(s.toLowerCase().trim()))
-    : cluster.skills;
+  // Show ALL cluster skills — including merged/normalized names from
+  // /refine-clusters (overflow path) and sub-skills from /expand-skills
+  // (capacity-floor path). Previously this filtered to only recruiter-typed
+  // entries, which hid refine's actual work and made it look like refine
+  // never ran. AI-derived names render with a sparkle marker (isAiDerived).
+  const visibleClusterSkills = cluster.skills;
+  const isAiDerivedSkill = (name: string): boolean =>
+    !!mainSkillSet && mainSkillSet.size > 0 && !mainSkillSet.has(name.toLowerCase().trim());
 
   /* Drag handle for reordering clusters */
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
@@ -443,6 +454,19 @@ function ClusterRow({
         <span className="text-sm font-medium text-gray-900 flex-1 truncate">
           {cluster.name || 'Unnamed Cluster'}
         </span>
+        {(() => {
+          const aiCount = visibleClusterSkills.filter(isAiDerivedSkill).length;
+          if (aiCount === 0) return null;
+          return (
+            <span
+              title={`${aiCount} skill${aiCount !== 1 ? 's' : ''} merged or added by AI from your inputs`}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-brand-blue/10 text-brand-blue border border-brand-blue/20 flex-shrink-0"
+            >
+              <Sparkles className="w-2.5 h-2.5" />
+              {aiCount} AI
+            </span>
+          );
+        })()}
         <span className="text-xs text-gray-500">
           {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
         </span>
@@ -532,6 +556,7 @@ function ClusterRow({
                               onRemove={onRemoveSkill}
                               isReadOnly={isReadOnly}
                               chipClass={g.chipClass}
+                              isAiDerived={isAiDerivedSkill(s)}
                             />
                           ))}
                         </div>
@@ -1032,13 +1057,16 @@ export default function AIInterviewClusters() {
           }
           return survivors;
         };
+        const initialExpandIds: string[] = [];
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
           const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
-          setMthClusters(mthTrimmed.map((c: any) => ({
+          const mthRestored = mthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
-          })));
+          }));
+          setMthClusters(mthRestored);
+          mthRestored.forEach((c: any) => { if (c.id) initialExpandIds.push(c.id); });
         }
         if (si.nth_clusters?.length) {
           const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
@@ -1046,10 +1074,18 @@ export default function AIInterviewClusters() {
           const nthTrimmed = !nthEnabledForTimed
             ? []
             : trimAndRedistribute(si.nth_clusters as any[], nthMax);
-          setNthClusters(nthTrimmed.map((c: any) => ({
+          const nthRestored = nthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
-          })));
+          }));
+          setNthClusters(nthRestored);
+          nthRestored.forEach((c: any) => { if (c.id) initialExpandIds.push(c.id); });
+        }
+        // Open all clusters by default so AI-derived (sparkle) skills are
+        // visible immediately. Otherwise users see only headers and think
+        // refine produced nothing new.
+        if (initialExpandIds.length > 0) {
+          setExpandedIds(new Set(initialExpandIds));
         }
         // Restore skill weights
         if (si.skill_weights) {
@@ -1427,11 +1463,43 @@ export default function AIInterviewClusters() {
         }
       }
 
+      // Hard-cap cluster skill totals at 3 × Q (the overflow ceiling).
+      // The /refine-clusters prompt enforces this softly and sometimes
+      // returns more skills than the budget — observed in the field on NTH
+      // (24 returned vs 15 ceiling). We trim the tail of the lowest-priority
+      // clusters so each round honors its question budget.
+      const enforceSkillCeiling = (clusters: Cluster[], questions: number): Cluster[] => {
+        if (clusters.length === 0 || questions <= 0) return clusters;
+        const ceiling = questions * 3;
+        let total = clusters.reduce((sum, c) => sum + c.skills.length, 0);
+        if (total <= ceiling) return clusters;
+        // Drop tail skills from lowest-priority clusters first; keep at least
+        // one skill per cluster so no cluster goes empty.
+        const out = clusters.map(c => ({ ...c, skills: [...c.skills] }));
+        const ordered = [...out].sort((a, b) => a.priority - b.priority);
+        for (const c of ordered) {
+          while (total > ceiling && c.skills.length > 1) {
+            c.skills.pop();
+            total -= 1;
+          }
+          if (total <= ceiling) break;
+        }
+        return out;
+      };
+      const mthQ = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
+      const nthQ = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+      newMthClusters = enforceSkillCeiling(newMthClusters, mthQ);
+      newNthClusters = enforceSkillCeiling(newNthClusters, nthQ);
+
       // Commit expanded skills to UI state so the user sees them on the page
       if (mthExpanded) setMthSkills(mthExpanded);
       if (nthExpanded) setNthSkills(nthExpanded);
       setMthClusters(newMthClusters);
       setNthClusters(newNthClusters);
+      // Auto-expand all generated clusters so AI-merged skills (with sparkle
+      // markers) are visible immediately. Without this, users only see the
+      // cluster headers and assume nothing changed.
+      setExpandedIds(new Set([...newMthClusters, ...newNthClusters].map(c => c.id)));
 
       // Auto-save generated clusters immediately so they survive a page refresh.
       // We use the local vars (not state) because setState is async and hasn't updated yet.

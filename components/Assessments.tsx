@@ -3000,13 +3000,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           })()}
                           <td className="py-3 px-4">
                             {(invitation.status === 'completed' || invitation.completed_at) ? (
-                              <button
-                                onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                View Results
-                              </button>
+                              invitation.attempt_id ? (
+                                <button
+                                  onClick={() => router.push(
+                                    `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`
+                                    + `?candidate_id=${invitation.attempt_id}`
+                                    + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+                                  )}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View Results
+                                </button>
+                              ) : (
+                                // Completed-but-no-attempt — extremely rare orphaned invitation. Render
+                                // disabled so we don't silently dump the user on the aggregate page.
+                                <button
+                                  disabled
+                                  title="Result detail unavailable for this invitation"
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 rounded-lg cursor-not-allowed"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View Results
+                                </button>
+                              )
                             ) : invitation.status === 'bounced' ? (
                               editingEmailId === invitation.id ? (
                                 <div className="flex flex-col gap-1.5 min-w-[190px]">

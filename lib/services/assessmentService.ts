@@ -102,6 +102,10 @@ export interface InvitationResponse {
   invitation_token: string;
   invitation_link?: string;
   status: 'pending' | 'sent' | 'opened' | 'started' | 'completed' | 'expired' | 'abandoned';
+  // Latest attempt's UUID — populated by the listing endpoint and used by
+  // Track Invites' "View Results" deep-link. Null until the candidate has
+  // started the assessment.
+  attempt_id?: string;
   sent_at?: string;
   opened_at?: string;
   started_at?: string;
