@@ -96,6 +96,7 @@ export default function AssessmentDetailsPage() {
           jd_complexity: response.jd_complexity,
           jd_primary_domain: response.jd_primary_domain,
           jd_skill_depth: response.jd_skill_depth || [],
+          jd_nice_to_have_skills: (response as any).jd_nice_to_have_skills || [],
         };
         setAssessment(mapped);
       } else {

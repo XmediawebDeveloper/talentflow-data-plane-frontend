@@ -81,89 +81,26 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     const videoTrack = stream.getVideoTracks()[0];
     const audioTrack = stream.getAudioTracks()[0];
 
-    // Lock so the 2-second poller doesn't stack duplicate probes while one is
-    // already in flight.
-    const probeInFlight = { camera: false, microphone: false };
-
-    // The combined getUserMedia({video,audio}) call ties both tracks to a
-    // single permission grant. Chromium tears down the *entire* stream the
-    // moment ANY permission for that grant changes (even an unrelated one) —
-    // it shows the "Refresh the page" banner and flips both tracks to
-    // readyState='ended'. Without this probe, blocking just the microphone
-    // marks the camera as failed too, even though the camera permission is
-    // still Allowed. Re-requesting each device individually lets us tell
-    // "user actually blocked this device" apart from "browser invalidated
-    // the stream", and only the genuinely-failed device gets flipped to
-    // error.
-    const probeDevice = async (kind: 'camera' | 'microphone'): Promise<boolean> => {
-      // Ask the Permissions API first — it's the authoritative source of
-      // whether the device is allowed/blocked and works even when Chromium
-      // is in the post-permission-change "reload required" state where new
-      // getUserMedia calls misbehave. Permissions API for "microphone" is
-      // patchy on Safari, so we fall through to a gUM probe when the API
-      // returns 'prompt' or throws.
-      try {
-        const permName = kind === 'camera' ? 'camera' : 'microphone';
-        const perm = await navigator.permissions.query({ name: permName as PermissionName });
-        if (perm.state === 'granted') return true;   // explicitly allowed
-        if (perm.state === 'denied') return false;   // explicitly blocked
-        // 'prompt' → user hasn't decided; let the gUM probe below resolve it.
-      } catch {
-        // Browser doesn't support querying this device — fall through.
-      }
-
-      try {
-        const probeStream = await getUserMedia(
-          kind === 'camera' ? { video: true } : { audio: true }
-        );
-        // Release the probe stream immediately — leaving it open keeps the
-        // camera LED on and double-acquires the mic.
-        probeStream.getTracks().forEach(t => t.stop());
-        return true;
-      } catch {
-        return false;
+    // Handler for when video track ends (camera disabled)
+    const handleVideoEnded = () => {
+      console.log('[SYSTEM CHECK] Camera track ended - camera was disabled');
+      setCameraCheck({
+        status: 'error',
+        message: 'Camera was disabled. Please re-run checks.'
+      });
+      // Clear video preview to show camera is off
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
       }
     };
 
-    const handleVideoEnded = async () => {
-      if (probeInFlight.camera) return;
-      probeInFlight.camera = true;
-      try {
-        const stillWorks = await probeDevice('camera');
-        if (!stillWorks) {
-          console.log('[SYSTEM CHECK] Camera probe failed — permission really revoked');
-          setCameraCheck({
-            status: 'error',
-            message: 'Camera was disabled. Please re-run checks.'
-          });
-          if (videoRef.current) {
-            videoRef.current.srcObject = null;
-          }
-        } else {
-          console.log('[SYSTEM CHECK] Camera track ended but probe succeeded — stream tear-down only, camera still allowed');
-        }
-      } finally {
-        probeInFlight.camera = false;
-      }
-    };
-
-    const handleAudioEnded = async () => {
-      if (probeInFlight.microphone) return;
-      probeInFlight.microphone = true;
-      try {
-        const stillWorks = await probeDevice('microphone');
-        if (!stillWorks) {
-          console.log('[SYSTEM CHECK] Microphone probe failed — permission really revoked');
-          setMicCheck({
-            status: 'error',
-            message: 'Microphone was disabled. Please re-run checks.'
-          });
-        } else {
-          console.log('[SYSTEM CHECK] Audio track ended but probe succeeded — stream tear-down only, mic still allowed');
-        }
-      } finally {
-        probeInFlight.microphone = false;
-      }
+    // Handler for when audio track ends (microphone disabled)
+    const handleAudioEnded = () => {
+      console.log('[SYSTEM CHECK] Audio track ended - microphone was disabled');
+      setMicCheck({
+        status: 'error',
+        message: 'Microphone was disabled. Please re-run checks.'
+      });
     };
 
     // Add event listeners for track ended events
@@ -174,15 +111,21 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       audioTrack.addEventListener('ended', handleAudioEnded);
     }
 
-    // Periodic check every 2 seconds to detect if tracks are no longer live.
-    // Routes through the same probe-then-decide path so a stream tear-down
-    // doesn't cause a false-positive failure for either device.
+    // Periodic check every 2 seconds to detect if tracks are no longer live
     const monitorInterval = setInterval(() => {
       if (videoTrack && videoTrack.readyState === 'ended') {
-        handleVideoEnded();
+        console.log('[SYSTEM CHECK] Camera track readyState is ended');
+        setCameraCheck({
+          status: 'error',
+          message: 'Camera stopped working. Please re-run checks.'
+        });
       }
       if (audioTrack && audioTrack.readyState === 'ended') {
-        handleAudioEnded();
+        console.log('[SYSTEM CHECK] Microphone track readyState is ended');
+        setMicCheck({
+          status: 'error',
+          message: 'Microphone stopped working. Please re-run checks.'
+        });
       }
     }, 2000);
 
@@ -399,92 +342,36 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       const browser = detectBrowser();
       const errorMessage = err.message || '';
 
-      // DEVICE_IN_USE is the only failure mode where we know both devices
-      // are equally affected (camera/mic hardware locked by another app).
-      // Mark both and skip the per-device recovery so we don't show a
-      // misleading "Camera ready" while the camera is actually held by Zoom.
-      if (errorMessage === 'DEVICE_IN_USE') {
+      // Handle standardized error codes from getUserMedia
+      if (errorMessage === 'PERMISSION_DENIED') {
+        const msg = 'Both camera and microphone are required. Please allow both in your browser site settings, then reload and re-run checks.';
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'DEVICE_NOT_FOUND') {
+        const msg = getErrorMessage('DEVICE_NOT_FOUND', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'DEVICE_IN_USE') {
         const msg = getErrorMessage('DEVICE_IN_USE', browser.name);
         setCameraCheck({ status: 'error', message: msg });
         setMicCheck({ status: 'error', message: 'Microphone may be in use by another app or tab' });
         setCameraInUseError(msg); // Store for prominent display
-
-        console.log('[SYSTEM CHECK] Camera in use detected - NOT calling fallback checks', {
-          browser: browser.name,
-          errorType: err.name
-        });
-
-        return;
-      }
-
-      // For every other failure (PERMISSION_DENIED in particular), the
-      // combined getUserMedia({video,audio}) request is *atomic* — a denial
-      // of just ONE device fails the whole call. Pre-marking both as failed
-      // here was the source of the "block mic → camera also shows failed"
-      // bug: even when checkCameraSeparately later succeeds, the user has
-      // already seen camera as red, and the recovery doesn't always
-      // overwrite cleanly (e.g. when Chromium is in "reload required"
-      // state). Instead, hand off to the per-device probes which set their
-      // own definitive status.
-      console.log('[SYSTEM CHECK] Combined gUM failed — running per-device probes', {
-        errorMessage,
-        browser: browser.name,
-      });
-      await checkCameraSeparately();
-      await checkMicrophoneSeparately();
-    }
-  };
-
-  const checkCameraSeparately = async () => {
-    try {
-      const stream = await getUserMedia({ video: true });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        void playVideo(videoRef.current);
-      }
-      // Run face detection on the fallback stream too
-      setCameraCheck({ status: 'checking', message: 'Detecting face...' });
-      await new Promise(r => setTimeout(r, 1000));
-      if ('FaceDetector' in window) {
-        try {
-          await runFaceDetection();
-        } catch {
-          await runFaceDetectionFaceApi();
-        }
+      } else if (errorMessage === 'SECURITY_ERROR_HTTPS_REQUIRED') {
+        const msg = getErrorMessage('SECURITY_ERROR_HTTPS_REQUIRED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'MEDIA_API_NOT_SUPPORTED') {
+        const msg = getErrorMessage('MEDIA_API_NOT_SUPPORTED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
       } else {
-        await runFaceDetectionFaceApi();
+        // For unknown errors, show user-friendly message
+        setCameraCheck({ status: 'error', message: 'Camera error - please check if camera is available' });
+        setMicCheck({ status: 'error', message: 'Microphone error - please check if microphone is available' });
       }
-    } catch (err: any) {
-      console.error('Camera-only error:', err.name, err.message);
-      // Set a definitive error so the catch block doesn't have to pre-mark
-      // the camera as failed. If the per-device call also failed, the camera
-      // really is unavailable.
-      const browser = detectBrowser();
-      const code = err.message || 'PERMISSION_DENIED';
-      setCameraCheck({
-        status: 'error',
-        message: getErrorMessage(code, browser.name),
-      });
-    }
-  };
-
-  const checkMicrophoneSeparately = async () => {
-    try {
-      const stream = await getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      setMicCheck({ status: 'success', message: 'Microphone working' });
-    } catch (err: any) {
-      console.error('Microphone-only error:', err.name, err.message);
-      // Set a definitive error so the catch block doesn't have to pre-mark
-      // the mic as failed. Per-device probe failure means the mic really is
-      // blocked or unavailable.
-      const browser = detectBrowser();
-      const code = err.message || 'PERMISSION_DENIED';
-      setMicCheck({
-        status: 'error',
-        message: getErrorMessage(code, browser.name),
-      });
+      // No per-device fallback: assessment requires BOTH camera and microphone.
+      // If the combined request fails, both are reported failed and the
+      // candidate must allow both before proceeding.
     }
   };
 

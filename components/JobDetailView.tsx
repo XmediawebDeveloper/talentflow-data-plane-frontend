@@ -24,6 +24,7 @@ import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import CandidateResultDetails from './CandidateResultDetails';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
+import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -698,6 +699,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           if (status.status === 'completed' || status.status === 'failed') {
             clearInterval(poll);
             fetchScoredResumes();
+            // Refresh header quota dropdown — RS deductions landed on CP
+            dispatchUnitsConsumed();
           }
         } catch {
           clearInterval(poll);

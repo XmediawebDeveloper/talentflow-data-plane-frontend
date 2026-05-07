@@ -2062,28 +2062,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Grid Card Actions */}
                     <div className="flex items-center gap-2 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                      {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
-                        <button
-                          onClick={() => {
-                            if (assessment.status === 'Draft') {
-                              toast.warning('Please publish the assessment before sharing');
-                              return;
-                            }
-                            setSelectedAssessmentForShare(assessment);
-                            setShowShareModal(true);
-                          }}
-                          disabled={assessment.status === 'Draft'}
-                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
-                            assessment.status === 'Draft'
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                          }`}
-                          title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          Share
-                        </button>
-                      )}
+                      {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
+                        // Share is blocked for Draft (must publish first) AND
+                        // Archived (assessment is out of circulation, can't
+                        // invite candidates to it). The disabled visuals are
+                        // shared across both states.
+                        const shareBlockedReason =
+                          assessment.status === 'Draft' ? 'Publish assessment first to share' :
+                          assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
+                          '';
+                        const isShareBlocked = !!shareBlockedReason;
+                        return (
+                          <button
+                            onClick={() => {
+                              if (assessment.status === 'Draft') {
+                                toast.warning('Please publish the assessment before sharing');
+                                return;
+                              }
+                              if (assessment.status === 'Archived') {
+                                toast.warning('Archived assessments cannot be shared');
+                                return;
+                              }
+                              setSelectedAssessmentForShare(assessment);
+                              setShowShareModal(true);
+                            }}
+                            disabled={isShareBlocked}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
+                              isShareBlocked
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                            }`}
+                            title={shareBlockedReason || 'Share via email'}
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Share
+                          </button>
+                        );
+                      })()}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -2147,7 +2162,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Preview
                           </button>
-                          {canCreateAssessment && (
+                          {/* Archived assessments only expose Edit / Preview / Activate —
+                              Copy Link, Completed, Archive, Delete are hidden so the menu
+                              reflects what the recruiter can actually do on a row that's
+                              been pulled out of circulation. */}
+                          {assessment.status !== 'Archived' && canCreateAssessment && (
                           <button
                             onClick={async () => {
                               if (assessment.status === 'Draft') {
@@ -2196,7 +2215,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                           )}
                           <div className="border-t border-gray-100 my-1"></div>
-                          {canUpdateAssessment && assessment.status !== 'Completed' && (
+                          {canUpdateAssessment && assessment.status !== 'Active' && (
+                            <button
+                              onClick={() => handleActivateAssessment(assessment.id)}
+                              className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
+                            >
+                              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
+                              Activate
+                            </button>
+                          )}
+                          {canUpdateAssessment && assessment.status !== 'Completed' && assessment.status !== 'Archived' && (
                             <button
                               onClick={() => handleCompleteAssessment(assessment.id)}
                               className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
@@ -2205,6 +2233,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               Completed
                             </button>
                           )}
+                          {assessment.status !== 'Archived' && (
                           <button
                             onClick={() => {
                               if (!canDeleteAssessment) {
@@ -2224,7 +2253,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Archive
                           </button>
-                          {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+                          )}
+                          {assessment.status !== 'Archived' && (hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
                             const hasCandidates = assessment.invitations_count > 0;
                             const isDisabled = !canDeleteAssessment || hasCandidates;
                             const disabledReason = !canDeleteAssessment
@@ -2361,29 +2391,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* Share via Email Button */}
-                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
-                            <button
-                              onClick={() => {
-                                if (assessment.status === 'Draft') {
-                                  toast.warning('Please publish the assessment before sharing');
-                                  return;
-                                }
-                                setSelectedAssessmentForShare(assessment);
-                                setShowShareModal(true);
-                              }}
-                              disabled={assessment.status === 'Draft'}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
-                                assessment.status === 'Draft'
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                              }`}
-                              title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
-                            >
-                              <Mail className="w-3.5 h-3.5" />
-                              Share
-                            </button>
-                          )}
+                          {/* Share via Email Button — disabled for Draft (must
+                              publish first) and Archived (out of circulation). */}
+                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
+                            const shareBlockedReason =
+                              assessment.status === 'Draft' ? 'Publish assessment first to share' :
+                              assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
+                              '';
+                            const isShareBlocked = !!shareBlockedReason;
+                            return (
+                              <button
+                                onClick={() => {
+                                  if (assessment.status === 'Draft') {
+                                    toast.warning('Please publish the assessment before sharing');
+                                    return;
+                                  }
+                                  if (assessment.status === 'Archived') {
+                                    toast.warning('Archived assessments cannot be shared');
+                                    return;
+                                  }
+                                  setSelectedAssessmentForShare(assessment);
+                                  setShowShareModal(true);
+                                }}
+                                disabled={isShareBlocked}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
+                                  isShareBlocked
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                }`}
+                                title={shareBlockedReason || 'Share via email'}
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                Share
+                              </button>
+                            );
+                          })()}
 
                           {/* Track Invites Button */}
                           {assessment.candidates > 0 && (
@@ -2467,7 +2509,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Preview
                                 </button>
-                                {canCreateAssessment && (
+                                {/* Archived assessments only expose Edit / Preview / Activate —
+                                    Copy Link, Duplicate, Completed, Archive, Delete are hidden
+                                    so the menu reflects what the recruiter can actually do
+                                    on a row that's been pulled out of circulation. */}
+                                {assessment.status !== 'Archived' && canCreateAssessment && (
                                 <button
                                   onClick={async () => {
                                     if (assessment.status === 'Draft') {
@@ -2515,7 +2561,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Copy Link
                                 </button>
                                 )}
-                                {canCreateAssessment && (
+                                {assessment.status !== 'Archived' && canCreateAssessment && (
                                 <button
                                   onClick={async () => {
                                     try {
@@ -2555,6 +2601,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     Completed
                                   </button>
                                 )}
+                                {assessment.status !== 'Archived' && (
                                 <button
                                   onClick={() => {
                                     if (!canDeleteAssessment) {
@@ -2574,8 +2621,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Archive
                                 </button>
-                                <div className="border-t border-gray-100 my-1"></div>
-                                {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+                                )}
+                                {assessment.status !== 'Archived' && (
+                                  <div className="border-t border-gray-100 my-1"></div>
+                                )}
+                                {assessment.status !== 'Archived' && (hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
                                   const hasCandidates = assessment.invitations_count > 0;
                                   const isDisabled = !canDeleteAssessment || hasCandidates;
                                   const disabledReason = !canDeleteAssessment

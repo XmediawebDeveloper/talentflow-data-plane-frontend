@@ -66,6 +66,12 @@ export interface AssessmentResponse {
   invitations_count: number;
   completed_count: number;
   passed_count: number;
+  // JD-extracted metadata snapshot (Assessment Info tab)
+  jd_experience_level?: string | null;
+  jd_complexity?: string | null;
+  jd_primary_domain?: string | null;
+  jd_skill_depth?: any[];
+  jd_nice_to_have_skills?: any[];
   created_at: string;
   updated_at: string;
 }
