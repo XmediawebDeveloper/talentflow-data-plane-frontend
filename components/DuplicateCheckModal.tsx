@@ -58,23 +58,23 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-3xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-3xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-600 to-red-600 px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-              <FileText className="w-6 h-6 text-white" />
+        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+              <FileText className="w-5 h-5 text-brand-blue" />
             </div>
-            <div>
-              <h2 className="text-xl text-white">Check for Duplicate Resumes</h2>
-              <p className="text-sm text-orange-100">Upload a resume to check if it already exists</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Check for Duplicate Resumes</h2>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">Upload a resume to check if it already exists</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            className="p-1.5 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0"
            aria-label="Close">
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -82,12 +82,12 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
           {!showDuplicateWarning ? (
             /* Upload Section */
             <div>
-              <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <div className="mb-6 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
                   <div>
-                    <div className="text-sm font-medium text-gray-800 mb-1">How it works</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="text-sm font-semibold text-brand-blue mb-1">How it works</div>
+                    <div className="text-sm text-gray-700">
                       Upload a resume file and we'll check if this candidate already exists in your database based on name, email, and phone number.
                     </div>
                   </div>
@@ -95,16 +95,16 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
               </div>
 
               {/* File Upload Area */}
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-gray-700 hover:bg-gray-50 transition-all">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Upload className="w-8 h-8 text-gray-800" />
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 sm:p-12 text-center hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-all">
+                <div className="w-16 h-16 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-8 h-8 text-brand-blue" />
                 </div>
-                <h3 className="text-lg text-gray-900 mb-2">Upload Resume to Check</h3>
-                <p className="text-sm text-gray-600 mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Upload Resume to Check</h3>
+                <p className="text-xs sm:text-sm text-gray-600 mb-4">
                   Drop your resume file here or click to browse
                 </p>
-                <label className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors cursor-pointer">
-                  <Upload className="w-5 h-5" />
+                <label className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors cursor-pointer">
+                  <Upload className="w-4 h-4" />
                   Select Resume File
                   <input
                     type="file"
@@ -120,17 +120,17 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
             /* Duplicate Found Section */
             <div>
               {/* Warning Alert */}
-              <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-xl p-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <AlertCircle className="w-7 h-7 text-orange-600" />
+              <div className="mb-6 bg-brand-orange/5 ring-1 ring-brand-orange/30 rounded-xl p-4 sm:p-5">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertCircle className="w-6 h-6 text-brand-orange" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-orange-900 mb-2">Duplicate Resume Detected!</h3>
-                    <p className="text-sm text-orange-800 mb-3">
+                    <h3 className="text-base sm:text-lg font-semibold text-brand-orange-deep mb-2">Duplicate Resume Detected!</h3>
+                    <p className="text-xs sm:text-sm text-gray-700 mb-3">
                       This resume appears to already exist in your database. We found a match based on the candidate's name and email address.
                     </p>
-                    <div className="flex items-center gap-2 text-sm text-orange-700">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-brand-orange-deep">
                       <FileText className="w-4 h-4" />
                       <span className="font-medium">Uploaded file: {uploadedFiles[0]?.name}</span>
                     </div>
@@ -139,25 +139,25 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
               </div>
 
               {/* Existing Resume Details */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden mb-6">
-                <div className="bg-gradient-to-r from-gray-700 to-gray-900 px-5 py-4">
-                  <h4 className="text-white font-medium flex items-center gap-2">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden mb-6">
+                <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border-b border-gray-100 px-4 sm:px-5 py-3">
+                  <h4 className="text-brand-blue font-semibold flex items-center gap-2">
                     <Eye className="w-5 h-5" />
                     Existing Resume in Database
                   </h4>
                 </div>
-                
-                <div className="p-6">
+
+                <div className="p-4 sm:p-6">
                   {/* Candidate Header */}
-                  <div className="flex items-start justify-between mb-6 pb-6 border-b border-gray-200">
-                    <div className="flex items-start gap-4">
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-800 to-gray-800 flex items-center justify-center text-white text-2xl font-bold">
+                  <div className="flex items-start justify-between mb-6 pb-6 border-b border-gray-100">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-brand-blue ring-1 ring-white/10 flex items-center justify-center text-white text-lg sm:text-2xl font-semibold">
                         {existingResume.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <div>
-                        <h3 className="text-xl text-gray-900 font-semibold mb-1">{existingResume.name}</h3>
-                        <p className="text-base text-gray-700 mb-2">{existingResume.title}</p>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <h3 className="text-base sm:text-xl text-gray-900 font-semibold mb-1">{existingResume.name}</h3>
+                        <p className="text-sm sm:text-base text-gray-700 mb-2">{existingResume.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-600">
                           <div className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />
                             {existingResume.experience}
@@ -169,7 +169,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                         </div>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                    <span className="px-2.5 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-medium">
                       Existing
                     </span>
                   </div>
@@ -199,7 +199,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                       {existingResume.skills.map((skill, idx) => (
                         <span
                           key={idx}
-                          className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs font-medium"
+                          className="px-2.5 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs font-medium"
                         >
                           {skill}
                         </span>
@@ -232,7 +232,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-3">
                 <button
                   onClick={() => {
                     if (onViewExisting) {
@@ -240,9 +240,9 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                       onClose();
                     }
                   }}
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                 >
-                  <Eye className="w-5 h-5" />
+                  <Eye className="w-4 h-4" />
                   View Existing Resume
                 </button>
                 <button
@@ -250,16 +250,16 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                     setShowDuplicateWarning(false);
                     setUploadedFiles([]);
                   }}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  className="flex-1 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                 >
                   Check Another Resume
                 </button>
               </div>
 
               {/* Info Note */}
-              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="mt-4 bg-slate-50 border border-gray-100 rounded-lg p-4">
                 <p className="text-xs text-gray-600">
-                  <strong>Note:</strong> If you want to update this candidate's resume with a new version, use the <span className="font-semibold text-gray-800">"Version"</span> button instead. The Duplicate Check is designed to prevent accidental re-uploads of the same candidate.
+                  <strong>Note:</strong> If you want to update this candidate's resume with a new version, use the <span className="font-semibold text-brand-blue">"Version"</span> button instead. The Duplicate Check is designed to prevent accidental re-uploads of the same candidate.
                 </p>
               </div>
             </div>

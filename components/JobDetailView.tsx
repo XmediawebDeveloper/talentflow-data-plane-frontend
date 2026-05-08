@@ -62,10 +62,10 @@ function QuickActionButton({
         onClick={onClick}
         disabled={disabled}
         className={`
-          w-full px-3 py-2.5 text-sm font-medium rounded-md transition-all text-left flex items-center gap-2.5
+          w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all text-left flex items-center gap-2.5
           ${disabled
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-            : className || 'bg-gray-800 text-white hover:bg-gray-700 shadow-sm'
+            ? 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200'
+            : className || 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
           }
         `}
         title={disabled ? disabledTooltip : undefined}
@@ -77,7 +77,7 @@ function QuickActionButton({
 
       {/* Tooltip on hover when disabled */}
       {disabled && disabledTooltip && (
-        <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+        <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-brand-blue text-white text-xs rounded-md shadow-lg shadow-brand-blue/25 ring-1 ring-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
           {disabledTooltip}
         </div>
       )}
@@ -918,7 +918,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   }
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+    <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center justify-between mb-3">
@@ -1435,7 +1436,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         {/* Right Column - Actions & Activity */}
         <div className="lg:col-span-4 space-y-4">
           {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
             <div className="space-y-2">
               {/* 1. View JD History */}
@@ -2150,6 +2151,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jdTitle={job.title}
         />
       )}
+      </div>
     </main>
   );
 }
@@ -2262,7 +2264,7 @@ function AIMatchTabContent({
         {canRunAiMatch && (
           <button
             onClick={onRunMatch}
-            className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-900 transition-colors flex items-center gap-2"
+            className="mt-4 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
             Run AI Match
@@ -2285,13 +2287,13 @@ function AIMatchTabContent({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search candidates..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
             />
           </div>
           <select
             value={filterThreshold}
             onChange={(e) => setFilterThreshold(Number(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-xs sm:text-sm text-black"
           >
             <option value={0}>All Matches</option>
             <option value={50}>50%+ Match</option>
@@ -2304,7 +2306,7 @@ function AIMatchTabContent({
           {selectedIds.size > 0 && (
             <button
               onClick={() => onScoreSelected(selectedCandidates)}
-              className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg text-xs sm:text-sm hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+              className="px-3 sm:px-4 py-2 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg text-xs sm:text-sm shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 font-medium"
             >
               <Target className="w-3 h-3 sm:w-4 sm:h-4" />
               Score ({selectedIds.size})
@@ -2313,7 +2315,7 @@ function AIMatchTabContent({
           {canRunAiMatch && (
             <button
               onClick={onRunMatch}
-              className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg text-xs sm:text-sm hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+              className="px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 font-medium"
             >
               <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
               Run AI Match
@@ -2328,33 +2330,33 @@ function AIMatchTabContent({
             value={filterPhone}
             onChange={(e) => setFilterPhone(e.target.value)}
             placeholder="Filter by phone..."
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
           />
           <input
             type="text"
             value={filterLocation}
             onChange={(e) => setFilterLocation(e.target.value)}
             placeholder="Filter by location..."
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
           />
           <input
             type="number"
             value={filterExperienceMin}
             onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="Min exp"
-            className="w-full sm:w-28 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
           />
           <input
             type="number"
             value={filterExperienceMax}
             onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="Max exp"
-            className="w-full sm:w-28 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
           />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+            className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-xs sm:text-sm text-black"
           >
             <option value="rank">Sort by Rating</option>
             <option value="name">Sort by Name</option>

@@ -995,8 +995,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
 
   return (
-    <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
-      <div className="w-full">
+    <div className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div className="flex items-start gap-3">

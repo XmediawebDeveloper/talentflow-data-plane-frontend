@@ -760,7 +760,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 sm:pt-6">
         {/* SaaS Hero Header */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -815,7 +815,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         </section>
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
         {/* Subscription Summary Card */}
         {subscriptionSummary && (
           <div className="mb-6 sm:mb-8 bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
@@ -1248,7 +1248,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       {/* Add-ons Section */}
       {canPurchaseAddons && (
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Section Header */}
           <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6 sm:py-5">

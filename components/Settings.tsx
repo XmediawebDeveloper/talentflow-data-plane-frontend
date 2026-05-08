@@ -223,34 +223,31 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 flex items-center justify-center">
+        <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="font-medium text-gray-600">Loading settings...</p>
+          <p className="font-semibold text-gray-600">Loading settings...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
-      <div className="mx-auto max-w-7xl">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
       {/* SaaS Hero Header */}
-      <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+      <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
         <div className="relative flex items-start gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-            <User className="h-6 w-6 text-white" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+            <User className="h-5 w-5 text-brand-blue" />
           </div>
           <div>
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-              <Sparkles className="h-3 w-3 text-brand-orange" />
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+              <Sparkles className="h-3 w-3 text-brand-orange-deep" />
               Personal preferences
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Recruiter Settings</h1>
-            <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage your personal preferences, notifications, and workflow defaults.</p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl text-gray-900">Recruiter Settings</h1>
+            <p className="mt-2 max-w-2xl text-sm text-gray-600 sm:text-base">Manage your personal preferences, notifications, and workflow defaults.</p>
           </div>
         </div>
       </section>
@@ -259,7 +256,7 @@ export default function Settings() {
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
         <div className="w-full lg:w-64 flex-shrink-0">
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-2 lg:sticky lg:top-8">
+          <div className="rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-2 lg:sticky lg:top-8">
             <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
               {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
@@ -267,10 +264,10 @@ export default function Settings() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
                       activeTab === tab.id
-                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20 ring-1 ring-white/10'
-                        : 'text-gray-700 hover:bg-brand-cyan/[0.06] hover:text-brand-blue'
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                        : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -281,9 +278,9 @@ export default function Settings() {
             </nav>
 
             {/* Role Info */}
-            <div className="hidden lg:block mt-4 p-3 rounded-xl bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5">
+            <div className="hidden lg:block mt-4 p-3 rounded-lg bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/5">
               <div className="text-[10px] font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
-              <div className="text-sm text-gray-900 font-medium">{user?.role || 'Recruiter'}</div>
+              <div className="text-sm text-gray-900 font-semibold">{user?.role || 'Recruiter'}</div>
               <div className="text-xs text-gray-600 mt-1">Access Level: {user?.role === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
             </div>
           </div>
@@ -291,9 +288,9 @@ export default function Settings() {
 
         {/* Right Content Area */}
         <div className="flex-1">
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-4 sm:p-6 lg:p-8">
+          <div className="rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-4 sm:p-6 lg:p-8">
             {!canEditSettings && activeTab !== 'change-password' && (
-              <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="mb-6 rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 px-4 py-3 text-sm text-brand-orange-deep">
                 View-only access. You can review these settings, but you do not have permission to edit them.
               </div>
             )}
@@ -303,7 +300,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">My Profile</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">My Profile</h2>
                     <p className="text-sm text-gray-600">Update your personal information and recruiter profile</p>
                   </div>
                 </div>
@@ -311,22 +308,22 @@ export default function Settings() {
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                   {/* Profile Picture */}
                   <div className="mb-8 pb-8 border-b border-gray-200">
-                    <label className="block text-sm font-medium text-gray-900 mb-3">Profile Picture</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-3">Profile Picture</label>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-20 h-20 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-lg text-2xl flex-shrink-0">
+                      <div className="w-20 h-20 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-2xl flex-shrink-0">
                         {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                       </div>
                       <div className="text-center sm:text-left">
                         <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                           <button
                             type="button"
-                            className="px-4 py-2 bg-brand-blue text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-white/10 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Upload New
                           </button>
                           <button
                             type="button"
-                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Remove
                           </button>
@@ -340,21 +337,21 @@ export default function Settings() {
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-900 mb-2">Full Name</label>
+                        <label className="block text-sm font-semibold text-gray-900 mb-2">Full Name</label>
                         <input
                           type="text"
                           value={profileData.full_name || ''}
                           onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-900 mb-2">Email Address</label>
+                        <label className="block text-sm font-semibold text-gray-900 mb-2">Email Address</label>
                         <input
                           type="email"
                           value={profileData.email || ''}
                           disabled
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
                         />
                         <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
                       </div>
@@ -363,26 +360,26 @@ export default function Settings() {
                     <div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-900 mb-2">Phone Number</label>
+                          <label className="block text-sm font-semibold text-gray-900 mb-2">Phone Number</label>
                           <div className="relative">
                             <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input
                               type="tel"
                               value={profileData.phone || ''}
                               onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-900 mb-2">Job Title</label>
+                          <label className="block text-sm font-semibold text-gray-900 mb-2">Job Title</label>
                           <div className="relative">
                             <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input
                               type="text"
                               value={profileData.job_title || ''}
                               onChange={(e) => setProfileData({ ...profileData, job_title: e.target.value })}
-                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                             />
                           </div>
                         </div>
@@ -390,12 +387,12 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Department</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">Department</label>
                       <input
                         type="text"
                         value={profileData.department || ''}
                         onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                     </div>
                   </div>
@@ -408,7 +405,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">Notification Settings</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Notification Settings</h2>
                     <p className="text-sm text-gray-600">Choose how you want to be notified about recruitment activities</p>
                   </div>
                 </div>
@@ -417,8 +414,8 @@ export default function Settings() {
                   <div className="space-y-6">
                     {/* Email Notifications */}
                     <div>
-                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                        <Mail className="w-5 h-5 text-gray-800" />
+                      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-brand-blue" />
                         Email Notifications
                       </h3>
                       <div className="space-y-3">
@@ -429,9 +426,9 @@ export default function Settings() {
                           { key: 'email_candidate_message', label: 'Candidate messages', desc: 'Get emails when candidates send you messages' },
                           { key: 'email_job_expiring', label: 'Job expiring soon', desc: 'Reminders when your job postings are about to expire' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-gray-200">
                             <div className="flex-1">
-                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-sm font-semibold text-gray-900 mb-1">{item.label}</div>
                               <div className="text-xs text-gray-600">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
@@ -441,7 +438,7 @@ export default function Settings() {
                                 onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                                 className="sr-only peer"
                               />
-                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                             </label>
                           </div>
                         ))}
@@ -450,8 +447,8 @@ export default function Settings() {
 
                     {/* Push Notifications */}
                     <div>
-                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                        <Bell className="w-5 h-5 text-gray-800" />
+                      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-brand-blue" />
                         Push Notifications
                       </h3>
                       <div className="space-y-3">
@@ -461,9 +458,9 @@ export default function Settings() {
                           { key: 'push_interview_reminder', label: 'Interview reminders', desc: 'Get reminded 15 minutes before interviews' },
                           { key: 'push_candidate_viewed', label: 'Candidate profile views', desc: 'When candidates view your job postings' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-gray-200">
                             <div className="flex-1">
-                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-sm font-semibold text-gray-900 mb-1">{item.label}</div>
                               <div className="text-xs text-gray-600">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
@@ -473,7 +470,7 @@ export default function Settings() {
                                 onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                                 className="sr-only peer"
                               />
-                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                             </label>
                           </div>
                         ))}
@@ -482,8 +479,8 @@ export default function Settings() {
 
                     {/* Digest Notifications */}
                     <div>
-                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-green-600" />
+                      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-brand-cyan" />
                         Digest & Reports
                       </h3>
                       <div className="space-y-3">
@@ -491,9 +488,9 @@ export default function Settings() {
                           { key: 'weekly_digest', label: 'Weekly activity digest', desc: 'Summary of weekly recruitment activity' },
                           { key: 'monthly_report', label: 'Monthly performance report', desc: 'Detailed monthly analytics and insights' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-gray-200">
                             <div className="flex-1">
-                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-sm font-semibold text-gray-900 mb-1">{item.label}</div>
                               <div className="text-xs text-gray-600">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
@@ -503,7 +500,7 @@ export default function Settings() {
                                 onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                                 className="sr-only peer"
                               />
-                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                             </label>
                           </div>
                         ))}
@@ -519,29 +516,29 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">Job Posting Preferences</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Job Posting Preferences</h2>
                     <p className="text-sm text-gray-600">Set default values for new job postings</p>
                   </div>
                 </div>
 
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                   <div className="space-y-6">
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="p-4 bg-brand-blue/5 ring-1 ring-brand-blue/15 border border-brand-blue/15 rounded-lg">
                       <div className="flex items-start gap-3">
-                        <Target className="w-5 h-5 text-gray-800 mt-0.5" />
+                        <Target className="w-5 h-5 text-brand-blue mt-0.5" />
                         <div>
-                          <div className="text-sm font-medium text-gray-800 mb-1">Quick Tip</div>
+                          <div className="text-sm font-semibold text-brand-blue mb-1">Quick Tip</div>
                           <div className="text-sm text-gray-900">These settings will be pre-filled when you create a new job posting, saving you time.</div>
                         </div>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Type</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">Default Job Type</label>
                       <select
                         value={settings.default_job_type || 'Full-time'}
                         onChange={(e) => setSettings({ ...settings, default_job_type: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                       >
                         <option>Full-time</option>
                         <option>Part-time</option>
@@ -552,11 +549,11 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Default Location</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">Default Location</label>
                       <select
                         value={settings.default_location || 'Remote'}
                         onChange={(e) => setSettings({ ...settings, default_location: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                       >
                         <option>Remote</option>
                         <option>Hybrid</option>
@@ -565,12 +562,12 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Expiry (Days)</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">Default Job Expiry (Days)</label>
                       <input
                         type="number"
                         value={settings.default_expiry_days || 30}
                         onChange={(e) => setSettings({ ...settings, default_expiry_days: parseInt(e.target.value) || 30 })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         min="1"
                         max="90"
                       />
@@ -583,9 +580,9 @@ export default function Settings() {
                         { key: 'require_assessment', label: 'Require assessment by default', desc: 'Automatically require candidates to complete an assessment' },
                         { key: 'auto_publish', label: 'Auto-publish jobs', desc: 'Automatically publish jobs after creation (skip draft)' },
                       ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-gray-200">
                           <div className="flex-1">
-                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                            <div className="text-sm font-semibold text-gray-900 mb-1">{item.label}</div>
                             <div className="text-xs text-gray-600">{item.desc}</div>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer ml-4">
@@ -595,7 +592,7 @@ export default function Settings() {
                               onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                               className="sr-only peer"
                             />
-                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                           </label>
                         </div>
                       ))}
@@ -610,7 +607,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">Workflow Preferences</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Workflow Preferences</h2>
                     <p className="text-sm text-gray-600">Customize how you interact with the platform</p>
                   </div>
                 </div>
@@ -618,7 +615,7 @@ export default function Settings() {
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-base font-medium text-gray-900 mb-4">Resume Management</h3>
+                      <h3 className="text-base font-semibold text-gray-900 mb-4">Resume Management</h3>
                       <div className="space-y-3">
                         {[
                           { key: 'auto_screen_resumes', label: 'AI-powered auto-screening', desc: 'Automatically screen and rank resumes using AI' },
@@ -626,9 +623,9 @@ export default function Settings() {
                           { key: 'bulk_action_confirmation', label: 'Confirm bulk actions', desc: 'Show confirmation dialog for bulk operations' },
                           { key: 'show_advanced_filters', label: 'Show advanced filters by default', desc: 'Display advanced filter options when searching resumes' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-gray-200">
                             <div className="flex-1">
-                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-sm font-semibold text-gray-900 mb-1">{item.label}</div>
                               <div className="text-xs text-gray-600">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
@@ -638,7 +635,7 @@ export default function Settings() {
                                 onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                                 className="sr-only peer"
                               />
-                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                             </label>
                           </div>
                         ))}
@@ -646,11 +643,11 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <h3 className="text-base font-medium text-gray-900 mb-4">Default Sort Order</h3>
+                      <h3 className="text-base font-semibold text-gray-900 mb-4">Default Sort Order</h3>
                       <select
                         value={settings.default_sort_order || 'latest'}
                         onChange={(e) => setSettings({ ...settings, default_sort_order: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                       >
                         <option value="latest">Latest First</option>
                         <option value="name-asc">Name (A-Z)</option>
@@ -670,7 +667,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">Privacy & Security</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Privacy & Security</h2>
                     <p className="text-sm text-gray-600">Manage your privacy settings and account security</p>
                   </div>
                 </div>
@@ -679,17 +676,17 @@ export default function Settings() {
                   <div className="space-y-6">
                     {/* Privacy Settings */}
                     <div>
-                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                        <Shield className="w-5 h-5 text-gray-800" />
+                      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-brand-blue" />
                         Privacy Settings
                       </h3>
                       <div className="space-y-4">
-                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <label className="block text-sm text-gray-900 mb-2">Profile Visibility</label>
+                        <div className="p-4 bg-slate-50 rounded-lg border border-gray-200">
+                          <label className="block text-sm font-semibold text-gray-900 mb-2">Profile Visibility</label>
                           <select
                             value={settings.profile_visibility || 'team'}
                             onChange={(e) => setSettings({ ...settings, profile_visibility: e.target.value })}
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                           >
                             <option value="team">Team Only - Visible to team members</option>
                             <option value="private">Private - Only visible to me</option>
@@ -702,9 +699,9 @@ export default function Settings() {
                           { key: 'show_phone', label: 'Show phone number', desc: 'Display your phone number on your profile' },
                           { key: 'show_activity_status', label: 'Show activity status', desc: "Let team members see when you're online" },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-gray-200">
                             <div className="flex-1">
-                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-sm font-semibold text-gray-900 mb-1">{item.label}</div>
                               <div className="text-xs text-gray-600">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
@@ -714,7 +711,7 @@ export default function Settings() {
                                 onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                                 className="sr-only peer"
                               />
-                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                             </label>
                           </div>
                         ))}
@@ -723,13 +720,13 @@ export default function Settings() {
 
                   {/* Security Settings */}
                   <div className="pt-6 border-t border-gray-200">
-                    <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <Lock className="w-5 h-5 text-red-600" />
                       Security Settings
                     </h3>
                     <p className="text-sm text-gray-600 mb-4">
                       For advanced security settings including password change, 2FA, and session management,
-                      please visit the <a href="/settings/security" className="text-blue-600 hover:underline">Security Settings</a> page.
+                      please visit the <a href="/settings/security" className="text-brand-blue hover:text-brand-blue-2 hover:underline font-semibold">Security Settings</a> page.
                     </p>
                   </div>
                   </div>
@@ -742,7 +739,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">Appearance Settings</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Appearance Settings</h2>
                     <p className="text-sm text-gray-600">Customize how TalentFlow looks and feels</p>
                   </div>
                 </div>
@@ -751,7 +748,7 @@ export default function Settings() {
                 <div className="space-y-6">
                   {/* Theme */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-3">Theme</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-3">Theme</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       {[
                         { value: 'light', label: 'Light', desc: 'Classic bright theme' },
@@ -766,8 +763,8 @@ export default function Settings() {
                           }}
                           className={`p-4 rounded-lg border-2 transition-all ${
                             settings.theme === theme.value
-                              ? 'border-gray-800 dark:border-gray-400 bg-gray-50'
-                              : 'border-gray-200 hover:border-gray-300'
+                              ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/15'
+                              : 'border-gray-200 hover:border-brand-blue/30'
                           }`}
                         >
                           <div className={`w-full h-20 rounded-md mb-3 ${
@@ -775,7 +772,7 @@ export default function Settings() {
                             theme.value === 'dark' ? 'bg-gray-900' :
                             'bg-gradient-to-br from-white to-gray-900'
                           }`}></div>
-                          <div className="text-sm font-medium text-gray-900">{theme.label}</div>
+                          <div className="text-sm font-semibold text-gray-900">{theme.label}</div>
                           <div className="text-xs text-gray-600">{theme.desc}</div>
                         </button>
                       ))}
@@ -784,11 +781,11 @@ export default function Settings() {
 
                   {/* Language */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Language</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Language</label>
                     <select
                       value={settings.language || 'en'}
                       onChange={(e) => setSettings({ ...settings, language: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                     >
                       <option value="en">English (US)</option>
                       <option value="es">Español</option>
@@ -800,11 +797,11 @@ export default function Settings() {
 
                   {/* Date Format */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Date Format</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Date Format</label>
                     <select
                       value={settings.date_format || 'MM/DD/YYYY'}
                       onChange={(e) => setSettings({ ...settings, date_format: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                     >
                       <option value="MM/DD/YYYY">MM/DD/YYYY (12/31/2024)</option>
                       <option value="DD/MM/YYYY">DD/MM/YYYY (31/12/2024)</option>
@@ -814,11 +811,11 @@ export default function Settings() {
 
                   {/* Time Format */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Time Format</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Time Format</label>
                     <select
                       value={settings.time_format || '12h'}
                       onChange={(e) => setSettings({ ...settings, time_format: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                     >
                       <option value="12h">12-hour (3:30 PM)</option>
                       <option value="24h">24-hour (15:30)</option>
@@ -827,11 +824,11 @@ export default function Settings() {
 
                   {/* Default Landing Page */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Default Landing Page</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Default Landing Page</label>
                     <select
                       value={settings.default_view || 'dashboard'}
                       onChange={(e) => setSettings({ ...settings, default_view: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
                     >
                       <option value="dashboard">Dashboard</option>
                       <option value="jobs">Jobs Listing</option>
@@ -850,7 +847,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-1">Change Password</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Change Password</h2>
                     <p className="text-sm text-gray-600">Update your password. You will be logged out after changing it.</p>
                   </div>
                 </div>
@@ -858,7 +855,7 @@ export default function Settings() {
                 <form onSubmit={handleChangePassword} className="space-y-5 max-w-md">
                   {/* Current Password */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Current Password</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Current Password</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
@@ -866,13 +863,13 @@ export default function Settings() {
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         required
-                        className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         placeholder="Enter current password"
                       />
                       <button
                         type="button"
                         onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-blue"
                       >
                         {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -881,7 +878,7 @@ export default function Settings() {
 
                   {/* New Password */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">New Password</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">New Password</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
@@ -889,13 +886,13 @@ export default function Settings() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         placeholder="Enter new password"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-blue"
                       >
                         {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -907,7 +904,7 @@ export default function Settings() {
 
                   {/* Confirm Password */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Confirm New Password</label>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Confirm New Password</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
@@ -915,13 +912,13 @@ export default function Settings() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         placeholder="Confirm new password"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-blue"
                       >
                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -930,7 +927,7 @@ export default function Settings() {
                       <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
                     )}
                     {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 6 && (
-                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-brand-cyan mt-1 flex items-center gap-1 font-semibold">
                         <Check className="w-3 h-3" /> Passwords match
                       </p>
                     )}
@@ -944,16 +941,16 @@ export default function Settings() {
                       newPassword.length < 6 ||
                       newPassword !== confirmPassword
                     }
-                    className="w-full sm:w-auto px-8 py-3 bg-brand-blue text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-white/10 transition-colors shadow-lg flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isChangingPassword ? (
                       <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                         Changing...
                       </>
                     ) : (
                       <>
-                        <KeyRound className="w-5 h-5" />
+                        <KeyRound className="w-4 h-4" />
                         Change Password
                       </>
                     )}
@@ -967,7 +964,7 @@ export default function Settings() {
             <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-600">
                 {saveSuccess && (
-                  <div className="flex items-center gap-2 text-green-600">
+                  <div className="flex items-center gap-2 text-brand-cyan font-semibold">
                     <Check className="w-4 h-4" />
                     Settings saved successfully!
                   </div>
@@ -976,16 +973,16 @@ export default function Settings() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="w-full sm:w-auto px-8 py-3 bg-brand-blue text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-white/10 transition-colors shadow-lg hover:shadow-xl flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Saving...
                   </>
                 ) : (
                   <>
-                    <Save className="w-5 h-5" />
+                    <Save className="w-4 h-4" />
                     Save Changes
                   </>
                 )}

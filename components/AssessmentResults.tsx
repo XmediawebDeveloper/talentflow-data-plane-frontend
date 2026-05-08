@@ -19,6 +19,10 @@ interface AssessmentResultsProps {
   jdTitle?: string;
   canDownloadPDF?: boolean;
   canBatchDownload?: boolean;
+  prevId?: string | null;
+  nextId?: string | null;
+  currentIndex?: number;
+  totalCount?: number;
 }
 
 interface CandidateResult {
@@ -77,7 +81,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -981,6 +985,37 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <span className="hidden sm:inline">Export Results</span>
                 <span className="sm:hidden">Export</span>
               </button>
+
+              {/* Previous / Next assessment navigation — mirrors the JD
+                  detail page so users can step through assessments
+                  without going back to the list. */}
+              {totalCount != null && totalCount > 0 && (
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    onClick={() => prevId && router.push(`/recruitment/assessments/${prevId}/results`)}
+                    disabled={!prevId}
+                    className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-nowrap"
+                    title="Previous assessment"
+                    aria-label="Previous assessment"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Previous</span>
+                  </button>
+                  <span className="text-xs text-gray-500 whitespace-nowrap font-medium">
+                    {(currentIndex ?? 0) + 1} / {totalCount}
+                  </span>
+                  <button
+                    onClick={() => nextId && router.push(`/recruitment/assessments/${nextId}/results`)}
+                    disabled={!nextId}
+                    className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-nowrap"
+                    title="Next assessment"
+                    aria-label="Next assessment"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -404,8 +404,8 @@ export default function UnitDisputesPage() {
   // --- Render ---
 
   return (
-    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8">
-      <div className="mx-auto max-w-7xl">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         {/* SaaS Hero Header */}
         <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -476,15 +476,15 @@ export default function UnitDisputesPage() {
               </span>
             </div>
           </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-amber-100/40 ring-1 ring-black/[0.02]">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Pending Review</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-700">{stats.pending}</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.pending}</p>
                 <p className="mt-1 text-xs text-gray-500">Awaiting decision</p>
               </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-50 ring-1 ring-amber-200 shadow-sm shadow-amber-100/40">
-                <Clock className="h-5 w-5 text-amber-600" />
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
+                <Clock className="h-5 w-5 text-brand-orange-deep" />
               </span>
             </div>
           </div>

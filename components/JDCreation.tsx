@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -259,7 +259,7 @@ const DraggableSkill = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-gray-600"
+            className="flex-1 px-2 py-1 border border-gray-200 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -429,7 +429,7 @@ const DraggableComment = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-gray-600"
+            className="flex-1 px-2 py-1 border border-gray-200 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -3403,45 +3403,45 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   const renderStepIndicator = () => (
-    <div className="py-3 sm:py-4">
+    <div className="pb-4 sm:pb-5">
       <div className="flex items-center justify-center">
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
         {/* Step 1 */}
-        <div className="flex flex-col items-center min-w-[60px] sm:min-w-[120px]">
-          <div className={`flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 rounded-full mb-1 sm:mb-2 text-sm sm:text-lg font-medium ${
-            step === 'create' ? 'bg-gray-800 text-white' : 'bg-green-600 text-white'
+        <div className="flex items-center gap-2.5">
+          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
+            step === 'create' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
           }`}>
-            {step !== 'create' ? <CheckCircle className="w-5 h-5 sm:w-7 sm:h-7" /> : '1'}
+            {step !== 'create' ? <CheckCircle className="w-5 h-5" /> : '1'}
           </div>
-          <div className="text-[10px] sm:text-sm text-gray-700 text-center whitespace-nowrap font-medium">Create JD</div>
+          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'create' ? 'text-brand-blue' : 'text-gray-700'}`}>Create JD</div>
         </div>
 
         {/* Connector 1 */}
-        <div className={`w-12 sm:w-32 lg:w-48 h-0.5 sm:h-1 -mt-4 sm:-mt-6 ${step !== 'create' ? 'bg-green-600' : 'bg-gray-300'}`} />
+        <div className={`w-10 sm:w-20 lg:w-32 h-0.5 rounded-full ${step !== 'create' ? 'bg-brand-cyan' : 'bg-gray-200'}`} />
 
         {/* Step 2 */}
-        <div className="flex flex-col items-center min-w-[60px] sm:min-w-[120px]">
-          <div className={`flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 rounded-full mb-1 sm:mb-2 text-sm sm:text-lg font-medium ${
-            step === 'extract' ? 'bg-gray-800 text-white' :
-            step === 'review' ? 'bg-green-600 text-white' :
-            'bg-gray-300 text-gray-600'
+        <div className="flex items-center gap-2.5">
+          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
+            step === 'extract' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' :
+            step === 'review' ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10' :
+            'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
           }`}>
-            {step === 'review' ? <CheckCircle className="w-5 h-5 sm:w-7 sm:h-7" /> : '2'}
+            {step === 'review' ? <CheckCircle className="w-5 h-5" /> : '2'}
           </div>
-          <div className="text-[10px] sm:text-sm text-gray-700 text-center whitespace-nowrap font-medium">Extract</div>
+          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'extract' ? 'text-brand-blue' : 'text-gray-700'}`}>Extract</div>
         </div>
 
         {/* Connector 2 */}
-        <div className={`w-12 sm:w-32 lg:w-48 h-0.5 sm:h-1 -mt-4 sm:-mt-6 ${step === 'review' ? 'bg-green-600' : 'bg-gray-300'}`} />
+        <div className={`w-10 sm:w-20 lg:w-32 h-0.5 rounded-full ${step === 'review' ? 'bg-brand-cyan' : 'bg-gray-200'}`} />
 
         {/* Step 3 */}
-        <div className="flex flex-col items-center min-w-[60px] sm:min-w-[120px]">
-          <div className={`flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 rounded-full mb-1 sm:mb-2 text-sm sm:text-lg font-medium ${
-            step === 'review' ? 'bg-gray-800 text-white' : 'bg-gray-300 text-gray-600'
+        <div className="flex items-center gap-2.5">
+          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
+            step === 'review' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
           }`}>
             3
           </div>
-          <div className="text-[10px] sm:text-sm text-gray-700 text-center whitespace-nowrap font-medium">{isEditingPublished ? 'Republish' : 'Publish'}</div>
+          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'review' ? 'text-brand-blue' : 'text-gray-700'}`}>{isEditingPublished ? 'Republish' : 'Publish'}</div>
         </div>
         </div>
       </div>
@@ -3610,10 +3610,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // FIX-003: Show loading state when fetching JD in embedded mode
   if (loadingJD) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-50">
+      <div className="h-full flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-800 mx-auto mb-3" />
-          <p className="text-gray-600">Loading job description...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue mx-auto mb-3" />
+          <p className="text-sm text-gray-600 font-medium">Loading job description...</p>
         </div>
       </div>
     );
@@ -3621,29 +3621,35 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   return (
     <>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col bg-slate-50">
         {/* Fixed Header with Step Indicator */}
-        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 shadow-sm">
-          <div className="mb-4 sm:mb-6">
+        <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 shadow-sm shadow-brand-blue/5">
+          <div className="w-full max-w-[1400px] mx-auto">
+          <div className="mb-4 sm:mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="min-w-0">
-                <h1 className="text-base sm:text-lg lg:text-xl text-gray-900 mb-1 sm:mb-2">
-                  {isEditingPublished ? 'Create New Version' : isEditingDraft ? 'Edit Draft' : 'Job Description Creation'}
-                </h1>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  {isEditingPublished
-                    ? 'Editing a published JD creates a new draft. The original remains unchanged.'
-                    : isEditingDraft
-                    ? 'Continue editing your draft job description'
-                    : 'Create professional job descriptions with AI-powered extraction'}
-                </p>
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                  <Briefcase className="h-5 w-5 text-brand-blue" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
+                    {isEditingPublished ? 'Create New Version' : isEditingDraft ? 'Edit Draft' : 'Job Description Creation'}
+                  </h1>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    {isEditingPublished
+                      ? 'Editing a published JD creates a new draft. The original remains unchanged.'
+                      : isEditingDraft
+                      ? 'Continue editing your draft job description'
+                      : 'Create professional job descriptions with AI-powered extraction'}
+                  </p>
+                </div>
               </div>
               {/* FIX-003: Show back/close button in both normal and embedded mode */}
               {(onBack || (isEmbedded && onClose)) && (
                 <button
                   onClick={handleBackClick}
                   disabled={isNavigatingBack || isSavingDraft}
-                  className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex-shrink-0 self-start sm:self-auto text-black"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex-shrink-0 self-start sm:self-auto"
                 >
                   {isNavigatingBack ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -3659,22 +3665,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           {/* Warning banner when JD is in use */}
           {isJDInUse && (
-            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-brand-orange/5 ring-1 ring-brand-orange/20 rounded-lg">
               <div className="flex items-start gap-2 sm:gap-3">
-                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-orange-800">This Job Description cannot be edited</p>
-                  <p className="text-xs text-orange-700 mt-1">
+                  <p className="text-sm font-medium text-brand-orange-deep">This Job Description cannot be edited</p>
+                  <p className="text-xs text-gray-700 mt-1">
                     {jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'}
                   </p>
                 </div>
               </div>
             </div>
           )}
+          </div>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
 
         {/* Step 1: Create JD */}
         {step === 'create' && (
@@ -3683,34 +3691,34 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
               <button
                 onClick={() => setMode('ai')}
-                className={`flex-1 p-4 sm:p-6 rounded-lg border-2 transition-all ${
+                className={`flex-1 p-4 sm:p-6 rounded-xl border-2 transition-all ${
                   mode === 'ai'
-                    ? 'border-gray-400 bg-gray-200 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-brand-blue/40 bg-brand-blue/5 shadow-md shadow-brand-blue/10'
+                    : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                 }`}
               >
                 <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-                  <Wand2 className={`w-5 h-5 sm:w-6 sm:h-6 ${mode === 'ai' ? 'text-gray-700' : 'text-gray-400'}`} />
-                  <h3 className={`font-medium text-sm sm:text-base ${mode === 'ai' ? 'text-gray-900' : 'text-gray-900'}`}>
+                  <Wand2 className={`w-5 h-5 sm:w-6 sm:h-6 ${mode === 'ai' ? 'text-brand-blue' : 'text-gray-400'}`} />
+                  <h3 className="font-medium text-sm sm:text-base text-gray-900">
                     AI-Generated JD
                   </h3>
                 </div>
-                <p className={`text-xs sm:text-sm text-left ${mode === 'ai' ? 'text-gray-600' : 'text-gray-600'}`}>
+                <p className="text-xs sm:text-sm text-left text-gray-600">
                   Let AI create a professional job description based on your inputs
                 </p>
               </button>
 
               <button
                 onClick={() => setMode('manual')}
-                className={`flex-1 p-4 sm:p-6 rounded-lg border-2 transition-all ${
+                className={`flex-1 p-4 sm:p-6 rounded-xl border-2 transition-all ${
                   mode === 'manual'
-                    ? 'border-gray-400 bg-gray-200 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-brand-blue/40 bg-brand-blue/5 shadow-md shadow-brand-blue/10'
+                    : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                 }`}
               >
                 <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-                  <Edit2 className={`w-5 h-5 sm:w-6 sm:h-6 ${mode === 'manual' ? 'text-gray-700' : 'text-gray-400'}`} />
-                  <h3 className={`font-medium text-sm sm:text-base ${mode === 'manual' ? 'text-gray-900' : 'text-gray-900'}`}>
+                  <Edit2 className={`w-5 h-5 sm:w-6 sm:h-6 ${mode === 'manual' ? 'text-brand-blue' : 'text-gray-400'}`} />
+                  <h3 className="font-medium text-sm sm:text-base text-gray-900">
                     Manual Input
                   </h3>
                 </div>
@@ -3723,9 +3731,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Input Form - AI Mode */}
               {mode === 'ai' && (
-                <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
-                    <h2 className="text-sm sm:text-base text-gray-900">Job Details</h2>
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900">Job Details</h2>
                     {/* JD06: Autosave status indicator for AI mode */}
                     <div className="flex items-center gap-2 text-sm">
                       {autosaveStatus === 'saving' && (
@@ -3751,7 +3759,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Job Title<span className="text-red-500">*</span>
                       </label>
                       <input
@@ -3761,12 +3769,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer – Banking Domain"
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black ${
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
                               ? 'border-red-300 bg-red-50'
-                              : 'border-gray-300'
+                              : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -3785,7 +3793,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
 
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         AI Prompt – Quick Job Details <span className="text-red-500">*</span>
                       </label>
                       <textarea
@@ -3795,12 +3803,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black placeholder-gray-500 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max
                               ? 'border-red-300 bg-red-50'
-                              : 'border-gray-300'
+                              : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -3858,7 +3866,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           hasProceededToExtract
                         );
                       })()}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-gray-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 bg-brand-blue text-white px-5 py-2.5 rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wand2 className="w-5 h-5" />
                       {isGenerating ? (
@@ -3875,9 +3883,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               {/* Manual Input Mode */}
               {mode === 'manual' && (
-                <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
-                    <h2 className="text-sm sm:text-base text-gray-900">Job Details</h2>
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900">Job Details</h2>
                     {/* JD06: Autosave status indicator */}
                     <div className="flex items-center gap-2 text-sm">
                       {autosaveStatus === 'saving' && (
@@ -3903,7 +3911,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Job Title <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -3913,12 +3921,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer"
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black ${
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
                               ? 'border-red-300 bg-red-50'
-                              : 'border-gray-300'
+                              : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -3932,7 +3940,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
 
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Job Description <span className="text-red-500">*</span>
                       </label>
                       <textarea
@@ -3941,10 +3949,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.MANUAL_JD.max}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black placeholder-gray-500 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
                           manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
                             ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                            : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -3963,9 +3971,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               )}
 
               {/* Preview */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h2 className="text-sm sm:text-base text-gray-900">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900">
                     {mode === 'ai' ? 'Generated Job Description' : 'Job Description Preview'}
                   </h2>
                   {((mode === 'ai' && generatedJD) || (mode === 'manual' && manualJD)) && (
@@ -4047,12 +4055,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             }
                             setIsEditingJD(!isEditingJD);
                           }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                             isJDInUse
-                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : isEditingJD
-                                ? 'bg-gray-800 text-white hover:bg-gray-900'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                : 'bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                           }`}
                           title={isJDInUse ? 'This JD is in use and cannot be edited' : ''}
                         >
@@ -4075,7 +4083,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           value={generatedJD}
                           onChange={(e) => setGeneratedJD(e.target.value)}
                           readOnly={isJDInUse}
-                          className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-xs sm:text-sm text-black ${isJDInUse ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-xs sm:text-sm text-black ${isJDInUse ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         />
                       ) : (
                         <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
@@ -4188,7 +4196,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="flex justify-between mt-4 sm:mt-6">
               <button
                 onClick={handleCancelJD}
-                className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -4200,10 +4208,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                   (mode === 'ai' ? !generatedJD || !containsMeaningfulText(generatedJD) : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
                 }
-                className="flex items-center gap-2 bg-gray-800 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                className="flex items-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white px-4 py-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 {isStreaming ? 'Generating...' : isExtracting ? 'Extracting...' : 'Next'}
-                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </>
@@ -4214,19 +4222,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <div className="space-y-4 sm:space-y-6">
             {/* Drag & Drop Tips */}
             {showDragTips && (
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 sm:p-5">
+              <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-xl p-3 sm:p-5">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className="flex-shrink-0 hidden sm:block">
-                    <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <Info className="w-5 h-5 text-white" />
                     </div>
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm sm:text-base text-gray-800">💡 Pro Tips</h3>
+                      <h3 className="text-sm sm:text-base text-brand-blue font-medium">💡 Pro Tips</h3>
                       <button
                         onClick={() => setShowDragTips(false)}
-                        className="text-gray-800 hover:text-gray-900 text-xs sm:text-sm flex items-center gap-1"
+                        className="text-brand-blue hover:text-brand-blue-2 text-xs sm:text-sm flex items-center gap-1"
                       >
                         <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         Dismiss
@@ -4234,19 +4242,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700">
                       <div className="flex items-start gap-2">
-                        <GripVertical className="w-4 h-4 mt-0.5 text-gray-800 flex-shrink-0" />
+                        <GripVertical className="w-4 h-4 mt-0.5 text-brand-blue flex-shrink-0" />
                         <div>
                           <strong>Drag & Drop:</strong> Hover over a skill and grab the grip icon to drag it between Must-Have and Nice-to-Have
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <Edit2 className="w-4 h-4 mt-0.5 text-gray-800 flex-shrink-0" />
+                        <Edit2 className="w-4 h-4 mt-0.5 text-brand-blue flex-shrink-0" />
                         <div>
                           <strong>Click to Edit:</strong> Click on any skill or comment text to edit it inline. Press Enter to save, Escape to cancel
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <span className="text-gray-800 mt-0.5 flex-shrink-0">← →</span>
+                        <span className="text-brand-blue mt-0.5 flex-shrink-0">← →</span>
                         <div>
                           <strong>Arrow Buttons:</strong> Use arrow buttons to quickly move skills between categories
                         </div>
@@ -4259,14 +4267,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             {/* Regeneration Notice - Removed Regenerate JD button as per requirement */}
             {extractedDataModified && mode === 'ai' && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3 sm:p-4">
+              <div className="bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-xl p-3 sm:p-4">
                 <div className="flex items-start sm:items-center gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                     <Wand2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div>
-                    <h4 className="text-sm sm:text-base text-blue-800 font-medium">Parameters Modified</h4>
-                    <p className="text-xs sm:text-sm text-blue-600">
+                    <h4 className="text-sm sm:text-base text-brand-blue font-medium">Parameters Modified</h4>
+                    <p className="text-xs sm:text-sm text-gray-700">
                       You&apos;ve made changes to skills or comments. The JD will be regenerated when you continue to Review.
                     </p>
                   </div>
@@ -4274,8 +4282,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
             )}
 
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
-              <h2 className="text-sm sm:text-base text-gray-900 mb-4 sm:mb-6">Extracted Information</h2>
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+              <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-4 sm:mb-6">Extracted Information</h2>
               <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
                 {isRegenerating
                   ? 'Processing... Fields are temporarily read-only.'
@@ -4288,7 +4296,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 1: Must-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm sm:text-base text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('mustHave')}
@@ -4307,12 +4315,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewSkill(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('mustHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
                       <button
                         onClick={() => handleAddSkill('mustHaveSkills')}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors"
                       >
                         Add
                       </button>
@@ -4351,7 +4359,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 2: Nice-to-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm sm:text-base text-gray-900">Nice-to-Have Skills</h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Nice-to-Have Skills</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('niceToHave')}
@@ -4370,12 +4378,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewSkill(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('niceToHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
                       <button
                         onClick={() => handleAddSkill('niceToHaveSkills')}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors"
                       >
                         Add
                       </button>
@@ -4410,7 +4418,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Must-Have Comments */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm sm:text-base text-gray-900">Must-Have Comments</h3>
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900">Must-Have Comments</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}
@@ -4429,12 +4437,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onChange={(e) => setNewComment(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                           placeholder="Enter comment..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                           autoFocus
                         />
                         <button
                           onClick={handleAddComment}
-                          className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                          className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors"
                         >
                           Add
                         </button>
@@ -4474,7 +4482,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div>
                     {console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments)}
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm sm:text-base text-gray-900">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('nice-comments')}
@@ -4493,12 +4501,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onChange={(e) => setNewComment(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
                           placeholder="Enter nice-to-have comment..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                           autoFocus
                         />
                         <button
                           onClick={handleAddNiceComment}
-                          className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                          className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors"
                         >
                           Add
                         </button>
@@ -4545,8 +4553,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setValidationErrors(prev => ({ ...prev, experience: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black mb-3 ${
-                      validationErrors.experience ? 'border-red-500' : 'border-gray-300'
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
+                      validationErrors.experience ? 'border-red-500' : 'border-gray-200'
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
                   >
@@ -4566,7 +4574,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       type="checkbox"
                       checked={Boolean(extractedData.experienceRequired)}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
                     <span className="text-sm text-gray-700">Required</span>
@@ -4586,8 +4594,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setValidationErrors(prev => ({ ...prev, education: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black mb-3 ${
-                      validationErrors.education ? 'border-red-500' : 'border-gray-300'
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
+                      validationErrors.education ? 'border-red-500' : 'border-gray-200'
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
                   >
@@ -4607,7 +4615,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       type="checkbox"
                       checked={Boolean(extractedData.educationRequired)}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
                     <span className="text-sm text-gray-700">Required</span>
@@ -4627,8 +4635,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setValidationErrors(prev => ({ ...prev, industryType: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black mb-3 ${
-                      validationErrors.industryType ? 'border-red-500' : 'border-gray-300'
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
+                      validationErrors.industryType ? 'border-red-500' : 'border-gray-200'
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
                   >
@@ -4648,7 +4656,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       type="checkbox"
                       checked={Boolean(extractedData.industryTypeRequired)}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
                     <span className="text-sm text-gray-700">Required</span>
@@ -4674,8 +4682,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
                         placeholder="From (e.g., 50000)"
-                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black ${
-                          validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
+                          validationErrors.salaryRange ? 'border-red-500' : 'border-gray-200'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         disabled={isRegenerating}
                         readOnly={isRegenerating}
@@ -4696,8 +4704,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
                         placeholder="To (e.g., 100000)"
-                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black ${
-                          validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
+                          validationErrors.salaryRange ? 'border-red-500' : 'border-gray-200'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         disabled={isRegenerating}
                         readOnly={isRegenerating}
@@ -4706,7 +4714,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={extractedData.compensationType}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' })); markExtractedDataModified(); }}
-                      className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       disabled={isRegenerating}
                     >
                       <option value="hourly">Hourly</option>
@@ -4752,7 +4760,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setLocationStateFilter(e.target.value);
                         setNewLocation(prev => ({ ...prev, city: '' }));
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
                     >
                       <option value="all">All States</option>
                       <option value="Delhi NCR">Delhi NCR</option>
@@ -4802,7 +4810,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={newLocation.city}
                       onChange={(e) => setNewLocation(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
                     >
                       <option value="">Select a city</option>
                       {(locationStateFilter === 'all' || locationStateFilter === 'Delhi NCR') && (
@@ -5712,7 +5720,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={newLocation.radius}
                       onChange={(e) => setNewLocation(prev => ({ ...prev, radius: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
                     >
                       <option value="10">10 km</option>
                       <option value="25">25 km</option>
@@ -5727,7 +5735,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Add Button */}
                   <button
                     onClick={handleAddLocation}
-                    className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm whitespace-nowrap flex items-center gap-1"
+                    className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm whitespace-nowrap flex items-center gap-1 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add
@@ -5769,7 +5777,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       ...prev,
                       employmentType: e.target.value as ExtractedData['employmentType']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
                     <option value="full_time">Full Time</option>
@@ -5789,7 +5797,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       ...prev,
                       workModel: e.target.value as ExtractedData['workModel']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
                     <option value="onsite">Onsite</option>
@@ -5815,7 +5823,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="sr-only peer"
                       disabled={isRegenerating}
                     />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                   </label>
                 </div>
               </div>
@@ -5844,12 +5852,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewCertification(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddCertification()}
                         placeholder="e.g., AWS Certified Solutions Architect"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
                       <button
                         onClick={handleAddCertification}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors"
                       >
                         Add
                       </button>
@@ -5901,12 +5909,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewDomainKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddDomainKeyword()}
                         placeholder="e.g., Banking, Fintech, Cloud"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
                       <button
                         onClick={handleAddDomainKeyword}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm transition-colors"
                       >
                         Add
                       </button>
@@ -5954,7 +5962,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     value={extractedData.assessmentGuidance}
                     onChange={(e) => { setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value.slice(0, 500) })); markExtractedDataModified(); }}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
                     disabled={isRegenerating}
                     readOnly={isRegenerating}
@@ -5980,7 +5988,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       internalRecruiterComments: e.target.value.split('\n').filter(c => c.trim())
                     })); markExtractedDataModified(); }}
                     placeholder="Add internal notes for recruiters..."
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
                     disabled={isRegenerating}
                     readOnly={isRegenerating}
@@ -6015,13 +6023,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     setStep('create');
                     setHasProceededToExtract(false);  // Re-enable regenerate button when going back
                   }}
-                  className="px-4 sm:px-8 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700"
+                  className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleCancelJD}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 text-gray-600 hover:text-gray-800 transition-colors text-sm sm:text-base"
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-brand-blue transition-colors"
                 >
                   Cancel
                 </button>
@@ -6029,21 +6037,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <button
                 onClick={handlePublish}
                 disabled={isRegenerating || !validationStatus.isValid}
-                className="flex items-center justify-center gap-2 bg-green-600 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                className="flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white px-4 py-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 title={!validationStatus.isValid ? `Missing: ${validationStatus.missingFields.join(', ')}` : ''}
               >
                 {isRegenerating ? (
                   <>
-                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Formatting with AI...
                   </>
                 ) : (
                   <>
                     Next
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -6055,9 +6060,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         {step === 'review' && !isPublished && (
           <div className="space-y-4 sm:space-y-6">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-4 sm:p-6 text-white">
-                  <h2 className="text-lg sm:text-2xl mb-1 sm:mb-2">{isEditingPublished ? 'Review & Republish' : 'Review & Publish'}</h2>
-                  <p className="text-sm sm:text-base text-gray-100">
+                <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-xl p-4 sm:p-6 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+                  <h2 className="text-lg sm:text-2xl mb-1 sm:mb-2 font-semibold tracking-tight">{isEditingPublished ? 'Review & Republish' : 'Review & Publish'}</h2>
+                  <p className="text-sm sm:text-base text-white/85">
                     {isEditingPublished
                       ? 'Review all details before republishing. This will create a new version of the published JD.'
                       : 'Review all details before publishing. Once published, this JD will be locked and available to all authorized users.'}
@@ -6065,8 +6070,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
 
             {/* Final JD Document View */}
-            <div className="bg-white rounded-lg border-2 border-gray-200 shadow-lg">
-              <div className="bg-gradient-to-r from-gray-50 to-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-md shadow-brand-blue/10">
+              <div className="bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                   <div className="min-w-0">
                     <h3 className="text-sm sm:text-lg text-gray-900 flex items-center gap-2 flex-wrap">
@@ -6074,7 +6079,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       Final Job Description
                       {/* JD12: AI-Generated indicator */}
                       {mode === 'ai' && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                           <Wand2 className="w-3 h-3" />
                           AI Generated
                         </span>
@@ -6173,11 +6178,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </div>
 
             {/* Extracted Data Summary Preview - Collapsible */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               {/* Section Header with Toggle */}
               <button
                 onClick={() => setShowExtractedSummary(!showExtractedSummary)}
-                className="w-full bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors"
               >
                 <div className="text-left">
                   <h3 className="text-sm sm:text-lg text-gray-900 flex items-center gap-2 flex-wrap">
@@ -6185,7 +6190,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <Eye className="w-5 h-5 text-gray-500" />
                     {/* JD12: AI-Generated indicator for extracted parameters */}
                     {mode === 'ai' && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                         <Wand2 className="w-3 h-3" />
                         AI Extracted
                       </span>
@@ -6469,25 +6474,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="flex gap-2 sm:gap-3 order-2 sm:order-1">
                 <button
                   onClick={() => setStep('extract')}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
                 >
-                  ← Back
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
                 </button>
-                {/* Cancel button - delete JD and return to JD List */}
-                <button
-                  onClick={handleCancelJD}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 text-gray-600 hover:text-gray-800 transition-colors text-sm sm:text-base"
-                >
-                  Cancel
-                </button>
-              </div>
-              <div className="flex gap-2 sm:gap-3 order-1 sm:order-2">
                 {/* JD12: Save as Draft button */}
                 <button
                   onClick={handleSaveDraft}
                   disabled={isSavingDraft || isJDInUse}
                   title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
-                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm sm:text-base text-black"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 text-sm"
                 >
                   {isSavingDraft ? (
                     <>
@@ -6501,24 +6498,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </>
                   )}
                 </button>
+              </div>
+              <div className="flex gap-2 sm:gap-3 order-1 sm:order-2">
                 <button
                   onClick={handleConfirmPublish}
                   disabled={isPublishing || !validationStatus.isValid || isJDInUse}
-                  className={`flex items-center gap-2 px-5 sm:px-8 py-2.5 sm:py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm ${
                     validationStatus.isValid && !isJDInUse
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-300 text-gray-500'
+                      ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-gray-200 text-gray-500'
                   }`}
                   title={isJDInUse ? 'This JD is in use and cannot be modified' : !validationStatus.isValid ? `Complete all required fields to ${isEditingPublished ? 'republish' : 'publish'}` : ''}
                 >
                   {isPublishing ? (
                     <>
-                      <span className="animate-spin">⏳</span>
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       {isEditingPublished ? 'Republishing...' : 'Publishing...'}
                     </>
                   ) : (
                     <>
-                      <Save className="w-5 h-5" />
+                      <Save className="w-4 h-4" />
                       {isEditingPublished ? 'Confirm & Republish' : 'Confirm & Publish'}
                     </>
                   )}
@@ -6530,22 +6529,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         {/* Published Success State */}
         {step === 'review' && isPublished && (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 sm:p-8 text-center">
-            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 sm:mb-6">
-              <CheckCircle className="w-8 h-8 sm:w-12 sm:h-12 text-green-600" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 text-center">
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+              <CheckCircle className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue" />
             </div>
-            <h2 className="text-lg sm:text-2xl text-gray-900 mb-3 sm:mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
+            <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 tracking-tight mb-3 sm:mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
             {/* JD Name, Code and Version */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 sm:px-6 py-2 sm:py-3 mb-4 sm:mb-6 inline-flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
+            <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg px-4 sm:px-6 py-2 sm:py-3 mb-4 sm:mb-6 inline-flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
               {publishedJobCode && (
-                <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                <span className="px-3 py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 text-sm font-medium rounded-full">
                   {publishedJobCode}
                 </span>
               )}
               <span className="text-base sm:text-lg font-semibold text-gray-900">{jobTitle}</span>
               {publishedVersion && (
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-full">
                   v{publishedVersion}
                 </span>
               )}
@@ -6556,34 +6555,31 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ? 'Your job description has been successfully republished with a new version.'
                 : 'Your job description has been successfully published and is now live.'}
             </p>
-            {/* <p className="text-sm text-gray-500 mb-8">
-              This JD is now locked and available to all authorized users within your tenant.
-              This JD is now locked and available to all authorized users within your tenant.
-            </p> */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
               <button
                 onClick={() => { window.location.href = '/recruitment/jd-creation'; }}
-                className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
+                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
               >
                 Create Another JD
               </button>
               {publishedJdId && (
                 <button
                   onClick={() => router.push(`/recruitment/job-details?id=${publishedJdId}`)}
-                  className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
+                  className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
                 >
                   View JD
                 </button>
               )}
               <button
                 onClick={onBack}
-                className="px-4 sm:px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors text-sm sm:text-base"
+                className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm"
               >
                 View All Jobs
               </button>
             </div>
           </div>
         )}
+        </div>
         </div>
       </div>
 
@@ -6599,14 +6595,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <DialogFooter>
             <button
               onClick={handleDiscardAndNavigate}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700"
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
             >
               Discard Changes
             </button>
             <button
               onClick={handleSaveAndNavigate}
               disabled={isSavingDraft}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
             >
               {isSavingDraft ? (
                 <>
@@ -6633,14 +6629,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <DialogFooter>
             <button
               onClick={() => setShowCancelDialog(false)}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-white"
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
             >
               Continue Editing
             </button>
             <button
               onClick={confirmCancelJD}
               disabled={isCancelling}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md shadow-red-600/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
             >
               {isCancelling ? (
                 <>

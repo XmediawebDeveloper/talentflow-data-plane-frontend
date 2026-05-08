@@ -92,28 +92,28 @@ function ScoredResumeDetailContent() {
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-gray-800';
-    if (score >= 60) return 'text-yellow-600';
+    if (score >= 70) return 'text-brand-blue';
+    if (score >= 60) return 'text-brand-orange-deep';
     return 'text-red-600';
   };
 
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-900';
-    if (score >= 60) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
+    if (score >= 70) return 'bg-brand-blue/10 ring-1 ring-brand-blue/15 border border-brand-blue/20 text-brand-blue';
+    if (score >= 60) return 'bg-brand-orange/5 ring-1 ring-brand-orange/20 border border-brand-orange/20 text-brand-orange-deep';
     return 'bg-red-100 border-red-300 text-red-700';
   };
 
   const getProgressBarColor = (score: number) => {
     if (score >= 85) return 'bg-green-600';
-    if (score >= 70) return 'bg-gray-800';
-    if (score >= 60) return 'bg-yellow-600';
+    if (score >= 70) return 'bg-brand-blue';
+    if (score >= 60) return 'bg-brand-orange';
     return 'bg-red-600';
   };
 
   const getMatchStatusColor = (status: string) => {
     if (status === 'Exact Match') return 'bg-green-100 text-green-700 border-green-300';
-    if (status === 'Partial Match') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    if (status === 'Partial Match') return 'bg-brand-orange/5 ring-1 ring-brand-orange/20 text-brand-orange-deep border border-brand-orange/20';
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
@@ -132,7 +132,7 @@ function ScoredResumeDetailContent() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading resume details...</span>
       </div>
     );
@@ -145,7 +145,7 @@ function ScoredResumeDetailContent() {
           <p className="text-gray-600 mb-4">Resume not found</p>
           <button
             onClick={handleBack}
-            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
           >
             Go Back
           </button>
@@ -158,10 +158,10 @@ function ScoredResumeDetailContent() {
     <main className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
+        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
           <button
             onClick={handleBack}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-brand-blue mb-3 sm:mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Job Details
@@ -169,8 +169,8 @@ function ScoredResumeDetailContent() {
 
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                <Target className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-white" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center flex-shrink-0">
+                <Target className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl text-gray-900 font-semibold tracking-tight mb-1 truncate">{resumeData.candidateName}</h1>
@@ -201,7 +201,7 @@ function ScoredResumeDetailContent() {
             <div className="flex items-center justify-between sm:justify-start gap-4 flex-wrap">
               {/* Match Score */}
               <div className="text-center">
-                <div className={`text-2xl sm:text-3xl lg:text-4xl font-bold ${getScoreColor(resumeData.scorePercentage)}`}>
+                <div className={`text-2xl sm:text-3xl lg:text-4xl font-semibold ${getScoreColor(resumeData.scorePercentage)}`}>
                   {resumeData.scorePercentage}%
                 </div>
                 <span className={`inline-flex px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm border mt-1.5 sm:mt-2 ${getMatchStatusColor(resumeData.matchStatus)}`}>
@@ -213,14 +213,14 @@ function ScoredResumeDetailContent() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => setShowResumePreview(true)}
-                  className="inline-flex items-center justify-center gap-2 h-9 sm:h-10 px-3 sm:px-4 bg-gray-800 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 h-9 sm:h-10 px-4 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                 >
                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Resume
                 </button>
                 <button
                   onClick={handleDownloadScorecard}
-                  className="inline-flex items-center justify-center gap-2 h-9 sm:h-10 px-3 sm:px-4 border border-gray-300 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 h-9 sm:h-10 px-4 bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Download Scorecard
@@ -230,7 +230,7 @@ function ScoredResumeDetailContent() {
           </div>
 
           {/* Job Context */}
-          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-slate-50 rounded-lg border border-gray-200">
             <p className="text-xs sm:text-sm text-gray-600">
               Scored against: <span className="font-medium text-gray-900">{jobTitle}</span>
             </p>
@@ -238,47 +238,47 @@ function ScoredResumeDetailContent() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-t border-gray-200 overflow-x-auto scrollbar-hide">
+        <div className="w-full max-w-[1400px] mx-auto flex border-t border-gray-200 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex-shrink-0 ${
               activeTab === 'overview'
-                ? 'text-gray-900 bg-white'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-brand-blue bg-white'
+                : 'text-gray-600 hover:text-brand-blue'
             }`}
           >
             Overview
             {activeTab === 'overview' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-blue"></div>
             )}
           </button>
           <button
             onClick={() => setActiveTab('scorecard')}
             className={`px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex-shrink-0 ${
               activeTab === 'scorecard'
-                ? 'text-gray-900 bg-white'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-brand-blue bg-white'
+                : 'text-gray-600 hover:text-brand-blue'
             }`}
           >
             Detailed Scorecard
             {activeTab === 'scorecard' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-blue"></div>
             )}
           </button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
+      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
             {/* Left Column - Candidate Info */}
             <div className="lg:col-span-2 space-y-4 sm:space-y-5 lg:space-y-6">
               {/* AI Summary */}
               {resumeData.aiSummary && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                   <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <Star className="w-5 h-5 text-yellow-500" />
+                    <Star className="w-5 h-5 text-brand-orange" />
                     AI Summary
                   </h3>
                   <p className="text-gray-700 leading-relaxed">{resumeData.aiSummary}</p>
@@ -287,7 +287,7 @@ function ScoredResumeDetailContent() {
 
               {/* Key Strengths */}
               {resumeData.strengths && resumeData.strengths.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                   <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
                     <CheckCircle className="w-5 h-5 text-green-600" />
                     Key Strengths
@@ -305,15 +305,15 @@ function ScoredResumeDetailContent() {
 
               {/* Gaps/Improvement Areas */}
               {resumeData.gaps && resumeData.gaps.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                   <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-yellow-600" />
+                    <TrendingUp className="w-5 h-5 text-brand-orange-deep" />
                     Areas for Consideration
                   </h3>
                   <ul className="space-y-2">
                     {resumeData.gaps.map((gap: string, index: number) => (
                       <li key={index} className="flex items-start gap-2 text-gray-700">
-                        <XCircle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 text-brand-orange mt-0.5 flex-shrink-0" />
                         {gap}
                       </li>
                     ))}
@@ -323,16 +323,16 @@ function ScoredResumeDetailContent() {
 
               {/* Skills */}
               {resumeData.skills && resumeData.skills.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                   <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <Code className="w-5 h-5 text-blue-600" />
+                    <Code className="w-5 h-5 text-brand-blue" />
                     Skills
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {resumeData.skills.map((skill: string, index: number) => (
                       <span
                         key={index}
-                        className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm border border-blue-200"
+                        className="px-3 py-1 bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue rounded-full text-sm"
                       >
                         {skill}
                       </span>
@@ -345,10 +345,10 @@ function ScoredResumeDetailContent() {
             {/* Right Column - Score Breakdown */}
             <div className="space-y-4 sm:space-y-5 lg:space-y-6">
               {/* Overall Score Card */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Match Score</h3>
                 <div className="text-center">
-                  <div className={`text-5xl font-bold ${getScoreColor(resumeData.scorePercentage)}`}>
+                  <div className={`text-5xl font-semibold ${getScoreColor(resumeData.scorePercentage)}`}>
                     {resumeData.scorePercentage}%
                   </div>
                   <p className="text-gray-600 mt-2">Overall Match</p>
@@ -356,7 +356,7 @@ function ScoredResumeDetailContent() {
               </div>
 
               {/* Score Breakdown */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Score Breakdown</h3>
                 <div className="space-y-4">
                   {[
@@ -371,7 +371,7 @@ function ScoredResumeDetailContent() {
                         <span className="text-gray-600">{item.label}</span>
                         <span className={`font-medium ${getScoreColor(item.score)}`}>{Math.round(item.score)}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-gray-100 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full ${getProgressBarColor(item.score)}`}
                           style={{ width: `${item.score}%` }}
@@ -383,7 +383,7 @@ function ScoredResumeDetailContent() {
               </div>
 
               {/* Candidate Details */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-5 lg:p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5 lg:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Candidate Details</h3>
                 <div className="space-y-3 text-sm">
                   {resumeData.currentCompany && (
@@ -423,13 +423,13 @@ function ScoredResumeDetailContent() {
         )}
 
         {activeTab === 'scorecard' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Detailed Scorecard</h3>
 
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
+                  <tr className="border-b border-gray-200 bg-slate-50">
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Category</th>
                     <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Score</th>
                     <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Status</th>
@@ -464,15 +464,15 @@ function ScoredResumeDetailContent() {
                       details: `${resumeData.location || 'N/A'}`
                     },
                   ].map((item, index) => (
-                    <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={index} className="border-b border-gray-100 hover:bg-brand-blue/5">
                       <td className="py-4 px-4 text-sm text-gray-900 font-medium">{item.category}</td>
                       <td className="py-4 px-4 text-center">
-                        <span className={`text-lg font-bold ${getScoreColor(item.score)}`}>
+                        <span className={`text-lg font-semibold ${getScoreColor(item.score)}`}>
                           {Math.round(item.score)}%
                         </span>
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${getScoreBgColor(item.score)}`}>
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs ${getScoreBgColor(item.score)}`}>
                           {item.score >= 85 ? 'Excellent' : item.score >= 70 ? 'Good' : item.score >= 60 ? 'Fair' : 'Needs Improvement'}
                         </span>
                       </td>
@@ -503,7 +503,7 @@ export default function ScoredResumeDetailPage() {
     <FeatureGate feature="resume_scoring">
       <Suspense fallback={
         <div className="flex-1 flex items-center justify-center bg-gray-50">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
           <span className="ml-3 text-gray-600">Loading...</span>
         </div>
       }>

@@ -565,37 +565,42 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     if (!showAddHRQuizModal) return null;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-        <div className="w-full max-w-5xl rounded-2xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10">
-          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-            <h3 className="text-2xl font-semibold text-gray-900 tracking-tight">Add New Question</h3>
-            <button type="button" onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-brand-blue transition-colors" aria-label="Close">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
+        <div className="w-full max-w-2xl rounded-xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-between border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                <FileText className="w-4 h-4 text-brand-blue" />
+              </div>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Add New Question</h3>
+            </div>
+            <button type="button" onClick={closeAddHRQuizModal} className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="space-y-6 px-6 py-6">
+          <div className="flex-1 overflow-y-auto space-y-4 px-4 sm:px-6 py-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Question Text *</label>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Question Text *</label>
               <input
                 type="text"
                 value={newHRQuestion.question_text}
                 onChange={(e) => setNewHRQuestion(prev => ({ ...prev, question_text: e.target.value }))}
                 placeholder="Enter the HR question..."
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
               />
             </div>
 
             <div>
-              <label className="mb-3 block text-sm font-medium text-gray-700">Answer Type</label>
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <label className="mb-2 block text-sm font-medium text-gray-700">Answer Type</label>
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'text', correct_answer: undefined, time_minutes: 3 }))}
-                  className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
+                  className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                     newHRQuestion.answer_type === 'text'
-                      ? 'border-brand-blue bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue'
+                      ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   Text Answer
@@ -603,10 +608,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <button
                   type="button"
                   onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
-                  className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
+                  className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                     newHRQuestion.answer_type === 'yes_no'
-                      ? 'border-brand-blue bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue'
+                      ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   Yes / No
@@ -616,15 +621,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             {newHRQuestion.answer_type === 'yes_no' && (
               <div>
-                <label className="mb-3 block text-sm font-medium text-gray-700">Correct Answer *</label>
-                <div className="flex flex-col gap-3 sm:flex-row">
+                <label className="mb-2 block text-sm font-medium text-gray-700">Correct Answer *</label>
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
                     onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
-                    className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
+                    className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                       newHRQuestion.correct_answer === 'Yes'
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-200'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
                     Yes is correct
@@ -632,10 +637,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <button
                     type="button"
                     onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
-                    className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
+                    className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                       newHRQuestion.correct_answer === 'No'
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-200'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
                     No is correct
@@ -645,11 +650,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             )}
           </div>
 
-          <div className="flex justify-end gap-4 border-t border-gray-100 px-6 py-5">
+          <div className="flex-shrink-0 flex justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">
             <button
               type="button"
               onClick={closeAddHRQuizModal}
-              className="rounded-xl border border-gray-200 bg-white px-6 py-3 text-lg text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
             >
               Cancel
             </button>
@@ -657,9 +662,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               type="button"
               onClick={handleSaveHRQuestion}
               disabled={isSavingHRQuestion}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-6 py-3 text-lg font-semibold disabled:opacity-60 transition-all"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-4 py-2 text-sm disabled:opacity-60 transition-colors"
             >
-              <FileText className="w-5 h-5" />
+              <FileText className="w-4 h-4" />
               {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
             </button>
           </div>
@@ -2622,20 +2627,20 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Actions */}
-              <div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={handleCancelCodingAction}
-                  className="flex-1 px-4 py-2 border border-gray-200 bg-white text-sm sm:text-base text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-200 bg-white text-sm text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmCodingAction}
                   disabled={codingPopupMode === 'enable' && selectedCodingLanguages.length === 0}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm sm:text-base transition-all disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
                     codingPopupMode === 'disable'
                       ? 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10'
-                      : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   }`}
                 >
                   {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
@@ -2670,10 +2675,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Actions */}
-              <div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 rounded-b-xl">
+              <div className="bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl">
                 <button
                   onClick={() => setShowMinRoundPopup(false)}
-                  className="w-full px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all"
+                  className="w-full px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm rounded-lg transition-colors"
                 >
                   Got it
                 </button>
@@ -2882,9 +2887,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 // Let parent handle navigation to avoid double router.push()
                 onCreateAssessment(generatedAssessment);
               }}
-              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base rounded-lg transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
             >
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+              <CheckCircle2 className="w-4 h-4" />
               <span className="hidden sm:inline">Done - Go to Assessments</span>
               <span className="sm:hidden">Done</span>
             </button>

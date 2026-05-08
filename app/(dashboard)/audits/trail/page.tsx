@@ -743,8 +743,8 @@ export default function AuditTrailPage() {
   });
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
-      <div className="max-w-7xl mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -898,7 +898,7 @@ export default function AuditTrailPage() {
                     placeholder="Search by user, action, or IP..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-xs sm:text-sm text-gray-900 placeholder-gray-500"
+                    className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-xs sm:text-sm text-gray-900 placeholder-gray-500"
                   />
                 </div>
               </div>
@@ -907,7 +907,7 @@ export default function AuditTrailPage() {
                   <select
                     value={actionFilter}
                     onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
+                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
                   >
                     <option value="">All Actions</option>
                     {availableActions.map(action => (
@@ -920,7 +920,7 @@ export default function AuditTrailPage() {
                   <select
                     value={entityFilter}
                     onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
+                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
                   >
                     <option value="">All Entities</option>
                     {availableEntities.map(entity => (
@@ -934,7 +934,7 @@ export default function AuditTrailPage() {
                   <select
                     value={dateRange}
                     onChange={(e) => { setDateRange(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
+                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
                   >
                     <option value="7">7 days</option>
                     <option value="30">30 days</option>
@@ -948,7 +948,7 @@ export default function AuditTrailPage() {
                   <select
                     value={errorOriginFilter}
                     onChange={(e) => { setErrorOriginFilter(e.target.value as '' | ErrorOrigin); setPage(1); }}
-                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
+                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
                   >
                     <option value="">All Origins</option>
                     <option value="TENANT">Tenant</option>
@@ -978,7 +978,7 @@ export default function AuditTrailPage() {
               <p className="text-gray-700 font-medium text-sm sm:text-base break-words px-4">{error}</p>
               <button
                 onClick={fetchAuditLogs}
-                className="mt-3 sm:mt-4 px-4 sm:px-5 py-2 sm:py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 text-xs sm:text-sm font-medium"
+                className="mt-3 sm:mt-4 px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-medium"
               >
                 Retry
               </button>
@@ -1082,7 +1082,7 @@ export default function AuditTrailPage() {
                           {log.user_display_id ? (
                             <span className="text-sm font-mono text-gray-700">{log.user_display_id}</span>
                           ) : log.actor_role?.toLowerCase() === 'candidate' ? (
-                            <span className="text-sm font-mono text-blue-600">CID</span>
+                            <span className="text-sm font-mono text-brand-blue">CID</span>
                           ) : (
                             <span className="text-sm text-gray-400">—</span>
                           )}
@@ -1243,7 +1243,7 @@ export default function AuditTrailPage() {
             <div className="p-3 sm:p-4 md:p-6 overflow-y-auto max-h-[65vh] sm:max-h-[60vh] space-y-3 sm:space-y-4 md:space-y-5">
               {/* User & Action Header */}
               <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 pb-3 sm:pb-4 md:pb-5 border-b border-gray-100">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl bg-gray-800 text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm font-bold flex-shrink-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl bg-brand-blue text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm font-bold flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                   {(selectedLog.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -1455,17 +1455,17 @@ export default function AuditTrailPage() {
               {aiAuditData && (
                 <div className="space-y-2 sm:space-y-3">
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 flex-shrink-0" />
-                  <p className="text-[10px] sm:text-[11px] font-medium text-purple-600 uppercase tracking-wider">AI Generation Audit</p>
+                  <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
+                  <p className="text-[10px] sm:text-[11px] font-medium text-brand-blue uppercase tracking-wider">AI Generation Audit</p>
                 </div>
 
                 {/* Model Version + Generation Timestamp */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                  <div className="bg-purple-50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 border border-purple-100">
+                  <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
                     <p className="text-xs sm:text-sm font-semibold text-gray-900">{aiAuditData.ai_model_version || 'N/A'}</p>
                   </div>
-                  <div className="bg-purple-50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 border border-purple-100">
+                  <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
                     <p className="text-xs sm:text-sm font-medium text-gray-900">
                       {formatIST(aiAuditData.questions_generated_at)}
@@ -1501,7 +1501,7 @@ export default function AuditTrailPage() {
                           <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
                           <div className="flex flex-wrap gap-1 sm:gap-1.5">
                             {aiAuditData.generation_params.rounds_config.map((round: any, idx: number) => (
-                              <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] sm:text-xs font-medium capitalize">
+                              <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-[10px] sm:text-xs font-medium capitalize">
                                 {round.type} ({round.weightage}%)
                               </span>
                             ))}
@@ -1523,7 +1523,7 @@ export default function AuditTrailPage() {
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-3 sm:px-4 md:px-5 py-1.5 sm:py-2 md:py-2.5 bg-gray-900 text-white rounded-lg sm:rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 text-xs sm:text-sm font-medium"
+                className="px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-medium"
               >
                 Close
               </button>
@@ -1562,7 +1562,7 @@ export default function AuditTrailPage() {
                 <div className="flex gap-2 mb-3">
                   <button
                     onClick={() => setExportDateMode('preset')}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${exportDateMode === 'preset' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${exportDateMode === 'preset' ? 'bg-brand-blue text-white border-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white text-gray-600 border-gray-200 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'}`}
                   >
                     Preset
                   </button>
@@ -1579,7 +1579,7 @@ export default function AuditTrailPage() {
                       <button
                         key={opt.value}
                         onClick={() => setExportPresetDays(opt.value)}
-                        className={`py-2 rounded-xl text-xs font-medium border transition-all ${exportPresetDays === opt.value ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                        className={`py-2 rounded-xl text-xs font-medium border transition-all ${exportPresetDays === opt.value ? 'bg-brand-blue text-white border-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white text-gray-600 border-gray-200 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'}`}
                       >
                         {opt.label}
                       </button>
@@ -1595,7 +1595,7 @@ export default function AuditTrailPage() {
                           type="date"
                           value={exportStartDate}
                           onChange={e => setExportStartDate(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all"
+                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all"
                         />
                       </div>
                     </div>
@@ -1607,7 +1607,7 @@ export default function AuditTrailPage() {
                           type="date"
                           value={exportEndDate}
                           onChange={e => setExportEndDate(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all"
+                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all"
                         />
                       </div>
                     </div>
@@ -1642,7 +1642,7 @@ export default function AuditTrailPage() {
                         type="checkbox"
                         checked={!!exportSelectedCols[col.key]}
                         onChange={e => setExportSelectedCols(prev => ({ ...prev, [col.key]: e.target.checked }))}
-                        className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
+                        className="w-4 h-4 rounded border-gray-200 accent-brand-blue focus:ring-brand-blue/40 cursor-pointer"
                       />
                       <span className="text-sm text-gray-700 group-hover:text-gray-900">{col.label}</span>
                     </label>
@@ -1669,7 +1669,7 @@ export default function AuditTrailPage() {
                 <button
                   onClick={handleExport}
                   disabled={exportLoading || Object.values(exportSelectedCols).every(v => !v) || (exportDateMode === 'custom' && (!exportStartDate || !exportEndDate))}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-blue rounded-lg hover:bg-brand-blue-2 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {exportLoading ? (
                     <><Loader2Icon className="w-4 h-4 animate-spin" /> Exporting...</>

@@ -86,16 +86,16 @@ export default function AITalentMatchProgressPanel({
   if (error) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-sm w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-sm w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
             </div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching Failed</h2>
             <p className="text-xs sm:text-sm text-gray-600 mb-4">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium text-sm"
+              className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium text-sm"
             >
               Try Again
             </button>
@@ -108,10 +108,10 @@ export default function AITalentMatchProgressPanel({
   // Show progress panel
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-lg w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header */}
         <div className="text-center mb-4 sm:mb-5">
-          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-brand-blue ring-1 ring-white/10 shadow-md shadow-brand-blue/25 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
             <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">AI Matching in Progress</h2>
@@ -122,11 +122,11 @@ export default function AITalentMatchProgressPanel({
         <div className="mb-5">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-gray-600 font-medium">Overall Progress</span>
-            <span className="text-xs text-gray-800 font-bold">{progress}%</span>
+            <span className="text-xs text-brand-blue font-bold">{progress}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-brand-blue/10 rounded-full h-2 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-gray-800 to-gray-800 rounded-full transition-all duration-300 ease-out"
+              className="h-full bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
             ></div>
           </div>
@@ -143,13 +143,13 @@ export default function AITalentMatchProgressPanel({
               <div
                 key={index}
                 className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-                  isCurrent ? 'bg-gray-50 border-2 border-gray-300' :
-                  isComplete ? 'bg-green-50 border border-green-200' :
-                  'bg-gray-50 border border-gray-200'
+                  isCurrent ? 'bg-brand-blue/5 ring-1 ring-brand-blue/30' :
+                  isComplete ? 'bg-green-50 ring-1 ring-green-200' :
+                  'bg-gray-50 ring-1 ring-gray-200'
                 }`}
               >
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isCurrent ? 'bg-gray-800 text-white' :
+                  isCurrent ? 'bg-brand-blue text-white shadow shadow-brand-blue/25 ring-1 ring-white/10' :
                   isComplete ? 'bg-green-600 text-white' :
                   'bg-gray-300 text-gray-600'
                 }`}>
@@ -162,7 +162,7 @@ export default function AITalentMatchProgressPanel({
                   )}
                 </div>
                 <span className={`text-xs font-medium ${
-                  isCurrent ? 'text-gray-900' :
+                  isCurrent ? 'text-brand-blue' :
                   isComplete ? 'text-green-700' :
                   'text-gray-600'
                 }`}>

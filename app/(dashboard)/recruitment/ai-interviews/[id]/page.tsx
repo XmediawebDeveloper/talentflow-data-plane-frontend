@@ -58,39 +58,45 @@ export default function AIInterviewDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex items-center justify-center h-64 bg-slate-50">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+        </div>
       </div>
     );
   }
 
   if (error || !config) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-slate-50">
-        <div className="text-red-500 text-base">{error || 'AI Interview config not found'}</div>
-        <button
-          onClick={handleBack}
-          className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-        >
-          Back to AI Interviews
-        </button>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-slate-50">
+          <div className="text-red-500 text-base">{error || 'AI Interview config not found'}</div>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          >
+            Back to AI Interviews
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <AIInterviewDetailsView
-      config={config}
-      onBack={handleBack}
-      onRefresh={fetchConfig}
-      currentIndex={allIds.indexOf(interviewId)}
-      totalCount={allIds.length}
-      onPrev={allIds.indexOf(interviewId) > 0
-        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) - 1]}`)
-        : undefined}
-      onNext={allIds.indexOf(interviewId) >= 0 && allIds.indexOf(interviewId) < allIds.length - 1
-        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
-        : undefined}
-    />
+    <div className="w-full max-w-[1400px] mx-auto">
+      <AIInterviewDetailsView
+        config={config}
+        onBack={handleBack}
+        onRefresh={fetchConfig}
+        currentIndex={allIds.indexOf(interviewId)}
+        totalCount={allIds.length}
+        onPrev={allIds.indexOf(interviewId) > 0
+          ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) - 1]}`)
+          : undefined}
+        onNext={allIds.indexOf(interviewId) >= 0 && allIds.indexOf(interviewId) < allIds.length - 1
+          ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
+          : undefined}
+      />
+    </div>
   );
 }

@@ -28,7 +28,7 @@ import {
 // Step component for instructions
 const Step = ({ number, title, children }: { number: number; title: string; children: React.ReactNode }) => (
   <div className="flex gap-4 mb-6">
-    <div className="flex-shrink-0 w-8 h-8 bg-gray-800 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+    <div className="flex-shrink-0 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-sm font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
       {number}
     </div>
     <div className="flex-1">
@@ -41,15 +41,15 @@ const Step = ({ number, title, children }: { number: number; title: string; chil
 // Tip/Note component
 const Tip = ({ type = 'tip', children }: { type?: 'tip' | 'warning' | 'info'; children: React.ReactNode }) => {
   const styles = {
-    tip: { bg: 'bg-green-50', border: 'border-green-200', icon: Lightbulb, iconColor: 'text-green-600', label: 'Pro Tip' },
-    warning: { bg: 'bg-amber-50', border: 'border-amber-200', icon: AlertTriangle, iconColor: 'text-amber-600', label: 'Important' },
-    info: { bg: 'bg-blue-50', border: 'border-blue-200', icon: Info, iconColor: 'text-blue-600', label: 'Note' },
+    tip: { bg: 'bg-brand-cyan/5', border: 'ring-1 ring-brand-cyan/20', icon: Lightbulb, iconColor: 'text-brand-cyan', label: 'Pro Tip' },
+    warning: { bg: 'bg-brand-orange/5', border: 'ring-1 ring-brand-orange/20', icon: AlertTriangle, iconColor: 'text-brand-orange-deep', label: 'Important' },
+    info: { bg: 'bg-brand-blue/5', border: 'ring-1 ring-brand-blue/15', icon: Info, iconColor: 'text-brand-blue', label: 'Note' },
   };
   const style = styles[type];
   const Icon = style.icon;
 
   return (
-    <div className={`${style.bg} ${style.border} border rounded-xl p-4 my-6`}>
+    <div className={`${style.bg} ${style.border} rounded-xl p-4 my-6`}>
       <div className="flex gap-3">
         <Icon className={`w-5 h-5 ${style.iconColor} flex-shrink-0 mt-0.5`} />
         <div>
@@ -206,12 +206,12 @@ const helpArticles: Record<string, {
 
         <section>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Need More Help?</h2>
-          <div className="bg-gray-800 text-white rounded-xl p-6">
+          <div className="bg-brand-blue text-white rounded-xl p-6 shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
             <p className="mb-4">Our support team is here to help you succeed.</p>
             <div className="flex flex-wrap gap-3">
-              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">Browse Knowledge Base</span>
-              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">Contact Support</span>
-              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">Email: support@talentflow.com</span>
+              <span className="bg-white/15 px-3 py-1 rounded-full text-sm">Browse Knowledge Base</span>
+              <span className="bg-white/15 px-3 py-1 rounded-full text-sm">Contact Support</span>
+              <span className="bg-white/15 px-3 py-1 rounded-full text-sm">Email: support@talentflow.com</span>
             </div>
           </div>
         </section>
@@ -436,13 +436,13 @@ const helpArticles: Record<string, {
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2">Supported File Formats</h4>
+          <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg p-4">
+            <h4 className="font-semibold text-brand-blue mb-2">Supported File Formats</h4>
             <div className="flex gap-3">
-              <span className="px-3 py-1 bg-white rounded border border-blue-200 text-sm font-medium">PDF</span>
-              <span className="px-3 py-1 bg-white rounded border border-blue-200 text-sm font-medium">.DOC</span>
-              <span className="px-3 py-1 bg-white rounded border border-blue-200 text-sm font-medium">.DOCX</span>
-              <span className="px-3 py-1 bg-white rounded border border-blue-200 text-sm font-medium">.TXT</span>
+              <span className="px-3 py-1 bg-white rounded ring-1 ring-brand-blue/15 text-sm font-medium">PDF</span>
+              <span className="px-3 py-1 bg-white rounded ring-1 ring-brand-blue/15 text-sm font-medium">.DOC</span>
+              <span className="px-3 py-1 bg-white rounded ring-1 ring-brand-blue/15 text-sm font-medium">.DOCX</span>
+              <span className="px-3 py-1 bg-white rounded ring-1 ring-brand-blue/15 text-sm font-medium">.TXT</span>
             </div>
           </div>
         </section>
@@ -540,7 +540,7 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">How It Works</h2>
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 text-center p-6 bg-gray-50 rounded-xl">
-              <div className="w-12 h-12 bg-gray-800 text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">1</div>
+              <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">1</div>
               <div className="font-medium text-gray-900">Select JD</div>
               <div className="text-sm text-gray-600 mt-1">Choose the position</div>
             </div>
@@ -548,7 +548,7 @@ const helpArticles: Record<string, {
               <ArrowRight className="w-6 h-6 text-gray-400 rotate-90 md:rotate-0" />
             </div>
             <div className="flex-1 text-center p-6 bg-gray-50 rounded-xl">
-              <div className="w-12 h-12 bg-gray-800 text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">2</div>
+              <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">2</div>
               <div className="font-medium text-gray-900">Select Resumes</div>
               <div className="text-sm text-gray-600 mt-1">Pick candidates to evaluate</div>
             </div>
@@ -556,7 +556,7 @@ const helpArticles: Record<string, {
               <ArrowRight className="w-6 h-6 text-gray-400 rotate-90 md:rotate-0" />
             </div>
             <div className="flex-1 text-center p-6 bg-gray-50 rounded-xl">
-              <div className="w-12 h-12 bg-gray-800 text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">3</div>
+              <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">3</div>
               <div className="font-medium text-gray-900">AI Analysis</div>
               <div className="text-sm text-gray-600 mt-1">AI compares against requirements</div>
             </div>
@@ -583,11 +583,11 @@ const helpArticles: Record<string, {
                 <div className="text-sm text-green-700">Top candidate - prioritize for interview</div>
               </div>
             </div>
-            <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="text-2xl font-bold text-blue-600">75-89</div>
+            <div className="flex items-center gap-4 p-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
+              <div className="text-2xl font-bold text-brand-blue">75-89</div>
               <div>
-                <div className="font-medium text-blue-800">Strong Match</div>
-                <div className="text-sm text-blue-700">Good fit - consider for interview</div>
+                <div className="font-semibold text-brand-blue">Strong Match</div>
+                <div className="text-sm text-brand-blue/80">Good fit - consider for interview</div>
               </div>
             </div>
             <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
@@ -677,30 +677,30 @@ const helpArticles: Record<string, {
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Types of Assessments</h2>
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="p-5 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-3">
-                <ClipboardCheck className="w-5 h-5 text-blue-600" />
+            <div className="p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
+              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
+                <ClipboardCheck className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Technical Quiz</h3>
               <p className="text-sm text-gray-600">Multiple choice, coding questions, and problem-solving tests</p>
             </div>
-            <div className="p-5 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-3">
-                <BarChart3 className="w-5 h-5 text-green-600" />
+            <div className="p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
+              <div className="h-9 w-9 bg-brand-cyan/10 ring-1 ring-brand-cyan/20 rounded-lg flex items-center justify-center mb-3">
+                <BarChart3 className="w-4 h-4 text-brand-cyan" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Skill Assessment</h3>
               <p className="text-sm text-gray-600">Practical tasks and hands-on exercises</p>
             </div>
-            <div className="p-5 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mb-3">
-                <MessageCircle className="w-5 h-5 text-purple-600" />
+            <div className="p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
+              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
+                <MessageCircle className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">AI Interview</h3>
               <p className="text-sm text-gray-600">Automated video interviews with AI analysis</p>
             </div>
-            <div className="p-5 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mb-3">
-                <Settings className="w-5 h-5 text-amber-600" />
+            <div className="p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
+              <div className="h-9 w-9 bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-lg flex items-center justify-center mb-3">
+                <Settings className="w-4 h-4 text-brand-orange-deep" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Custom Assessment</h3>
               <p className="text-sm text-gray-600">Your own evaluation criteria and scoring</p>
@@ -806,19 +806,19 @@ const helpArticles: Record<string, {
           <p className="text-gray-600 mb-4">TalentFlow has three main roles with different permission levels:</p>
 
           <div className="space-y-4">
-            <div className="p-5 border-2 border-purple-200 bg-purple-50 rounded-xl">
+            <div className="p-5 ring-1 ring-brand-blue/20 bg-brand-blue/5 rounded-xl">
               <div className="flex items-center gap-3 mb-2">
-                <div className="px-3 py-1 bg-purple-600 text-white rounded-full text-sm font-medium">Admin</div>
+                <div className="px-3 py-1 bg-brand-blue text-white rounded-full text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">Admin</div>
               </div>
               <p className="text-gray-700">Full access to all features including user management, billing, and settings. Can invite and manage other users.</p>
             </div>
-            <div className="p-5 border border-gray-200 rounded-xl">
+            <div className="p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
               <div className="flex items-center gap-3 mb-2">
-                <div className="px-3 py-1 bg-gray-600 text-white rounded-full text-sm font-medium">Recruiter</div>
+                <div className="px-3 py-1 bg-brand-cyan text-white rounded-full text-sm font-medium shadow-md ring-1 ring-white/10">Recruiter</div>
               </div>
               <p className="text-gray-600">Can create JDs, manage candidates, upload resumes, run assessments, and use AI features. Cannot manage users or billing.</p>
             </div>
-            <div className="p-5 border border-gray-200 rounded-xl">
+            <div className="p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
               <div className="flex items-center gap-3 mb-2">
                 <div className="px-3 py-1 bg-gray-400 text-white rounded-full text-sm font-medium">Viewer</div>
               </div>
@@ -1140,12 +1140,12 @@ export default function HelpCenterPage() {
   // Article view
   if (selectedArticle) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-5 sm:py-8">
           {/* Back button */}
           <button
             onClick={() => router.push('/help')}
-            className="inline-flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 mb-5 sm:mb-8 group"
+            className="inline-flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-5 sm:mb-8 group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             <span>Back to Help Center</span>
@@ -1154,8 +1154,8 @@ export default function HelpCenterPage() {
           {/* Article header */}
           <div className="mb-5 sm:mb-8">
             <div className="flex items-start gap-3 sm:gap-4 mb-4">
-              <div className="w-11 h-11 sm:w-14 sm:h-14 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
-                <selectedArticle.icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+              <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <selectedArticle.icon className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 tracking-tight mb-1 sm:mb-2">{selectedArticle.title}</h1>
@@ -1172,7 +1172,7 @@ export default function HelpCenterPage() {
           </div>
 
           {/* Article content */}
-          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-8 md:p-10">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 md:p-10">
             {selectedArticle.content}
           </div>
 
@@ -1187,14 +1187,14 @@ export default function HelpCenterPage() {
                   <button
                     key={article.id}
                     onClick={() => router.push(`/help?article=${article.id}`)}
-                    className="p-5 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:shadow-md transition-all text-left group"
+                    className="p-5 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md transition-all text-left group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-                        <article.icon className="w-5 h-5 text-gray-700" />
+                      <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors">
+                        <article.icon className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div>
-                        <h4 className="font-medium text-gray-900">{article.title}</h4>
+                        <h4 className="font-semibold text-gray-900">{article.title}</h4>
                         <p className="text-sm text-gray-500 mt-0.5">{article.readTime} read</p>
                       </div>
                     </div>
@@ -1203,18 +1203,18 @@ export default function HelpCenterPage() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   // Help center home
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
         <div className="text-center mb-6 sm:mb-10">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-800 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
-            <Book className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+            <Book className="w-6 h-6 sm:w-7 sm:h-7 text-brand-blue" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight mb-1 sm:mb-2">Help Center</h1>
           <p className="text-sm sm:text-base lg:text-lg text-gray-600 px-2">Find answers, guides, and tutorials to help you succeed</p>
@@ -1229,7 +1229,7 @@ export default function HelpCenterPage() {
               placeholder="Search for help articles..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm sm:text-base lg:text-lg shadow-sm"
+              className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base lg:text-lg shadow-sm"
             />
           </div>
         </div>
@@ -1242,8 +1242,8 @@ export default function HelpCenterPage() {
               onClick={() => setSelectedCategory(category.id)}
               className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-5 rounded-full text-xs sm:text-sm transition-all font-medium whitespace-nowrap flex-shrink-0 ${
                 selectedCategory === category.id
-                  ? 'bg-gray-800 text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:border-brand-blue/30 hover:text-brand-blue'
               }`}
             >
               <category.icon className="w-4 h-4" />
@@ -1256,25 +1256,25 @@ export default function HelpCenterPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-10">
           <button
             onClick={() => router.push('/help?article=getting-started')}
-            className="p-4 sm:p-6 bg-gradient-to-br from-gray-800 to-gray-900 text-white rounded-xl sm:rounded-2xl hover:shadow-xl transition-all text-left"
+            className="p-4 sm:p-6 bg-brand-blue text-white rounded-xl sm:rounded-2xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-xl transition-all text-left"
           >
             <Lightbulb className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3" />
             <div className="text-base sm:text-lg font-semibold">Quick Start Guide</div>
-            <div className="text-xs sm:text-sm text-gray-300 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
+            <div className="text-xs sm:text-sm text-white/80 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
           </button>
           <button
             onClick={() => router.push('/support-tickets')}
-            className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left"
+            className="p-4 sm:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl sm:rounded-2xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left"
           >
-            <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-gray-700" />
+            <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900">Contact Support</div>
             <div className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Get personalized help</div>
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
-            className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left"
+            className="p-4 sm:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl sm:rounded-2xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left"
           >
-            <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-gray-700" />
+            <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900">Settings</div>
             <div className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Configure your account</div>
           </button>
@@ -1298,14 +1298,14 @@ export default function HelpCenterPage() {
                 <button
                   key={article.id}
                   onClick={() => router.push(`/help?article=${article.id}`)}
-                  className="p-4 sm:p-5 lg:p-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl hover:border-gray-400 hover:shadow-lg transition-all text-left group"
+                  className="p-4 sm:p-5 lg:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl sm:rounded-2xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left group"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 transition-colors">
-                      <article.icon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                    <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                      <article.icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 group-hover:text-gray-700 mb-1 line-clamp-2">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-brand-blue mb-1 line-clamp-2">
                         {article.title}
                       </h3>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -1313,7 +1313,7 @@ export default function HelpCenterPage() {
                         {article.readTime}
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-brand-blue group-hover:translate-x-1 transition-all flex-shrink-0" />
                   </div>
                 </button>
               ))}
@@ -1322,15 +1322,15 @@ export default function HelpCenterPage() {
         </div>
 
         {/* Contact Section */}
-        <div className="mt-12 bg-white rounded-2xl p-8 border border-gray-200">
+        <div className="mt-12 bg-white rounded-2xl p-8 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Still need help?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <a
               href="mailto:support@talentflow.com"
-              className="flex items-center gap-4 p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-4 p-5 bg-brand-blue/[0.04] ring-1 ring-brand-blue/10 rounded-xl hover:bg-brand-blue/[0.08] transition-colors"
             >
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                <MessageCircle className="w-6 h-6 text-gray-700" />
+              <div className="h-10 w-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <MessageCircle className="w-5 h-5 text-brand-blue" />
               </div>
               <div>
                 <div className="font-semibold text-gray-900">Email Support</div>
@@ -1339,10 +1339,10 @@ export default function HelpCenterPage() {
             </a>
             <button
               onClick={() => router.push('/support-tickets')}
-              className="flex items-center gap-4 p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors text-left"
+              className="flex items-center gap-4 p-5 bg-brand-blue/[0.04] ring-1 ring-brand-blue/10 rounded-xl hover:bg-brand-blue/[0.08] transition-colors text-left"
             >
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                <FileText className="w-6 h-6 text-gray-700" />
+              <div className="h-10 w-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-brand-blue" />
               </div>
               <div>
                 <div className="font-semibold text-gray-900">Support Ticket</div>
@@ -1352,6 +1352,6 @@ export default function HelpCenterPage() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

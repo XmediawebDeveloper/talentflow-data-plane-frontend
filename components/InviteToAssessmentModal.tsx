@@ -429,7 +429,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                 setShowDuplicateError(false);
                 setDuplicateEmails([]);
               }}
-              className="flex-1 px-4 py-2 bg-gray-800 text-white text-sm sm:text-base rounded-lg hover:bg-gray-900 transition-colors"
+              className="flex-1 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-sm rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
               Try Different Email
             </button>
@@ -627,7 +627,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                 <button
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                    inputMode === 'manual' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    inputMode === 'manual' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   <Upload className="w-3.5 h-3.5" />
@@ -636,7 +636,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                 <button
                   onClick={() => setInputMode('database')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                    inputMode === 'database' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    inputMode === 'database' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   <Database className="w-3.5 h-3.5" />
@@ -778,11 +778,11 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                           key={resume.id}
                           onClick={() => setSelectedResumes(prev => prev.includes(resume.id) ? prev.filter(id => id !== resume.id) : [...prev, resume.id])}
                           className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                            selectedResumes.includes(resume.id) ? 'bg-gray-50 border-gray-800' : 'bg-white border-gray-200 hover:border-gray-300'
+                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue/40' : 'bg-white border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
-                            selectedResumes.includes(resume.id) ? 'bg-gray-800 border-gray-800' : 'border-gray-300'
+                            selectedResumes.includes(resume.id) ? 'bg-brand-blue border-brand-blue' : 'border-gray-300'
                           }`}>
                             {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
                           </div>
@@ -803,7 +803,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       <button
                         onClick={handleAddFromDatabase}
                         disabled={selectedResumes.length === 0}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-xs transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <Users className="w-3.5 h-3.5" />
                         Add Selected
