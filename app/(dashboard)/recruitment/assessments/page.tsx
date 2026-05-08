@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import Assessments from '@/components/Assessments';
 import { jdService } from '@/lib/services/jdService';
 import { Job } from '@/lib/types/types';
@@ -18,6 +19,14 @@ export default function AssessmentsRoute() {
   const preSelectedJdId = searchParams.get('jd_id');
   const preSelectedJdTitle = searchParams.get('jd_title');
   const assessmentIdFromUrl = searchParams.get('assessment_id');
+
+  // Capture create-flow params on first mount so they survive the URL strip
+  // below. Without this, the loading spinner blocks <Assessments> from mounting
+  // until after router.replace clears `?create=true`, and autoOpenCreate ends
+  // up false by the time the child finally renders.
+  const initialAutoCreate = useRef(autoCreate);
+  const initialPreSelectedJdId = useRef(preSelectedJdId);
+  const initialPreSelectedJdTitle = useRef(preSelectedJdTitle);
 
   // Handle deep link to specific assessment from notifications
   useEffect(() => {
@@ -79,7 +88,7 @@ export default function AssessmentsRoute() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     );
   }
@@ -88,9 +97,9 @@ export default function AssessmentsRoute() {
     <FeatureGate feature="assessment">
       <Assessments
         jobs={jobs}
-        autoOpenCreate={autoCreate}
-        preSelectedJdId={preSelectedJdId || undefined}
-        preSelectedJdTitle={preSelectedJdTitle ? decodeURIComponent(preSelectedJdTitle) : undefined}
+        autoOpenCreate={initialAutoCreate.current}
+        preSelectedJdId={initialPreSelectedJdId.current || undefined}
+        preSelectedJdTitle={initialPreSelectedJdTitle.current ? decodeURIComponent(initialPreSelectedJdTitle.current) : undefined}
       />
     </FeatureGate>
   );

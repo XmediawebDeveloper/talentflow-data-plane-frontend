@@ -19,6 +19,7 @@ import React, {
   forwardRef,
   useState,
 } from "react";
+import { Loader2 } from 'lucide-react';
 
 export interface TalkingHeadHandle {
   streamStart(sampleRate: number, onAudioEnd: () => void): void;
@@ -799,7 +800,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         {status === "loading" && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto mb-3" />
               <p className="text-xs text-gray-400">Loading avatar...</p>
             </div>
           </div>

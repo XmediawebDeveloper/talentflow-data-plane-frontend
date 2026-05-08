@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
 import FeatureNotAvailablePage from './FeatureNotAvailablePage';
-import { Lock, ArrowRight } from 'lucide-react';
+import { Lock, ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface FeatureGateProps {
@@ -37,7 +37,7 @@ export default function FeatureGate({
     if (mode === 'hidden') return null;
     return (
       <div className="flex items-center justify-center p-12">
-        <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+        <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
       </div>
     );
   }

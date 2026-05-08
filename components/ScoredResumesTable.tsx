@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader, Send, ShieldAlert, Info } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -539,7 +539,7 @@ export default function ScoredResumesTable({
                 className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {bulkDownloading ? (
-                  <Loader className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
@@ -1146,7 +1146,7 @@ export default function ScoredResumesTable({
               >
                 {downloadingId === resume.id ? (
                   <>
-                    <Loader className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Downloading...
                   </>
                 ) : (
@@ -1416,7 +1416,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
     return (
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
         <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-6 sm:p-8 text-center">
-          <Loader className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
           <p className="text-gray-500 text-sm">Checking for existing assessments</p>
         </div>
@@ -1697,7 +1697,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
             >
               {isSubmitting ? (
                 <>
-                  <Loader className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Sending...
                 </>
               ) : (

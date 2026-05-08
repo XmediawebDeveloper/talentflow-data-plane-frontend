@@ -635,7 +635,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             if (quotaStatsLoading) {
               return (
                 <div className="mb-4 px-4 py-3 bg-slate-50 border border-gray-100 rounded-lg flex items-center gap-2 text-sm text-gray-500">
-                  <div className="w-4 h-4 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin" />
+                  <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
                   Checking assessment quota...
                 </div>
               );
@@ -1109,7 +1109,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             >
               {isSubmitting ? (
                 <>
-                  <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin" />
                   Sending...
                 </>
               ) : (

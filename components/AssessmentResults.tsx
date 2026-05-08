@@ -820,7 +820,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return (
       <div className="flex-1 bg-slate-50 flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3 sm:mb-4"></div>
+          <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 text-brand-blue animate-spin mx-auto mb-3 sm:mb-4" />
           <p className="text-sm sm:text-base text-gray-600">Loading assessment results...</p>
         </div>
       </div>
@@ -1982,7 +1982,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
-                            <div className="w-4 h-4 border-2 border-green-700 border-t-transparent rounded-full animate-spin" />
+                            <Loader2 className="w-4 h-4 text-green-700 animate-spin" />
                           ) : (
                             <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
                           )}
@@ -2005,7 +2005,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
-                            <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
+                            <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
                           ) : (
                             <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                           )}
@@ -2029,7 +2029,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
-                            <div className="w-4 h-4 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin" />
+                            <Loader2 className="w-4 h-4 text-brand-cyan animate-spin" />
                           ) : (
                             <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
                           )}

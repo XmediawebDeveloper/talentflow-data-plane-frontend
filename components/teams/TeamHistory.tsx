@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight, History } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight, History, Loader2 } from 'lucide-react';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
@@ -96,7 +96,7 @@ export default function TeamHistory() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-blue" />
+          <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center text-gray-400">

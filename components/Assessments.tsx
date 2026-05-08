@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -1430,7 +1430,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {isLoadingTopics ? (
                       <div className="flex items-center justify-center py-12">
                         <div className="text-center">
-                          <div className="w-10 h-10 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                          <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                           <p className="text-gray-600">Loading topic settings...</p>
                         </div>
                       </div>
@@ -1627,7 +1627,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {isLoadingProctoring ? (
                   <div className="flex items-center justify-center py-8 sm:py-12">
                     <div className="text-center">
-                      <div className="w-10 h-10 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                      <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                       <p className="text-sm text-gray-600">Loading proctoring settings...</p>
                     </div>
                   </div>
@@ -1873,7 +1873,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                       {isLoadingProctoringEvents ? (
                         <div className="flex items-center justify-center py-8">
-                          <div className="w-6 h-6 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mr-2" />
+                          <Loader2 className="w-6 h-6 text-brand-blue animate-spin mr-2" />
                           <span className="text-sm text-gray-500">Loading events...</span>
                         </div>
                       ) : proctoringEvents.length === 0 ? (
@@ -1932,7 +1932,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               /* Loading State */
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
-                  <div className="w-10 h-10 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                  <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                   <p className="text-gray-600">Loading assessments...</p>
                 </div>
               </div>
@@ -2829,7 +2829,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
               {isLoadingInvitations ? (
                 <div className="flex items-center justify-center py-8 sm:py-12">
-                  <div className="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-brand-blue/20 border-t-brand-blue rounded-full"></div>
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
                 </div>
               ) : trackingInvitations.length === 0 ? (
                 <div className="text-center py-8 sm:py-12 text-gray-500">

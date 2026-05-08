@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, XCircle, Loader2 } from 'lucide-react';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -86,7 +86,7 @@ export default function ConfirmationDialog({
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <Loader2 className="w-4 h-4 text-white animate-spin" />
                 Processing...
               </span>
             ) : (

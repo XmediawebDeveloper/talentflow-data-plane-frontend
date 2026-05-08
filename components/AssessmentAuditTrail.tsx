@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import {
   Search, Filter, Download, X, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
-  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff
+  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -346,7 +346,7 @@ export default function AssessmentAuditTrail() {
         <div className="p-3 sm:p-6">
           {isLoading ? (
             <div className="text-center py-8 sm:py-12">
-              <div className="animate-spin w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full mx-auto mb-4"></div>
+              <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4" />
               <p className="text-sm text-gray-500">Loading activity log...</p>
             </div>
           ) : activities.length === 0 ? (

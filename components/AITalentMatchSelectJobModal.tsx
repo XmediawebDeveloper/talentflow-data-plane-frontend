@@ -1,4 +1,4 @@
-import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Target } from 'lucide-react';
+import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Target, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -352,7 +352,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
             >
               {isMatching ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
                   Processing...
                 </>
               ) : (

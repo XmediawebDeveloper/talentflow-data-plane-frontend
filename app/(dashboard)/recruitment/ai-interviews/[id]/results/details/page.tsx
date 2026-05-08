@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
@@ -62,7 +63,7 @@ function DetailsContent() {
     return (
       <div className="w-full max-w-[1400px] mx-auto">
         <div className="flex items-center justify-center h-64 bg-slate-50">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue" />
+          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>
       </div>
     );
@@ -93,7 +94,7 @@ export default function AIInterviewResultDetailsPage() {
     <Suspense fallback={
       <div className="w-full max-w-[1400px] mx-auto">
         <div className="flex items-center justify-center h-64 bg-slate-50">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue" />
+          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>
       </div>
     }>

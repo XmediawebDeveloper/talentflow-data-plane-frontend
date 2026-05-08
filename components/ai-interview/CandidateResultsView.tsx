@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download,
+  Download, Loader2,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -145,7 +145,7 @@ function VideoPane({
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="w-8 h-8 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3" />
+        <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
         <p className="text-sm text-gray-500">Loading {label.toLowerCase()}…</p>
       </div>
     );
@@ -1004,7 +1004,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     <div className="flex flex-col items-center justify-center py-24">
       <div className="relative mb-6">
         <div className="w-16 h-16 rounded-full border-4 border-brand-blue/20" />
-        <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-t-brand-blue animate-spin" />
+        <Loader2 className="absolute inset-0 w-16 h-16 text-brand-blue animate-spin" />
       </div>
       <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="text-sm text-gray-500 max-w-xs text-center">
@@ -1117,7 +1117,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         {/* Evaluation pending banner */}
         {evaluationPending && (
           <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-blue/5 border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-xl text-sm text-brand-blue shadow-sm shadow-brand-blue/5">
-            <div className="w-4 h-4 rounded-full border-2 border-brand-blue/20 border-t-brand-blue animate-spin flex-shrink-0" />
+            <Loader2 className="w-4 h-4 text-brand-blue animate-spin flex-shrink-0" />
             Generating evaluation results — this usually takes 15–30 seconds...
           </div>
         )}

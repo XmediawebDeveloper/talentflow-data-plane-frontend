@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send } from 'lucide-react';
+import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
@@ -296,7 +296,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 sm:py-12">
-              <div className="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-brand-blue border-t-transparent rounded-full"></div>
+              <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
             </div>
           ) : invitations.length === 0 ? (
             <div className="text-center py-8 sm:py-12 text-gray-500">

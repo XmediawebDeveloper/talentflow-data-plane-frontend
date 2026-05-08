@@ -583,45 +583,113 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           </div>
 
           {/* SaaS Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
-            <div className="group bg-gradient-to-br from-white to-brand-blue/[0.03] rounded-xl p-4 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
-                  <Briefcase className="h-4 w-4 text-brand-blue" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
+            <div className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-blue-50/50 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(37,99,235,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-blue/25 hover:shadow-[0_16px_30px_-22px_rgba(37,99,235,0.45)]">
+              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(37,99,235,0.10),transparent_70%)]" aria-hidden />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-brand-blue ring-1 ring-blue-100 shadow-sm">
+                    <Briefcase className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Total Jobs</p>
+                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.total}</div>
+                  </div>
                 </div>
-                <span className="text-sm text-gray-600">Total Jobs</span>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{stats.total}</div>
+              <div className="relative mt-2.5 flex items-end justify-end">
+                <svg viewBox="0 0 88 34" className="h-7 w-20 text-brand-blue/85" aria-hidden="true">
+                  <path d="M4 27C12 26 15 20 22 20C29 20 31 23 38 18C45 13 49 17 56 14C63 11 66 4 84 4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M4 27C12 26 15 20 22 20C29 20 31 23 38 18C45 13 49 17 56 14C63 11 66 4 84 4V34H4Z" fill="url(#jobs-spark)" opacity="0.18" />
+                  <defs>
+                    <linearGradient id="jobs-spark" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="currentColor" />
+                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
             </div>
 
-            <div className="group bg-gradient-to-br from-white to-green-50/40 rounded-xl p-4 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-green-300 hover:shadow-md hover:shadow-green-100 transition-all">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-9 w-9 bg-green-100 ring-1 ring-green-200/60 rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <div className="group relative overflow-hidden rounded-xl border border-emerald-200/80 bg-gradient-to-br from-white via-white to-emerald-50/60 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(22,163,74,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-[0_16px_30px_-22px_rgba(22,163,74,0.38)]">
+              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(34,197,94,0.12),transparent_70%)]" aria-hidden />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 shadow-sm">
+                    <CheckCircle2 className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Active</p>
+                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.published}</div>
+                  </div>
                 </div>
-                <span className="text-sm text-gray-600">Active</span>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{stats.published}</div>
+              <div className="relative mt-2.5 flex items-end justify-end">
+                <svg viewBox="0 0 88 34" className="h-7 w-20 text-emerald-500/85" aria-hidden="true">
+                  <path d="M4 25C11 25 14 16 21 16C30 16 32 22 40 22C50 22 50 10 58 10C67 10 71 17 84 5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M4 25C11 25 14 16 21 16C30 16 32 22 40 22C50 22 50 10 58 10C67 10 71 17 84 5V34H4Z" fill="url(#active-spark)" opacity="0.18" />
+                  <defs>
+                    <linearGradient id="active-spark" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="currentColor" />
+                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
             </div>
 
-            <div className="group bg-gradient-to-br from-white to-brand-orange/[0.05] rounded-xl p-4 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-9 w-9 bg-brand-orange/15 ring-1 ring-brand-orange/20 rounded-lg flex items-center justify-center">
-                  <FileText className="h-4 w-4 text-brand-orange-deep" />
+            <div className="group relative overflow-hidden rounded-xl border border-orange-200/80 bg-gradient-to-br from-white via-white to-orange-50/60 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(249,115,22,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-[0_16px_30px_-22px_rgba(249,115,22,0.38)]">
+              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(249,115,22,0.12),transparent_70%)]" aria-hidden />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-50 text-brand-orange-deep ring-1 ring-orange-100 shadow-sm">
+                    <FileText className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Drafts</p>
+                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.draft}</div>
+                  </div>
                 </div>
-                <span className="text-sm text-gray-600">Drafts</span>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{stats.draft}</div>
+              <div className="relative mt-2.5 flex items-end justify-end">
+                <svg viewBox="0 0 88 34" className="h-7 w-20 text-orange-500/85" aria-hidden="true">
+                  <path d="M4 27C14 27 15 18 24 18C31 18 30 22 38 22C46 22 47 12 55 12C64 12 67 4 84 4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M4 27C14 27 15 18 24 18C31 18 30 22 38 22C46 22 47 12 55 12C64 12 67 4 84 4V34H4Z" fill="url(#draft-spark)" opacity="0.18" />
+                  <defs>
+                    <linearGradient id="draft-spark" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="currentColor" />
+                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
             </div>
 
-            <div className="group bg-gradient-to-br from-white to-brand-cyan/[0.04] rounded-xl p-4 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 transition-all">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-9 w-9 bg-brand-cyan/10 ring-1 ring-brand-cyan/15 rounded-lg flex items-center justify-center">
-                  <Users className="h-4 w-4 text-brand-cyan" />
+            <div className="group relative overflow-hidden rounded-xl border border-cyan-200/80 bg-gradient-to-br from-white via-white to-cyan-50/60 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(6,182,212,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-[0_16px_30px_-22px_rgba(6,182,212,0.38)]">
+              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(6,182,212,0.12),transparent_70%)]" aria-hidden />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-brand-cyan ring-1 ring-cyan-100 shadow-sm">
+                    <Users className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Applicants</p>
+                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.totalApplicants}</div>
+                  </div>
                 </div>
-                <span className="text-sm text-gray-600">Applicants</span>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{stats.totalApplicants}</div>
+              <div className="relative mt-2.5 flex items-end justify-end">
+                <svg viewBox="0 0 88 34" className="h-7 w-20 text-cyan-500/85" aria-hidden="true">
+                  <path d="M4 28C14 23 19 25 28 22C35 19 39 21 45 16C52 11 57 15 64 12C72 9 76 4 84 4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M4 28C14 23 19 25 28 22C35 19 39 21 45 16C52 11 57 15 64 12C72 9 76 4 84 4V34H4Z" fill="url(#applicants-spark)" opacity="0.18" />
+                  <defs>
+                    <linearGradient id="applicants-spark" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="currentColor" />
+                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
             </div>
           </div>
 

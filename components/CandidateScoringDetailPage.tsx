@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -376,7 +376,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mb-4"></div>
+          <Loader2 className="h-12 w-12 text-gray-800 animate-spin inline-block mb-4" />
           <p className="text-gray-600 font-medium">Loading candidate details...</p>
         </div>
       </div>
@@ -653,7 +653,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                   </ul>
                 ) : (
                   <div className="flex items-center gap-2 text-gray-500 py-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                    <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
                     <span className="text-sm">Loading job details...</span>
                   </div>
                 )}

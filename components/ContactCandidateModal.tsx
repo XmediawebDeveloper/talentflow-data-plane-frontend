@@ -1,4 +1,4 @@
-import { X, Mail, Phone, Calendar, Clock, Send, FileText, Loader } from 'lucide-react';
+import { X, Mail, Phone, Calendar, Clock, Send, FileText, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -347,7 +347,7 @@ export default function ContactCandidateModal({
             >
               {isSending ? (
                 <>
-                  <Loader className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Sending...
                 </>
               ) : (
@@ -375,7 +375,7 @@ export default function ContactCandidateModal({
             >
               {isSending ? (
                 <>
-                  <Loader className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Scheduling...
                 </>
               ) : (

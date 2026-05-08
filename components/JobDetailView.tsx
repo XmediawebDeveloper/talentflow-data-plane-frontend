@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -1653,7 +1653,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="mt-0">
           {loadingScoredResumes ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 sm:p-10 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
               <span className="ml-3 text-gray-600 text-sm">Loading scored resumes...</span>
             </div>
           ) : scoredResumes.length === 0 ? (
@@ -1932,7 +1932,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(90vh-140px)] sm:max-h-[calc(85vh-140px)]">
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+                  <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
                   <span className="ml-3 text-gray-600">Loading history...</span>
                 </div>
               ) : selectedHistoryVersion ? (
@@ -2366,7 +2366,7 @@ function AIMatchTabContent({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+          <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
           <p className="text-gray-500 text-sm">Loading AI match results...</p>
         </div>
       </div>

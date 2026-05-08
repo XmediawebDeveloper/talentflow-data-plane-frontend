@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, memo } from "react";
+import { Loader2 } from 'lucide-react';
 
 interface WebcamProps {
   onStream?: (stream: MediaStream) => void;
@@ -109,7 +110,7 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
       />
       {!isActive && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
         </div>
       )}
 

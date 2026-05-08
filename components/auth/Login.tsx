@@ -922,8 +922,12 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
               >
                 {isLoading ? (
                   <>
-                    <div style={{ width: 20, height: 20, border: '2px solid #ffffff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                    Signing in...
+                    Signing in
+                    <span style={{ display: 'inline-flex', gap: 4, marginLeft: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ffffff', animation: 'bounce-dot 1.2s infinite ease-in-out', animationDelay: '0s' }}></span>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ffffff', animation: 'bounce-dot 1.2s infinite ease-in-out', animationDelay: '0.2s' }}></span>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ffffff', animation: 'bounce-dot 1.2s infinite ease-in-out', animationDelay: '0.4s' }}></span>
+                    </span>
                   </>
                 ) : (
                   <>
@@ -960,6 +964,10 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes bounce-dot {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-6px); opacity: 1; }
         }
       `}</style>
 

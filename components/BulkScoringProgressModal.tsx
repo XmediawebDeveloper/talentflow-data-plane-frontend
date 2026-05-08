@@ -1,4 +1,4 @@
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
@@ -213,7 +213,7 @@ export default function BulkScoringProgressModal({
       case 'Queued':
         return <Clock className="w-4 h-4 text-gray-500" />;
       case 'Scoring in progress':
-        return <Loader className="w-4 h-4 text-brand-blue animate-spin" />;
+        return <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />;
       case 'Scored successfully':
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case 'Already Scored - Skipped':
@@ -368,7 +368,7 @@ export default function BulkScoringProgressModal({
         <div className="flex flex-wrap items-center gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3 bg-brand-blue/[0.03] border-b border-gray-100">
           {[
             { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-3.5 h-3.5" />, activeClass: 'bg-gray-700 text-white ring-2 ring-gray-300', hoverClass: 'bg-white text-gray-600 hover:bg-gray-100' },
-            { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader className={`w-3.5 h-3.5 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, activeClass: 'bg-brand-blue text-white ring-2 ring-brand-blue/40 shadow shadow-brand-blue/25', hoverClass: 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue' },
+            { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader2 className={`w-3.5 h-3.5 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, activeClass: 'bg-brand-blue text-white ring-2 ring-brand-blue/40 shadow shadow-brand-blue/25', hoverClass: 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue' },
             { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-3.5 h-3.5" />, activeClass: 'bg-green-600 text-white ring-2 ring-green-300 shadow shadow-green-600/25', hoverClass: 'bg-white text-gray-600 hover:bg-green-50' },
             { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-3.5 h-3.5" />, activeClass: 'bg-brand-cyan text-white ring-2 ring-brand-cyan/40 shadow shadow-brand-cyan/25', hoverClass: 'bg-white text-gray-600 hover:bg-brand-cyan/5 hover:text-brand-cyan' },
             { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-3.5 h-3.5" />, activeClass: 'bg-red-600 text-white ring-2 ring-red-300 shadow shadow-red-600/25', hoverClass: 'bg-white text-gray-600 hover:bg-red-50' },
@@ -399,7 +399,7 @@ export default function BulkScoringProgressModal({
               aria-label="Retry all failed resumes at once" title="Retry all failed resumes at once"
             >
               {bulkRetrying ? (
-                <><Loader className="w-3.5 h-3.5 animate-spin" /><span>Retrying...</span></>
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Retrying...</span></>
               ) : (
                 <><RefreshCw className="w-3.5 h-3.5" /><span>Retry All</span></>
               )}
@@ -413,7 +413,7 @@ export default function BulkScoringProgressModal({
             <div className="flex items-center justify-center gap-4">
               <div className="relative">
                 <div className="w-14 h-14 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center">
-                  <Loader className="w-7 h-7 text-brand-blue animate-spin" />
+                  <Loader2 className="w-7 h-7 text-brand-blue animate-spin" />
                 </div>
                 <div className="absolute -top-1 -right-1 w-5 h-5 bg-brand-blue ring-1 ring-white/10 shadow shadow-brand-blue/25 rounded-full flex items-center justify-center animate-pulse">
                   <span className="text-white text-xs font-bold">{totalResumes}</span>
@@ -584,7 +584,7 @@ export default function BulkScoringProgressModal({
                                   : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 ring-1 ring-brand-blue/20'
                               }`}
                             >
-                              {retryingItems.has(item.id) ? <><Loader className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
+                              {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
                             </button>
                           )}
                         </td>
@@ -642,7 +642,7 @@ export default function BulkScoringProgressModal({
                             retryingItems.has(item.id) ? 'bg-gray-100 text-gray-400' : 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
                           }`}
                         >
-                          {retryingItems.has(item.id) ? <><Loader className="w-3 h-3 animate-spin" />Retrying</> : <><RotateCcw className="w-3 h-3" />Retry</>}
+                          {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying</> : <><RotateCcw className="w-3 h-3" />Retry</>}
                         </button>
                       )}
                     </div>

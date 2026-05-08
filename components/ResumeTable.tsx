@@ -1,6 +1,6 @@
 'use client'
 
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
@@ -762,7 +762,7 @@ export default function ResumeTable({
       {isLoadingVersions && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 flex items-center gap-3 shadow-xl shadow-brand-blue/20 ring-1 ring-brand-blue/10">
-            <div className="w-5 h-5 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
+            <Loader2 className="w-5 h-5 text-brand-blue animate-spin" />
             <span className="text-gray-700">Loading versions...</span>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { X, ClipboardCheck, CheckCircle, AlertCircle, FileText, Calendar, Clock, Target } from 'lucide-react';
+import { X, ClipboardCheck, CheckCircle, AlertCircle, FileText, Calendar, Clock, Target, Loader2 } from 'lucide-react';
 import { Resume } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
@@ -218,7 +218,7 @@ export default function AssignAssessmentModal({
           >
             {isAssigning ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Loader2 className="w-4 h-4 text-white animate-spin" />
                 Assigning...
               </>
             ) : (

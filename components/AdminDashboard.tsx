@@ -511,7 +511,7 @@ export default function AdminDashboard({
 
             {hasPlanFeature('resume_scoring') && (
               <button
-                onClick={() => router.push('/recruitment/resume-scoring')}
+                onClick={() => router.push('/recruitment/resume-scoring?mode=new')}
                 className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-teal/[0.02] hover:bg-brand-teal/[0.04] hover:border-brand-teal/30 hover:shadow-sm hover:shadow-brand-teal/10 transition-all"
               >
                 <div className="w-10 h-10 bg-brand-teal/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center group-hover:bg-brand-teal/15 transition-colors">
@@ -526,7 +526,7 @@ export default function AdminDashboard({
 
             {hasPlanFeature('assessment') && (
               <button
-                onClick={() => router.push('/recruitment/assessments')}
+                onClick={() => router.push('/recruitment/assessments?create=true')}
                 className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-orange/[0.02] hover:bg-brand-orange/[0.04] hover:border-brand-orange/30 hover:shadow-sm hover:shadow-brand-orange/10 transition-all"
               >
                 <div className="w-10 h-10 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center group-hover:bg-brand-orange/15 transition-colors">
@@ -541,7 +541,7 @@ export default function AdminDashboard({
 
             {hasPlanFeature('ai_interview') && (
               <button
-                onClick={() => router.push('/recruitment/ai-interviews')}
+                onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
                 className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-blue/[0.02] hover:bg-brand-blue/[0.04] hover:border-brand-blue/30 hover:shadow-sm hover:shadow-brand-blue/10 transition-all"
               >
                 <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center group-hover:bg-brand-blue/15 transition-colors">

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -882,7 +882,7 @@ export default function AssessmentDetailsView({
                   <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Recent Invitations</h4>
                   {activityLoading ? (
                     <div className="py-8 sm:py-12 text-center">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-2 sm:mb-3"></div>
+                      <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin mx-auto mb-2 sm:mb-3" />
                       <p className="text-gray-600 text-xs sm:text-sm">Loading invitations...</p>
                     </div>
                   ) : recentActivity.length === 0 ? (
@@ -1013,7 +1013,7 @@ export default function AssessmentDetailsView({
 
             {activityLoading ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <div className="w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
                 <p className="text-gray-600">Loading activity...</p>
               </div>
             ) : recentActivity.length === 0 ? (
@@ -1151,7 +1151,7 @@ export default function AssessmentDetailsView({
 
             {versionsLoading ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <div className="w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
                 <p className="text-gray-600">Loading version history...</p>
               </div>
             ) : versionHistory.length === 0 ? (

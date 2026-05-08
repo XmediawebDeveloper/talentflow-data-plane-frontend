@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import AIInterviewResults from '@/components/ai-interview/AIInterviewResults';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 
@@ -42,7 +43,7 @@ export default function AIInterviewResultsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue" />
+        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     );
   }
