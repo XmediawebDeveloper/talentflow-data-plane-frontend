@@ -1,6 +1,6 @@
 'use client'
 
-import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, ChevronRight, Upload, Users } from 'lucide-react';
+import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, ChevronRight, Upload, Users, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
@@ -251,7 +251,7 @@ export default function SearchFilterBarCompact({
           )}
           {localSearchQuery && localSearchQuery !== debouncedSearch && (
             <div className="absolute right-10 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+              <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
             </div>
           )}
         </div>

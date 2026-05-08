@@ -1,5 +1,7 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
+
 interface LoadingScreenProps {
   message: string;
   subMessage?: string;
@@ -13,7 +15,7 @@ export function LoadingScreen({ message, subMessage }: LoadingScreenProps) {
           {/* Outer ring */}
           <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
           {/* Spinning ring */}
-          <div className="absolute inset-0 border-4 border-gray-800 rounded-full border-t-transparent animate-spin"></div>
+          <Loader2 className="absolute inset-0 w-full h-full text-gray-800 animate-spin" />
           {/* Inner dot */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-4 h-4 bg-gray-800 rounded-full animate-pulse"></div>

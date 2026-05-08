@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import AssessmentResults from '@/components/AssessmentResults';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -99,7 +100,7 @@ export default function AssessmentResultsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     );
   }

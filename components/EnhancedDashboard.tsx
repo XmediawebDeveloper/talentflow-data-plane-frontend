@@ -1035,7 +1035,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 <Button
                   variant="outline"
                   className="group h-auto flex-col gap-2 py-5 border-gray-100 bg-gradient-to-br from-white to-brand-teal/[0.03] hover:border-brand-teal/40 hover:shadow-md hover:shadow-brand-teal/10 hover:-translate-y-0.5 transition-all"
-                  onClick={() => router.push('/recruitment/resume-scoring')}
+                  onClick={() => router.push('/recruitment/resume-scoring?mode=new')}
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15 group-hover:bg-brand-teal/15 transition-colors">
                     <Target className="h-5 w-5 text-brand-teal" />

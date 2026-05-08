@@ -1018,7 +1018,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               </div>
               {versionsLoading ? (
                 <div className="px-6 py-12 text-center">
-                  <div className="w-8 h-8 border-2 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                  <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
                   <p className="text-gray-600">Loading version history...</p>
                 </div>
               ) : versionHistory.length === 0 ? (

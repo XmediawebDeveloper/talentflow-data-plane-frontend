@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Target, Clock, Loader, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
+import { X, Target, Clock, Loader2, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export interface ResumeProgressItem {
@@ -194,7 +194,7 @@ export default function ScoringJobProgressModal({
       case 'queued':
         return <Clock className="w-4 h-4 text-gray-400" />;
       case 'processing':
-        return <Loader className="w-4 h-4 text-brand-blue animate-spin" />;
+        return <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />;
       case 'completed':
         return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
       case 'failed':
@@ -331,7 +331,7 @@ export default function ScoringJobProgressModal({
               <span className="text-xs sm:text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{overallQueued}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Loader className={`w-3.5 h-3.5 text-brand-blue ${overallInProgress > 0 ? 'animate-spin' : ''}`} />
+              <Loader2 className={`w-3.5 h-3.5 text-brand-blue ${overallInProgress > 0 ? 'animate-spin' : ''}`} />
               <span className="text-xs sm:text-sm text-gray-600">Processing: <span className="font-semibold text-brand-blue">{overallInProgress}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -424,7 +424,7 @@ export default function ScoringJobProgressModal({
                     >
                       {retryingItems.has(item.resumeId) ? (
                         <>
-                          <Loader className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-3 h-3 animate-spin" />
                           <span className="hidden sm:inline">Retrying...</span>
                         </>
                       ) : (

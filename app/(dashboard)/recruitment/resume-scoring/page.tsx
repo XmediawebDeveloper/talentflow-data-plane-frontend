@@ -99,10 +99,11 @@ export default function ResumeScoringRoute() {
       setShowProgress(true);
     }
 
-    // Handle mode=new from JD module (JD-first scoring flow)
+    // Handle mode=new (Quick Action / JD-first scoring flow). With jd_id it
+    // pre-selects the JD; without it just lands directly in "new scoring" view.
     const modeParam = searchParams.get('mode');
-    if (modeParam === 'new' && jdId) {
-      console.log('[ResumeScoringRoute] JD-first scoring flow: mode=new with jd_id:', jdId);
+    if (modeParam === 'new') {
+      console.log('[ResumeScoringRoute] mode=new requested, jd_id:', jdId || '(none)');
       setInitialNewScoring(true);
     }
 

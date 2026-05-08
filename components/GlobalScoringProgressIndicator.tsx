@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
-import { Target, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Target, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function GlobalScoringProgressIndicator() {
@@ -93,7 +93,7 @@ export default function GlobalScoringProgressIndicator() {
       } text-white`}>
         <div className="flex items-center gap-2">
           {hasActiveScoring ? (
-            <Loader className="w-5 h-5 animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
             <CheckCircle2 className="w-5 h-5" />
           )}
@@ -208,7 +208,7 @@ function JobProgressItem({
             {isComplete ? (
               <CheckCircle2 className="w-4 h-4 text-green-600" />
             ) : (
-              <Loader className="w-4 h-4 text-gray-600 animate-spin" />
+              <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
             )}
           </div>
           <div className="flex-1 min-w-0">

@@ -1,4 +1,4 @@
-import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine } from 'lucide-react';
+import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -396,7 +396,7 @@ export default function ApplyToJobModal({
             >
               {isApplying ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
                   Applying...
                 </>
               ) : (

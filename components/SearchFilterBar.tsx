@@ -1,4 +1,4 @@
-import { Search, Filter, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, HelpCircle, Info } from 'lucide-react';
+import { Search, Filter, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, HelpCircle, Info, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
@@ -124,7 +124,7 @@ export default function SearchFilterBar({
           )}
           {localSearchQuery && localSearchQuery !== debouncedSearch && (
             <div className="absolute right-[4.5rem] top-1/2 -translate-y-1/2">
-              <div className="w-3.5 h-3.5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
+              <Loader2 className="w-3.5 h-3.5 text-[var(--primary)] animate-spin" />
             </div>
           )}
           <button

@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Target, TrendingUp, CheckCircle, AlertCircle, FileText, Briefcase, FolderOpen, Database } from 'lucide-react';
+import { X, Target, TrendingUp, CheckCircle, AlertCircle, FileText, Briefcase, FolderOpen, Database, Loader2 } from 'lucide-react';
 import { Resume, Job } from '@/lib/types/types';
 import { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
@@ -389,7 +389,7 @@ export default function ResumeScoringModal({
           >
             {isScoring ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Loader2 className="w-4 h-4 text-white animate-spin" />
                 Scoring...
               </>
             ) : (

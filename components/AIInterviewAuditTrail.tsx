@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import {
   Search, Filter, Download, X, CheckCircle, Clock,
   FileText, Eye, Mail, User, Activity,
-  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive
+  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive, Loader2
 } from 'lucide-react';
 import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -298,7 +298,7 @@ export default function AIInterviewAuditTrail() {
         <div className="p-6">
           {isLoading ? (
             <div className="text-center py-12">
-              <div className="animate-spin w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full mx-auto mb-4"></div>
+              <Loader2 className="w-8 h-8 text-gray-600 animate-spin mx-auto mb-4" />
               <p className="text-sm text-gray-500">Loading activity log...</p>
             </div>
           ) : activities.length === 0 ? (

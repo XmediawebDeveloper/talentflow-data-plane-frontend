@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronLeft, ChevronRight, Building2, Calendar, Users } from 'lucide-react';
+import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader2, Square, CheckSquare, ChevronLeft, ChevronRight, Building2, Calendar, Users } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -411,6 +411,20 @@ export default function ResumeScoringPage({
   useEffect(() => {
     // Only handle initialJdId once
     if (initialJdHandled) return;
+
+    // mode=new without a pre-selected JD (Quick Action entry): drop straight
+    // into the "new scoring" view, same internal state change as the in-page
+    // "Score Resumes" button.
+    if (initialNewScoring && !initialJdId) {
+      console.log('[ResumeScoringPage] mode=new (no jd_id): entering new scoring view');
+      setViewMode('new');
+      setSelectedJob('');
+      setResumeSource(null);
+      setSelectedResumes([]);
+      setIsWaitingForInitialJd(false);
+      setInitialJdHandled(true);
+      return;
+    }
 
     if (initialJdId) {
       // JD-First Scoring Flow: mode=new from JD module - skip history, go straight to new scoring
@@ -1113,7 +1127,7 @@ export default function ResumeScoringPage({
     return (
       <main className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <Loader className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
+          <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
           <p className="text-sm text-gray-600">Loading scored candidates...</p>
         </div>
       </main>
@@ -1337,7 +1351,7 @@ export default function ResumeScoringPage({
                 >
                   {isBulkDownloading ? (
                     <>
-                      <Loader className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       Generating ZIP...
                     </>
                   ) : (
@@ -1650,7 +1664,7 @@ export default function ResumeScoringPage({
           <div className="space-y-4">
             {isLoadingGlobal ? (
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
-                <Loader className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
+                <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
                 <p className="text-sm text-gray-600">Loading all scored candidates...</p>
               </div>
             ) : globalScoredResumes.length === 0 ? (
@@ -2281,7 +2295,7 @@ export default function ResumeScoringPage({
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
-            <Loader className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
+            <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
             <p className="text-gray-600 text-sm">Loading scoring history...</p>
           </div>
         ) : scoredHistory.length === 0 ? (
@@ -2520,7 +2534,7 @@ export default function ResumeScoringPage({
             className="p-2 bg-white border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex-shrink-0"
             aria-label="Back" title="Back"
           >
-            <ArrowLeft className="w-4 h-4 text-gray-600" />
+            <ArrowLeft className="w-4 h-4 text-gray-600" /> 
           </button>
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
             <Target className="h-4 w-4 text-brand-blue" />

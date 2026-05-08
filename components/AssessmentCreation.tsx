@@ -19,7 +19,7 @@ const JDCreation = dynamic(() => import('@/components/JDCreation'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue" />
+      <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
     </div>
   ),
 });
@@ -1670,7 +1670,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <div className="p-4 sm:p-6">
               {isLoadingJobs ? (
                 <div className="text-center py-8 sm:py-12">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-3"></div>
+                  <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-brand-blue animate-spin mx-auto mb-3" />
                   <p className="text-sm sm:text-base text-gray-500">Loading job descriptions...</p>
                 </div>
               ) : (
@@ -2698,7 +2698,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       return (
         <div className="flex-1 flex items-center justify-center bg-slate-50 p-4">
           <div className="text-center">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin mx-auto mb-4"></div>
+            <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-brand-blue animate-spin mx-auto mb-4" />
             <h3 className="text-sm sm:text-base text-gray-900 mb-2 tracking-tight">Saving Assessment Definition...</h3>
             <p className="text-xs sm:text-sm text-gray-600">Configuring your assessment parameters</p>
           </div>

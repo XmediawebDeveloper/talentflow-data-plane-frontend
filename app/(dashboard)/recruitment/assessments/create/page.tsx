@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import AssessmentCreation from '@/components/AssessmentCreation';
 import { jdService } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
@@ -114,7 +115,7 @@ export default function CreateAssessmentPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+        <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
       </div>
     );
   }

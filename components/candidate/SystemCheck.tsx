@@ -17,7 +17,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  HelpCircle
+  HelpCircle,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
@@ -524,7 +525,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         return <div className="w-6 h-6 rounded-full bg-gray-200" />;
       case 'checking':
         return (
-          <div className="w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
         );
       case 'success':
         return <CheckCircle className="w-6 h-6 text-green-500" />;

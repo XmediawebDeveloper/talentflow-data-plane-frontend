@@ -982,7 +982,9 @@ export default function AIInterview() {
                       <div
                         key={config.id}
                         onClick={() => router.push(`/recruitment/ai-interviews/${config.id}`)}
-                        className="group relative flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-2xl bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer gap-4 overflow-hidden"
+                        className={`group relative flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-5 border border-gray-100 ring-1 ring-black/[0.02] rounded-2xl bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer gap-4 overflow-visible ${
+                          openMenuId === config.id ? 'z-40' : 'z-0'
+                        }`}
                       >
                         {normalizedStatus === 'published' && (
                           <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full bg-gradient-to-b from-brand-blue to-brand-cyan" aria-hidden />
@@ -1139,7 +1141,7 @@ export default function AIInterview() {
                           )}
 
                           {/* 3-dot menu */}
-                          <div className="relative flex-shrink-0" ref={openMenuId === config.id ? menuRef : undefined}>
+                          <div className="relative flex-shrink-0 z-50" ref={openMenuId === config.id ? menuRef : undefined}>
                             <button
                               onClick={() => setOpenMenuId(openMenuId === config.id ? null : config.id)}
                               className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors"

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { assessmentService } from '@/lib/services';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -92,7 +93,7 @@ function DetailsContent() {
     return (
       <div className="w-full max-w-[1400px] mx-auto">
         <div className="flex items-center justify-center h-64 bg-slate-50">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+          <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
         </div>
       </div>
     );
@@ -141,7 +142,7 @@ export default function CandidateResultDetailsPage() {
       <Suspense fallback={
         <div className="w-full max-w-[1400px] mx-auto">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+            <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
           </div>
         </div>
       }>
