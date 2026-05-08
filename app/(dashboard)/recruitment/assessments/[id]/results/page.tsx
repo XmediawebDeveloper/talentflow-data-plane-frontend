@@ -26,6 +26,7 @@ export default function AssessmentResultsPage() {
   const [jdTitle, setJdTitle] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchAssessmentInfo = async () => {
@@ -49,6 +50,43 @@ export default function AssessmentResultsPage() {
       fetchAssessmentInfo();
     }
   }, [assessmentId]);
+
+  // Fetch sibling assessment IDs for Previous/Next navigation. When the
+  // user opened the page from a JD's Track Invites flow we scope to that
+  // JD's assessments; otherwise we walk the global assessment list.
+  useEffect(() => {
+    const fetchSiblingIds = async () => {
+      try {
+        const ids: string[] = [];
+        let page = 1;
+        while (true) {
+          const params: { page: number; page_size: number; jd_id?: string } = {
+            page,
+            page_size: 100,
+          };
+          if (fromSource === 'jd' && fromJdId) {
+            params.jd_id = fromJdId;
+          }
+          const res = await assessmentService.list(params);
+          const items = res.items ?? [];
+          ids.push(...items.map((a) => a.id));
+          if (ids.length >= (res.total ?? 0) || items.length < 100) break;
+          page++;
+        }
+        setAllAssessmentIds(ids);
+      } catch (err) {
+        console.warn('Failed to fetch sibling assessment IDs:', err);
+      }
+    };
+    fetchSiblingIds();
+  }, [fromSource, fromJdId]);
+
+  const currentIndex = allAssessmentIds.indexOf(assessmentId);
+  const prevId = currentIndex > 0 ? allAssessmentIds[currentIndex - 1] : null;
+  const nextId =
+    currentIndex >= 0 && currentIndex < allAssessmentIds.length - 1
+      ? allAssessmentIds[currentIndex + 1]
+      : null;
 
   const handleBack = () => {
     if (fromSource === 'jd' && fromJdId) {
@@ -89,6 +127,10 @@ export default function AssessmentResultsPage() {
         jdTitle={jdTitle}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}
+        prevId={prevId}
+        nextId={nextId}
+        currentIndex={currentIndex}
+        totalCount={allAssessmentIds.length}
       />
     </FeatureGate>
   );

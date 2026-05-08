@@ -53,42 +53,42 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-violet-50">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-purple-600" />
+        <div className="flex-shrink-0 flex items-start justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex-shrink-0">
+              <AlertTriangle className="w-4 h-4 text-brand-cyan" />
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">
                 Resume Update Detected
               </h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs text-gray-500 mt-0.5">
                 {items.length === 1
-                  ? 'This candidate already exists in the system. Choose how to handle this update.'
-                  : `${items.length} candidates already exist in the system. Choose how to handle these updates.`}
+                  ? 'This candidate already exists. Choose how to handle this update.'
+                  : `${items.length} candidates already exist. Choose how to handle these updates.`}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
-            <X className="w-5 h-5 text-gray-500" />
+          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0" aria-label="Close">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(85vh-260px)]">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           {/* Affected Files List */}
-          <div className="mb-6 p-4 bg-purple-50/50 rounded-xl border border-purple-200">
-            <h4 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
+          <div className="mb-4 p-3 bg-brand-cyan/5 ring-1 ring-brand-cyan/20 rounded-lg">
+            <h4 className="text-sm font-semibold text-brand-cyan mb-2 flex items-center gap-2">
               <GitBranch className="w-4 h-4" />
               {items.length === 1 ? 'Affected Resume' : `Affected Resumes (${items.length})`}
             </h4>
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {items.map(item => (
-                <div key={item.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-purple-100">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                <div key={item.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-brand-cyan/15">
+                  <div className="w-8 h-8 rounded-full bg-brand-cyan ring-1 ring-white/10 shadow-sm shadow-brand-cyan/25 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                     {item.candidateName
                       ? item.candidateName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
                       : '?'}
@@ -100,7 +100,7 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
                       {item.fileName}
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 flex-shrink-0">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 flex-shrink-0">
                     Version
                   </span>
                 </div>
@@ -117,22 +117,22 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
             {/* Option 1: Discard */}
             <button
               onClick={() => setSelectedAction('discard')}
-              className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
+              className={`w-full p-3 sm:p-4 border-2 rounded-lg text-left transition-all ${
                 selectedAction === 'discard'
-                  ? 'border-gray-800 bg-gray-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
+                  : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
               }`}
             >
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'discard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  selectedAction === 'discard' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 text-gray-600'
                 }`}>
                   <Trash2 className="w-5 h-5" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <h5 className="font-semibold text-gray-900">Discard New Resume{items.length > 1 ? 's' : ''}</h5>
-                    {selectedAction === 'discard' && <Check className="w-5 h-5 text-gray-800" />}
+                    <h5 className="font-semibold text-gray-900 text-sm sm:text-base">Discard New Resume{items.length > 1 ? 's' : ''}</h5>
+                    {selectedAction === 'discard' && <Check className="w-5 h-5 text-brand-blue" />}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">
                     Keep existing resume{items.length > 1 ? 's' : ''} unchanged. {items.length > 1 ? 'New uploads' : 'The new upload'} will be deleted.
@@ -149,22 +149,22 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
             {/* Option 2: Overwrite */}
             <button
               onClick={() => setSelectedAction('overwrite')}
-              className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
+              className={`w-full p-3 sm:p-4 border-2 rounded-lg text-left transition-all ${
                 selectedAction === 'overwrite'
-                  ? 'border-orange-500 bg-orange-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-brand-orange/50 bg-brand-orange/5 shadow-sm shadow-brand-orange/10'
+                  : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
               }`}
             >
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'overwrite' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  selectedAction === 'overwrite' ? 'bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10' : 'bg-gray-100 text-gray-600'
                 }`}>
                   <RefreshCw className="w-5 h-5" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <h5 className="font-semibold text-gray-900">Overwrite Existing Resume{items.length > 1 ? 's' : ''}</h5>
-                    {selectedAction === 'overwrite' && <Check className="w-5 h-5 text-orange-500" />}
+                    <h5 className="font-semibold text-gray-900 text-sm sm:text-base">Overwrite Existing Resume{items.length > 1 ? 's' : ''}</h5>
+                    {selectedAction === 'overwrite' && <Check className="w-5 h-5 text-brand-orange" />}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">
                     Replace {items.length > 1 ? 'old resumes' : 'the old resume'} with {items.length > 1 ? 'new ones' : 'the new one'}. Original{items.length > 1 ? 's' : ''} will be permanently deleted.
@@ -181,23 +181,23 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
             {/* Option 3: Save as Version */}
             <button
               onClick={() => setSelectedAction('version')}
-              className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
+              className={`w-full p-3 sm:p-4 border-2 rounded-lg text-left transition-all ${
                 selectedAction === 'version'
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-green-500 bg-green-50 shadow-sm shadow-green-500/10'
+                  : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
               }`}
             >
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  selectedAction === 'version' ? 'bg-green-500 text-white shadow-sm shadow-green-500/25 ring-1 ring-white/10' : 'bg-gray-100 text-gray-600'
                 }`}>
                   <GitBranch className="w-5 h-5" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h5 className="font-semibold text-gray-900">Save as New Version{items.length > 1 ? 's' : ''}</h5>
-                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Recommended</span>
+                      <h5 className="font-semibold text-gray-900 text-sm sm:text-base">Save as New Version{items.length > 1 ? 's' : ''}</h5>
+                      <span className="px-2 py-0.5 bg-green-50 text-green-700 ring-1 ring-green-200 text-xs font-medium rounded">Recommended</span>
                     </div>
                     {selectedAction === 'version' && <Check className="w-5 h-5 text-green-500" />}
                   </div>
@@ -216,17 +216,17 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50 gap-3">
+        <div className="flex-shrink-0 flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 gap-2 sm:gap-3">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={!selectedAction || isSubmitting}
-            className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {isSubmitting ? (
               <>

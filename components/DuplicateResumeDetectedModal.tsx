@@ -78,7 +78,7 @@ export function DuplicateResumeDetectedModal({
                 <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
                 <span className="text-sm sm:text-base font-medium text-gray-900 truncate">{existingResume.candidate_name || 'Unknown Candidate'}</span>
                 {existingResume.version && existingResume.version > 1 && (
-                  <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                  <span className="px-2 py-0.5 text-xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full">
                     v{existingResume.version}
                   </span>
                 )}
@@ -145,7 +145,7 @@ export function DuplicateResumeDetectedModal({
               onProceedWithScoring(existingResume.id);
               onClose();
             }}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 order-1 sm:order-3 text-xs sm:text-sm"
+            className="flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3 text-xs sm:text-sm"
           >
             <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Proceed with Scoring

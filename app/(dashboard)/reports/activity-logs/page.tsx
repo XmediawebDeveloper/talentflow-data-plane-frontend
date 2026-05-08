@@ -26,14 +26,14 @@ const categoryIcons: Record<string, React.ReactNode> = {
 };
 
 const categoryColors: Record<string, string> = {
-  jobs: 'bg-gray-100 text-gray-800',
-  scoring: 'bg-gray-100 text-gray-800',
-  interview: 'bg-green-100 text-green-600',
-  assessment: 'bg-orange-100 text-orange-600',
-  settings: 'bg-gray-100 text-gray-600',
-  view: 'bg-yellow-100 text-yellow-600',
-  upload: 'bg-gray-100 text-gray-800',
-  team: 'bg-pink-100 text-pink-600',
+  jobs: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
+  scoring: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
+  interview: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
+  assessment: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+  settings: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
+  view: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+  upload: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
+  team: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
 };
 
 export default function ActivityLogsPage() {
@@ -52,21 +52,21 @@ export default function ActivityLogsPage() {
   });
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <div className="max-w-5xl mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         {/* Header */}
         <div className="mb-5 sm:mb-6 lg:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+              <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Activity Logs</h1>
                 <p className="text-xs sm:text-sm text-gray-600">Track all activities across your organization</p>
               </div>
             </div>
-            <button className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors self-end sm:self-auto">
+            <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors self-end sm:self-auto">
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export Logs</span>
               <span className="sm:hidden">Export</span>
@@ -83,13 +83,13 @@ export default function ActivityLogsPage() {
               placeholder="Search activities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none"
+              className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
             />
           </div>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="h-10 px-3 sm:px-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none"
+            className="h-10 px-3 sm:px-4 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -100,10 +100,10 @@ export default function ActivityLogsPage() {
         </div>
 
         {/* Activity Timeline */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="divide-y divide-gray-200">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="divide-y divide-gray-100">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="p-3 sm:p-4 hover:bg-gray-50 transition-colors">
+              <div key={log.id} className="p-3 sm:p-4 hover:bg-brand-blue/[0.04] transition-colors">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${categoryColors[log.category]}`}>
                     {categoryIcons[log.category]}

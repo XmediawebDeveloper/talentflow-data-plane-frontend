@@ -38,16 +38,16 @@ const getMatchStatusColor = (status: string) => {
   switch (status?.toLowerCase()) {
     case 'excellent':
     case 'exact_match':
-      return 'bg-green-100 text-green-800';
+      return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
     case 'good':
     case 'partial':
     case 'partial_match':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
     case 'poor':
     case 'no_match':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-100 text-red-800 ring-1 ring-red-200';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
   }
 };
 
@@ -72,10 +72,12 @@ export function ExistingScoreAlertModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-amber-600">
-            <AlertTriangle className="w-5 h-5" />
+          <DialogTitle className="flex items-center gap-2 text-brand-orange-deep text-base sm:text-lg font-semibold">
+            <div className="h-9 w-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-brand-orange" />
+            </div>
             {allAlreadyScored
               ? (isSingleResume ? 'Resume Already Scored' : 'All Resumes Already Scored')
               : 'Some Resumes Already Scored'}
@@ -105,11 +107,11 @@ export function ExistingScoreAlertModal({
           </p>
 
           {/* Existing Scores List */}
-          <div className="max-h-60 overflow-y-auto border rounded-lg divide-y">
+          <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200 ring-1 ring-black/[0.02] divide-y divide-gray-100">
             {existingScores.map((score) => (
               <div
                 key={score.score_id}
-                className="p-3 hover:bg-gray-50 cursor-pointer"
+                className="p-3 hover:bg-brand-blue/5 cursor-pointer transition-colors"
                 onClick={() => onViewExisting(score.score_id)}
               >
                 <div className="flex items-center justify-between">
@@ -145,14 +147,18 @@ export function ExistingScoreAlertModal({
           {/* Summary */}
           {!isSingleResume && newCount > 0 && (
             <p className="text-sm text-gray-500 mt-3">
-              <span className="font-medium text-green-600">{newCount}</span> resume(s) have not been
+              <span className="font-medium text-brand-cyan">{newCount}</span> resume(s) have not been
               scored yet.
             </p>
           )}
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={onClose} className="flex items-center gap-2">
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg"
+          >
             <X className="w-4 h-4" />
             {allAlreadyScored ? 'Close' : 'Cancel'}
           </Button>
@@ -160,7 +166,7 @@ export function ExistingScoreAlertModal({
           {allAlreadyScored && existingScores.length === 1 && (
             <Button
               onClick={() => onViewExisting(existingScores[0].score_id)}
-              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900"
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Eye className="w-4 h-4" />
               View Existing Score
@@ -170,7 +176,7 @@ export function ExistingScoreAlertModal({
           {!allAlreadyScored && newCount > 0 && onProceedWithNewOnly && (
             <Button
               onClick={onProceedWithNewOnly}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Target className="w-4 h-4" />
               Score New Only ({newCount})

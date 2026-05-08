@@ -176,10 +176,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // Helper: status badge colors
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'Completed': return 'bg-green-100 text-green-800 border-green-200';
-      case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Pending': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'Completed': return 'bg-green-50 text-green-700 ring-1 ring-green-200';
+      case 'In Progress': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
+      case 'Pending': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+      default: return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
     }
   };
 
@@ -521,14 +521,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const getPassFailBadge = (status: 'Pass' | 'Fail') => {
     if (status === 'Pass') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs border border-green-300">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 ring-1 ring-green-200 rounded-full text-xs">
           <CheckCircle className="w-3 h-3" />
           Pass
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs border border-red-300">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full text-xs">
         <XCircle className="w-3 h-3" />
         Fail
       </span>
@@ -537,8 +537,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-gray-800';
-    if (percentage >= 40) return 'text-yellow-600';
+    if (percentage >= 60) return 'text-brand-blue';
+    if (percentage >= 40) return 'text-brand-orange-deep';
     return 'text-red-600';
   };
 
@@ -559,9 +559,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
       {/* Header */}
-      <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+      <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
           <div>
             <h2 className="text-sm sm:text-base text-gray-900">Assessment Results</h2>
@@ -577,7 +577,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <div className="relative">
               <button
                 onClick={() => setShowColumnSelector(!showColumnSelector)}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Columns ({enabledColumns.length})
@@ -589,8 +589,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     className="fixed inset-0 z-10"
                     onClick={() => setShowColumnSelector(false)}
                   ></div>
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
-                    <div className="px-4 py-2 border-b border-gray-200">
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-96 overflow-y-auto">
+                    <div className="px-4 py-2 border-b border-gray-100">
                       <div className="text-sm text-gray-900">Select Columns</div>
                       <div className="text-xs text-gray-500 mt-0.5">
                         {enabledColumns.length} of {columns.length} selected
@@ -599,13 +599,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     {columns.map((column) => (
                       <label
                         key={column.id}
-                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-blue/5 hover:text-brand-blue cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={column.enabled}
                           onChange={() => handleToggleColumn(column.id)}
-                          className="w-4 h-4 text-gray-800 rounded"
+                          className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
                         />
                         <span className="text-sm text-gray-700">{column.label}</span>
                       </label>
@@ -619,7 +619,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             {selectedResults.length === 0 && (
               <button
                 onClick={handleExportExcel}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
               >
                 <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Export
@@ -633,7 +633,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   <button
                     onClick={handleDownloadBulkPDFs}
                     disabled={downloadingBulkPDF}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {downloadingBulkPDF ? (
                       <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
@@ -645,7 +645,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 )}
                 <button
                   onClick={handleExportExcel}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-1.5 sm:gap-2"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2"
                 >
                   <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Export
@@ -664,7 +664,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
+              className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
             />
           </div>
 
@@ -674,7 +674,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending')}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Completed">Completed</option>
@@ -689,7 +689,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <select
               value={filterPassFail}
               onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Pass">Pass</option>
@@ -707,7 +707,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                 }}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -727,7 +727,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                 }}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -741,7 +741,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           {activeFiltersCount > 0 && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
             >
               <X className="w-4 h-4" />
               Clear
@@ -759,22 +759,25 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       >
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200">
+            <tr className="border-b border-gray-100 bg-gray-50/60">
               <th className="text-left py-3 px-4 w-12">
-                <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
+                <button onClick={handleSelectAll} className="p-1 hover:bg-brand-blue/5 rounded">
                   {selectedResults.length === filteredResults.length && filteredResults.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-gray-800" />
+                    <CheckSquare className="w-4 h-4 text-brand-blue" />
                   ) : (
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
                 </button>
               </th>
               {enabledColumns.map((col) => (
-                <th key={col.id} className="text-left py-3 px-4 text-sm text-gray-600">
+                <th
+                  key={col.id}
+                  className={`text-left py-3 px-4 text-xs text-gray-600 ${col.id === 'cid' ? 'w-24 whitespace-nowrap' : ''}`}
+                >
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm text-gray-600">Actions</th>
+              <th className="text-left py-3 px-4 text-xs text-gray-600">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -794,9 +797,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               filteredResults.map((result, index) => (
                 <React.Fragment key={result.id}>
                   <tr
-                    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    } ${getResultStatus(result) !== 'Pending' && onViewResultDetail ? 'cursor-pointer' : ''}`}
+                    className={`border-b border-gray-100 hover:bg-brand-blue/5 transition-colors ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'
+                    } ${selectedResults.includes(result.id) ? 'bg-brand-blue/5' : ''} ${getResultStatus(result) !== 'Pending' && onViewResultDetail ? 'cursor-pointer' : ''}`}
                     onClick={() => {
                       if (getResultStatus(result) === 'Pending' || !onViewResultDetail) return;
                       onViewResultDetail(result, jobTitle);
@@ -805,10 +808,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleSelectResult(result.id)}
-                        className="p-1 hover:bg-gray-100 rounded"
+                        className="p-1 hover:bg-brand-blue/10 rounded"
                       >
                         {selectedResults.includes(result.id) ? (
-                          <CheckSquare className="w-4 h-4 text-gray-800" />
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
                           <Square className="w-4 h-4 text-gray-400" />
                         )}
@@ -818,10 +821,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     {enabledColumns.map((col) => {
                       if (col.id === 'cid') {
                         return (
-                          <td key={col.id} className="py-3 px-4">
-                            <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
-                              {result.candidateDisplayId || '-'}
-                            </span>
+                          <td key={col.id} className="py-3 px-4 w-24 whitespace-nowrap">
+                            {result.candidateDisplayId ? (
+                              <span className="inline-flex items-center text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-0.5 rounded whitespace-nowrap">
+                                {result.candidateDisplayId}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
                           </td>
                         );
                       }
@@ -829,7 +836,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         return (
                           <td key={col.id} className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
+                              <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs">
                                 {(result.candidateName || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                               </div>
                               <div className="text-sm text-gray-900 font-medium">{result.candidateName}</div>
@@ -861,7 +868,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       if (col.id === 'inviteSource') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                               {result.inviteSource || 'Manual'}
                             </span>
                           </td>
@@ -927,7 +934,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         const displayStatus = getResultStatus(result);
                         return (
                           <td key={col.id} className="py-3 px-4 text-center">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusBadgeColor(displayStatus)}`}>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs ${getStatusBadgeColor(displayStatus)}`}>
                               {displayStatus}
                             </span>
                           </td>
@@ -939,19 +946,19 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             <div className="space-y-1">
                               {result.sent_at && (
                                 <div className="flex items-center gap-2">
-                                  <Mail className="w-3 h-3 text-blue-500" />
+                                  <Mail className="w-3 h-3 text-brand-blue" />
                                   <span>Sent: {formatTimelineDate(result.sent_at)}</span>
                                 </div>
                               )}
                               {result.started_at && (
                                 <div className="flex items-center gap-2">
-                                  <Play className="w-3 h-3 text-yellow-500" />
+                                  <Play className="w-3 h-3 text-brand-orange-deep" />
                                   <span>Started: {formatTimelineDate(result.started_at)}</span>
                                 </div>
                               )}
                               {result.completed_at && (
                                 <div className="flex items-center gap-2">
-                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                  <CheckCircle className="w-3 h-3 text-green-600" />
                                   <span>Completed: {formatTimelineDate(result.completed_at)}</span>
                                 </div>
                               )}
@@ -1021,7 +1028,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                                 router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                               }
                             }}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${result.candidateName || 'candidate'}`}
                           >
@@ -1032,7 +1039,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           <button
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download PDF Report"
                             aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
                           >
@@ -1053,7 +1060,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
                   {/* Expanded Detail Row */}
                   {selectedResultDetail === result.id && (
-                    <tr className="bg-gray-50 border-b border-gray-200">
+                    <tr className="bg-brand-blue/[0.03] border-b border-brand-blue/10">
                       <td colSpan={enabledColumns.length + 2} className="p-6">
                         <div className="max-w-4xl">
                           <div className="grid grid-cols-2 gap-6">
@@ -1090,7 +1097,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             {/* Right Column - AI Summary */}
                             <div>
                               <h4 className="text-sm text-gray-900 mb-3">AI Summary</h4>
-                              <div className="bg-gradient-to-br from-gray-50 to-gray-50 rounded-lg p-4 border border-gray-200">
+                              <div className="bg-brand-blue/5 rounded-lg p-4 border border-brand-blue/15">
                                 <p className="text-sm text-gray-700 leading-relaxed">
                                   {result.aiSummary}
                                 </p>
@@ -1154,10 +1161,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               <div className="flex items-start gap-3">
                 <button
                   onClick={() => handleSelectResult(result.id)}
-                  className="p-1 hover:bg-gray-100 rounded mt-1"
+                  className="p-1 hover:bg-brand-blue/10 rounded mt-1"
                 >
                   {selectedResults.includes(result.id) ? (
-                    <CheckSquare className="w-4 h-4 text-gray-800" />
+                    <CheckSquare className="w-4 h-4 text-brand-blue" />
                   ) : (
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
@@ -1169,7 +1176,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         {result.candidateDisplayId && (
-                          <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                          <span className="inline-flex items-center text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0">
                             {result.candidateDisplayId}
                           </span>
                         )}
@@ -1177,7 +1184,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       </div>
                       <p className="text-xs text-gray-600 mt-0.5">{result.assessmentName}</p>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getStatusBadgeColor(getResultStatus(result))}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusBadgeColor(getResultStatus(result))}`}>
                       {getResultStatus(result)}
                     </span>
                   </div>
@@ -1243,7 +1250,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                         }
                       }}
-                      className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 px-3 py-1.5 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-1.5"
                     >
                       <Award className="w-3.5 h-3.5" />
                       View Details
@@ -1253,7 +1260,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       <button
                         onClick={() => handleDownloadPDF(result.id)}
                         disabled={downloadingPDF === result.id}
-                        className="flex-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 px-3 py-1.5 text-xs bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {downloadingPDF === result.id ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1274,7 +1281,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         <h4 className="text-xs text-gray-900 mb-2">Round-wise Scores</h4>
                         <div className="space-y-2">
                           {result.roundScores.map((round, idx) => (
-                            <div key={idx} className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                            <div key={idx} className="bg-gray-50/60 rounded-lg p-2 border border-gray-100">
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-xs text-gray-900">{round.roundName}</span>
                                 <span className={`text-xs ${round.passFail === 'Pass' ? 'text-green-600' : 'text-red-600'}`}>
@@ -1295,7 +1302,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       {/* AI Summary */}
                       <div>
                         <h4 className="text-xs text-gray-900 mb-2">AI Summary</h4>
-                        <div className="bg-gradient-to-br from-gray-50 to-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div className="bg-brand-blue/5 rounded-lg p-3 border border-brand-blue/15">
                           <p className="text-xs text-gray-700 leading-relaxed">
                             {result.aiSummary}
                           </p>
@@ -1312,14 +1319,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
       {/* Footer with selection info */}
       {selectedResults.length > 0 && (
-        <div className="p-4 bg-gray-50 border-t border-gray-200">
+        <div className="p-4 bg-brand-blue/5 border-t border-brand-blue/15">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-brand-blue">
               {selectedResults.length} result{selectedResults.length !== 1 ? 's' : ''} selected
             </span>
             <button
               onClick={() => setSelectedResults([])}
-              className="text-sm text-gray-800 hover:text-gray-900"
+              className="text-sm text-brand-blue hover:text-brand-blue-2"
             >
               Clear selection
             </button>

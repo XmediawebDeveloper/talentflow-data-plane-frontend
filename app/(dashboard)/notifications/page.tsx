@@ -149,12 +149,13 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Bell className="w-4 h-4 text-white" />
+          <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+            <Bell className="w-4 h-4 text-brand-blue" />
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Notifications</h1>
@@ -166,7 +167,7 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-2 self-end sm:self-auto">
           <button
             onClick={() => fetchNotifications(true)}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
             aria-label="Refresh" title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
@@ -174,7 +175,7 @@ export default function NotificationsPage() {
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
-              className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 text-sm font-medium bg-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex items-center gap-1.5"
             >
               <Check className="w-4 h-4" />
               Mark All Read
@@ -213,7 +214,7 @@ export default function NotificationsPage() {
           <select
             value={categoryFilter || ''}
             onChange={(e) => setCategoryFilter(e.target.value || undefined)}
-            className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 w-full sm:w-auto text-black"
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full sm:w-auto text-black"
           >
             {categories.map(cat => (
               <option key={cat.value || 'all'} value={cat.value || ''}>
@@ -225,7 +226,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Notifications List */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -249,8 +250,8 @@ export default function NotificationsPage() {
               return (
                 <div
                   key={notification.id}
-                  className={`p-3 sm:p-4 hover:bg-gray-50 transition-colors ${
-                    !notification.is_read ? 'bg-blue-50/30' : ''
+                  className={`p-3 sm:p-4 hover:bg-brand-blue/[0.04] transition-colors ${
+                    !notification.is_read ? 'bg-brand-blue/[0.04]' : ''
                   }`}
                 >
                   <div className="flex gap-2.5 sm:gap-4">
@@ -268,7 +269,7 @@ export default function NotificationsPage() {
                             {notification.title}
                           </p>
                           {!notification.is_read && (
-                            <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></span>
+                            <span className="w-2 h-2 bg-brand-blue rounded-full flex-shrink-0"></span>
                           )}
                         </div>
                         <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
@@ -276,7 +277,7 @@ export default function NotificationsPage() {
                       <p className="text-xs sm:text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">
                         {isTenantAdmin && notification.action_label && (
-                          <span className="text-xs text-gray-800 font-medium hover:underline">
+                          <span className="text-xs text-brand-blue font-medium hover:underline">
                             {notification.action_label}
                           </span>
                         )}
@@ -291,7 +292,7 @@ export default function NotificationsPage() {
                             e.stopPropagation();
                             handleMarkAsRead(notification.id);
                           }}
-                          className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1 sm:p-1.5 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
                           aria-label="Mark as read" title="Mark as read"
                         >
                           <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -321,7 +322,7 @@ export default function NotificationsPage() {
             <button
               onClick={() => fetchNotifications(false)}
               disabled={loadingMore}
-              className="w-full py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2 text-sm font-medium text-brand-blue bg-white border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loadingMore ? (
                 <>
@@ -335,6 +336,7 @@ export default function NotificationsPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </main>
   );
 }

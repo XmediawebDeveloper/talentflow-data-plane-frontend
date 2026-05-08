@@ -48,12 +48,12 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gray-50 border-b border-gray-100 px-4 sm:px-6 py-4 sm:py-5 flex items-start sm:items-center justify-between gap-3">
+        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-3 flex-shrink-0">
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -86,8 +86,8 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                 <div className="text-xs sm:text-sm text-gray-700 sm:mb-1">Total Duration</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900">{assessment.duration_minutes || assessment.duration || 30} min</div>
               </div>
-              <div className="p-3 sm:p-4 bg-green-50 rounded-lg flex sm:block items-center justify-between">
-                <div className="text-xs sm:text-sm text-green-700 sm:mb-1">Sections</div>
+              <div className="p-3 sm:p-4 bg-brand-cyan/5 ring-1 ring-brand-cyan/15 rounded-lg flex sm:block items-center justify-between">
+                <div className="text-xs sm:text-sm text-brand-cyan sm:mb-1">Sections</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900">{sections.length}</div>
               </div>
               <div className="p-3 sm:p-4 bg-brand-orange/10 rounded-lg flex sm:block items-center justify-between">
@@ -150,10 +150,10 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
 
               {/* Technical + Coding Info */}
               {(assessment.technical_enabled || assessment.coding_enabled) && (
-                <div className="bg-white rounded-lg p-3 sm:p-4 border border-green-300 ring-1 ring-black/[0.02]">
+                <div className="bg-white rounded-lg p-3 sm:p-4 border border-brand-cyan/30 ring-1 ring-black/[0.02]">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     {assessment.technical_enabled && <Brain className="w-4 h-4 text-brand-blue flex-shrink-0" />}
-                    {assessment.coding_enabled && <Code className="w-4 h-4 text-green-600 flex-shrink-0" />}
+                    {assessment.coding_enabled && <Code className="w-4 h-4 text-brand-cyan flex-shrink-0" />}
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900">
                       {assessment.technical_enabled && assessment.coding_enabled
                         ? 'Technical + Coding'
@@ -161,7 +161,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                           ? 'Technical'
                           : 'Coding'}
                     </h4>
-                    <span className="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] sm:text-xs font-medium">
+                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-[10px] sm:text-xs font-medium">
                       Scored
                     </span>
                   </div>
@@ -175,8 +175,8 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             </div>
 
             {/* Final Result Logic */}
-            <div className="mt-3 sm:mt-4 bg-green-100 border border-green-300 rounded-lg p-2.5 sm:p-3 text-center">
-              <span className="text-xs sm:text-sm text-green-800">
+            <div className="mt-3 sm:mt-4 bg-brand-cyan/10 ring-1 ring-brand-cyan/20 rounded-lg p-2.5 sm:p-3 text-center">
+              <span className="text-xs sm:text-sm text-brand-cyan">
                 <strong>Final Result:</strong> PASS/FAIL determined by{' '}
                 {assessment.technical_enabled && assessment.coding_enabled
                   ? 'Technical + Coding sections only'
@@ -197,16 +197,16 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                   <div className="flex items-center gap-2 sm:gap-3">
                     {section.name === 'HR' && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />}
                     {section.name === 'Technical' && <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />}
-                    {section.name === 'Coding' && <Code className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />}
+                    {section.name === 'Coding' && <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan flex-shrink-0" />}
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{section.name} Section</h3>
                         {section.scoringType === 'informational' ? (
-                          <span className="px-2 py-0.5 bg-slate-100 text-gray-700 rounded text-[10px] sm:text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-slate-100 text-gray-700 ring-1 ring-gray-200 rounded text-[10px] sm:text-xs font-medium">
                             Informational Only
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] sm:text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-[10px] sm:text-xs font-medium">
                             Scored (0-10 scale)
                           </span>
                         )}
@@ -216,7 +216,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                   <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1">
                     <div className="text-xl sm:text-2xl font-semibold text-brand-blue">{section.percentage}%</div>
                     {section.scoringType === 'scored' && (
-                      <span className="text-[10px] sm:text-xs text-green-600">Counts to PASS/FAIL</span>
+                      <span className="text-[10px] sm:text-xs text-brand-cyan">Counts to PASS/FAIL</span>
                     )}
                   </div>
                 </div>
@@ -263,10 +263,10 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 flex items-center justify-end">
+        <div className="border-t border-gray-100 px-4 sm:px-6 py-3 bg-slate-50 flex items-center justify-end flex-shrink-0">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm font-medium"
+            className="w-full sm:w-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
           >
             Close
           </button>

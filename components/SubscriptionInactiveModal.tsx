@@ -90,33 +90,33 @@ export default function SubscriptionInactiveModal() {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
 
         {/* Top colored banner */}
-        <div className={`h-2 ${isSuspended ? 'bg-red-500' : 'bg-orange-500'}`} />
+        <div className={`h-1.5 ${isSuspended ? 'bg-red-500' : 'bg-brand-orange'}`} />
 
         {/* Header Section */}
-        <div className="pt-8 pb-2 px-8 text-center">
+        <div className="pt-7 pb-2 px-6 sm:px-8 text-center">
           {/* Icon */}
-          <div className={`mx-auto w-20 h-20 ${isSuspended ? 'bg-red-100' : 'bg-orange-100'} rounded-full flex items-center justify-center mb-5 shadow-lg`}>
+          <div className={`mx-auto w-16 h-16 sm:w-20 sm:h-20 ${isSuspended ? 'bg-red-100 ring-1 ring-red-200' : 'bg-brand-orange/10 ring-1 ring-brand-orange/15'} rounded-full flex items-center justify-center mb-4`}>
             {isSuspended ? (
-              <svg className="w-10 h-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-8 h-8 sm:w-10 sm:h-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
             ) : (
-              <svg className="w-10 h-10 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-8 h-8 sm:w-10 sm:h-10 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             )}
           </div>
 
           {/* Title */}
-          <h2 className={`text-2xl font-bold mb-2 ${isSuspended ? 'text-red-700' : 'text-orange-700'}`}>
+          <h2 className={`text-lg sm:text-xl font-semibold mb-2 ${isSuspended ? 'text-red-700' : 'text-brand-orange-deep'}`}>
             {isSuspended ? 'Account Suspended' : isExpired ? 'Subscription Expired' : 'Subscription Inactive'}
           </h2>
 
           {/* Subtitle */}
-          <p className="text-gray-600 text-base">
+          <p className="text-gray-600 text-sm">
             {isSuspended
               ? 'Your account access has been temporarily restricted.'
               : isExpired
@@ -127,11 +127,11 @@ export default function SubscriptionInactiveModal() {
         </div>
 
         {/* Body */}
-        <div className="px-8 pb-6">
+        <div className="px-6 sm:px-8 pb-6">
 
           {/* Suspension Reason Card */}
           {isSuspended && errorDetails?.reason && (
-            <div className="mt-4 mb-6 p-5 bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-500 rounded-lg shadow-sm">
+            <div className="mt-4 mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg ring-1 ring-red-100">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-0.5">
                   <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
@@ -139,10 +139,10 @@ export default function SubscriptionInactiveModal() {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-red-800 uppercase tracking-wide mb-1">
+                  <h3 className="text-xs font-semibold text-red-800 uppercase tracking-wide mb-1">
                     Suspension Reason
                   </h3>
-                  <p className="text-base font-medium text-red-900 leading-relaxed">
+                  <p className="text-sm font-medium text-red-900 leading-relaxed">
                     {errorDetails.reason}
                   </p>
                 </div>
@@ -152,7 +152,7 @@ export default function SubscriptionInactiveModal() {
 
           {/* Suspended Date */}
           {isSuspended && errorDetails?.suspended_at && (
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-4">
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-500 mb-4">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -163,8 +163,8 @@ export default function SubscriptionInactiveModal() {
           )}
 
           {/* Help Text */}
-          <div className="bg-gray-50 rounded-xl p-4 mb-6">
-            <p className="text-sm text-gray-600 text-center">
+          <div className="bg-slate-50 rounded-lg p-3 sm:p-4 mb-5 border border-gray-100">
+            <p className="text-xs sm:text-sm text-gray-600 text-center">
               {isSuspended
                 ? 'If you believe this is an error or need assistance, please contact our support team.'
                 : 'Renew your subscription to restore full access to your account.'
@@ -173,13 +173,13 @@ export default function SubscriptionInactiveModal() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             {isExpired ? (
               <button
                 onClick={handleRenewSubscription}
-                className="w-full px-5 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Renew Subscription
@@ -187,9 +187,9 @@ export default function SubscriptionInactiveModal() {
             ) : (
               <button
                 onClick={handleContactSupport}
-                className="w-full px-5 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 Contact Support
@@ -198,9 +198,9 @@ export default function SubscriptionInactiveModal() {
 
             <button
               onClick={handleLogout}
-              className="w-full px-5 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+              className="w-full px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
               Sign Out
@@ -210,15 +210,15 @@ export default function SubscriptionInactiveModal() {
 
         {/* Footer with Support Email */}
         {errorDetails?.support_email && (
-          <div className="px-8 py-4 bg-gray-50 border-t border-gray-100">
-            <div className="flex items-center justify-center gap-2 text-sm">
+          <div className="px-6 sm:px-8 py-3 bg-slate-50 border-t border-gray-100">
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
               <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               <span className="text-gray-500">Need help?</span>
               <a
                 href={`mailto:${errorDetails.support_email}`}
-                className="text-blue-600 font-medium hover:underline"
+                className="text-brand-blue font-medium hover:underline"
               >
                 {errorDetails.support_email}
               </a>

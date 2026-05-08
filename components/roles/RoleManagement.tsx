@@ -290,8 +290,8 @@ export default function RoleManagement() {
   }, {} as Record<string, Permission[]>);
 
   return (
-    <main className="flex-1 bg-slate-50">
-      <div className="p-4 md:p-8">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />

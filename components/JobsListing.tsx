@@ -542,8 +542,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   };
 
   return (
-    <main className="flex-1 overflow-y-auto bg-slate-50">
-      <div className="p-4 md:p-8">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
         {/* SaaS Header */}
         <div className="mb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">

@@ -216,21 +216,24 @@ export default function ResumeVersionsModal({
   }, [changes]);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3 min-w-0">
             {comparisonMode && (
               <button
                 onClick={handleBackToList}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-brand-blue/5 hover:text-brand-blue rounded-md transition-colors"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
+                <ArrowLeft className="w-4 h-4 text-gray-600" />
               </button>
             )}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
+            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+              <GitBranch className="w-4 h-4 text-brand-blue" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">
                 {comparisonMode && selectedVersion
                   ? `Version ${selectedVersion.version} Comparison`
                   : selectionMode
@@ -246,14 +249,15 @@ export default function ResumeVersionsModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-           aria-label="Close">
+            className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
+            aria-label="Close"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-8 h-8 text-gray-400 animate-spin mb-3" />
@@ -263,10 +267,10 @@ export default function ResumeVersionsModal({
             /* Comparison View */
             <div className="space-y-6">
               {/* Version Info Bar */}
-              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between p-4 bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold">
+                    <span className="px-3 py-1.5 bg-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-semibold">
                       v{selectedVersion.version}
                     </span>
                     <span className="text-sm text-gray-600">
@@ -571,7 +575,7 @@ export default function ResumeVersionsModal({
                           e.stopPropagation();
                           onSelectVersion?.(version);
                         }}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
+                        className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium"
                       >
                         Select
                       </button>

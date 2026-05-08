@@ -97,32 +97,32 @@ export default function ResumeScoringModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden animate-scale-in flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden animate-scale-in flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-gray-50 to-gray-50">
+        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 flex items-center justify-between bg-slate-50 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
-              <Target className="w-6 h-6 text-white" />
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <Target className="w-5 h-5 text-brand-blue" />
             </div>
             <div>
-              <h2 className="text-xl text-gray-900">Resume Scoring</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Resume Scoring</h2>
               <p className="text-sm text-gray-600">Score resumes against job requirements</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white rounded-lg transition-colors"
+            className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
            aria-label="Close">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+        <div className="flex-1 p-6 overflow-y-auto">
           {/* Step 1: Select Job */}
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-gray-800 text-white flex items-center justify-center text-sm font-medium">
+              <div className="w-8 h-8 rounded-full bg-brand-blue text-white flex items-center justify-center text-sm font-medium">
                 1
               </div>
               <h3 className="text-gray-900">Select Job Description</h3>
@@ -137,18 +137,18 @@ export default function ResumeScoringModal({
                     setResumeSource(null);
                     setSelectedResumes([]);
                   }}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                  className={`w-full text-left p-4 rounded-xl border transition-all ${
                     selectedJob === job.id
-                      ? 'border-gray-800 bg-gray-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/15'
+                      : 'border-gray-100 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 ring-1 ring-black/[0.02]'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      selectedJob === job.id ? 'bg-gray-800' : 'bg-gray-100'
+                      selectedJob === job.id ? 'bg-brand-blue' : 'bg-brand-blue/10 ring-1 ring-brand-blue/15'
                     }`}>
                       <Briefcase className={`w-5 h-5 ${
-                        selectedJob === job.id ? 'text-white' : 'text-gray-600'
+                        selectedJob === job.id ? 'text-white' : 'text-brand-blue'
                       }`} />
                     </div>
                     <div className="flex-1">
@@ -162,13 +162,13 @@ export default function ResumeScoringModal({
                           <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
                           {job.type || job.employmentType || 'Full-time'}
                         </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan rounded">
                           {job.status}
                         </span>
                       </div>
                     </div>
                     {selectedJob === job.id && (
-                      <CheckCircle className="w-5 h-5 text-gray-800 flex-shrink-0" />
+                      <CheckCircle className="w-5 h-5 text-brand-blue flex-shrink-0" />
                     )}
                   </div>
                 </button>
@@ -189,7 +189,7 @@ export default function ResumeScoringModal({
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  resumeSource ? 'bg-gray-800 text-white' : 'bg-gray-300 text-gray-600'
+                  resumeSource ? 'bg-brand-blue text-white' : 'bg-gray-200 text-gray-600'
                 }`}>
                   2
                 </div>
@@ -205,11 +205,11 @@ export default function ResumeScoringModal({
                       setResumeSource('my-resumes');
                       setSelectedResumes([]);
                     }}
-                    className="p-6 rounded-xl border-2 border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-all text-left group"
+                    className="p-6 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all text-left group shadow-sm shadow-brand-blue/5"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-lg bg-gray-100 group-hover:bg-gray-800 flex items-center justify-center transition-colors">
-                        <FolderOpen className="w-6 h-6 text-gray-800 group-hover:text-white transition-colors" />
+                      <div className="w-12 h-12 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 group-hover:bg-brand-blue flex items-center justify-center transition-colors">
+                        <FolderOpen className="w-6 h-6 text-brand-blue group-hover:text-white transition-colors" />
                       </div>
                       <div className="flex-1">
                         <h4 className="text-gray-900 mb-1">
@@ -218,7 +218,7 @@ export default function ResumeScoringModal({
                         <p className="text-sm text-gray-600 mb-2">
                           Resumes from your personal collection
                         </p>
-                        <div className="text-xs text-gray-800 font-medium">
+                        <div className="text-xs text-brand-blue font-medium">
                           {myResumes.length} resume{myResumes.length !== 1 ? 's' : ''} available
                         </div>
                       </div>
@@ -231,11 +231,11 @@ export default function ResumeScoringModal({
                       setResumeSource('database');
                       setSelectedResumes([]);
                     }}
-                    className="p-6 rounded-xl border-2 border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-all text-left group"
+                    className="p-6 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all text-left group shadow-sm shadow-brand-blue/5"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-lg bg-gray-100 group-hover:bg-gray-800 flex items-center justify-center transition-colors">
-                        <Database className="w-6 h-6 text-gray-800 group-hover:text-white transition-colors" />
+                      <div className="w-12 h-12 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 group-hover:bg-brand-blue flex items-center justify-center transition-colors">
+                        <Database className="w-6 h-6 text-brand-blue group-hover:text-white transition-colors" />
                       </div>
                       <div className="flex-1">
                         <h4 className="text-gray-900 mb-1">
@@ -244,7 +244,7 @@ export default function ResumeScoringModal({
                         <p className="text-sm text-gray-600 mb-2">
                           All resumes in internal database
                         </p>
-                        <div className="text-xs text-gray-800 font-medium">
+                        <div className="text-xs text-brand-blue font-medium">
                           {databaseResumes.length} resume{databaseResumes.length !== 1 ? 's' : ''} available
                         </div>
                       </div>
@@ -260,7 +260,7 @@ export default function ResumeScoringModal({
                       setResumeSource(null);
                       setSelectedResumes([]);
                     }}
-                    className="mb-4 text-sm text-gray-800 hover:text-gray-900 font-medium flex items-center gap-2"
+                    className="mb-4 text-sm text-brand-blue hover:text-brand-blue-2 font-medium flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -270,9 +270,9 @@ export default function ResumeScoringModal({
 
                   {/* Source Badge */}
                   <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg mb-4 ${
-                    resumeSource === 'my-resumes' 
-                      ? 'bg-gray-100 text-gray-900' 
-                      : 'bg-gray-100 text-gray-900'
+                    resumeSource === 'my-resumes'
+                      ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
+                      : 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                   }`}>
                     {resumeSource === 'my-resumes' ? (
                       <>
@@ -289,13 +289,13 @@ export default function ResumeScoringModal({
 
                   {/* Select All / Deselect All */}
                   {availableResumes.length > 0 && (
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="text-sm text-gray-600">
                         {selectedResumes.length} of {availableResumes.length} resume{availableResumes.length !== 1 ? 's' : ''} selected
                       </div>
                       <button
                         onClick={handleSelectAll}
-                        className="text-sm text-gray-800 hover:text-gray-900 font-medium"
+                        className="text-sm text-brand-blue hover:text-brand-blue-2 font-medium"
                       >
                         {selectedResumes.length === availableResumes.length ? 'Deselect All' : 'Select All'}
                       </button>
@@ -307,23 +307,23 @@ export default function ResumeScoringModal({
                     {availableResumes.map(resume => (
                       <label
                         key={resume.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                           selectedResumes.includes(resume.id)
-                            ? resumeSource === 'my-resumes' 
-                              ? 'border-gray-800 bg-gray-50'
-                              : 'border-gray-800 bg-gray-50'
-                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                            ? resumeSource === 'my-resumes'
+                              ? 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/15'
+                              : 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/15'
+                            : 'border-gray-100 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 ring-1 ring-black/[0.02]'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={selectedResumes.includes(resume.id)}
                           onChange={() => handleResumeToggle(resume.id)}
-                          className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                          className="w-5 h-5 accent-brand-blue rounded border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                         <FileText className={`w-5 h-5 ${
                           selectedResumes.includes(resume.id)
-                            ? resumeSource === 'my-resumes' ? 'text-gray-800' : 'text-gray-800'
+                            ? resumeSource === 'my-resumes' ? 'text-brand-blue' : 'text-brand-blue'
                             : 'text-gray-400'
                         }`} />
                         <div className="flex-1">
@@ -349,22 +349,22 @@ export default function ResumeScoringModal({
 
           {/* Scoring Info */}
           {selectedResumes.length > 0 && (
-            <div className="ml-11 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
+            <div className="ml-11 p-4 bg-brand-blue/5 ring-1 ring-brand-blue/15 border border-brand-blue/20 rounded-lg">
               <div className="flex items-start gap-3">
-                <TrendingUp className="w-5 h-5 text-gray-800 mt-0.5" />
+                <TrendingUp className="w-5 h-5 text-brand-blue mt-0.5" />
                 <div>
                   <h4 className="text-sm text-gray-900 mb-2">AI-Powered Resume Scoring</h4>
                   <ul className="text-xs text-gray-700 space-y-1">
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-brand-cyan mt-0.5 flex-shrink-0" />
                       <span>Analyzes skills match percentage</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-brand-cyan mt-0.5 flex-shrink-0" />
                       <span>Evaluates experience relevance</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-brand-cyan mt-0.5 flex-shrink-0" />
                       <span>Identifies skill gaps and provides overall compatibility score</span>
                     </li>
                   </ul>
@@ -375,17 +375,17 @@ export default function ResumeScoringModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex items-center justify-between flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium"
           >
             Cancel
           </button>
           <button
             onClick={handleScore}
             disabled={!selectedJob || selectedResumes.length === 0 || isScoring}
-            className="px-6 py-2.5 text-sm bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg font-medium"
+            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all disabled:bg-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2 font-medium"
           >
             {isScoring ? (
               <>

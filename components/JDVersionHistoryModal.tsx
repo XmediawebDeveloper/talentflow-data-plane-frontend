@@ -135,26 +135,26 @@ export default function JDVersionHistoryModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
+        className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-100 bg-slate-50">
           <div className="flex items-center gap-3">
             {selectedVersion ? (
               <button
                 onClick={handleBack}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
               </button>
             ) : (
-              <div className="p-2 bg-gray-200 rounded-lg">
-                <History className="w-5 h-5 text-gray-700" />
+              <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+                <History className="w-5 h-5 text-brand-blue" />
               </div>
             )}
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">
                 {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
               </h2>
               <p className="text-sm text-gray-600 mt-0.5">
@@ -167,7 +167,7 @@ export default function JDVersionHistoryModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="p-2 text-gray-500 hover:text-brand-blue rounded-lg hover:bg-brand-blue/5 transition-colors"
            aria-label="Close">
             <X className="w-5 h-5" />
           </button>
@@ -177,16 +177,16 @@ export default function JDVersionHistoryModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
               <span className="ml-3 text-gray-600">Loading version history...</span>
             </div>
           ) : selectedVersion ? (
             /* Version Detail View */
             <div>
               {/* Version Info Bar with Download Button */}
-              <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between mb-6 p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl">
                 <div className="flex items-center gap-4">
-                  <span className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-semibold">
+                  <span className="px-3 py-1.5 bg-brand-blue text-white rounded-lg text-sm font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                     v{selectedVersion.version_number}.0
                   </span>
                   <div className="text-sm text-gray-600">
@@ -196,14 +196,14 @@ export default function JDVersionHistoryModal({
                     </span>
                   </div>
                   {previousVersion && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                    <span className="text-xs bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue px-2 py-0.5 rounded">
                       New content highlighted in blue
                     </span>
                   )}
                 </div>
                 <button
                   onClick={handleDownload}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium"
                 >
                   <Download className="w-4 h-4" />
                   Download
@@ -214,7 +214,7 @@ export default function JDVersionHistoryModal({
               <h3 className="text-xl font-semibold text-gray-900 mb-6">{selectedVersion.title}</h3>
 
               {/* Job Description with proper markdown rendering and blue highlighting */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
                 {(() => {
                   const isV1 = selectedVersion.version_number === 1;
                   const currentDesc = selectedVersion.description || '';
@@ -261,7 +261,7 @@ export default function JDVersionHistoryModal({
                     return text.length > 0 && !prevLinesSet.has(text);
                   };
 
-                  const highlightClass = 'bg-blue-100 text-blue-800 px-2 rounded';
+                  const highlightClass = 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue px-2 rounded';
 
                   const diffComponents = {
                     h1: ({ node, children, ...props }: any) => (
@@ -312,23 +312,23 @@ export default function JDVersionHistoryModal({
                       e.stopPropagation();
                       handleVersionClick(version, index);
                     }}
-                    className={`border-2 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md text-left w-full ${
+                    className={`bg-white rounded-xl border ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 cursor-pointer transition-all hover:shadow-md text-left w-full ${
                       isLatest
-                        ? 'border-gray-300 bg-gray-50 hover:border-gray-400'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-brand-blue/20 bg-brand-blue/5 hover:border-brand-blue/30'
+                        : 'border-gray-100 hover:border-brand-blue/30'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <span className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
                           isLatest
-                            ? 'bg-gray-900 text-white'
-                            : 'bg-gray-200 text-gray-700'
+                            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                            : 'bg-gray-100 text-gray-700'
                         }`}>
                           v{version.version_number}.0
                         </span>
                         {isLatest && (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-brand-cyan/10 ring-1 ring-brand-cyan/20 text-brand-cyan rounded-full text-xs font-medium">
                             Current
                           </span>
                         )}
@@ -360,10 +360,10 @@ export default function JDVersionHistoryModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex-shrink-0 flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50">
           <button
             onClick={selectedVersion ? handleBack : onClose}
-            className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             {selectedVersion ? 'Back to List' : 'Close'}
           </button>

@@ -28,27 +28,27 @@ export default function ConfirmationDialog({
   const config = {
     warning: {
       icon: AlertTriangle,
-      iconColor: 'text-yellow-600',
-      iconBg: 'bg-yellow-100',
-      confirmButton: 'bg-yellow-600 hover:bg-yellow-700',
+      iconColor: 'text-brand-orange',
+      iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/15',
+      confirmButton: 'bg-brand-orange hover:bg-brand-orange-deep shadow-md shadow-brand-orange/25 ring-1 ring-white/10',
     },
     danger: {
       icon: XCircle,
       iconColor: 'text-red-600',
-      iconBg: 'bg-red-100',
-      confirmButton: 'bg-red-600 hover:bg-red-700',
+      iconBg: 'bg-red-100 ring-1 ring-red-200',
+      confirmButton: 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10',
     },
     info: {
       icon: Info,
-      iconColor: 'text-gray-800',
-      iconBg: 'bg-gray-100',
-      confirmButton: 'bg-gray-800 hover:bg-gray-900',
+      iconColor: 'text-brand-blue',
+      iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',
+      confirmButton: 'bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10',
     },
     success: {
       icon: CheckCircle,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100',
-      confirmButton: 'bg-green-600 hover:bg-green-700',
+      iconColor: 'text-brand-cyan',
+      iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',
+      confirmButton: 'bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10',
     },
   };
 
@@ -56,7 +56,7 @@ export default function ConfirmationDialog({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Icon */}
         <div className="flex justify-center pt-8 pb-4">
           <div className={`${iconBg} rounded-full p-3`}>
@@ -66,23 +66,23 @@ export default function ConfirmationDialog({
 
         {/* Content */}
         <div className="px-8 pb-6">
-          <h2 className="text-center text-gray-900 mb-3">{title}</h2>
+          <h2 className="text-center text-base sm:text-lg font-semibold text-gray-900 mb-3">{title}</h2>
           <p className="text-center text-gray-600 text-sm leading-relaxed">{message}</p>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 px-8 pb-8">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 px-6 sm:px-8 pb-6 sm:pb-8">
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${confirmButton}`}
+            className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${confirmButton}`}
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">

@@ -833,7 +833,8 @@ export default function ResumeDatabasePage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-4 md:p-8 bg-slate-50">
+    <main className="flex-1 p-4 md:p-8 overflow-x-hidden bg-slate-50">
+      <div className="w-full max-w-[1400px] mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-start gap-3">
           <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
@@ -1123,6 +1124,7 @@ export default function ResumeDatabasePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </main>
     </DndProvider>
     </FeatureGate>

@@ -136,29 +136,33 @@ export default function AssessmentDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex items-center justify-center h-64 bg-slate-50">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+        </div>
       </div>
     );
   }
 
   if (error || !assessment) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-slate-50">
-        <div className="text-red-500 text-base">{error || 'Assessment not found'}</div>
-        <button
-          onClick={handleBack}
-          className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-        >
-          Back to Assessments
-        </button>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-slate-50">
+          <div className="text-red-500 text-base">{error || 'Assessment not found'}</div>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          >
+            Back to Assessments
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <FeatureGate feature="assessment">
-      <>
+      <div className="w-full max-w-[1400px] mx-auto">
         <AssessmentDetailsView
           assessment={assessment}
           onBack={handleBack}
@@ -203,7 +207,7 @@ export default function AssessmentDetailsPage() {
             onSave={handleEditSave}
           />
         )}
-      </>
+      </div>
     </FeatureGate>
   );
 }

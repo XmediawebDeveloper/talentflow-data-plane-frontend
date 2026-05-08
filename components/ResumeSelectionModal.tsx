@@ -685,8 +685,8 @@ export default function ResumeSelectionModal({
             onClick={() => setSelectedFolder(folder.id)}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm group ${
               isSelected
-                ? 'bg-gray-100 text-gray-900 font-medium'
-                : 'text-gray-700 hover:bg-gray-100'
+                ? 'bg-brand-blue/10 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
             }`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
@@ -724,7 +724,7 @@ export default function ResumeSelectionModal({
                   e.stopPropagation();
                   toggleFolder(folder.id);
                 }}
-                className="p-0.5 hover:bg-gray-200 rounded"
+                className="p-0.5 hover:bg-brand-blue/10 rounded"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-4 h-4" />
@@ -747,7 +747,7 @@ export default function ResumeSelectionModal({
             )}
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               isSelected
-                ? 'bg-gray-200 text-gray-900'
+                ? 'bg-brand-blue/15 text-brand-blue'
                 : 'bg-gray-200 text-gray-600'
             }`}>
               {count}
@@ -765,11 +765,11 @@ export default function ResumeSelectionModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200">
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue ring-1 ring-white/10 shadow-md shadow-brand-blue/25 rounded-xl flex items-center justify-center flex-shrink-0">
               <Target className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
@@ -781,7 +781,7 @@ export default function ResumeSelectionModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors flex-shrink-0"
             aria-label="Close modal"
           >
             <X className="w-5 h-5 text-gray-500" />
@@ -789,14 +789,14 @@ export default function ResumeSelectionModal({
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-4 sm:px-6 pt-3 sm:pt-4">
+        <div className="border-b border-gray-100 px-4 sm:px-6 pt-3 sm:pt-4">
           <div className="flex gap-1 sm:gap-2">
             <button
               onClick={() => handleTabChange('my-resumes')}
               className={`px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${
                 activeTab === 'my-resumes'
-                  ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-brand-blue/5 text-brand-blue border-b-2 border-brand-blue'
+                  : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
               }`}
             >
               <div className="flex items-center gap-1.5 sm:gap-2">
@@ -804,7 +804,7 @@ export default function ResumeSelectionModal({
                 My Resumes
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   activeTab === 'my-resumes'
-                    ? 'bg-gray-800 text-white'
+                    ? 'bg-brand-blue text-white'
                     : 'bg-gray-200 text-gray-600'
                 }`}>
                   {allMyResumes.length}
@@ -817,8 +817,8 @@ export default function ResumeSelectionModal({
                 onClick={() => handleTabChange('database')}
                 className={`px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${
                   activeTab === 'database'
-                    ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-brand-blue/5 text-brand-blue border-b-2 border-brand-blue'
+                    : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                 }`}
               >
                 <div className="flex items-center gap-1.5 sm:gap-2">
@@ -826,7 +826,7 @@ export default function ResumeSelectionModal({
                   Internal Database
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
                     activeTab === 'database'
-                      ? 'bg-gray-800 text-white'
+                      ? 'bg-brand-blue text-white'
                       : 'bg-gray-200 text-gray-600'
                   }`}>
                     {allDatabaseResumes.length}
@@ -868,14 +868,14 @@ export default function ResumeSelectionModal({
 
         {/* Mobile/Tablet Folder Selector (Only for My Resumes) */}
         {activeTab === 'my-resumes' && (
-          <div className="lg:hidden border-b border-gray-200 bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 overflow-x-auto">
+          <div className="lg:hidden border-b border-gray-100 bg-brand-blue/[0.03] px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 overflow-x-auto">
             <div className="flex items-center gap-2 min-w-max">
               <button
                 onClick={() => setSelectedFolder('all')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                   selectedFolder === 'all'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                    ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                 }`}
               >
                 <FolderOpen className="w-3.5 h-3.5" />
@@ -897,8 +897,8 @@ export default function ResumeSelectionModal({
                     onClick={() => setSelectedFolder(folder.id)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                       isSelected
-                        ? 'bg-gray-800 text-white'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
                     <Folder className="w-3.5 h-3.5" />
@@ -921,10 +921,10 @@ export default function ResumeSelectionModal({
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Folder Tree (Only for My Resumes - Desktop) */}
           {activeTab === 'my-resumes' && (
-            <div className="hidden lg:block w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0">
+            <div className="hidden lg:block w-64 border-r border-gray-100 bg-brand-blue/[0.03] overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <h3 className="text-xs font-medium text-gray-500 uppercase mb-3 px-3">Folders</h3>
-                
+
                 {/* All Resumes */}
                 {(() => {
                   const allState = getFolderSelectionState('all');
@@ -990,7 +990,7 @@ export default function ResumeSelectionModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-blue/[0.03] border-b border-gray-100">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -999,7 +999,7 @@ export default function ResumeSelectionModal({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, title, or skills..."
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm"
                   />
                 </div>
 
@@ -1016,7 +1016,7 @@ export default function ResumeSelectionModal({
                   <button
                     onClick={handleUploadClick}
                     disabled={isUploading}
-                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isUploading ? (
                       <>
@@ -1043,11 +1043,11 @@ export default function ResumeSelectionModal({
                     return (
                       <button
                         onClick={handleSelectAll}
-                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm font-medium text-gray-700 flex items-center justify-center gap-2 whitespace-nowrap"
+                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-200 bg-white rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium text-gray-700 flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         {allVisibleSelected ? (
                           <>
-                            <CheckSquare className="w-4 h-4 text-gray-800" />
+                            <CheckSquare className="w-4 h-4 text-brand-blue" />
                             <span className="hidden sm:inline">Deselect All</span>
                             <span className="sm:hidden">Deselect</span>
                           </>
@@ -1068,7 +1068,7 @@ export default function ResumeSelectionModal({
                     );
                   })()}
                   <div className="text-sm text-gray-700 bg-white px-3 sm:px-4 py-2.5 rounded-lg border border-gray-200 font-medium whitespace-nowrap">
-                    <span className="font-semibold text-gray-900">{selectedResumes.length}</span> selected
+                    <span className="font-semibold text-brand-blue">{selectedResumes.length}</span> selected
                   </div>
                 </div>
               </div>
@@ -1079,7 +1079,7 @@ export default function ResumeSelectionModal({
               {filteredResumes.length > 0 ? (
                 <div className="space-y-2">
                   {/* Table Header - Hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-100 rounded-lg text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg ring-1 ring-gray-100 text-xs font-semibold text-gray-700 uppercase tracking-wide">
                     <div className="col-span-1 flex items-center justify-center">
                       {(() => {
                         const visibleIds = filteredResumes.filter(r => !r.isArchived).map(r => r.id);
@@ -1089,10 +1089,10 @@ export default function ResumeSelectionModal({
                         return (
                           <button
                             onClick={handleSelectAll}
-                            className="p-1 hover:bg-gray-200 rounded"
+                            className="p-1 hover:bg-brand-blue/10 rounded"
                           >
                             {allVisibleSelected ? (
-                              <CheckSquare className="w-4 h-4 text-gray-800" />
+                              <CheckSquare className="w-4 h-4 text-brand-blue" />
                             ) : someVisibleSelected ? (
                               <MinusSquare className="w-4 h-4 text-blue-600" />
                             ) : (
@@ -1131,8 +1131,8 @@ export default function ResumeSelectionModal({
                           isArchived
                             ? 'border-amber-100 bg-amber-50 opacity-60 cursor-not-allowed'
                             : isSelected
-                              ? 'border-gray-400 bg-gray-50 shadow-sm cursor-pointer'
-                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm cursor-pointer'
+                              ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
+                              : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] hover:shadow-sm cursor-pointer'
                         }`}
                       >
                         {/* Desktop layout */}
@@ -1149,10 +1149,10 @@ export default function ResumeSelectionModal({
                                 handleToggleResume(resume.id);
                               }}
                               disabled={isArchived}
-                              className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50"
+                              className="p-1 hover:bg-brand-blue/10 rounded disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {isSelected ? (
-                                <CheckSquare className="w-5 h-5 text-gray-800" />
+                                <CheckSquare className="w-5 h-5 text-brand-blue" />
                               ) : (
                                 <Square className="w-5 h-5 text-gray-400" />
                               )}
@@ -1243,7 +1243,7 @@ export default function ResumeSelectionModal({
                               className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50 flex-shrink-0 mt-0.5"
                             >
                               {isSelected ? (
-                                <CheckSquare className="w-5 h-5 text-gray-800" />
+                                <CheckSquare className="w-5 h-5 text-brand-blue" />
                               ) : (
                                 <Square className="w-5 h-5 text-gray-400" />
                               )}
@@ -1317,14 +1317,14 @@ export default function ResumeSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-brand-blue/[0.03]">
           {/* Quota Warning */}
           {availableUnits !== null && availableUnits !== undefined && selectedResumes.length > 0 && selectedResumes.length > availableUnits && (
-            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="mb-3 p-3 bg-brand-orange/5 ring-1 ring-brand-orange/20 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
               <div className="flex-1 text-xs sm:text-sm">
-                <span className="font-semibold text-amber-800">Insufficient Units!</span>
-                <span className="text-amber-700 ml-1">
+                <span className="font-semibold text-brand-orange-deep">Insufficient Units!</span>
+                <span className="text-brand-orange-deep/90 ml-1">
                   You selected {selectedResumes.length} resumes but only have {availableUnits} RS units available.
                   Need {selectedResumes.length - availableUnits} more unit{selectedResumes.length - availableUnits > 1 ? 's' : ''}.
                 </span>
@@ -1354,10 +1354,10 @@ export default function ResumeSelectionModal({
 
               {/* Available Units Display */}
               {availableUnits !== null && availableUnits !== undefined && (
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ring-1 ${
                   selectedResumes.length > availableUnits
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-green-100 text-green-800'
+                    ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                    : 'bg-green-50 text-green-700 ring-green-200'
                 }`}>
                   <Zap className="w-3.5 h-3.5" />
                   <span>{availableUnits} RS units available</span>
@@ -1367,7 +1367,7 @@ export default function ResumeSelectionModal({
             <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <button
                 onClick={onClose}
-                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium text-sm"
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors font-medium text-sm"
               >
                 Cancel
               </button>
@@ -1395,10 +1395,10 @@ export default function ResumeSelectionModal({
 
                   return hasArchivedResumes;
                 })()}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm ${
+                className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-white rounded-lg ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm ${
                   selectedResumes.length > 0 && availableUnits !== null && availableUnits !== undefined && selectedResumes.length > availableUnits
-                    ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800'
-                    : 'bg-gradient-to-r from-gray-800 to-gray-800 hover:from-gray-700 hover:to-gray-900'
+                    ? 'bg-brand-orange hover:bg-brand-orange-deep shadow-brand-orange/25'
+                    : 'bg-brand-blue hover:bg-brand-blue-2 shadow-brand-blue/25'
                 }`}
               >
                 <Target className="w-4 h-4" />

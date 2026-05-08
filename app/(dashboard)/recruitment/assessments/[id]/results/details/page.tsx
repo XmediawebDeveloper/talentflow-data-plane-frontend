@@ -74,56 +74,64 @@ function DetailsContent() {
 
   if (!candidateId) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-3">
-        <div className="text-red-500 text-base">No candidate selected</div>
-        <button
-          onClick={handleBack}
-          className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-        >
-          Back to Results
-        </button>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex flex-col items-center justify-center h-64 space-y-3">
+          <div className="text-red-500 text-base">No candidate selected</div>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          >
+            Back to Results
+          </button>
+        </div>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex items-center justify-center h-64 bg-slate-50">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-3">
-        <div className="text-red-500 text-base">{error}</div>
-        <button
-          onClick={handleBack}
-          className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-        >
-          Back to Results
-        </button>
+      <div className="w-full max-w-[1400px] mx-auto">
+        <div className="flex flex-col items-center justify-center h-64 space-y-3">
+          <div className="text-red-500 text-base">{error}</div>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          >
+            Back to Results
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <CandidateResultDetails
-      onBack={handleBack}
-      assessmentId={assessmentId}
-      assessmentShortId={assessmentShortId}
-      candidateId={candidateId}
-      candidateDisplayId={candidateDisplayId}
-      assessmentTitle={assessmentTitle}
-      jdTitle={jdTitle}
-      jdId={jdId}
-      assessmentVersion={assessmentVersion}
-      currentIndex={navIndex >= 0 ? navIndex : undefined}
-      totalCount={navList.length || undefined}
-      onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
-      onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
-    />
+    <div className="w-full max-w-[1400px] mx-auto">
+      <CandidateResultDetails
+        onBack={handleBack}
+        assessmentId={assessmentId}
+        assessmentShortId={assessmentShortId}
+        candidateId={candidateId}
+        candidateDisplayId={candidateDisplayId}
+        assessmentTitle={assessmentTitle}
+        jdTitle={jdTitle}
+        jdId={jdId}
+        assessmentVersion={assessmentVersion}
+        currentIndex={navIndex >= 0 ? navIndex : undefined}
+        totalCount={navList.length || undefined}
+        onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
+        onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
+      />
+    </div>
   );
 }
 
@@ -131,8 +139,10 @@ export default function CandidateResultDetailsPage() {
   return (
     <FeatureGate feature="assessment">
       <Suspense fallback={
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+        <div className="w-full max-w-[1400px] mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+          </div>
         </div>
       }>
         <DetailsContent />

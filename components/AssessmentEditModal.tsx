@@ -155,25 +155,25 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
-              <Edit2 className="w-5 h-5 text-white" />
+        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <Edit2 className="w-5 h-5 text-brand-blue" />
             </div>
-            <div>
-              <h2 className="text-xl text-gray-900 tracking-tight mb-1">Edit Assessment</h2>
-              <p className="text-gray-600 text-sm">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Edit Assessment</h2>
+              <p className="text-gray-600 text-xs sm:text-sm">
                 Modify assessment details and configuration
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors"
+            className="text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-1.5 sm:p-2 transition-colors flex-shrink-0"
            aria-label="Close">
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -295,7 +295,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               </h3>
               <button
                 onClick={addSection}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Section
@@ -366,7 +366,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 <p className="text-gray-600 mb-3">No sections added yet</p>
                 <button
                   onClick={addSection}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add First Section
@@ -389,26 +389,26 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 px-6 py-4 bg-slate-50 flex items-center justify-between">
+        <div className="border-t border-gray-100 px-4 sm:px-6 py-3 bg-slate-50 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="px-6 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <button
               onClick={() => handleSave(true)}
               disabled={isSaving}
-              className="px-6 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save as Draft'}
             </button>
             <button
               onClick={() => handleSave(false)}
               disabled={isSaving}
-              className="px-6 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save Changes'}
