@@ -221,14 +221,16 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                   </div>
                 </div>
 
-                {/* Topics */}
+                {/* Topics — HR topics arrive as `{text, type, time}` objects
+                    while Technical/Coding topics are strings. Resolve to the
+                    visible text so we don't trigger React error #31. */}
                 {section.topics && section.topics.length > 0 && (
                   <div className="mb-3 sm:mb-4">
                     <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Topics Covered:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {section.topics.map((topic: string, tidx: number) => (
+                      {section.topics.map((topic: any, tidx: number) => (
                         <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 text-gray-700 rounded-lg text-xs sm:text-sm">
-                          {topic}
+                          {typeof topic === 'string' ? topic : (topic?.text || topic?.name || '')}
                         </span>
                       ))}
                     </div>

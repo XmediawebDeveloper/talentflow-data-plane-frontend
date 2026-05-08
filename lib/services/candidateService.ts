@@ -504,7 +504,10 @@ export interface CodeSubmissionResult {
 
 export interface PrepareAssessmentResponse {
   attempt_id: string;
-  status: 'pending_system_check' | 'generating' | 'ready';
+  // 'pending_lang_choice' fires when the assessment has a multi-language
+  // coding round and the candidate hasn't picked a language yet. The
+  // backend defers actual question generation until POST /choose-language.
+  status: 'pending_system_check' | 'pending_lang_choice' | 'generating' | 'ready';
   message: string;
 }
 

@@ -51,6 +51,23 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const faceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const networkCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Face-detection failure-mode counters. We grade the two failure modes
+  // very differently:
+  //
+  //   • "Multiple faces" is a genuine proctoring concern (someone else in
+  //     the frame), so we hard-fail after 2 consecutive readings.
+  //
+  //   • "No face" usually means the detector itself is struggling — bad
+  //     lighting, glasses, head tilt, or a flaky native FaceDetector that
+  //     just returns 0. The camera is clearly working (we have a live video
+  //     track), so after several misses we soft-pass with a hint instead of
+  //     blocking the candidate forever. The actual proctoring system in
+  //     the assessment will catch face issues during the test.
+  const noFaceCountRef = useRef(0);
+  const multiFaceCountRef = useRef(0);
+  const MULTI_FACE_HARD_FAIL = 2;     // ~5s at the 2.5s polling cadence
+  const NO_FACE_SOFT_PASS = 4;        // ~10s — long enough that the user
+                                       // had a fair chance to face the cam.
 
   useEffect(() => {
     // Scroll to top when component mounts
@@ -161,6 +178,10 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     setInternetCheck({ status: 'checking', message: 'Checking...' });
     setBrowserCheck({ status: 'checking', message: 'Checking...' });
     setCameraInUseError(''); // Clear previous camera in use error
+    // Reset face-detection tolerance buffers so a previous run's misses
+    // don't leak into this one.
+    noFaceCountRef.current = 0;
+    multiFaceCountRef.current = 0;
 
     // Run checks
     await checkBrowser();
@@ -231,14 +252,63 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   // GitHub CDN hosts the actual weight files (npm package does not include them)
   const FACE_API_MODEL_URL = '/models/';
 
-  // Apply face-count rules: exactly 1 face → pass, 0 or 2+ → fail
+  // Apply face-count rules with separate handling for the two failure modes.
+  //
+  // 1 face            → ✅ pass immediately, reset both counters.
+  // 0 faces           → soft path. Keep "checking" for a few cycles to give
+  //                     the candidate a chance to settle, then soft-pass —
+  //                     the camera is working, the detector just can't see
+  //                     a face reliably (common with glasses, low light, or
+  //                     a flaky native FaceDetector). Proctoring during the
+  //                     assessment will still catch face-missing events.
+  // 2+ faces          → hard fail after 2 consecutive readings, since this
+  //                     is a real "someone else in the frame" signal.
+  //
+  // Polling continues regardless of state, so the mark recovers automatically
+  // the moment a "1 face" reading comes through.
   const applyFaceCountResult = (count: number) => {
     if (count === 1) {
+      noFaceCountRef.current = 0;
+      multiFaceCountRef.current = 0;
       setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
-    } else if (count === 0) {
-      setCameraCheck({ status: 'error', message: 'No face detected. Look directly at the camera.' });
+      return;
+    }
+
+    if (count >= 2) {
+      // Multiple faces — strict path.
+      noFaceCountRef.current = 0;
+      multiFaceCountRef.current += 1;
+      if (multiFaceCountRef.current >= MULTI_FACE_HARD_FAIL) {
+        setCameraCheck({
+          status: 'error',
+          message: `Multiple faces detected (${count}). Only you should be in frame.`,
+        });
+      } else {
+        setCameraCheck({
+          status: 'checking',
+          message: 'Verifying you are alone in frame…',
+        });
+      }
+      return;
+    }
+
+    // count === 0 — lenient path.
+    multiFaceCountRef.current = 0;
+    noFaceCountRef.current += 1;
+    if (noFaceCountRef.current >= NO_FACE_SOFT_PASS) {
+      // Detector can't see a face after several attempts. Don't block the
+      // candidate — the camera stream is alive (otherwise we wouldn't be
+      // here), so treat it as a soft success. Subsequent polls still run,
+      // so if the face becomes detectable later we'll upgrade the message.
+      setCameraCheck({
+        status: 'success',
+        message: 'Camera working (face check unavailable — please ensure good lighting during the assessment)',
+      });
     } else {
-      setCameraCheck({ status: 'error', message: `Multiple faces detected (${count}). Only you should be in frame.` });
+      setCameraCheck({
+        status: 'checking',
+        message: 'Looking for your face… please face the camera with good lighting.',
+      });
     }
   };
 
@@ -264,6 +334,12 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       if (!faceapi.nets.tinyFaceDetector.isLoaded) {
         await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
       }
+      // 0.5 is the face-api.js default. We tried 0.7 to suppress false
+      // "multiple faces" hits from posters/monitors, but at 0.7 the actual
+      // candidate's face was getting rejected too — especially with glasses
+      // or off-axis angles. Holding the threshold at the default keeps real
+      // faces in; the multi-face false positives are now handled by the
+      // 2-strike buffer in applyFaceCountResult instead.
       const options = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
       const detections = await faceapi.detectAllFaces(videoRef.current, options);
       applyFaceCountResult(detections.length);

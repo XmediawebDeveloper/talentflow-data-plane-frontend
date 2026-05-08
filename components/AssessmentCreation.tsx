@@ -598,7 +598,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       : 'border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
-                  Text Answer (3 min)
+                  Text Answer
                 </button>
                 <button
                   type="button"
@@ -609,7 +609,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       : 'border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
-                  Yes / No (1 min)
+                  Yes / No
                 </button>
               </div>
             </div>
@@ -1377,9 +1377,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       let resultAssessment;
 
       if (isEditMode && editingAssessment) {
-        // Update existing assessment
-        console.log('[TalentFlow] Updating assessment:', editingAssessment.id);
-        resultAssessment = await assessmentService.update(editingAssessment.id, assessmentData);
+        // Update existing assessment. When the user picks "Save as Draft" on
+        // an assessment that's currently published (allowed when 0 invites),
+        // demote it to draft explicitly — without this the row stays
+        // "published" in the DB and the recruiter's own UI shows the wrong
+        // status. Backend now keeps the version stable through this status
+        // flip; the bump only fires later if/when they republish with real
+        // content changes.
+        const updatePayload = saveAsDraft
+          ? { ...assessmentData, status: 'draft' as const }
+          : assessmentData;
+        console.log('[TalentFlow] Updating assessment:', editingAssessment.id, 'saveAsDraft:', saveAsDraft);
+        resultAssessment = await assessmentService.update(editingAssessment.id, updatePayload);
 
         // If not saving as draft, publish the updated assessment
         if (!saveAsDraft) {
@@ -1418,16 +1427,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
 
-      // Show success message and redirect
+      // Show success message and redirect. Save-as-Draft used to drop the
+      // recruiter on the preview step, but they wanted to go straight back to
+      // the assessments list (same as Publish). Both paths now hand off to
+      // the parent's onCreateAssessment which closes the creation view and
+      // reloads the list — that's the expected "I'm done here" behaviour.
       if (!saveAsDraft) {
         toast.success('Assessment published successfully! You can now invite candidates.');
-        // Let parent handle navigation to avoid double router.push()
-        onCreateAssessment(assessmentDefinition);
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
-        // Show preview page for drafts
-        setStep('preview');
       }
+      onCreateAssessment(assessmentDefinition);
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
@@ -1577,8 +1587,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const hasZeroPercentageEnabled = enabledSections.some(s => s.percentage === 0);
   const isPercentageValid = totalPercentage === 100 && hasAtLeastOneEnabled && !hasZeroPercentageEnabled;
 
-  // Use localJobs which includes newly created JDs
-  const availableJobs = localJobs.length > 0 ? localJobs : jobs;
+  // Use localJobs which includes newly created JDs. We hard-filter to
+  // Published-only here so drafts never reach the JD picker — case-
+  // insensitive so any stray `'published'` from a status string that
+  // wasn't normalized upstream still passes, and any `'draft'` /
+  // `'closed'` / `'archived'` is explicitly excluded.
+  const availableJobs = (localJobs.length > 0 ? localJobs : jobs).filter(j => {
+    const s = String(j.status || '').toLowerCase();
+    return s === 'published';
+  });
 
   // Plan feature gate: assessment creation not available on current plan
   useEffect(() => {
@@ -1653,7 +1670,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               ) : (
               <div className="space-y-3">
-                {availableJobs.filter(j => j.status === 'Published').map(job => {
+                {/* `availableJobs` is already Published-only (filtered above)
+                    — this map renders all of them as the JD picker. */}
+                {availableJobs.map(job => {
                   // Check if this JD already has an assessment (1:1 relationship)
                   const hasExistingAssessment = jdsWithAssessments.has(job.id);
 
@@ -1788,7 +1807,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   );
                 })}
 
-                {availableJobs.filter(j => j.status === 'Published').length === 0 && (
+                {availableJobs.length === 0 && (
                   <div className="text-center py-8 sm:py-12 text-gray-500">
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">No published jobs available</p>
@@ -2828,9 +2847,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <div className="mb-3 sm:mb-4">
                   <div className="text-xs sm:text-sm text-gray-700 mb-2">Topics Covered:</div>
                   <div className="flex flex-wrap gap-2">
-                    {section.topics.map((topic: string, tidx: number) => (
+                    {/* HR topics come back as `{text, type, time}` objects from the
+                        backend (the HR Question Bank shape), while Technical/Coding
+                        topics are plain strings. Rendering the object directly
+                        triggers React error #31 ("Objects are not valid as a child").
+                        Resolve to the visible text per item. */}
+                    {section.topics.map((topic: any, tidx: number) => (
                       <span key={tidx} className="px-2 sm:px-3 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm">
-                        {topic}
+                        {typeof topic === 'string' ? topic : (topic?.text || topic?.name || '')}
                       </span>
                     ))}
                   </div>
