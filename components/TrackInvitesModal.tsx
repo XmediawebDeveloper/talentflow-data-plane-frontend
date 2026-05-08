@@ -387,9 +387,14 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               <span className="text-[10px] text-gray-400">—</span>
                             )}
                           </div>
-                          {getEffectiveStatus(invitation) === 'completed' && (
+                          {getEffectiveStatus(invitation) === 'completed' && invitation.attempt_id && (
                             <button
-                              onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
+                              onClick={() => router.push(
+                                `/recruitment/assessments/${invitation.assessment_id}/results/details`
+                                + `?candidate_id=${invitation.attempt_id}`
+                                + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+                                + `&from=jd&jd_id=${jdId}`
+                              )}
                               className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
                             >
                               <Eye className="w-3 h-3" />
@@ -630,13 +635,32 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 Resend button on sent/opened/failed invites
                                 that haven't been started yet. */}
                             {getEffectiveStatus(invitation) === 'completed' ? (
-                              <button
-                                onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results?from=jd&jd_id=${jdId}`)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                View Results
-                              </button>
+                              invitation.attempt_id ? (
+                                <button
+                                  onClick={() => router.push(
+                                    `/recruitment/assessments/${invitation.assessment_id}/results/details`
+                                    + `?candidate_id=${invitation.attempt_id}`
+                                    + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+                                    + `&from=jd&jd_id=${jdId}`
+                                  )}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View Results
+                                </button>
+                              ) : (
+                                // Completed-but-no-attempt — extremely rare orphaned invitation. Render
+                                // a disabled button rather than silently dumping the user on the aggregate
+                                // results page (the very bug this fix is for).
+                                <button
+                                  disabled
+                                  title="Result detail unavailable for this invitation"
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 rounded-lg whitespace-nowrap cursor-not-allowed"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View Results
+                                </button>
+                              )
                             ) : invitation.status === 'bounced' ? (
                               editingEmailId === invitation.id ? (
                                 <div className="flex flex-col gap-1.5 min-w-[190px]">

@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import { scoringService } from '@/lib/services/scoringService';
+import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -331,6 +332,8 @@ export default function SelectSourceModal({
 
           if (allDone) {
             setSubmitting(false);
+            // Refresh header quota dropdown — RS deductions landed on CP
+            dispatchUnitsConsumed();
             // Redirect to Scored Resumes tab after a short delay so user sees final state
             setTimeout(() => {
               setShowProgressModal(false);

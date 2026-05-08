@@ -344,7 +344,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
       // Handle standardized error codes from getUserMedia
       if (errorMessage === 'PERMISSION_DENIED') {
-        const msg = getErrorMessage('PERMISSION_DENIED', browser.name);
+        const msg = 'Both camera and microphone are required. Please allow both in your browser site settings, then reload and re-run checks.';
         setCameraCheck({ status: 'error', message: msg });
         setMicCheck({ status: 'error', message: msg });
       } else if (errorMessage === 'DEVICE_NOT_FOUND') {
@@ -356,14 +356,6 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         setCameraCheck({ status: 'error', message: msg });
         setMicCheck({ status: 'error', message: 'Microphone may be in use by another app or tab' });
         setCameraInUseError(msg); // Store for prominent display
-
-        console.log('[SYSTEM CHECK] Camera in use detected - NOT calling fallback checks', {
-          browser: browser.name,
-          errorType: err.name
-        });
-
-        // IMPORTANT: Return early to prevent fallback checks from overwriting this error
-        return;
       } else if (errorMessage === 'SECURITY_ERROR_HTTPS_REQUIRED') {
         const msg = getErrorMessage('SECURITY_ERROR_HTTPS_REQUIRED', browser.name);
         setCameraCheck({ status: 'error', message: msg });
@@ -377,48 +369,9 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         setCameraCheck({ status: 'error', message: 'Camera error - please check if camera is available' });
         setMicCheck({ status: 'error', message: 'Microphone error - please check if microphone is available' });
       }
-
-      // Try to get more specific info - maybe only one device is the problem
-      // (This will only run for non-AbortError/NotReadableError cases due to early return above)
-      await checkCameraSeparately();
-      await checkMicrophoneSeparately();
-    }
-  };
-
-  const checkCameraSeparately = async () => {
-    try {
-      const stream = await getUserMedia({ video: true });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        void playVideo(videoRef.current);
-      }
-      // Run face detection on the fallback stream too
-      setCameraCheck({ status: 'checking', message: 'Detecting face...' });
-      await new Promise(r => setTimeout(r, 1000));
-      if ('FaceDetector' in window) {
-        try {
-          await runFaceDetection();
-        } catch {
-          await runFaceDetectionFaceApi();
-        }
-      } else {
-        await runFaceDetectionFaceApi();
-      }
-    } catch (err: any) {
-      console.error('Camera-only error:', err.name, err.message);
-      // Keep the existing error message if already set
-    }
-  };
-
-  const checkMicrophoneSeparately = async () => {
-    try {
-      const stream = await getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      setMicCheck({ status: 'success', message: 'Microphone working' });
-    } catch (err: any) {
-      console.error('Microphone-only error:', err.name, err.message);
-      // Keep the existing error message if already set
+      // No per-device fallback: assessment requires BOTH camera and microphone.
+      // If the combined request fails, both are reported failed and the
+      // candidate must allow both before proceeding.
     }
   };
 

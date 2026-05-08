@@ -66,6 +66,12 @@ export interface AssessmentResponse {
   invitations_count: number;
   completed_count: number;
   passed_count: number;
+  // JD-extracted metadata snapshot (Assessment Info tab)
+  jd_experience_level?: string | null;
+  jd_complexity?: string | null;
+  jd_primary_domain?: string | null;
+  jd_skill_depth?: any[];
+  jd_nice_to_have_skills?: any[];
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +108,10 @@ export interface InvitationResponse {
   invitation_token: string;
   invitation_link?: string;
   status: 'pending' | 'sent' | 'opened' | 'started' | 'completed' | 'expired' | 'abandoned';
+  // Latest attempt's UUID — populated by the listing endpoint and used by
+  // Track Invites' "View Results" deep-link. Null until the candidate has
+  // started the assessment.
+  attempt_id?: string;
   sent_at?: string;
   opened_at?: string;
   started_at?: string;

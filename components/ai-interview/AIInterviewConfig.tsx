@@ -1860,6 +1860,14 @@ export default function AIInterviewConfig() {
     // Preserve skill snapshots (only updated on cluster generation — don't overwrite here)
     ...(loadedSiRef.current.mth_skills_snapshot !== undefined && { mth_skills_snapshot: loadedSiRef.current.mth_skills_snapshot }),
     ...(loadedSiRef.current.nth_skills_snapshot !== undefined && { nth_skills_snapshot: loadedSiRef.current.nth_skills_snapshot }),
+    // Extended snapshots — Q values, skill types, NTH/HR enabled flags. Driven
+    // by cluster generation; preserved here so they survive Configure's saves.
+    ...(loadedSiRef.current.mth_questions_snapshot !== undefined && { mth_questions_snapshot: loadedSiRef.current.mth_questions_snapshot }),
+    ...(loadedSiRef.current.nth_questions_snapshot !== undefined && { nth_questions_snapshot: loadedSiRef.current.nth_questions_snapshot }),
+    ...(loadedSiRef.current.mth_skill_types_snapshot !== undefined && { mth_skill_types_snapshot: loadedSiRef.current.mth_skill_types_snapshot }),
+    ...(loadedSiRef.current.nth_skill_types_snapshot !== undefined && { nth_skill_types_snapshot: loadedSiRef.current.nth_skill_types_snapshot }),
+    ...(loadedSiRef.current.nth_enabled_snapshot !== undefined && { nth_enabled_snapshot: loadedSiRef.current.nth_enabled_snapshot }),
+    ...(loadedSiRef.current.hr_enabled_snapshot !== undefined && { hr_enabled_snapshot: loadedSiRef.current.hr_enabled_snapshot }),
     // Recruiter-typed "main" skills, captured before AI expansion runs.
     // Persisted once on first navigate; the Clusters page uses this to
     // visually distinguish original skills from expansion-added sub-skills.
@@ -1981,9 +1989,10 @@ export default function AIInterviewConfig() {
     }
 
     // 2. Determine if clusters need (re)generation.
-    // Rule: regenerate when skills changed since last cluster save OR when no
-    // clusters exist for the active rounds. Mere back-nav with no skill change
-    // must NOT re-trigger generation.
+    // Rule: regenerate when ANYTHING that affects cluster output changes since
+    // the last cluster save — skill names, skill TYPES (Skill/Command/Cert),
+    // question count Q (changes when NTH/HR rounds toggle), or NTH/HR enabled
+    // state. Mere back-nav with no change must NOT re-trigger generation.
     const currentMthSet = new Set(
       mth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean)
     );
@@ -2003,15 +2012,65 @@ export default function AIInterviewConfig() {
       ? currentNthSet.size !== nthSnapshotSet.size || [...currentNthSet].some(s => !nthSnapshotSet.has(s))
       : false;
 
+    // Skill TYPE comparison — type change (Skill ↔ Command ↔ Certification)
+    // affects clustering even when names are unchanged.
+    const buildTypesMap = (entries: { name: string; type?: string }[]): Record<string, string> => {
+      const out: Record<string, string> = {};
+      for (const e of entries) {
+        if (e?.name) out[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
+      }
+      return out;
+    };
+    const currentMthTypes = buildTypesMap(mth.skills);
+    const currentNthTypes = nth.enabled ? buildTypesMap(nth.skills) : {};
+    const snapMthTypes: Record<string, string> = loadedSiRef.current.mth_skill_types_snapshot ?? {};
+    const snapNthTypes: Record<string, string> = loadedSiRef.current.nth_skill_types_snapshot ?? {};
+    const typesEqual = (a: Record<string, string>, b: Record<string, string>): boolean => {
+      const ka = Object.keys(a);
+      const kb = Object.keys(b);
+      if (ka.length !== kb.length) return false;
+      for (const k of ka) if (a[k] !== b[k]) return false;
+      return true;
+    };
+    const mthTypesChanged = hasSnapshot && !typesEqual(currentMthTypes, snapMthTypes);
+    const nthTypesChanged = nth.enabled && hasSnapshot && !typesEqual(currentNthTypes, snapNthTypes);
+
+    // Q (questions per bucket) change — toggling NTH/HR rounds shifts the
+    // duration preset, which shifts mthQuestions/nthQuestions, which shifts
+    // the cluster floor (2Q) and ceiling (3Q).
+    const snapMthQ: number | undefined = loadedSiRef.current.mth_questions_snapshot;
+    const snapNthQ: number | undefined = loadedSiRef.current.nth_questions_snapshot;
+    const mthQChanged = hasSnapshot && typeof snapMthQ === 'number'
+      && snapMthQ !== (timedAllocation.mthQuestions ?? 0);
+    const nthQChanged = hasSnapshot && typeof snapNthQ === 'number'
+      && snapNthQ !== (nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0);
+
+    // NTH/HR toggle — directly forces regen (even when Q didn't capture, e.g.
+    // older drafts without the questions snapshot).
+    const snapNthEnabled: boolean | undefined = loadedSiRef.current.nth_enabled_snapshot;
+    const snapHrEnabled: boolean | undefined = loadedSiRef.current.hr_enabled_snapshot;
+    const nthEnabledChanged = hasSnapshot && typeof snapNthEnabled === 'boolean'
+      && snapNthEnabled !== nth.enabled;
+    const hrEnabledChanged = hasSnapshot && typeof snapHrEnabled === 'boolean'
+      && snapHrEnabled !== hrEnabled;
+
     const mthClustersMatch =
       mth.clusters.length > 0 &&
       mth.clusters.length <= effectiveMthMax &&
-      !mthSkillsChanged;
+      !mthSkillsChanged &&
+      !mthTypesChanged &&
+      !mthQChanged &&
+      !nthEnabledChanged &&
+      !hrEnabledChanged;
     const nthClustersMatch =
       !nth.enabled ||
       (nth.clusters.length > 0 &&
         nth.clusters.length <= effectiveNthMax &&
-        !nthSkillsChanged);
+        !nthSkillsChanged &&
+        !nthTypesChanged &&
+        !nthQChanged &&
+        !nthEnabledChanged &&
+        !hrEnabledChanged);
     const needsRegeneration = !mthClustersMatch || !nthClustersMatch;
 
     // Backfill snapshot if missing so future visits use snapshot comparison.
@@ -2019,6 +2078,12 @@ export default function AIInterviewConfig() {
       const siBackfill = JSON.parse(buildClusterJson());
       siBackfill.mth_skills_snapshot = mth.skills.map(s => s.name);
       siBackfill.nth_skills_snapshot = nth.enabled ? nth.skills.map(s => s.name) : [];
+      siBackfill.mth_questions_snapshot = timedAllocation.mthQuestions ?? 0;
+      siBackfill.nth_questions_snapshot = nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+      siBackfill.mth_skill_types_snapshot = currentMthTypes;
+      siBackfill.nth_skill_types_snapshot = currentNthTypes;
+      siBackfill.nth_enabled_snapshot = nth.enabled;
+      siBackfill.hr_enabled_snapshot = hrEnabled;
       loadedSiRef.current = { ...loadedSiRef.current, ...siBackfill };
       aiInterviewService.update(existingDraftIdRef.current, {
         special_instructions: JSON.stringify(siBackfill),

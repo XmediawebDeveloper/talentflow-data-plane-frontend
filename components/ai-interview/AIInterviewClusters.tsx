@@ -294,6 +294,7 @@ function DraggableClusterSkill({
   onRemove,
   isReadOnly = false,
   chipClass,
+  isAiDerived = false,
 }: {
   skillName: string;
   clusterId: string;
@@ -303,6 +304,11 @@ function DraggableClusterSkill({
   /** Tailwind classes for the chip's background/border/text — used by
    * ClusterRow to color-code Skill / Command / Certification badges. */
   chipClass?: string;
+  /** True when the skill name didn't come from the recruiter's typed list
+   * (i.e. it was merged/renamed by /refine-clusters or expanded by
+   * /expand-skills). Renders a sparkle marker so recruiters can see
+   * exactly what AI added. */
+  isAiDerived?: boolean;
 }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: DND_TYPES.CLUSTER_SKILL,
@@ -313,11 +319,13 @@ function DraggableClusterSkill({
   return (
     <span
       ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
+      title={isAiDerived ? 'Merged or added by AI from your skills' : undefined}
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-all ${
         isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-40' : 'opacity-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'}`}
+      } ${isDragging ? 'opacity-40' : 'opacity-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'} ${isAiDerived ? 'italic' : ''}`}
     >
       {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 text-gray-300" />}
+      {isAiDerived && <Sparkles className="w-3 h-3 flex-shrink-0 opacity-70" />}
       {skillName}
       {!isReadOnly && (
         <button
@@ -370,11 +378,14 @@ function ClusterRow({
   const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
   const rowRef = useRef<HTMLDivElement>(null);
 
-  // Filter out auto-derived sub-skills so the cluster only renders recruiter-typed
-  // entries, matching the same rule applied at the pool level.
-  const visibleClusterSkills = mainSkillSet && mainSkillSet.size > 0
-    ? cluster.skills.filter(s => mainSkillSet.has(s.toLowerCase().trim()))
-    : cluster.skills;
+  // Show ALL cluster skills — including merged/normalized names from
+  // /refine-clusters (overflow path) and sub-skills from /expand-skills
+  // (capacity-floor path). Previously this filtered to only recruiter-typed
+  // entries, which hid refine's actual work and made it look like refine
+  // never ran. AI-derived names render with a sparkle marker (isAiDerived).
+  const visibleClusterSkills = cluster.skills;
+  const isAiDerivedSkill = (name: string): boolean =>
+    !!mainSkillSet && mainSkillSet.size > 0 && !mainSkillSet.has(name.toLowerCase().trim());
 
   /* Drag handle for reordering clusters */
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
@@ -443,6 +454,19 @@ function ClusterRow({
         <span className="text-sm font-medium text-gray-900 flex-1 truncate">
           {cluster.name || 'Unnamed Cluster'}
         </span>
+        {(() => {
+          const aiCount = visibleClusterSkills.filter(isAiDerivedSkill).length;
+          if (aiCount === 0) return null;
+          return (
+            <span
+              title={`${aiCount} skill${aiCount !== 1 ? 's' : ''} merged or added by AI from your inputs`}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-brand-blue/10 text-brand-blue border border-brand-blue/20 flex-shrink-0"
+            >
+              <Sparkles className="w-2.5 h-2.5" />
+              {aiCount} AI
+            </span>
+          );
+        })()}
         <span className="text-xs text-gray-500">
           {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
         </span>
@@ -506,6 +530,18 @@ function ClusterRow({
                   const t = skillTypeLookup?.get(s.toLowerCase().trim()) ?? 'Skill';
                   groups[t].push(s);
                 }
+                // Order within each type: recruiter-typed main skills first,
+                // AI-derived sub-skills / merged canonicals after. Stable sort
+                // preserves original ordering within each segment.
+                const sortMainFirst = (arr: string[]) =>
+                  [...arr].sort((a, b) => {
+                    const aDerived = isAiDerivedSkill(a) ? 1 : 0;
+                    const bDerived = isAiDerivedSkill(b) ? 1 : 0;
+                    return aDerived - bDerived;
+                  });
+                groups.Skill = sortMainFirst(groups.Skill);
+                groups.Command = sortMainFirst(groups.Command);
+                groups.Certification = sortMainFirst(groups.Certification);
                 const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
                   { type: 'Skill', label: 'Skills', chipClass: 'bg-purple-50 border-purple-200 text-purple-700' },
                   { type: 'Command', label: 'Commands', chipClass: 'bg-blue-50 border-blue-200 text-blue-700' },
@@ -532,6 +568,7 @@ function ClusterRow({
                               onRemove={onRemoveSkill}
                               isReadOnly={isReadOnly}
                               chipClass={g.chipClass}
+                              isAiDerived={isAiDerivedSkill(s)}
                             />
                           ))}
                         </div>
@@ -1032,13 +1069,16 @@ export default function AIInterviewClusters() {
           }
           return survivors;
         };
+        const initialExpandIds: string[] = [];
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
           const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
-          setMthClusters(mthTrimmed.map((c: any) => ({
+          const mthRestored = mthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
-          })));
+          }));
+          setMthClusters(mthRestored);
+          mthRestored.forEach((c: any) => { if (c.id) initialExpandIds.push(c.id); });
         }
         if (si.nth_clusters?.length) {
           const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
@@ -1046,10 +1086,18 @@ export default function AIInterviewClusters() {
           const nthTrimmed = !nthEnabledForTimed
             ? []
             : trimAndRedistribute(si.nth_clusters as any[], nthMax);
-          setNthClusters(nthTrimmed.map((c: any) => ({
+          const nthRestored = nthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
-          })));
+          }));
+          setNthClusters(nthRestored);
+          nthRestored.forEach((c: any) => { if (c.id) initialExpandIds.push(c.id); });
+        }
+        // Open all clusters by default so AI-derived (sparkle) skills are
+        // visible immediately. Otherwise users see only headers and think
+        // refine produced nothing new.
+        if (initialExpandIds.length > 0) {
+          setExpandedIds(new Set(initialExpandIds));
         }
         // Restore skill weights
         if (si.skill_weights) {
@@ -1226,6 +1274,20 @@ export default function AIInterviewClusters() {
         return;
       }
 
+      // [DEBUG] Inputs at start of Generate flow
+      console.log('[CLUSTER-DEBUG] === Generate Clusters START ===', {
+        isFixed,
+        isFlexible,
+        nthEnabled,
+        mthInputSkillsCount: mthSkillNames.length,
+        nthInputSkillsCount: nthSkillNames.length,
+        mthQuestions: timedAllocation.mthQuestions,
+        nthQuestions: timedAllocation.nthQuestions,
+        mthMaxClusters,
+        nthMaxClusters,
+        timedAllocation,
+      });
+
       // Capacity bands per spec: each interview question covers 2-3 related skills.
       //   below   (input < 2Q)   → expand (Phase 0) + refine in preserve-names mode
       //   within  (2Q ≤ input ≤ 3Q) → no refinement
@@ -1277,12 +1339,33 @@ export default function AIInterviewClusters() {
         const nthRecover = !nthShort && !nthParentGroups && nthMainList.length > 0
           && nthQ > 0 && nthMainList.length < nthQ * 2;
 
+        // [DEBUG] Capacity gate evaluation
+        console.log('[CLUSTER-DEBUG] Capacity gate (Fixed mode):', {
+          mthQ,
+          nthQ,
+          mthFloor_2Q: mthQ * 2,
+          mthCeiling_3Q: mthQ * 3,
+          nthFloor_2Q: nthQ * 2,
+          nthCeiling_3Q: nthQ * 3,
+          mthInputCount: mthSkillNames.length,
+          nthInputCount: nthSkillNames.length,
+          mthShort,
+          nthShort,
+          mthOverflow,
+          nthOverflow,
+          mthRecover,
+          nthRecover,
+          willExpand: mthShort || nthShort || mthRecover || nthRecover,
+          willOverflowRefine: !(mthShort || nthShort || mthRecover || nthRecover) && (mthOverflow || nthOverflow),
+        });
+
         // Pick the right input for each bucket: main_skills for recovery,
         // current names for fresh expansion.
         const mthExpandInput = mthRecover ? mthMainList : mthSkillNames;
         const nthExpandInput = nthRecover ? nthMainList : nthSkillNames;
 
         if (mthShort || nthShort || mthRecover || nthRecover) {
+          console.log('[CLUSTER-DEBUG] → Taking EXPAND path (applyRefine=true, allowMerge=false)');
           const [mthExpandRes, nthExpandRes] = await Promise.all([
             (mthShort || mthRecover)
               ? aiInterviewService.expandSkills({
@@ -1330,8 +1413,14 @@ export default function AIInterviewClusters() {
           // Overflow path: refine should MERGE related skills into canonical
           // names so we fit within 3Q. Don't preserve verbatim names.
           allowMerge = true;
+          console.log('[CLUSTER-DEBUG] → Taking OVERFLOW path (applyRefine=true, allowMerge=true)');
+        } else {
+          console.log('[CLUSTER-DEBUG] → Taking IN-BAND path (applyRefine=false — Generate only, NO refine call)');
         }
+      } else {
+        console.log('[CLUSTER-DEBUG] → Not Fixed mode — skipping capacity gate, applyRefine stays false');
       }
+      console.log('[CLUSTER-DEBUG] Final gate result:', { applyRefine, allowMerge });
 
       // Build {skillName: type} maps so the backend can keep [Command]
       // and [Certification] skills in separate clusters. Source of truth
@@ -1346,6 +1435,12 @@ export default function AIInterviewClusters() {
       const mthTypesMap = buildTypesMap(mthSkills);
       const nthTypesMap = nthSkillNames.length > 0 ? buildTypesMap(nthSkills) : undefined;
 
+      console.log('[CLUSTER-DEBUG] Calling /generate-clusters with:', {
+        mthSkillCount: mthSkillNames.length,
+        nthSkillCount: nthSkillNames.length,
+        mthMaxClusters,
+        nthMaxClusters: nthSkillNames.length > 0 ? nthMaxClusters : 0,
+      });
       const result = await aiInterviewService.generateClusters(
         mthSkillNames,
         nthSkillNames,
@@ -1360,6 +1455,14 @@ export default function AIInterviewClusters() {
         mthTypesMap,
         nthTypesMap,
       );
+      console.log('[CLUSTER-DEBUG] /generate-clusters response:', {
+        mthClusterCount: result.mth_clusters?.length ?? 0,
+        nthClusterCount: result.nth_clusters?.length ?? 0,
+        mthSkillsTotal: (result.mth_clusters ?? []).reduce((s, c) => s + (c.skills?.length ?? 0), 0),
+        nthSkillsTotal: (result.nth_clusters ?? []).reduce((s, c) => s + (c.skills?.length ?? 0), 0),
+        mthClusters: (result.mth_clusters ?? []).map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills?.length ?? 0 })),
+        nthClusters: (result.nth_clusters ?? []).map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills?.length ?? 0 })),
+      });
       let newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
         ? (() => {
             const mthRaw = result.mth_clusters;
@@ -1388,7 +1491,18 @@ export default function AIInterviewClusters() {
       // question-limit rules without renaming/merging skills. Triggered
       // after expansion or input overflow. Best-effort: keep raw clusters
       // on failure.
+      console.log('[CLUSTER-DEBUG] Refine gate check:', {
+        applyRefine,
+        newMthClusterCount: newMthClusters.length,
+        newNthClusterCount: newNthClusters.length,
+        willCallRefine: applyRefine && (newMthClusters.length > 0 || newNthClusters.length > 0),
+      });
       if (applyRefine && (newMthClusters.length > 0 || newNthClusters.length > 0)) {
+        console.log('[CLUSTER-DEBUG] → Calling /refine-clusters', {
+          preserveSkillNames: !allowMerge,
+          mthQuestions: timedAllocation.mthQuestions ?? 0,
+          nthQuestions: nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0,
+        });
         try {
           const refineResult = await aiInterviewService.refineClusters({
             mthClusters: newMthClusters,
@@ -1408,6 +1522,14 @@ export default function AIInterviewClusters() {
             mthSkillTypes: mthTypesMap,
             nthSkillTypes: nthTypesMap,
           });
+          console.log('[CLUSTER-DEBUG] /refine-clusters response:', {
+            mthClusterCount: refineResult.mth_clusters?.length ?? 0,
+            nthClusterCount: refineResult.nth_clusters?.length ?? 0,
+            mthSkillsTotal: (refineResult.mth_clusters ?? []).reduce((s, c) => s + (c.skills?.length ?? 0), 0),
+            nthSkillsTotal: (refineResult.nth_clusters ?? []).reduce((s, c) => s + (c.skills?.length ?? 0), 0),
+            mthClusters: (refineResult.mth_clusters ?? []).map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills?.length ?? 0 })),
+            nthClusters: (refineResult.nth_clusters ?? []).map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills?.length ?? 0 })),
+          });
           if (refineResult.mth_clusters?.length) {
             newMthClusters = refineResult.mth_clusters.map(c => ({
               ...c,
@@ -1422,16 +1544,77 @@ export default function AIInterviewClusters() {
               reason: c.reason || '',
             }));
           }
-        } catch {
+        } catch (refineErr) {
           // Non-fatal — keep raw generated clusters
+          console.error('[CLUSTER-DEBUG] /refine-clusters FAILED — keeping raw generate output', refineErr);
         }
+      } else {
+        console.log('[CLUSTER-DEBUG] → Refine SKIPPED');
       }
+
+      // Hard-cap cluster skill totals at 3 × Q (the overflow ceiling).
+      // The /refine-clusters prompt enforces this softly and sometimes
+      // returns more skills than the budget — observed in the field on NTH
+      // (24 returned vs 15 ceiling). We trim the tail of the lowest-priority
+      // clusters so each round honors its question budget.
+      const enforceSkillCeiling = (clusters: Cluster[], questions: number): Cluster[] => {
+        if (clusters.length === 0 || questions <= 0) return clusters;
+        const ceiling = questions * 3;
+        let total = clusters.reduce((sum, c) => sum + c.skills.length, 0);
+        if (total <= ceiling) return clusters;
+        // Drop tail skills from lowest-priority clusters first; keep at least
+        // one skill per cluster so no cluster goes empty.
+        const out = clusters.map(c => ({ ...c, skills: [...c.skills] }));
+        const ordered = [...out].sort((a, b) => a.priority - b.priority);
+        for (const c of ordered) {
+          while (total > ceiling && c.skills.length > 1) {
+            c.skills.pop();
+            total -= 1;
+          }
+          if (total <= ceiling) break;
+        }
+        return out;
+      };
+      const mthQ = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
+      const nthQ = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+      const mthBeforeTrim = newMthClusters.reduce((s, c) => s + c.skills.length, 0);
+      const nthBeforeTrim = newNthClusters.reduce((s, c) => s + c.skills.length, 0);
+      newMthClusters = enforceSkillCeiling(newMthClusters, mthQ);
+      newNthClusters = enforceSkillCeiling(newNthClusters, nthQ);
+      const mthAfterTrim = newMthClusters.reduce((s, c) => s + c.skills.length, 0);
+      const nthAfterTrim = newNthClusters.reduce((s, c) => s + c.skills.length, 0);
+      console.log('[CLUSTER-DEBUG] enforceSkillCeiling:', {
+        mthQ,
+        nthQ,
+        mthCeiling_3Q: mthQ * 3,
+        nthCeiling_3Q: nthQ * 3,
+        mthBeforeTrim,
+        mthAfterTrim,
+        nthBeforeTrim,
+        nthAfterTrim,
+        mthTrimmed: mthBeforeTrim - mthAfterTrim,
+        nthTrimmed: nthBeforeTrim - nthAfterTrim,
+        skippedReason_mth: mthQ <= 0 ? 'mthQ is 0 — function returned early (likely Flexible mode or missing timedAllocation)' : 'ran',
+        skippedReason_nth: nthQ <= 0 ? 'nthQ is 0 — function returned early' : 'ran',
+      });
+      console.log('[CLUSTER-DEBUG] === FINAL clusters being committed to UI ===', {
+        mthClusterCount: newMthClusters.length,
+        nthClusterCount: newNthClusters.length,
+        mthSkillsTotal: mthAfterTrim,
+        nthSkillsTotal: nthAfterTrim,
+        mthClusters: newMthClusters.map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills.length })),
+        nthClusters: newNthClusters.map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills.length })),
+      });
 
       // Commit expanded skills to UI state so the user sees them on the page
       if (mthExpanded) setMthSkills(mthExpanded);
       if (nthExpanded) setNthSkills(nthExpanded);
       setMthClusters(newMthClusters);
       setNthClusters(newNthClusters);
+      // Auto-expand all generated clusters so AI-merged skills (with sparkle
+      // markers) are visible immediately. Without this, users only see the
+      // cluster headers and assume nothing changed.
+      setExpandedIds(new Set([...newMthClusters, ...newNthClusters].map(c => c.id)));
 
       // Auto-save generated clusters immediately so they survive a page refresh.
       // We use the local vars (not state) because setState is async and hasn't updated yet.
@@ -1464,6 +1647,27 @@ export default function AIInterviewClusters() {
             si.nth_parent_groups = nthParentGroups;
             setNthParentGroupsState(nthParentGroups);
           }
+
+          // Snapshot the inputs that drove THIS generation so Configure can
+          // detect any meaningful change on next visit and trigger regen.
+          // Q values + skill types + NTH/HR enabled state are all clustering
+          // inputs — without snapshotting them, Configure's needsRegeneration
+          // gate misses Q changes (toggle NTH off → Q jumps 8→15 in 30-min
+          // mode but existing 24-skill clusters incorrectly pass the check).
+          si.mth_questions_snapshot = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
+          si.nth_questions_snapshot = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+          si.mth_skill_types_snapshot = mthSkills.reduce((acc: Record<string, string>, e) => {
+            if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
+            return acc;
+          }, {});
+          si.nth_skill_types_snapshot = nthEnabled
+            ? nthSkills.reduce((acc: Record<string, string>, e) => {
+                if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
+                return acc;
+              }, {})
+            : {};
+          si.nth_enabled_snapshot = nthEnabled;
+          si.hr_enabled_snapshot = hrEnabled;
 
           // Also update rounds_config topics/weights using the new cluster data
           const PRIORITY_WEIGHT: Record<number, number> = { 3: 60, 2: 40, 1: 20 };
@@ -1646,6 +1850,22 @@ export default function AIInterviewClusters() {
       // and won't falsely trigger cluster regeneration on back navigation
       si.mth_skills_snapshot = mthSkills.map(s => s.name);
       si.nth_skills_snapshot = nthEnabled ? nthSkills.map(s => s.name) : [];
+      // Extended snapshot — Q + types + enabled flags (mirrors handleGenerateClusters
+      // path so regen detection covers more than just skill-name diffs).
+      si.mth_questions_snapshot = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
+      si.nth_questions_snapshot = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+      si.mth_skill_types_snapshot = mthSkills.reduce((acc: Record<string, string>, e) => {
+        if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
+        return acc;
+      }, {});
+      si.nth_skill_types_snapshot = nthEnabled
+        ? nthSkills.reduce((acc: Record<string, string>, e) => {
+            if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
+            return acc;
+          }, {})
+        : {};
+      si.nth_enabled_snapshot = nthEnabled;
+      si.hr_enabled_snapshot = hrEnabled;
       // Flexible mode: always write flexible_finalized from current React state,
       // not from stale config.special_instructions — this ensures handleReopenClusters
       // (which sets isFinalized=false) is not overwritten by a subsequent Back/save.
@@ -1947,17 +2167,34 @@ export default function AIInterviewClusters() {
           )}
 
           {!generating && (() => {
-            // Display-only union of cluster skills (does NOT mutate state, so it
-            // never flows back into rounds_config). When clusters exist with
-            // expanded skills, the Skills panel shows the full distributed set;
-            // otherwise falls back to the recruiter-input list from rounds_config.
-            // Pool always shows the recruiter's Step 2 list verbatim so every
-            // typed Skill / Command / Certification appears here, regardless
-            // of whether the AI placed it in a cluster. Sub-skills from
-            // /expand-skills are filtered out downstream by mainSkillSet in
-            // CategorySection.
-            const mthDisplaySkills = mthSkills;
-            const nthDisplaySkills = nthSkills;
+            // Pool now shows ONLY the refined cluster contents (post-Generate +
+            // Refine + enforceSkillCeiling). Raw input pool of 101+50 skills is
+            // hidden — recruiter sees only the 24+12 skills that survived.
+            // Falls back to recruiter input when no clusters exist yet (initial
+            // load before generation has run).
+            const buildPoolFromClusters = (clusters: Cluster[], allSkills: SkillEntry[]): SkillEntry[] => {
+              const byName = new Map<string, SkillEntry>();
+              for (const e of allSkills) byName.set(e.name.toLowerCase().trim(), e);
+              const seen = new Set<string>();
+              const out: SkillEntry[] = [];
+              for (const c of clusters) {
+                for (const s of c.skills) {
+                  const key = s.toLowerCase().trim();
+                  if (!key || seen.has(key)) continue;
+                  seen.add(key);
+                  // Preserve original type when matched; default to 'Skill' for
+                  // AI-merged canonical names (e.g. 'Relational Databases').
+                  out.push(byName.get(key) ?? { name: s, comment: '', type: 'Skill' });
+                }
+              }
+              return out;
+            };
+            const mthDisplaySkills = mthClusters.length > 0
+              ? buildPoolFromClusters(mthClusters, mthSkills)
+              : mthSkills;
+            const nthDisplaySkills = nthClusters.length > 0
+              ? buildPoolFromClusters(nthClusters, nthSkills)
+              : nthSkills;
             return (
             <>
               {/* Must-To-Have Section */}
@@ -1984,7 +2221,10 @@ export default function AIInterviewClusters() {
                 skills={mthDisplaySkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
-                mainSkillSet={mthMainSkillSet}
+                // Skip mainSkillSet filter when pool is already cluster-derived —
+                // AI-merged canonical names (e.g. 'Relational Databases') aren't
+                // in mthMainSkillSet and would otherwise be filtered out.
+                mainSkillSet={mthClusters.length > 0 ? undefined : mthMainSkillSet}
                 parentGroups={mthParentGroupsState}
               />
 
@@ -2013,7 +2253,7 @@ export default function AIInterviewClusters() {
                   skills={nthDisplaySkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}
-                  mainSkillSet={nthMainSkillSet}
+                  mainSkillSet={nthClusters.length > 0 ? undefined : nthMainSkillSet}
                   parentGroups={nthParentGroupsState}
                 />
               )}

@@ -9,7 +9,7 @@ import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
-import api from '@/lib/services/api';
+import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
@@ -714,6 +714,8 @@ export default function ResumeScoringPage({
               clearInterval(pollIntervalId);
               updateBulkProgress();
               console.log(`[ResumeScoringPage] Celery scoring complete`);
+              // Refresh header quota dropdown — Celery just finished deducting RS units on CP
+              dispatchUnitsConsumed();
 
               if (onRefreshHistory) {
                 console.log('[ResumeScoringPage] Refreshing scored history...');

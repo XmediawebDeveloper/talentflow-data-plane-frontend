@@ -1331,6 +1331,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
+    // Hard guard for Publish: HR section enabled but no questions picked.
+    // The button is already disabled in that state, but the keyboard path
+    // (Enter while focused) and any future programmatic invocation should
+    // still bail out cleanly with a recruiter-visible reason.
+    const hrSectionPre = sections.find(s => s.name === 'HR');
+    if (!saveAsDraft && hrSectionPre?.enabled && selectedHRQuestions.length === 0) {
+      toast.error('Select at least one HR question before publishing');
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -1848,6 +1858,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const hrSection = sections.find(section => section.name === 'HR');
     const hrEnabled = hrSection?.enabled || false;
     const enabledSectionsCount = sections.filter(section => section.enabled).length;
+    // Block Publish when HR is enabled but the recruiter hasn't picked any
+    // questions from the bank. Save as Draft is intentionally allowed in
+    // that state — drafts are explicitly incomplete by design.
+    const hasValidHRSelection = !hrEnabled || selectedHRQuestions.length > 0;
 
     return (
       <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50 relative">
@@ -2248,17 +2262,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
                               q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
                             }`}>{q.type}</span>
-                            <span className="text-gray-400 flex-shrink-0">{q.time} min</span>
+                            {/* HR is "No Timer" — per-question time is not surfaced because
+                                the recruiter can't act on it. The bank still stores `time`
+                                because the AI Interview flow reads it; the assessment
+                                section just doesn't display it. */}
                           </div>
                         );
                       })}
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                    <div className="mt-2 text-xs text-gray-500">
                       <span>Questions are synced with the HR Question Bank</span>
-                      <span className="font-medium text-gray-700">
-                        Total: {hrQuestionBank.filter(q => selectedHRQuestions.includes(q.id)).reduce((sum, q) => sum + q.time, 0)} min
-                      </span>
                     </div>
                   </div>
                   )}
@@ -2309,7 +2323,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         </div>
                       </div>
 
-                      {/* Topics */}
+                      {/* TOPICS UI — temporarily hidden per product decision.
+                          The recruiter no longer adds free-text topics; the LLM
+                          uses the JD content alone to generate questions. The
+                          backend column (`technical_topics` / `coding_topics`)
+                          and the create/update payload still carry topics so
+                          re-enabling this UI is a one-block change. Do NOT
+                          delete — uncomment when topic input returns. */}
+                      {/*
                       <div>
                         <label className="text-xs text-gray-600 mb-2 block">
                           Topics (LLM will generate questions based on these)
@@ -2357,6 +2378,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           )}
                         </div>
                       </div>
+                      */}
                     </div>
                   ))}
                 </div>
@@ -2489,7 +2511,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </button>
                   <button
                     onClick={() => handleGenerateAssessment(false)}
-                    disabled={!isPercentageValid || isGenerating}
+                    disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
+                    title={
+                      !isPercentageValid
+                        ? 'Section percentages must total 100%'
+                        : !hasValidHRSelection
+                          ? 'Select at least one HR question before publishing'
+                          : ''
+                    }
                     className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />

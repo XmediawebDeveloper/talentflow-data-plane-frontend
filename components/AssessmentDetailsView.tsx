@@ -367,15 +367,28 @@ export default function AssessmentDetailsView({
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {onShare && canCreateAssessments && (
-                <button
-                  onClick={onShare}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-brand-blue hover:bg-brand-blue/5 rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm"
-                >
-                  <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  Share
-                </button>
-              )}
+              {onShare && canCreateAssessments && (() => {
+                // Archived assessments aren't candidate-facing — block Share so
+                // a recruiter can't accidentally invite someone to an inactive
+                // assessment. Mirrors the archived-row menu logic in
+                // Assessments.tsx (which hides Copy Link / Duplicate / etc.).
+                const isArchived = assessment.status === 'Archived';
+                return (
+                  <button
+                    onClick={isArchived ? undefined : onShare}
+                    disabled={isArchived}
+                    title={isArchived ? 'Archived assessments cannot be shared' : ''}
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
+                      isArchived
+                        ? 'bg-white/60 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-brand-blue hover:bg-brand-blue/5'
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Share
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -880,7 +893,26 @@ export default function AssessmentDetailsView({
                     </div>
                   ) : (
                     <div className="space-y-2 sm:space-y-3">
-                      {recentActivity.slice(0, 5).map((activity: any) => {
+                      {/* `recentActivity` is an EXPANDED timeline (one entry per
+                          lifecycle event — invited / sent / opened / started /
+                          completed / bounced / expired). The Recent Activity tab
+                          renders all of them, but this Recent Invitations card
+                          must show ONE row per invitation, otherwise a single
+                          candidate whose invite has both `created_at` and `sent_at`
+                          shows up 2–3 times. Dedupe by invitation id, keeping
+                          the most recent event so the status/scores reflect the
+                          latest known state. */}
+                      {(() => {
+                        const seen = new Set<string>();
+                        const uniqueInvitations: any[] = [];
+                        for (const ev of recentActivity) {
+                          const key = ev.id || `${ev.candidate_email || ''}__${ev.created_at || ''}`;
+                          if (seen.has(key)) continue;
+                          seen.add(key);
+                          uniqueInvitations.push(ev);
+                        }
+                        return uniqueInvitations.slice(0, 5);
+                      })().map((activity: any) => {
                         const getStatusBadge = () => {
                           if (activity.status === 'completed') {
                             return { color: 'bg-green-100 text-green-700 ring-1 ring-green-200', label: 'Completed' };
