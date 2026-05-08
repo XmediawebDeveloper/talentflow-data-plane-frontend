@@ -1063,8 +1063,20 @@ export default function MyResumesPage() {
     );
   };
 
+  // Only act on currently visible IDs. Selections in OTHER folders / pages
+  // must be preserved — wiping them would surprise users with multi-folder
+  // selections (e.g. picking 5 in folder A then opening folder B and clicking
+  // Select All used to drop the original 5).
   const handleSelectAll = (selected: boolean) => {
-    setSelectedResumes(selected ? filteredResumes.map(r => r.id) : []);
+    const visibleIds = filteredResumes.map(r => r.id);
+    setSelectedResumes(prev => {
+      if (selected) {
+        const merged = new Set(prev);
+        visibleIds.forEach(id => merged.add(id));
+        return Array.from(merged);
+      }
+      return prev.filter(id => !visibleIds.includes(id));
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -2958,7 +2970,17 @@ export default function MyResumesPage() {
         <UploadModal
           folders={folders.filter(f => f.id !== 'all' && !(f.name === 'Archived Resumes' && !f.parentId))}
           tenant={null}
-          targetFolder={selectedFolder !== 'all' ? selectedFolder || undefined : undefined}
+          // Pre-select whichever folder the user is currently browsing.
+          // Card view uses `cardViewFolder` (drill-down navigation), list view
+          // uses `selectedFolder`. Skip the synthetic 'all'/'uncategorized'
+          // values — they're filters, not real folders the API knows about.
+          targetFolder={(() => {
+            const card = cardViewFolder && cardViewFolder !== 'all' && cardViewFolder !== 'uncategorized'
+              ? cardViewFolder
+              : null;
+            const list = selectedFolder && selectedFolder !== 'all' ? selectedFolder : null;
+            return card || list || undefined;
+          })()}
           onClose={() => setIsUploadModalOpen(false)}
           onUpload={handleUploadResumes}
           onCreateFolder={handleCreateFolder}

@@ -149,28 +149,66 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
   const [shareAssessments, setShareAssessments] = useState<any[]>([]);
   const [isLoadingShareAssessments, setIsLoadingShareAssessments] = useState(false);
+  // Picker shown when the JD has more than one published assessment — user
+  // chooses which one(s) to invite candidates to before the share modal opens.
+  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
+  const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
+  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
+
+  // Open the share flow with a list of assessments already chosen.
+  const openShareWithAssessments = (items: any[]) => {
+    setShareAssessments(items);
+    setShowShareAssessmentModal(true);
+  };
 
   const handleOpenShareAssessment = async () => {
     if (isLoadingShareAssessments) return;
     setIsLoadingShareAssessments(true);
     try {
-      const resp = await assessmentService.list({ jd_id: job.id, page_size: 100 });
-      const items = (resp?.items || []).filter((a: any) => a?.status === 'published' || a?.status === 'PUBLISHED' || true);
+      // Ask the API for ONLY published assessments. Drafts, archived, and
+      // disabled assessments are excluded — candidates can't take those.
+      const resp = await assessmentService.list({ jd_id: job.id, status: 'published', page_size: 100 });
+      const items: any[] = (resp?.items || []).filter((a: any) => {
+        const status = String(a?.status || '').toLowerCase();
+        return status === 'published' || status === 'active';
+      });
+
       if (items.length === 0) {
-        // Fallback to the older invite modal if there are no assessments
-        // configured under this JD — ShareAssessmentModal needs at least
-        // one to mount.
-        setShowInviteToAssessmentModal(true);
+        // No usable assessment for this JD. Tell the user explicitly instead
+        // of silently opening a fallback modal that they can't act on.
+        toast.error(
+          'No published assessment is available for this job. Please publish an existing assessment or create a new one first.',
+          { duration: 6000 }
+        );
         return;
       }
-      setShareAssessments(items);
-      setShowShareAssessmentModal(true);
+
+      if (items.length === 1) {
+        // Exactly one — skip the picker and go straight to share.
+        openShareWithAssessments(items);
+        return;
+      }
+
+      // Multiple — let the user choose which assessment(s) to invite for.
+      setPickerAssessments(items);
+      setPickerSelectedIds([]);
+      setShowAssessmentPicker(true);
     } catch (err) {
       console.error('Failed to load assessments for JD:', err);
-      setShowInviteToAssessmentModal(true);
+      toast.error('Could not load assessments. Please try again.');
     } finally {
       setIsLoadingShareAssessments(false);
     }
+  };
+
+  const handleConfirmAssessmentPick = () => {
+    if (pickerSelectedIds.length === 0) {
+      toast.error('Please select at least one assessment.');
+      return;
+    }
+    const chosen = pickerAssessments.filter(a => pickerSelectedIds.includes(a.id));
+    setShowAssessmentPicker(false);
+    openShareWithAssessments(chosen);
   };
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showSelectSourceModal, setShowSelectSourceModal] = useState(false);
@@ -1706,6 +1744,88 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jobId={job.id}
           onClose={() => setShowInviteToAssessmentModal(false)}
         />
+      )}
+
+      {/* Assessment Picker — shown when this JD has multiple published assessments.
+          User selects which one(s) before the Share modal opens. */}
+      {showAssessmentPicker && pickerAssessments.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Choose an assessment</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  This job has {pickerAssessments.length} published assessments. Select which one(s) to invite candidates to.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAssessmentPicker(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              {pickerAssessments.map(a => {
+                const isPicked = pickerSelectedIds.includes(a.id);
+                const sections = (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0);
+                return (
+                  <label
+                    key={a.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border mb-2 transition-colors ${
+                      isPicked ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isPicked}
+                      onChange={() => {
+                        setPickerSelectedIds(prev =>
+                          prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                        );
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">
+                        {a.title || a.short_id || 'Untitled assessment'}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                        {a.short_id && <span>{a.short_id}</span>}
+                        <span>{a.duration_minutes || 30} min</span>
+                        <span>{sections} section{sections !== 1 ? 's' : ''}</span>
+                        {a.jd_version && <span>JD v{a.jd_version}</span>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3">
+              <span className="text-xs text-gray-600">
+                {pickerSelectedIds.length} of {pickerAssessments.length} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAssessmentPicker(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmAssessmentPick}
+                  disabled={pickerSelectedIds.length === 0}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Share Assessment via Email — same modal the assessment-side page

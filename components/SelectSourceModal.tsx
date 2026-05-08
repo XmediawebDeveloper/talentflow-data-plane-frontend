@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder, Clock, CheckCircle2, XCircle, User, Timer, Minus, RotateCcw, Upload } from 'lucide-react';
+import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder, Clock, CheckCircle2, XCircle, User, Timer, Minus, RotateCcw, Upload } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
@@ -188,26 +188,25 @@ export default function SelectSourceModal({
     );
   };
 
-  // Select/deselect all
+  // Select/deselect all VISIBLE resumes — preserves picks in other folders.
   const handleSelectAll = () => {
-    // Check if viewing Archived folder
     const selectedFolderData = folders.find(f => f.id === selectedFolder);
     const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
-
-    // Don't allow select all in archived folder
     if (isArchivedFolder) {
       toast.error('Archived resumes cannot be scored. Please select an active resume.');
       return;
     }
-
-    // Filter out archived resumes before selecting
-    const selectableResumes = filteredResumes.filter(r => !r.is_archived);
-
-    if (selectedResumes.length === selectableResumes.length && selectableResumes.length > 0) {
-      setSelectedResumes([]);
-    } else {
-      setSelectedResumes(selectableResumes.map(r => r.id));
-    }
+    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
+    if (visibleIds.length === 0) return;
+    const allVisibleSelected = visibleIds.every(id => selectedResumes.includes(id));
+    setSelectedResumes(prev => {
+      if (allVisibleSelected) {
+        return prev.filter(id => !visibleIds.includes(id));
+      }
+      const merged = new Set(prev);
+      visibleIds.forEach(id => merged.add(id));
+      return Array.from(merged);
+    });
   };
 
   // Tab change
@@ -596,6 +595,92 @@ export default function SelectSourceModal({
     return resumes.filter(r => r.folder_id === folderId).length;
   };
 
+  // Recursively collect a folder's own ID and all descendant folder IDs.
+  // Used so ticking a parent folder cascades selection to subfolders.
+  const collectDescendantFolderIds = (folderId: string): string[] => {
+    const result = [folderId];
+    const queue = [folderId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const f of folders) {
+        if (f.parent_id === current) {
+          result.push(f.id);
+          queue.push(f.id);
+        }
+      }
+    }
+    return result;
+  };
+
+  // Selectable (non-archived) resume IDs in a given folder *and all its
+  // descendants*. "all" = every resume the user can score across all folders.
+  const getFolderResumeIds = (folderId: string): string[] => {
+    const archivedFolder = folders.find(f => f.name?.toLowerCase().includes('archived'));
+    const isArchivedTarget = folderId !== 'all'
+      && (folders.find(f => f.id === folderId)?.name?.toLowerCase().includes('archived') ?? false);
+    if (isArchivedTarget) return [];
+
+    let pool: Resume[];
+    if (folderId === 'all') {
+      pool = resumes.filter(r => {
+        if (r.is_archived === true) return false;
+        if (archivedFolder && r.folder_id === archivedFolder.id) return false;
+        return true;
+      });
+    } else {
+      const branchFolderIds = new Set(collectDescendantFolderIds(folderId));
+      const target = folders.find(f => f.id === folderId);
+      const isRoot = target?.name?.toLowerCase() === 'root';
+
+      pool = resumes.filter(r => {
+        if (r.is_archived === true) return false;
+        if (archivedFolder && !branchFolderIds.has(archivedFolder.id)
+            && r.folder_id === archivedFolder.id) return false;
+        if (isRoot && (!r.folder_id || branchFolderIds.has(r.folder_id))) return true;
+        return r.folder_id ? branchFolderIds.has(r.folder_id) : false;
+      });
+    }
+    return pool.map(r => r.id);
+  };
+
+  const getFolderSelectionState = (folderId: string): 'none' | 'partial' | 'all' => {
+    const ids = getFolderResumeIds(folderId);
+    if (ids.length === 0) return 'none';
+    const selectedCount = ids.filter(id => selectedResumes.includes(id)).length;
+    if (selectedCount === 0) return 'none';
+    if (selectedCount === ids.length) return 'all';
+    return 'partial';
+  };
+
+  const getFolderSelectedCount = (folderId: string): number => {
+    const ids = getFolderResumeIds(folderId);
+    return ids.filter(id => selectedResumes.includes(id)).length;
+  };
+
+  // Toggle the entire folder (and its descendants) in/out of selection,
+  // preserving picks in OTHER folders. Auto-expands on select so user sees
+  // the cascade.
+  const toggleFolderSelection = (folderId: string) => {
+    const folderIds = getFolderResumeIds(folderId);
+    if (folderIds.length === 0) return;
+    const state = getFolderSelectionState(folderId);
+    setSelectedResumes(prev => {
+      if (state === 'all') {
+        return prev.filter(id => !folderIds.includes(id));
+      }
+      const next = new Set(prev);
+      folderIds.forEach(id => next.add(id));
+      return Array.from(next);
+    });
+    if (state !== 'all' && folderId !== 'all') {
+      const descendants = collectDescendantFolderIds(folderId);
+      const toExpand = descendants.filter(id => folders.some(f => f.parent_id === id));
+      if (toExpand.length > 0) {
+        setExpandedFolders(prev => Array.from(new Set([...prev, ...toExpand])));
+      }
+    }
+  };
+
   // Render folder tree
   const renderFolderTree = (parentId?: string, level: number = 0) => {
     // Find root folder first
@@ -632,6 +717,9 @@ export default function SelectSourceModal({
       const isSelected = selectedFolder === folder.id;
       const hasChildren = folders.some(f => f.parent_id === folder.id);
       const count = getResumeCount(folder.id);
+      const selectionState = getFolderSelectionState(folder.id);
+      const selectedInFolder = getFolderSelectedCount(folder.id);
+      const isArchivedFolder = folder.name?.toLowerCase().includes('archived');
 
       return (
         <div key={folder.id}>
@@ -644,6 +732,36 @@ export default function SelectSourceModal({
             }`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
+            {/* Folder selection checkbox: adds/removes ALL of this folder's
+                (and descendants') resumes from selection, without changing the
+                active folder filter. */}
+            {!isArchivedFolder ? (
+              <span
+                role="checkbox"
+                aria-checked={selectionState === 'all'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFolderSelection(folder.id);
+                }}
+                className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200"
+                title={
+                  selectionState === 'all'
+                    ? `Deselect all ${count} resumes in this folder`
+                    : `Select all ${count} resumes in this folder`
+                }
+              >
+                {selectionState === 'all' ? (
+                  <CheckSquare className="w-4 h-4 text-blue-600" />
+                ) : selectionState === 'partial' ? (
+                  <MinusSquare className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <Square className="w-4 h-4 text-gray-400" />
+                )}
+              </span>
+            ) : (
+              <div className="w-4 flex-shrink-0" />
+            )}
+
             {hasChildren && (
               <button
                 onClick={(e) => {
@@ -666,6 +784,11 @@ export default function SelectSourceModal({
               <Folder className="w-4 h-4" />
             )}
             <span className="flex-1 text-left truncate">{folder.name}</span>
+            {selectedInFolder > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                {selectedInFolder} sel
+              </span>
+            )}
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               isSelected
                 ? 'bg-blue-200 text-blue-900'
@@ -767,24 +890,58 @@ export default function SelectSourceModal({
                 <h3 className="text-xs font-medium text-gray-500 uppercase mb-3 px-3">Folders</h3>
 
                 {/* All Resumes */}
-                <button
-                  onClick={() => setSelectedFolder('all')}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm mb-2 ${
-                    selectedFolder === 'all'
-                      ? 'bg-blue-100 text-blue-900 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <FolderOpen className="w-4 h-4" />
-                  <span className="flex-1 text-left">All Resumes</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    selectedFolder === 'all'
-                      ? 'bg-blue-200 text-blue-900'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}>
-                    {resumes.length}
-                  </span>
-                </button>
+                {(() => {
+                  const allState = getFolderSelectionState('all');
+                  const allSelectedCount = getFolderSelectedCount('all');
+                  return (
+                    <button
+                      onClick={() => setSelectedFolder('all')}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm mb-2 ${
+                        selectedFolder === 'all'
+                          ? 'bg-blue-100 text-blue-900 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {/* Master checkbox: select/deselect every non-archived resume */}
+                      <span
+                        role="checkbox"
+                        aria-checked={allState === 'all'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFolderSelection('all');
+                        }}
+                        className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200"
+                        title={
+                          allState === 'all'
+                            ? 'Deselect all resumes'
+                            : 'Select all resumes across all folders'
+                        }
+                      >
+                        {allState === 'all' ? (
+                          <CheckSquare className="w-4 h-4 text-blue-600" />
+                        ) : allState === 'partial' ? (
+                          <MinusSquare className="w-4 h-4 text-blue-600" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </span>
+                      <FolderOpen className="w-4 h-4" />
+                      <span className="flex-1 text-left">All Resumes</span>
+                      {allSelectedCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          {allSelectedCount} sel
+                        </span>
+                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        selectedFolder === 'all'
+                          ? 'bg-blue-200 text-blue-900'
+                          : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {resumes.length}
+                      </span>
+                    </button>
+                  );
+                })()}
 
                 {/* Folder Tree */}
                 {folders.length > 0 ? (
@@ -828,25 +985,41 @@ export default function SelectSourceModal({
                       <span className="sm:hidden">Upload</span>
                     </button>
                   )}
-                  <button
-                    onClick={handleSelectAll}
-                    disabled={filteredResumes.length === 0}
-                    className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm font-medium text-gray-700 flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                      <>
-                        <CheckSquare className="w-4 h-4 text-blue-600" />
-                        <span className="hidden sm:inline">Deselect All</span>
-                        <span className="sm:hidden">Deselect</span>
-                      </>
-                    ) : (
-                      <>
-                        <Square className="w-4 h-4" />
-                        <span className="hidden sm:inline">Select All</span>
-                        <span className="sm:hidden">All</span>
-                      </>
-                    )}
-                  </button>
+                  {(() => {
+                    // Track selection state of the *visible* folder only — the
+                    // master count can include resumes from other folders.
+                    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
+                    const visibleSelectedCount = visibleIds.filter(id => selectedResumes.includes(id)).length;
+                    const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
+                    const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+                    return (
+                      <button
+                        onClick={handleSelectAll}
+                        disabled={filteredResumes.length === 0}
+                        className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm font-medium text-gray-700 flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {allVisibleSelected ? (
+                          <>
+                            <CheckSquare className="w-4 h-4 text-blue-600" />
+                            <span className="hidden sm:inline">Deselect All</span>
+                            <span className="sm:hidden">Deselect</span>
+                          </>
+                        ) : someVisibleSelected ? (
+                          <>
+                            <MinusSquare className="w-4 h-4 text-blue-600" />
+                            <span className="hidden sm:inline">Select All</span>
+                            <span className="sm:hidden">All</span>
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-4 h-4" />
+                            <span className="hidden sm:inline">Select All</span>
+                            <span className="sm:hidden">All</span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
                   <div className="text-xs sm:text-sm text-gray-700 bg-blue-50 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-blue-200 font-medium whitespace-nowrap">
                     <span className="text-blue-700">{selectedResumes.length}</span> <span className="hidden sm:inline">selected</span>
                   </div>
@@ -866,16 +1039,26 @@ export default function SelectSourceModal({
                   {/* Desktop Table Header - hidden on mobile */}
                   <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-100 rounded-lg text-xs font-medium text-gray-600 uppercase sticky top-0">
                     <div className="col-span-1 flex items-center justify-center">
+                      {(() => {
+                        const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
+                        const visibleSelectedCount = visibleIds.filter(id => selectedResumes.includes(id)).length;
+                        const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
+                        const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+                        return (
                       <button
                         onClick={handleSelectAll}
                         className="p-1 hover:bg-gray-200 rounded"
                       >
-                        {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
+                        {allVisibleSelected ? (
                           <CheckSquare className="w-4 h-4 text-blue-600" />
+                        ) : someVisibleSelected ? (
+                          <MinusSquare className="w-4 h-4 text-blue-600" />
                         ) : (
                           <Square className="w-4 h-4 text-gray-400" />
                         )}
                       </button>
+                        );
+                      })()}
                     </div>
                     <div className="col-span-3">Candidate</div>
                     <div className="col-span-2">Current Role</div>
@@ -1202,12 +1385,15 @@ export default function SelectSourceModal({
         />
       )}
 
-      {/* Upload Modal */}
+      {/* Upload Modal — pre-selects the currently-viewed folder so the user
+          doesn't have to re-pick. "all" is a UI filter (not a real folder),
+          so we leave it unset and let the modal default to root. */}
       {showUploadModal && (
         <UploadModal
           folders={folders}
           tenant={tenant}
           uploadSection="my-resumes"
+          targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
           onClose={() => setShowUploadModal(false)}
           onUpload={handleUpload}
           onUploadComplete={handleUploadComplete}
