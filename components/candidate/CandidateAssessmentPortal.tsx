@@ -169,6 +169,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [completingStuck, setCompletingStuck] = useState(false);
   const [hrAnswers, setHrAnswers] = useState<Record<string, string>>({});
   const [isSavingHRAnswers, setIsSavingHRAnswers] = useState(false);
+  // Tracks whether the candidate still owes us a coding-language pick.
+  // Set when /prepare responds with status='pending_lang_choice'. Consumed
+  // in handleSystemCheckComplete — only after the system check passes do
+  // we route into the picker step (it now sits AFTER system check, shown
+  // as a modal-style card before HR / assessment start).
+  const [needsLanguagePick, setNeedsLanguagePick] = useState(false);
 
   // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
   // (no local state needed — modal subscribes to EventBus directly)
@@ -460,13 +466,16 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
       // Determine initial step based on status
 
-      // Pre-assessment language picker (step 2 only). When the candidate
-      // returns to a link whose attempt is still awaiting a language pick,
-      // route them straight back to the picker instead of leaving them on
-      // the loading screen.
+      // Pre-assessment language picker. When the candidate returns to a
+      // link whose attempt is still awaiting a language pick, send them
+      // through system check first — the picker now sits AFTER the system
+      // check (it appears as a modal-style card before HR / assessment
+      // start). The pending flag is set so handleSystemCheckComplete knows
+      // to route into the picker once the system check passes.
       if (info.attempt_status === 'pending_lang_choice') {
-        console.log('[DEBUG] Attempt awaiting coding language pick — routing to picker');
-        setStepSafe('choose_coding_language');
+        console.log('[DEBUG] Attempt awaiting coding language pick — routing through system check first');
+        setNeedsLanguagePick(true);
+        setStepSafe('system_check');
         return;
       }
 
@@ -622,24 +631,22 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     console.log('[DEBUG] handleBeginClick - marking flow as active');
 
     try {
-      // Trigger question generation in background BEFORE system check
+      // Trigger question generation in background BEFORE system check.
+      // For multi-language coding rounds the backend defers actual
+      // generation until POST /choose-language fires — we just need to
+      // know whether a pick is owed so we can show the modal AFTER the
+      // candidate completes system check (per product flow change).
       console.log('[PORTAL] Triggering background question generation...');
       const prepareResponse = await candidateService.prepareAssessment(token);
       console.log('[PORTAL] Prepare response:', prepareResponse);
 
-      // ASK FOR LANGUAGE AT STEP 2 (Assessment Details), BEFORE System Check.
-      // The picker is the only place the candidate is asked to pick — only
-      // when the JD has 2+ compilable languages (backend signals via
-      // status='pending_lang_choice'). After they pick, question generation
-      // is triggered server-side and the candidate moves on to System Check.
-      if (prepareResponse?.status === 'pending_lang_choice') {
-        console.log('[PORTAL] Multi-language coding round — routing to language picker (step 2)');
-        setStepSafe('choose_coding_language');
-        return;
+      const pickPending = prepareResponse?.status === 'pending_lang_choice';
+      setNeedsLanguagePick(pickPending);
+      if (pickPending) {
+        console.log('[PORTAL] Multi-language coding round — picker will show AFTER system check');
       }
 
-      console.log('[PORTAL] Question generation started successfully, proceeding to system check');
-      // Proceed to system check while questions generate in parallel
+      console.log('[PORTAL] Proceeding to system check (picker, if any, will appear afterwards)');
       setStepSafe('system_check');
     } catch (err) {
       console.error('[PORTAL] ERROR: Failed to prepare assessment:', err);
@@ -773,6 +780,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     setIsReadyToStart(true);
 
+    // If the assessment has a multi-language coding round, the backend
+    // told us during /prepare that a language pick is owed. We deferred
+    // that pick to AFTER system check — show the picker modal-step now.
+    // After the candidate confirms, handleCodingLanguagePicked routes them
+    // into HR (if any) or straight to the fullscreen-prompt gate.
+    if (needsLanguagePick) {
+      console.log('[PORTAL] System check complete — routing to coding language picker modal');
+      setStepSafe('choose_coding_language');
+      return;
+    }
+
     // Skip HR questions if none selected (hr_topics empty or has_hr_round is false)
     const hasHRQuestions = assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0;
     if (hasHRQuestions && !isHRCompleted(token)) {
@@ -780,6 +798,22 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       setStepSafe('hr_questions');
     } else {
       console.log('[PORTAL] System check complete - continuing to assessment start gate...');
+      await continueToAssessmentStart();
+    }
+  };
+
+  // After the candidate picks a coding language post-system-check, route
+  // them into the same destination handleSystemCheckComplete would have —
+  // HR (if configured) or the fullscreen-prompt gate. The pick is now
+  // recorded server-side, so we clear the pending flag.
+  const handleCodingLanguagePicked = async () => {
+    setNeedsLanguagePick(false);
+    const hasHRQuestions = assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0;
+    if (hasHRQuestions && !isHRCompleted(token)) {
+      console.log('[PORTAL] Language picked — proceeding to HR questions');
+      setStepSafe('hr_questions');
+    } else {
+      console.log('[PORTAL] Language picked — proceeding to assessment start gate');
       await continueToAssessmentStart();
     }
   };
@@ -1294,13 +1328,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           token={token}
           attemptId={assessmentInfo?.attempt_id || ''}
           onPicked={() => {
-            // After the candidate picks, the backend has stored the choice
-            // and triggered background question generation. The picker is
-            // step 2 (Assessment Details) — proceed to System Check (step
-            // 3). When the candidate finishes System Check, the existing
-            // post-fullscreen polling will pick up the now-generating
-            // questions and start the assessment when ready.
-            setStepSafe('system_check');
+            // The picker now sits AFTER system check. On confirm we hand
+            // off to handleCodingLanguagePicked which routes the candidate
+            // into HR (if any) or the fullscreen-prompt gate — same
+            // downstream path system-check completion would have taken.
+            // Question generation kicks off server-side at this point.
+            void handleCodingLanguagePicked();
           }}
         />
       );

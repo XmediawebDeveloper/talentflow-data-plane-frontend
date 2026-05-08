@@ -2099,12 +2099,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                         );
                       })()}
+                      {/* Results disabled for Draft — a draft has no candidates,
+                          so the results page is empty. */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (assessment.status === 'Draft') return;
                           router.push(`/recruitment/assessments/${assessment.id}/results`);
                         }}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-xs"
+                        disabled={assessment.status === 'Draft'}
+                        title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg transition-colors text-xs ${
+                          assessment.status === 'Draft'
+                            ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        }`}
                       >
                         <BarChart className="w-3.5 h-3.5" />
                         Results
@@ -2215,7 +2224,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                           )}
                           <div className="border-t border-gray-100 my-1"></div>
-                          {canUpdateAssessment && assessment.status !== 'Active' && (
+                          {/* Draft assessments hide Activate/Archive — drafts go
+                              through the configure-page Publish button, and an
+                              unpublished row has nothing meaningful to archive. */}
+                          {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
                             <button
                               onClick={() => handleActivateAssessment(assessment.id)}
                               className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
@@ -2224,7 +2236,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               Activate
                             </button>
                           )}
-                          {canUpdateAssessment && assessment.status !== 'Completed' && assessment.status !== 'Archived' && (
+                          {canUpdateAssessment && assessment.status !== 'Completed' && assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
                             <button
                               onClick={() => handleCompleteAssessment(assessment.id)}
                               className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
@@ -2233,7 +2245,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               Completed
                             </button>
                           )}
-                          {assessment.status !== 'Archived' && (
+                          {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
                           <button
                             onClick={() => {
                               if (!canDeleteAssessment) {
@@ -2440,13 +2452,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </button>
                           )}
 
-                          {/* View Results Button */}
+                          {/* View Results Button — disabled for Draft (no candidates yet). */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (assessment.status === 'Draft') return;
                               router.push(`/recruitment/assessments/${assessment.id}/results`);
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-xs whitespace-nowrap"
+                            disabled={assessment.status === 'Draft'}
+                            title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg transition-colors text-xs whitespace-nowrap ${
+                              assessment.status === 'Draft'
+                                ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            }`}
                           >
                             <BarChart className="w-3.5 h-3.5" />
                             Results
@@ -2583,7 +2602,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </button>
                                 )}
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {canUpdateAssessment && assessment.status !== 'Active' && (
+                                {/* Draft assessments hide Activate/Archive — drafts
+                                    go through the configure-page Publish button,
+                                    and an unpublished row has nothing meaningful
+                                    to archive. */}
+                                {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
                                   <button
                                     onClick={() => handleActivateAssessment(assessment.id)}
                                     className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
@@ -2601,7 +2624,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     Completed
                                   </button>
                                 )}
-                                {assessment.status !== 'Archived' && (
+                                {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
                                 <button
                                   onClick={() => {
                                     if (!canDeleteAssessment) {
