@@ -174,7 +174,16 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // in handleSystemCheckComplete — only after the system check passes do
   // we route into the picker step (it now sits AFTER system check, shown
   // as a modal-style card before HR / assessment start).
-  const [needsLanguagePick, setNeedsLanguagePick] = useState(false);
+  //
+  // Backed by BOTH state and ref: the state drives re-renders, the ref
+  // guarantees handleSystemCheckComplete sees the latest value even if
+  // a stale-closure path swallows the state update.
+  const [needsLanguagePick, setNeedsLanguagePickState] = useState(false);
+  const needsLanguagePickRef = useRef(false);
+  const setNeedsLanguagePick = useCallback((v: boolean) => {
+    needsLanguagePickRef.current = v;
+    setNeedsLanguagePickState(v);
+  }, []);
 
   // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
   // (no local state needed — modal subscribes to EventBus directly)
@@ -642,8 +651,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
       const pickPending = prepareResponse?.status === 'pending_lang_choice';
       setNeedsLanguagePick(pickPending);
-      if (pickPending) {
-        console.log('[PORTAL] Multi-language coding round — picker will show AFTER system check');
+      console.log(
+        '[PORTAL] 🌐 PICKER DECISION:',
+        pickPending ? '✅ WILL show after system check' : '❌ will NOT show',
+        '— prepare.status =', prepareResponse?.status,
+      );
+      if (!pickPending) {
+        console.log(
+          '[PORTAL] Picker is being skipped because /prepare returned',
+          prepareResponse?.status,
+          '— picker only fires for status="pending_lang_choice".',
+          'Common causes: assessment has <2 compilable languages, or candidate already picked in a prior session.',
+        );
       }
 
       console.log('[PORTAL] Proceeding to system check (picker, if any, will appear afterwards)');
@@ -785,7 +804,19 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // that pick to AFTER system check — show the picker modal-step now.
     // After the candidate confirms, handleCodingLanguagePicked routes them
     // into HR (if any) or straight to the fullscreen-prompt gate.
-    if (needsLanguagePick) {
+    //
+    // Read from the ref — it's synchronously updated alongside state and
+    // immune to stale-closure issues if React batched the update on the
+    // same tick as setStepSafe('system_check').
+    const pickStillNeeded = needsLanguagePickRef.current;
+    console.log(
+      '[PORTAL] 🌐 SYSTEM CHECK COMPLETE — needsLanguagePick(ref) =',
+      pickStillNeeded,
+      '/ state =',
+      needsLanguagePick,
+      '(if false, picker is skipped and we continue to HR / fullscreen)',
+    );
+    if (pickStillNeeded) {
       console.log('[PORTAL] System check complete — routing to coding language picker modal');
       setStepSafe('choose_coding_language');
       return;

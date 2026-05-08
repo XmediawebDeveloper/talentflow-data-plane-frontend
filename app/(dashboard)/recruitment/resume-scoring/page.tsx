@@ -676,7 +676,10 @@ export default function ResumeScoringRoute() {
         archivedAt: r.archived_at,
       }));
 
-      // Convert API Folder to component Folder type
+      // Convert API Folder to component Folder type AND flatten the tree.
+      // The API returns a nested tree (folder.children), but the resume-selection
+      // sidebar walks a FLAT list keyed by parentId — so subfolders must appear
+      // as siblings in the same array, not buried inside their parent's `children`.
       const convertApiFolder = (f: any): Folder => ({
         id: f.id,
         name: f.name,
@@ -684,7 +687,19 @@ export default function ResumeScoringRoute() {
         parentId: f.parent_id,
         children: f.children?.map(convertApiFolder),
       });
-      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      const flattenFolders = (nodes: any[]): Folder[] => {
+        const out: Folder[] = [];
+        for (const node of nodes) {
+          out.push(convertApiFolder(node));
+          if (Array.isArray(node.children) && node.children.length > 0) {
+            out.push(...flattenFolders(node.children));
+          }
+        }
+        return out;
+      };
+      const convertedFolders: Folder[] = flattenFolders(
+        Array.isArray(folderResponse) ? folderResponse : []
+      );
 
       setJobs(convertedJobs);
       setResumes(convertedResumes);

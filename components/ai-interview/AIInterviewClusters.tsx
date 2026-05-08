@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Shield, Star, Plus, X,
   Sparkles, GripVertical, ChevronDown, ChevronUp, Layers, Clock,
-  Trash2, AlertTriangle, CheckCheck, SlidersHorizontal, Info, Lock,
+  Trash2, AlertTriangle, CheckCheck, Info, Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -142,149 +142,6 @@ function PriorityBadge({ p }: { p: number }) {
     </span>
   );
 }
-
-/* ── Skill Weight Panel ── */
-const WEIGHT_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; activeCls: string }[] = [
-  { value: 'high',   label: 'High', activeCls: 'bg-red-100 text-red-700 border-red-200 ring-1 ring-red-200' },
-  { value: 'medium', label: 'Med',  activeCls: 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20 ring-1 ring-brand-orange/20' },
-  { value: 'low',    label: 'Low',  activeCls: 'bg-green-100 text-green-700 border-green-200 ring-1 ring-green-200' },
-];
-
-function SkillWeightRow({
-  skill,
-  weights,
-  onWeightChange,
-}: {
-  skill: SkillEntry;
-  weights: Record<string, 'high' | 'medium' | 'low'>;
-  onWeightChange: (skill: string, w: 'high' | 'medium' | 'low') => void;
-}) {
-  const current = weights[skill.name] ?? 'medium';
-  return (
-    <div className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-700 truncate flex-1 mr-3">{skill.name}</span>
-      <div className="flex items-center gap-1">
-        {WEIGHT_OPTIONS.map(opt => (
-          <button
-            key={opt.value}
-            onClick={() => onWeightChange(skill.name, opt.value)}
-            className={`px-2 py-0.5 text-[10px] font-medium rounded border transition-all ${
-              current === opt.value
-                ? opt.activeCls
-                : 'bg-white text-gray-400 border-gray-200 hover:border-brand-blue/30 hover:text-brand-blue'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SkillWeightPanel({
-  mthSkills,
-  nthSkills,
-  weights,
-  onWeightChange,
-}: {
-  mthSkills: SkillEntry[];
-  nthSkills: SkillEntry[];
-  weights: Record<string, 'high' | 'medium' | 'low'>;
-  onWeightChange: (skill: string, w: 'high' | 'medium' | 'low') => void;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-brand-blue" />
-        </div>
-        <span className="text-sm font-semibold text-gray-900 tracking-tight">Skill Importance</span>
-        <span className="text-xs text-gray-400 ml-1">— guides AI cluster generation</span>
-      </div>
-      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8">
-        {mthSkills.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-brand-blue uppercase tracking-wide mb-2">Must-To-Have</p>
-            {mthSkills.map(s => <SkillWeightRow key={s.name} skill={s} weights={weights} onWeightChange={onWeightChange} />)}
-          </div>
-        )}
-        {nthSkills.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-brand-cyan uppercase tracking-wide mb-2">Nice-To-Have</p>
-            {nthSkills.map(s => <SkillWeightRow key={s.name} skill={s} weights={weights} onWeightChange={onWeightChange} />)}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ── Time Allocation Summary ── */
-function TimeAllocationSummary({
-  mthClusters,
-  nthClusters,
-  fixedMthMin,
-  fixedNthMin,
-  isFixed,
-}: {
-  mthClusters: Cluster[];
-  nthClusters: Cluster[];
-  fixedMthMin: number;
-  fixedNthMin: number;
-  isFixed: boolean;
-}) {
-  if (!isFixed || (mthClusters.length === 0 && nthClusters.length === 0)) return null;
-
-  const mthMinuteMap = allocateClusterMinutes(mthClusters, fixedMthMin);
-  const nthMinuteMap = allocateClusterMinutes(nthClusters, fixedNthMin);
-  const rows: { name: string; priority: number; mins: number; category: string }[] = [];
-  mthClusters.forEach(c => rows.push({
-    name: c.name || 'Unnamed',
-    priority: c.priority,
-    mins: mthMinuteMap[c.id] ?? 0,
-    category: 'MTH',
-  }));
-  nthClusters.forEach(c => rows.push({
-    name: c.name || 'Unnamed',
-    priority: c.priority,
-    mins: nthMinuteMap[c.id] ?? 0,
-    category: 'NTH',
-  }));
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-          <Clock className="w-3.5 h-3.5 text-brand-blue" />
-        </div>
-        <span className="text-sm font-semibold text-gray-900 tracking-tight">Estimated Time per Cluster</span>
-        <span className="text-xs text-gray-400 ml-1">— based on priority</span>
-      </div>
-      <div className="px-5 py-3 space-y-2">
-        {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-              r.category === 'MTH'
-                ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
-                : 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20'
-            }`}>{r.category}</span>
-            <span className="text-xs text-gray-700 flex-1 truncate">{r.name}</span>
-            <PriorityBadge p={r.priority} />
-            <span className="text-xs font-semibold text-brand-blue w-14 text-right">~{r.mins} min</span>
-            <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-brand-blue to-brand-cyan rounded-full"
-                style={{ width: `${Math.min(100, (r.priority / 3) * 100)}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 
 /* ── Draggable Skill Badge ── */
 function DraggableClusterSkill({
@@ -893,7 +750,6 @@ export default function AIInterviewClusters() {
 
   /* UI state */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showWeightPanel, setShowWeightPanel] = useState(false);
 
   /* Flexible mode state */
   const [isFlexible, setIsFlexible] = useState(false);
@@ -1324,8 +1180,12 @@ export default function AIInterviewClusters() {
         const nthMainList = Array.isArray(savedSi.nth_main_skills) ? (savedSi.nth_main_skills as string[]) : [];
 
         // Floor = 2 × Q (below → expand). Ceiling = 3 × Q (above → merge/refine).
-        const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
-        const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
+        // Trigger expand when recruiter input is below the absolute minimum
+        // (1 skill per question). LLM decides actual count from JD; we no
+        // longer use a hardcoded 2Q floor target — that was forcing a fixed
+        // math relationship the spec rejects.
+        const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ;
+        const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ;
         const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 3;
         const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 3;
 
@@ -1335,18 +1195,16 @@ export default function AIInterviewClusters() {
         // the parent → sub_skills bindings, otherwise the backend can't repair
         // cross-family mis-routing.
         const mthRecover = !mthShort && !mthParentGroups && mthMainList.length > 0
-          && mthQ > 0 && mthMainList.length < mthQ * 2;
+          && mthQ > 0 && mthMainList.length < mthQ;
         const nthRecover = !nthShort && !nthParentGroups && nthMainList.length > 0
-          && nthQ > 0 && nthMainList.length < nthQ * 2;
+          && nthQ > 0 && nthMainList.length < nthQ;
 
         // [DEBUG] Capacity gate evaluation
         console.log('[CLUSTER-DEBUG] Capacity gate (Fixed mode):', {
           mthQ,
           nthQ,
-          mthFloor_2Q: mthQ * 2,
-          mthCeiling_3Q: mthQ * 3,
-          nthFloor_2Q: nthQ * 2,
-          nthCeiling_3Q: nthQ * 3,
+          mthFloor_1Q: mthQ,
+          nthFloor_1Q: nthQ,
           mthInputCount: mthSkillNames.length,
           nthInputCount: nthSkillNames.length,
           mthShort,
@@ -1370,7 +1228,10 @@ export default function AIInterviewClusters() {
             (mthShort || mthRecover)
               ? aiInterviewService.expandSkills({
                   mainSkills: mthExpandInput,
-                  targetSkillCount: mthQ * 2,
+                  // No fixed target — pass Q as the absolute floor (1 skill/Q
+                  // minimum). Backend prompt tells LLM to extract however many
+                  // JD-relevant skills make sense; we never push a numeric goal.
+                  targetSkillCount: mthQ,
                   bucket: 'MTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
@@ -1379,7 +1240,7 @@ export default function AIInterviewClusters() {
             (nthShort || nthRecover)
               ? aiInterviewService.expandSkills({
                   mainSkills: nthExpandInput,
-                  targetSkillCount: nthQ * 2,
+                  targetSkillCount: nthQ,
                   bucket: 'NTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
@@ -1405,22 +1266,19 @@ export default function AIInterviewClusters() {
             }
           }
           applyRefine = true;
-          // Expansion path keeps preserve-names semantics (recruiter expects
-          // their typed skills + AI sub-skills to appear verbatim).
           allowMerge = false;
-        } else if (mthOverflow || nthOverflow) {
-          applyRefine = true;
-          // Overflow path: refine should MERGE related skills into canonical
-          // names so we fit within 3Q. Don't preserve verbatim names.
-          allowMerge = true;
-          console.log('[CLUSTER-DEBUG] → Taking OVERFLOW path (applyRefine=true, allowMerge=true)');
-        } else {
-          console.log('[CLUSTER-DEBUG] → Taking IN-BAND path (applyRefine=false — Generate only, NO refine call)');
         }
-      } else {
-        console.log('[CLUSTER-DEBUG] → Not Fixed mode — skipping capacity gate, applyRefine stays false');
+
+        // Always call refine in Fixed mode so the LLM gets a chance to decide
+        // (Within / Exceeds / Below). If we already triggered expansion above,
+        // keep preserve-names semantics. Otherwise let LLM merge if it judges
+        // Scenario 2 applies.
+        applyRefine = true;
+        if (!(mthShort || nthShort || mthRecover || nthRecover)) {
+          allowMerge = true;
+        }
       }
-      console.log('[CLUSTER-DEBUG] Final gate result:', { applyRefine, allowMerge });
+      console.log('[CLUSTER-DEBUG] Final gate result (LLM-decided scenario):', { applyRefine, allowMerge, isFixed });
 
       // Build {skillName: type} maps so the backend can keep [Command]
       // and [Certification] skills in separate clusters. Source of truth
@@ -1552,50 +1410,20 @@ export default function AIInterviewClusters() {
         console.log('[CLUSTER-DEBUG] → Refine SKIPPED');
       }
 
-      // Hard-cap cluster skill totals at 3 × Q (the overflow ceiling).
-      // The /refine-clusters prompt enforces this softly and sometimes
-      // returns more skills than the budget — observed in the field on NTH
-      // (24 returned vs 15 ceiling). We trim the tail of the lowest-priority
-      // clusters so each round honors its question budget.
-      const enforceSkillCeiling = (clusters: Cluster[], questions: number): Cluster[] => {
-        if (clusters.length === 0 || questions <= 0) return clusters;
-        const ceiling = questions * 3;
-        let total = clusters.reduce((sum, c) => sum + c.skills.length, 0);
-        if (total <= ceiling) return clusters;
-        // Drop tail skills from lowest-priority clusters first; keep at least
-        // one skill per cluster so no cluster goes empty.
-        const out = clusters.map(c => ({ ...c, skills: [...c.skills] }));
-        const ordered = [...out].sort((a, b) => a.priority - b.priority);
-        for (const c of ordered) {
-          while (total > ceiling && c.skills.length > 1) {
-            c.skills.pop();
-            total -= 1;
-          }
-          if (total <= ceiling) break;
-        }
-        return out;
-      };
+      // Frontend skill-ceiling trim REMOVED per spec — LLM decides the count
+      // based on JD complexity; no hard 3Q cap is enforced. The backend's
+      // refine endpoint owns capacity judgment now. Recruiter trusts the AI's
+      // decision to preserve all input skills when JD warrants it.
       const mthQ = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
       const nthQ = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
-      const mthBeforeTrim = newMthClusters.reduce((s, c) => s + c.skills.length, 0);
-      const nthBeforeTrim = newNthClusters.reduce((s, c) => s + c.skills.length, 0);
-      newMthClusters = enforceSkillCeiling(newMthClusters, mthQ);
-      newNthClusters = enforceSkillCeiling(newNthClusters, nthQ);
       const mthAfterTrim = newMthClusters.reduce((s, c) => s + c.skills.length, 0);
       const nthAfterTrim = newNthClusters.reduce((s, c) => s + c.skills.length, 0);
-      console.log('[CLUSTER-DEBUG] enforceSkillCeiling:', {
+      console.log('[CLUSTER-DEBUG] enforceSkillCeiling: REMOVED (LLM-decided)', {
         mthQ,
         nthQ,
-        mthCeiling_3Q: mthQ * 3,
-        nthCeiling_3Q: nthQ * 3,
-        mthBeforeTrim,
-        mthAfterTrim,
-        nthBeforeTrim,
-        nthAfterTrim,
-        mthTrimmed: mthBeforeTrim - mthAfterTrim,
-        nthTrimmed: nthBeforeTrim - nthAfterTrim,
-        skippedReason_mth: mthQ <= 0 ? 'mthQ is 0 — function returned early (likely Flexible mode or missing timedAllocation)' : 'ran',
-        skippedReason_nth: nthQ <= 0 ? 'nthQ is 0 — function returned early' : 'ran',
+        mthFinalSkills: mthAfterTrim,
+        nthFinalSkills: nthAfterTrim,
+        note: 'No frontend trim — backend refine owns capacity judgment',
       });
       console.log('[CLUSTER-DEBUG] === FINAL clusters being committed to UI ===', {
         mthClusterCount: newMthClusters.length,
@@ -1650,21 +1478,30 @@ export default function AIInterviewClusters() {
 
           // Snapshot the inputs that drove THIS generation so Configure can
           // detect any meaningful change on next visit and trigger regen.
-          // Q values + skill types + NTH/HR enabled state are all clustering
-          // inputs — without snapshotting them, Configure's needsRegeneration
-          // gate misses Q changes (toggle NTH off → Q jumps 8→15 in 30-min
-          // mode but existing 24-skill clusters incorrectly pass the check).
+          //
+          // CRITICAL: snapshot stores MAIN skills (recruiter-typed) only —
+          // NOT the post-expansion list. Configure only displays main skills,
+          // so its diff check sees only main skills. If we snapshot the full
+          // expanded list (e.g. 30 skills after expansion), Configure's 2
+          // recruiter-typed skills won't match → false regen on every visit.
           si.mth_questions_snapshot = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
           si.nth_questions_snapshot = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
-          si.mth_skill_types_snapshot = mthSkills.reduce((acc: Record<string, string>, e) => {
-            if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
-            return acc;
-          }, {});
+          // Use preExpansionMth/Nth — captured before any expansion API call.
+          si.mth_skills_snapshot = preExpansionMth;
+          si.nth_skills_snapshot = nthEnabled ? preExpansionNth : [];
+          // Types map only for main skills (lookup comes from current state,
+          // which still has the original type tags from the recruiter UI).
+          const buildTypesForMains = (mainList: string[], allEntries: SkillEntry[]): Record<string, string> => {
+            const byName = new Map(allEntries.map(e => [e.name.toLowerCase().trim(), e.type ?? 'Skill']));
+            const out: Record<string, string> = {};
+            for (const name of mainList) {
+              out[name.toLowerCase().trim()] = byName.get(name.toLowerCase().trim()) ?? 'Skill';
+            }
+            return out;
+          };
+          si.mth_skill_types_snapshot = buildTypesForMains(preExpansionMth, mthSkills);
           si.nth_skill_types_snapshot = nthEnabled
-            ? nthSkills.reduce((acc: Record<string, string>, e) => {
-                if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
-                return acc;
-              }, {})
+            ? buildTypesForMains(preExpansionNth, nthSkills)
             : {};
           si.nth_enabled_snapshot = nthEnabled;
           si.hr_enabled_snapshot = hrEnabled;
@@ -1746,7 +1583,8 @@ export default function AIInterviewClusters() {
           ? 'Clusters generated! Skills expanded to fill the question budget.'
           : 'Clusters generated!'
       );
-    } catch {
+    } catch (err) {
+      console.error('[CLUSTER-DEBUG] handleGenerateClusters FAILED:', err);
       toast.error('Failed to generate clusters');
     } finally {
       setGenerating(false);
@@ -1846,23 +1684,37 @@ export default function AIInterviewClusters() {
       si.mth_clusters = mthClusters;
       si.nth_clusters = nthEnabled ? nthClusters : []; // don't persist NHS clusters when disabled
       si.skill_weights = skillWeights;
-      // Save skill snapshot so Config step knows which skills were present at last save
-      // and won't falsely trigger cluster regeneration on back navigation
-      si.mth_skills_snapshot = mthSkills.map(s => s.name);
-      si.nth_skills_snapshot = nthEnabled ? nthSkills.map(s => s.name) : [];
-      // Extended snapshot — Q + types + enabled flags (mirrors handleGenerateClusters
-      // path so regen detection covers more than just skill-name diffs).
+      // Save skill snapshot so Configure step knows what was present at last
+      // save and won't falsely trigger cluster regeneration on back-nav.
+      //
+      // CRITICAL: snapshot uses MAIN skills only (recruiter-typed) — not the
+      // post-expansion list. Configure displays only main skills, so any
+      // expanded extras would always look "missing" → false regen.
+      const mthMainList: string[] = Array.isArray(si.mth_main_skills) && si.mth_main_skills.length > 0
+        ? si.mth_main_skills
+        : mthSkills.map(s => s.name);
+      const nthMainList: string[] = nthEnabled
+        ? (Array.isArray(si.nth_main_skills) && si.nth_main_skills.length > 0
+            ? si.nth_main_skills
+            : nthSkills.map(s => s.name))
+        : [];
+      si.mth_skills_snapshot = mthMainList;
+      si.nth_skills_snapshot = nthMainList;
+      // Extended snapshot — Q + types + enabled flags. Types map only for
+      // main skills (matches what Configure compares against).
       si.mth_questions_snapshot = isFixed ? (timedAllocation.mthQuestions ?? 0) : 0;
       si.nth_questions_snapshot = isFixed && nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
-      si.mth_skill_types_snapshot = mthSkills.reduce((acc: Record<string, string>, e) => {
-        if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
-        return acc;
-      }, {});
+      const buildTypesForMains = (mainList: string[], allEntries: SkillEntry[]): Record<string, string> => {
+        const byName = new Map(allEntries.map(e => [e.name.toLowerCase().trim(), e.type ?? 'Skill']));
+        const out: Record<string, string> = {};
+        for (const name of mainList) {
+          out[name.toLowerCase().trim()] = byName.get(name.toLowerCase().trim()) ?? 'Skill';
+        }
+        return out;
+      };
+      si.mth_skill_types_snapshot = buildTypesForMains(mthMainList, mthSkills);
       si.nth_skill_types_snapshot = nthEnabled
-        ? nthSkills.reduce((acc: Record<string, string>, e) => {
-            if (e?.name) acc[e.name.toLowerCase().trim()] = e.type ?? 'Skill';
-            return acc;
-          }, {})
+        ? buildTypesForMains(nthMainList, nthSkills)
         : {};
       si.nth_enabled_snapshot = nthEnabled;
       si.hr_enabled_snapshot = hrEnabled;
@@ -2066,17 +1918,8 @@ export default function AIInterviewClusters() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowWeightPanel(v => !v)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                    showWeightPanel
-                      ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  Skill Importance
-                </button>
+                {/* Skill Importance toggle REMOVED — per-skill High/Med/Low
+                    selection is no longer surfaced on the cluster page. */}
                 {/* Hide regenerate when flexible mode clusters are finalized */}
                 {!(isFlexible && isFinalized) && (
                   <button
@@ -2099,16 +1942,6 @@ export default function AIInterviewClusters() {
           {/* ── Two-column layout: main content + config summary sidebar ── */}
           <div className="flex gap-6 items-start">
           <div className="flex-1 min-w-0 space-y-6 pb-24">
-
-          {/* Skill Importance Panel */}
-          {showWeightPanel && (
-            <SkillWeightPanel
-              mthSkills={mthSkills}
-              nthSkills={nthSkills}
-              weights={skillWeights}
-              onWeightChange={setSkillWeight}
-            />
-          )}
 
           {/* Flexible mode: finalized lock banner */}
           {isFlexible && isFinalized && (
@@ -2261,16 +2094,8 @@ export default function AIInterviewClusters() {
             );
           })()}
 
-          {/* Time Allocation Summary */}
-          {!generating && (
-            <TimeAllocationSummary
-              mthClusters={mthClusters}
-              nthClusters={activeNthClusters}
-              fixedMthMin={fixedMthMin}
-              fixedNthMin={fixedNthMin}
-              isFixed={isFixed}
-            />
-          )}
+          {/* Time Allocation Summary REMOVED per spec — recruiters didn't
+              want a per-cluster minute breakdown shown on the cluster page. */}
           </div>{/* closes flex-1 min-w-0 main content */}
 
           {/* ── Configuration Summary sidebar ── */}

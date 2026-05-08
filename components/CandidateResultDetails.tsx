@@ -484,26 +484,36 @@ export default function CandidateResultDetails({
               )}
               <button
                 onClick={async () => {
+                  // Single-candidate export — emit a PDF report for this
+                  // attempt only. The previous Excel export pulled the whole
+                  // assessment's roster which wasn't useful from a single
+                  // candidate's detail page; recruiters wanted a printable
+                  // summary they could share. exportPDF accepts the
+                  // attempt_id and the backend scopes the report to that
+                  // candidate.
                   try {
-                    const blob = await assessmentService.exportResults(assessmentId, 'excel', true);
+                    const blob = await assessmentService.exportPDF(assessmentId, candidateId);
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results_detailed.xlsx`;
+                    const candidateSlug = (candidateData?.name || candidateDisplayId || candidateId)
+                      .toString()
+                      .replace(/\s+/g, '_');
+                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_${candidateSlug}_result.pdf`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
                   } catch (error) {
-                    console.error('Failed to export results:', error);
-                    toast.error('Failed to export results. Please try again.');
+                    console.error('Failed to export result PDF:', error);
+                    toast.error('Failed to export result PDF. Please try again.');
                   }
                 }}
                 className="px-3 sm:px-6 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium"
               >
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Export Results</span>
-                <span className="sm:hidden">Export</span>
+                <span className="hidden sm:inline">Export Result (PDF)</span>
+                <span className="sm:hidden">PDF</span>
               </button>
             </div>
           </div>
@@ -1325,6 +1335,16 @@ export default function CandidateResultDetails({
                             <div key={qIdx} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden hover:border-brand-blue/20 hover:ring-brand-blue/5 transition-colors shadow-sm shadow-brand-blue/5">
                               {(() => {
                                 const isTextQuestion = !['coding', 'mcq', 'single_choice', 'multiple_choice'].includes(q.question_type);
+                                // For MCQs the recruiter only needs to see what
+                                // the candidate picked vs the correct option —
+                                // the inline OPTIONS list already conveys that.
+                                // The AI Feedback / Strengths / What-to-Improve
+                                // blocks are noise for fixed-answer questions
+                                // and are kept ONLY for text and coding answers
+                                // where the LLM evaluation actually adds value.
+                                const isMCQQuestion = ['mcq', 'single_choice', 'multiple_choice'].includes(
+                                  String(q.question_type || '').toLowerCase()
+                                );
                                 return (
                                   <>
                               {/* Question Header */}
@@ -1798,8 +1818,9 @@ export default function CandidateResultDetails({
                                   </div>
                                 )}
 
-                                {/* AI Feedback */}
-                                {!isHRRound && (q.feedback || q.question_type === 'coding') && (
+                                {/* AI Feedback — hidden for MCQ (the OPTIONS
+                                    list already shows correct vs picked). */}
+                                {!isHRRound && !isMCQQuestion && (q.feedback || q.question_type === 'coding') && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
                                       <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
@@ -1817,8 +1838,8 @@ export default function CandidateResultDetails({
                                   </div>
                                 )}
 
-                                {/* Strengths */}
-                                {!isHRRound && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
+                                {/* Strengths — hidden for MCQ. */}
+                                {!isHRRound && !isMCQQuestion && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-100">
                                     <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
                                       <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
@@ -1834,8 +1855,8 @@ export default function CandidateResultDetails({
                                   </div>
                                 )}
 
-                                {/* Areas for Improvement */}
-                                {!isHRRound && ((q.areas_for_improvement && q.areas_for_improvement.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.improvements && q.candidate_test_results.improvements.length > 0)) && (
+                                {/* Areas for Improvement — hidden for MCQ. */}
+                                {!isHRRound && !isMCQQuestion && ((q.areas_for_improvement && q.areas_for_improvement.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.improvements && q.candidate_test_results.improvements.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-100">
                                     <div className="bg-brand-orange/5 ring-1 ring-brand-orange/15 border border-brand-orange/20 rounded-lg p-4">
                                       <div className="text-sm font-medium text-brand-orange-deep mb-2">What to Improve</div>

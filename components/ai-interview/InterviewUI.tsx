@@ -1074,8 +1074,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // events (interrupted without a follow-up question_timer_started, etc.).
   useEffect(() => {
     if (!isConnected || isClosing) return;
+    let tickCounter = 0;
     const id = setInterval(() => {
       const cur = questionTimerSecondsRef.current;
+      tickCounter += 1;
+      // Heartbeat log every 5s while a timer is active — lets you confirm
+      // the timer is alive in DevTools, and spot exactly when it stops
+      // ticking if it gets stuck.
+      if (tickCounter % 5 === 0 && cur !== null) {
+        console.log('[INTERVIEW-DEBUG] timer heartbeat', {
+          questionTimerSeconds: cur,
+          intervalAlive: questionTimerIntervalRef.current !== null,
+          isAiSpeaking: isAiSpeakingRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+          isClarification: isClarificationRef.current,
+          isFullscreenExited: isFullscreenExitedRef.current,
+          questionTimerExpired: questionTimerExpiredRef.current,
+          questionTimerPending: questionTimerPendingRef.current,
+          speechDetected: speechDetectedRef.current,
+        });
+      }
       if (
         cur !== null
         && cur > 0
@@ -1086,7 +1105,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         && !isFullscreenExitedRef.current
         && questionTimerPendingRef.current === null
       ) {
-        console.warn(`[Timer watchdog] Per-question interval was null with ${cur}s remaining — restarting`);
+        console.warn('[INTERVIEW-DEBUG] STUCK TIMER detected — interval was null, restarting', {
+          remaining: cur,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
         ensureQuestionTimerRunning(cur);
       }
     }, 1000);
@@ -1121,6 +1144,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     questionTimerReceivedAtRef.current = null;
     ensureQuestionTimerRunning(pendingDur);
   }, [isAiSpeaking, ensureQuestionTimerRunning, questionTimerPendingTick]);
+
+  // ── Pending Timer Watchdog ──────────────────────────────────────────────
+  // Recovery for the "Linda finished but timer stuck" race. Three known
+  // causes: (1) avatar 3D load timeout breaks the playback-ended callback,
+  // (2) WebSocket drops the audio_end event so audioEndReceivedRef stays
+  // false, (3) playback-ended fires before audio_end arrives and the guard
+  // rejects it. In all three cases isAiSpeaking stays TRUE indefinitely and
+  // the pending timer never starts.
+  //
+  // 20s threshold: normal Linda TTS playback completes in 5-15s. If we still
+  // have a pending dur AND isAiSpeaking is still true after 20s, the
+  // playback callback chain is broken — force-flip and start the timer so
+  // the candidate isn't frozen.
+  useEffect(() => {
+    if (questionTimerPendingRef.current === null) return;
+    const stuckGuard = setTimeout(() => {
+      if (questionTimerPendingRef.current === null) return;
+      if (!isAiSpeakingRef.current) return; // resolved naturally
+      console.warn('[INTERVIEW-DEBUG] Pending timer STUCK — forcing recovery', {
+        pendingDur: questionTimerPendingRef.current,
+        audioEndReceived: audioEndReceivedRef.current,
+      });
+      isAiSpeakingRef.current = false;
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      const dur = questionTimerPendingRef.current;
+      questionTimerPendingRef.current = null;
+      questionTimerReceivedAtRef.current = null;
+      if (dur !== null) {
+        ensureQuestionTimerRunning(dur);
+      }
+      setStatus("Your turn — speak now...");
+      // Re-open mic if it was disabled while Linda was "speaking" but never
+      // re-enabled (since the normal handleAllAudioFinished path didn't run).
+      if (mediaStreamRef.current && !isMutedRef.current) {
+        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
+      if (wsRef.current?.readyState === WebSocket.OPEN
+          && !isMutedRef.current
+          && !isProcessingRef.current
+          && !isRecordingRef.current
+          && !isFaceBlockedRef.current) {
+        startRecordingInternal();
+      }
+    }, 20000);
+    return () => clearTimeout(stuckGuard);
+  }, [questionTimerPendingTick, avatarState, ensureQuestionTimerRunning]);
 
   // When the per-question timer expires, the client sends skip_question to the
   // backend (see the timer-expiry block above). The backend's handle_skip_question
@@ -1342,26 +1412,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // sees their complete speech in the live transcript bubble.
   const webSpeechFinalizedRef = useRef("");
 
-  const sendLiveTranscriptBatch = useCallback((text: string, trigger: string) => {
-    const payload = (text || "").trim();
-    if (!payload) return;
-    if (!(isFlexibleMode || isNewFlexibleMode)) return;
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-
-    liveBatchIndexRef.current += 1;
-    wsRef.current.send(JSON.stringify({
-      type: "live_transcript_batch",
-      text: payload,
-      trigger,
-      batch_index: liveBatchIndexRef.current,
-    }));
-  }, [isFlexibleMode, isNewFlexibleMode]);
+  const sendLiveTranscriptBatch = useCallback((_text: string, _trigger: string) => {
+    // No-op: Browser Web Speech API removed; Whisper provides the final
+    // transcript via the audio pipeline. live_transcript_batch is no longer
+    // sent — backend now treats Whisper's output as the canonical source.
+    return;
+  }, []);
 
   const startWebSpeechRecognition = useCallback(() => {
+    // Browser Web Speech API DISABLED per spec — Whisper (server-side ASR)
+    // is now the SOLE source of truth for transcripts. The browser STT was
+    // dropping words via echo guard, hardcoded en-US, and producing a
+    // different transcript than the one used for evaluation.
+    //
+    // Live bubble now shows "Listening…" while the candidate speaks; the
+    // actual transcript appears after MediaRecorder stops and Whisper
+    // returns the final transcription via the WS pipeline.
+    webSpeechFinalizedRef.current = "";
+    liveBatchSentCharsRef.current = 0;
+    liveBatchIndexRef.current = 0;
+    liveBatchStopRequestedRef.current = false;
+    setCurrentTranscript("");
+    return;
+    // ── Disabled code below kept as no-op. ──
+    // eslint-disable-next-line no-unreachable
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      // Firefox doesn't support Web Speech API — show a one-time note in the transcript area
       setCurrentTranscript("(live transcript unavailable in this browser — your audio is still being recorded)");
       setTimeout(() => setCurrentTranscript(""), 4000);
       return;
@@ -1369,14 +1446,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
     }
-    // Clear previous turn's transcript now — the new recording session starts fresh.
-    // This is the ONLY correct place to clear: after the previous message was added to
-    // the chat (or kept visible during processing gap) and a new question turn begins.
-    webSpeechFinalizedRef.current = "";
-    liveBatchSentCharsRef.current = 0;
-    liveBatchIndexRef.current = 0;
-    liveBatchStopRequestedRef.current = false;
-    setCurrentTranscript("");
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -1773,6 +1842,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "transcript":
+        console.log('[INTERVIEW-DEBUG] transcript received from Whisper', {
+          is_final: data.is_final,
+          text_length: data.text?.length ?? 0,
+          text_preview: (data.text ?? '').slice(0, 80),
+          is_enhanced: data.is_enhanced,
+        });
         console.log(`[WS ${timestamp}] Transcript: is_final=${data.is_final}, text_length=${data.text?.length}, is_enhanced=${data.is_enhanced}`);
         if (data.is_final) {
           const transcriptText = (data.text ?? "").trim();
@@ -2265,6 +2340,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setStatus("Interview time reached — ending now...");
         break;
       case "question_timer_started": {
+        console.log('[INTERVIEW-DEBUG] question_timer_started received', {
+          seconds: data.seconds,
+          total_seconds: data.total_seconds,
+          question_number: data.question_number,
+          is_follow_up: data.is_follow_up,
+          is_clarification: data.is_clarification,
+          isAiSpeaking: isAiSpeakingRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
         console.log(`[WS ${timestamp}] Question timer started:`, data);
         backendExpiredRef.current = false; // new question — reset backend-expired guard
         // Clear the Next-Q in-flight guard: the backend has processed the prior
@@ -2324,6 +2409,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setIsFollowUp(true);
           if (data.is_clarification === true) {
             // Point 4: pause per-question timer during clarification
+            console.log('[INTERVIEW-DEBUG] TIMER PAUSED — clarification mode entered', {
+              question_number: data.question_number,
+              currentSeconds: questionTimerSecondsRef.current,
+            });
             setIsClarification(true);
             isClarificationRef.current = true;
             setStatus("Clarifying the question — timer paused");
@@ -2433,6 +2522,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       }
       case "question_timer_stopped":
+        console.log('[INTERVIEW-DEBUG] TIMER STOPPED by backend', {
+          currentSeconds: questionTimerSecondsRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
         // Candidate ended their turn — pause the visible per-question timer,
         // do NOT zero out questionTimerSeconds. Reason: the backend fires
         // question_timer_stopped on EVERY end_turn, including ones that get
@@ -2458,6 +2552,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // still pick it up.
         break;
       case "question_timer_expired":
+        console.log('[INTERVIEW-DEBUG] question_timer_expired received', {
+          isRecording: isRecordingRef.current,
+          speechDetected: speechDetectedRef.current,
+          isProcessing: isProcessingRef.current,
+          isAiSpeaking: isAiSpeakingRef.current,
+          questionTimerSeconds: questionTimerSecondsRef.current,
+        });
         backendExpiredRef.current = true; // backend already handling skip — don't send client skip_question
         setQuestionTimerExpired(true);
         questionTimerExpiredRef.current = true;
@@ -2816,6 +2917,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Recording
   const stopRecording = useCallback(() => {
     const timestamp = new Date().toISOString();
+    console.log('[INTERVIEW-DEBUG] stopRecording called', {
+      isRecording: isRecordingRef.current,
+      speechDetected: speechDetectedRef.current,
+      questionTimerSeconds: questionTimerSecondsRef.current,
+      questionTimerExpired: questionTimerExpiredRef.current,
+    });
     console.log(`[Recording ${timestamp}] stopRecording called: isRecording=${isRecordingRef.current}, speechDetected=${speechDetectedRef.current}`);
     if (!isRecordingRef.current) return;
 
@@ -2989,6 +3096,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // which has independent mic access, so we must stop recording entirely on mute.
   const toggleMute = useCallback(() => {
     const next = !isMutedRef.current;
+    console.log('[INTERVIEW-DEBUG] MIC toggle pressed by USER', { from: isMutedRef.current, to: next });
     isMutedRef.current = next;
     setIsMuted(next);
     if (next) {
@@ -3038,6 +3146,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       return;
     }
     if (isMutedRef.current) {
+      console.log('[INTERVIEW-DEBUG] startRecording BLOCKED — mic is muted', {
+        questionTimerSeconds: questionTimerSecondsRef.current,
+        mediaBlocked: mediaBlockedRef.current,
+        isFullscreenExited: isFullscreenExitedRef.current,
+      });
       console.log(`[Recording ${timestamp}] startRecordingInternal blocked by mute`);
       return;
     }
@@ -3050,6 +3163,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // attempting to re-register 'pcm-processor' on the same AudioContext,
     // which throws NotSupportedError (processors can only be registered once).
     isRecordingRef.current = true;
+    console.log('[INTERVIEW-DEBUG] Recording STARTED', {
+      questionTimerSeconds: questionTimerSecondsRef.current,
+      questionNumber: questionNumberRef.current,
+      isProcessing: isProcessingRef.current,
+      isAiSpeaking: isAiSpeakingRef.current,
+    });
     console.log(`[Recording ${timestamp}] Starting recording...`);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -3164,6 +3283,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // continues so a real answer that starts during the guard window
             // is still picked up the moment the guard lifts.
             if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES && !suppressNewSpeechDetection) {
+              if (!speechDetectedRef.current) {
+                console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
+                  questionTimerSeconds: questionTimerSecondsRef.current,
+                  questionNumber: questionNumberRef.current,
+                });
+              }
               speechDetectedRef.current = true;
               speechDetectedAtRef.current = Date.now();
               postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES; // start confirmed
@@ -3173,6 +3298,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 speechStartSentRef.current = true;
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
                   wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+                  console.log('[INTERVIEW-DEBUG] sent speech_started to backend');
                 }
               }
               clearNoResponseTimer();
@@ -3785,6 +3911,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // UI behind a blocking overlay.
   const armMediaBlock = useCallback((result: NonNullable<typeof mediaBlocked>, extraDetails?: Record<string, any>) => {
     if (mediaBlockedRef.current) return; // already armed — idempotent
+    console.log('[INTERVIEW-DEBUG] MIC FORCE-MUTED by armMediaBlock', { kind: result.kind, details: extraDetails });
     mediaBlockedRef.current = result;
     setMediaBlocked(result);
     setStatus("Camera / microphone access is required to continue.");
@@ -3891,6 +4018,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         preExitMuteState = isMutedRef.current;
       }
       if (!isMutedRef.current) {
+        console.log('[INTERVIEW-DEBUG] MIC FORCE-MUTED by fullscreen-exit grace expiry');
         isMutedRef.current = true;
         setIsMuted(true);
       }
@@ -4618,8 +4746,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               </div>
             ))}
 
-            {/* Live speech transcript — teal (matches candidate bubble) */}
-            {currentTranscript && (
+            {/* Live speech indicator — teal (matches candidate bubble).
+                Browser Web Speech API removed; Whisper transcribes after stop.
+                Show a "Listening…" placeholder while recording so the
+                candidate has visual confirmation they're being heard. */}
+            {(currentTranscript || isRecording) && (
               <div className="flex gap-2 flex-row-reverse">
                 <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                   <span className="text-white text-[8px] font-bold">You</span>
@@ -4629,9 +4760,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     <div className="flex items-center gap-1 mb-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-emerald-600 text-[10px] font-medium">speaking…</span>
+                      <span className="text-emerald-600 text-[10px] font-medium">
+                        {currentTranscript ? 'speaking…' : 'listening…'}
+                      </span>
                     </div>
-                    <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
+                    {currentTranscript ? (
+                      <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
+                    ) : (
+                      <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                        Your transcript will appear here when you finish speaking.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

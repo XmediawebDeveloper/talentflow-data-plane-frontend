@@ -1,4 +1,4 @@
-import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase, AlertTriangle, Zap, Upload, Loader2 } from 'lucide-react';
+import { X, FolderOpen, Database, Search, CheckSquare, Square, MinusSquare, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase, AlertTriangle, Zap, Upload, Loader2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { Resume, Folder as FolderType } from '@/lib/types/types';
 import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
@@ -234,64 +234,86 @@ export default function ResumeSelectionModal({
     setShowUploadModal(true);
   };
 
-  // Bridge UploadModal's File[] callback to our existing single-file upload pipeline.
-  // Reuses handleFileUpload() for validation, duplicate detection, and parent notification.
+  // Build a Resume object from the API's upload response.
+  const apiResumeToLocal = (u: any, fallbackName: string, folderId?: string): Resume => ({
+    id: u.id,
+    name: u.candidate_name || fallbackName.replace(/\.[^/.]+$/, ''),
+    email: u.email || u.candidate_email || 'No email',
+    phone: u.phone || 'No phone',
+    title: u.current_title || 'N/A',
+    experience: u.experience_years ? `${u.experience_years} years` : 'N/A',
+    education: u.education?.[0]?.degree || 'N/A',
+    location: u.location || 'N/A',
+    skills: u.skills || [],
+    source: 'Manual' as const,
+    folderId: folderId || '',
+    uploadDate: u.created_at || new Date().toISOString(),
+    attachments: 1,
+    uploadedBy: 'Current User',
+    version: u.version || 1,
+    versionCount: u.version_count || 1,
+    fileName: u.file_name,
+  });
+
+  // Handler passed to UploadModal. Owns the upload pipeline for both single
+  // and bulk uploads, then auto-selects every successfully uploaded resume so
+  // the user can immediately proceed to score without re-checking boxes.
   const handleModalUpload = async (files: File[], folderId?: string) => {
     if (!files || files.length === 0) {
       return { success: false, error: 'No file provided' };
     }
+    setUploadError(null);
     try {
-      // Bulk path: upload all in parallel via resumeService directly so a single
-      // failure doesn't abort the rest. Each successful upload notifies parent.
-      if (files.length > 1) {
-        const results = await Promise.allSettled(
-          files.map(f => resumeService.upload(f, folderId))
-        );
-        const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
-        results.forEach((r, idx) => {
-          if (r.status === 'fulfilled' && onResumeUploaded) {
-            const u = r.value;
-            const newResume: Resume = {
-              id: u.id,
-              name: u.candidate_name || files[idx].name.replace(/\.[^/.]+$/, ''),
-              email: u.email || u.candidate_email || 'No email',
-              phone: u.phone || 'No phone',
-              title: u.current_title || 'N/A',
-              experience: u.experience_years ? `${u.experience_years} years` : 'N/A',
-              education: u.education?.[0]?.degree || 'N/A',
-              location: u.location || 'N/A',
-              skills: u.skills || [],
-              source: 'Manual' as const,
-              folderId: folderId || '',
-              uploadDate: u.created_at || new Date().toISOString(),
-              attachments: 1,
-              uploadedBy: 'Current User',
-              version: u.version || 1,
-              versionCount: u.version_count || 1,
-              fileName: u.file_name,
-            };
-            setLocalResumes(prev => [newResume, ...prev]);
-            onResumeUploaded(newResume);
-          }
+      const results = await Promise.allSettled(
+        files.map(f => resumeService.upload(f, folderId))
+      );
+
+      const newIds: string[] = [];
+      const newResumes: Resume[] = [];
+      let firstSuccess: any = null;
+      let firstError: string | null = null;
+
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          const u: any = r.value;
+          const newResume = apiResumeToLocal(u, files[idx].name, folderId);
+          newResumes.push(newResume);
+          newIds.push(u.id);
+          if (!firstSuccess) firstSuccess = u;
+          if (onResumeUploaded) onResumeUploaded(newResume);
+        } else if (!firstError) {
+          firstError = r.reason?.message || r.reason?.toString() || 'Upload failed';
+        }
+      });
+
+      if (newResumes.length > 0) {
+        setLocalResumes(prev => [...newResumes, ...prev]);
+        // Auto-select uploaded resumes so the user can score them immediately.
+        // Dedup against existing selections (paranoia — IDs from the API are unique).
+        setSelectedResumes(prev => {
+          const merged = new Set(prev);
+          newIds.forEach(id => merged.add(id));
+          return Array.from(merged);
         });
-        return {
-          success: true,
-          resumeId: firstSuccess?.value?.id,
-          candidateName: firstSuccess?.value?.candidate_name,
-        };
+        toast.success(
+          newResumes.length === 1
+            ? `Resume uploaded and selected: ${newResumes[0].name}`
+            : `${newResumes.length} resumes uploaded and selected`
+        );
       }
 
-      // Single-file path: delegate to handleFileUpload's logic via a synthetic event
-      // so duplicate detection + parent notification stays in one place.
-      const synthetic = {
-        target: { files: { 0: files[0], length: 1, item: (i: number) => files[i] } },
-      } as unknown as React.ChangeEvent<HTMLInputElement>;
-      await handleFileUpload(synthetic);
-      // handleFileUpload already toasts and calls onResumeUploaded; signal success
-      // to UploadModal so it shows its own success state.
-      return { success: !uploadError, error: uploadError || undefined };
+      if (firstSuccess) {
+        return {
+          success: true,
+          resumeId: firstSuccess.id,
+          candidateName: firstSuccess.candidate_name,
+        };
+      }
+      return { success: false, error: firstError || 'Upload failed' };
     } catch (error: any) {
-      return { success: false, error: error?.message || 'Upload failed' };
+      const msg = error?.message || 'Upload failed';
+      setUploadError(msg);
+      return { success: false, error: msg };
     }
   };
 
@@ -378,14 +400,26 @@ export default function ResumeSelectionModal({
       return;
     }
 
-    // Filter out archived resumes before selecting
-    const selectableResumes = filteredResumes.filter(r => !r.isArchived);
+    // Only act on currently visible (filtered) selectable IDs. Selections in
+    // OTHER folders must be preserved — wiping them would surprise users who
+    // have multi-folder selections.
+    const visibleIds = filteredResumes
+      .filter(r => !r.isArchived)
+      .map(r => r.id);
+    if (visibleIds.length === 0) return;
 
-    if (selectedResumes.length === selectableResumes.length) {
-      setSelectedResumes([]);
-    } else {
-      setSelectedResumes(selectableResumes.map(r => r.id));
-    }
+    const allVisibleSelected = visibleIds.every(id => selectedResumes.includes(id));
+
+    setSelectedResumes(prev => {
+      if (allVisibleSelected) {
+        // Toggle off: remove only the visible IDs, leave cross-folder picks alone.
+        return prev.filter(id => !visibleIds.includes(id));
+      }
+      // Toggle on: add visible IDs to existing selection (dedup).
+      const merged = new Set(prev);
+      visibleIds.forEach(id => merged.add(id));
+      return Array.from(merged);
+    });
   };
 
   const handleTabChange = (tab: 'my-resumes' | 'database') => {
@@ -530,12 +564,30 @@ export default function ResumeSelectionModal({
     return allMyResumes.filter(r => r.folderId === folderId).length;
   };
 
-  // Selectable (non-archived) resume IDs in a given folder, used by the per-folder
-  // checkbox. "all" means every resume the user can score across all folders.
+  // Recursively collect a folder's own ID and all descendant folder IDs.
+  // Used by getFolderResumeIds so ticking a parent folder cascades to subfolders.
+  const collectDescendantFolderIds = (folderId: string): string[] => {
+    const result = [folderId];
+    const queue = [folderId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const f of folders) {
+        if (f.parentId === current) {
+          result.push(f.id);
+          queue.push(f.id);
+        }
+      }
+    }
+    return result;
+  };
+
+  // Selectable (non-archived) resume IDs in a given folder *and all its
+  // descendants*. "all" means every resume the user can score across folders.
   const getFolderResumeIds = (folderId: string): string[] => {
     const archivedFolder = folders.find(f => f.name?.toLowerCase().includes('archived'));
     const isArchivedTarget = folderId !== 'all'
       && (folders.find(f => f.id === folderId)?.name?.toLowerCase().includes('archived') ?? false);
+    if (isArchivedTarget) return [];
 
     let pool: Resume[];
     if (folderId === 'all') {
@@ -546,18 +598,20 @@ export default function ResumeSelectionModal({
         return true;
       });
     } else {
+      // Include this folder + every descendant. Special-case "root" which
+      // also captures resumes with no folderId.
+      const branchFolderIds = new Set(collectDescendantFolderIds(folderId));
       const target = folders.find(f => f.id === folderId);
       const isRoot = target?.name?.toLowerCase() === 'root';
-      pool = isRoot
-        ? allMyResumes.filter(r => !r.folderId || r.folderId === folderId)
-        : allMyResumes.filter(r => r.folderId === folderId);
-      if (!isArchivedTarget) {
-        // Archived resumes inside a non-archived folder are still excluded
-        pool = pool.filter(r => r.isArchived !== true);
-      }
+
+      pool = allMyResumes.filter(r => {
+        if (r.isArchived === true) return false;
+        if (archivedFolder && branchFolderIds.has(archivedFolder.id) === false
+            && r.folderId === archivedFolder.id) return false;
+        if (isRoot && (!r.folderId || branchFolderIds.has(r.folderId))) return true;
+        return r.folderId ? branchFolderIds.has(r.folderId) : false;
+      });
     }
-    // Match the existing handleSelectAll behaviour: archived folder is unselectable
-    if (isArchivedTarget) return [];
     return pool.map(r => r.id);
   };
 
@@ -577,6 +631,8 @@ export default function ResumeSelectionModal({
 
   // Folder checkbox toggle — adds all folder's resumes if not fully selected,
   // removes them if all selected. Selection state for OTHER folders is preserved.
+  // Also auto-expands the folder so the cascade to subfolders is immediately
+  // visible — without this, ticking a collapsed parent appears to do nothing.
   const toggleFolderSelection = (folderId: string) => {
     const folderIds = getFolderResumeIds(folderId);
     if (folderIds.length === 0) return;
@@ -591,6 +647,19 @@ export default function ResumeSelectionModal({
       folderIds.forEach(id => next.add(id));
       return Array.from(next);
     });
+
+    // Reveal descendants so the cascade is visible. Only on SELECT direction;
+    // collapsing on deselect would feel jarring if user ticked by mistake.
+    if (state !== 'all' && folderId !== 'all') {
+      const descendants = collectDescendantFolderIds(folderId);
+      // Expand the parent + every descendant that itself has children.
+      const toExpand = descendants.filter(id =>
+        folders.some(f => f.parentId === id)
+      );
+      if (toExpand.length > 0) {
+        setExpandedFolders(prev => Array.from(new Set([...prev, ...toExpand])));
+      }
+    }
   };
 
   const renderFolderTree = (parentId?: string | null, level: number = 0) => {
@@ -641,7 +710,7 @@ export default function ResumeSelectionModal({
                 {selectionState === 'all' ? (
                   <CheckSquare className="w-4 h-4 text-blue-600" />
                 ) : selectionState === 'partial' ? (
-                  <CheckSquare className="w-4 h-4 text-blue-600 opacity-60" />
+                  <MinusSquare className="w-4 h-4 text-blue-600" />
                 ) : (
                   <Square className="w-4 h-4 text-gray-400" />
                 )}
@@ -887,7 +956,7 @@ export default function ResumeSelectionModal({
                         {allState === 'all' ? (
                           <CheckSquare className="w-4 h-4 text-blue-600" />
                         ) : allState === 'partial' ? (
-                          <CheckSquare className="w-4 h-4 text-blue-600 opacity-60" />
+                          <MinusSquare className="w-4 h-4 text-blue-600" />
                         ) : (
                           <Square className="w-4 h-4 text-gray-400" />
                         )}
@@ -964,24 +1033,40 @@ export default function ResumeSelectionModal({
                   </button>
                   )}
 
-                  <button
-                    onClick={handleSelectAll}
-                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-200 bg-white rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium text-gray-700 flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                      <>
-                        <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        <span className="hidden sm:inline">Deselect All</span>
-                        <span className="sm:hidden">Deselect</span>
-                      </>
-                    ) : (
-                      <>
-                        <Square className="w-4 h-4" />
-                        <span className="hidden sm:inline">Select All</span>
-                        <span className="sm:hidden">Select</span>
-                      </>
-                    )}
-                  </button>
+                  {(() => {
+                    // Track selection state of the *visible* folder only — the
+                    // master selection count can include resumes from other folders.
+                    const visibleIds = filteredResumes.filter(r => !r.isArchived).map(r => r.id);
+                    const visibleSelectedCount = visibleIds.filter(id => selectedResumes.includes(id)).length;
+                    const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
+                    const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+                    return (
+                      <button
+                        onClick={handleSelectAll}
+                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-200 bg-white rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium text-gray-700 flex items-center justify-center gap-2 whitespace-nowrap"
+                      >
+                        {allVisibleSelected ? (
+                          <>
+                            <CheckSquare className="w-4 h-4 text-brand-blue" />
+                            <span className="hidden sm:inline">Deselect All</span>
+                            <span className="sm:hidden">Deselect</span>
+                          </>
+                        ) : someVisibleSelected ? (
+                          <>
+                            <MinusSquare className="w-4 h-4 text-blue-600" />
+                            <span className="hidden sm:inline">Select All</span>
+                            <span className="sm:hidden">Select</span>
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-4 h-4" />
+                            <span className="hidden sm:inline">Select All</span>
+                            <span className="sm:hidden">Select</span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
                   <div className="text-sm text-gray-700 bg-white px-3 sm:px-4 py-2.5 rounded-lg border border-gray-200 font-medium whitespace-nowrap">
                     <span className="font-semibold text-brand-blue">{selectedResumes.length}</span> selected
                   </div>
@@ -996,16 +1081,26 @@ export default function ResumeSelectionModal({
                   {/* Table Header - Hidden on mobile */}
                   <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg ring-1 ring-gray-100 text-xs font-semibold text-gray-700 uppercase tracking-wide">
                     <div className="col-span-1 flex items-center justify-center">
-                      <button
-                        onClick={handleSelectAll}
-                        className="p-1 hover:bg-brand-blue/10 rounded"
-                      >
-                        {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                          <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
-                        )}
-                      </button>
+                      {(() => {
+                        const visibleIds = filteredResumes.filter(r => !r.isArchived).map(r => r.id);
+                        const visibleSelectedCount = visibleIds.filter(id => selectedResumes.includes(id)).length;
+                        const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
+                        const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+                        return (
+                          <button
+                            onClick={handleSelectAll}
+                            className="p-1 hover:bg-brand-blue/10 rounded"
+                          >
+                            {allVisibleSelected ? (
+                              <CheckSquare className="w-4 h-4 text-brand-blue" />
+                            ) : someVisibleSelected ? (
+                              <MinusSquare className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-400" />
+                            )}
+                          </button>
+                        );
+                      })()}
                     </div>
                     <div className="col-span-3">Name</div>
                     <div className="col-span-2">Title</div>
@@ -1340,12 +1435,16 @@ export default function ResumeSelectionModal({
         />
       )}
 
-      {/* Upload Resume Modal — Single/Bulk choice, RU quota display, folder selection */}
+      {/* Upload Resume Modal — Single/Bulk choice, RU quota display, folder selection.
+          Pre-selects the currently-viewed folder so the user doesn't have to re-pick
+          it. "all" is a UI filter, not a real folder, so we skip it and let the
+          modal fall back to root. */}
       {showUploadModal && (
         <UploadModal
           folders={folders}
           tenant={tenant}
           uploadSection="my-resumes"
+          targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
           onClose={() => setShowUploadModal(false)}
           onUpload={handleModalUpload}
         />

@@ -170,8 +170,11 @@ export default function ResumeTable({
   // When pagination is disabled (server-side pagination), render all passed items
   const paginatedItems = disablePagination ? resumes : paginatedItemsFromHook;
 
+  // Header checkbox state must reflect the VISIBLE rows only — selections in
+  // other folders/pages should not flip the header to "indeterminate" or
+  // change its onSelectAll behaviour.
   const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
-  const someSelected = selectedResumes.length > 0 && !allSelected;
+  const someSelected = !allSelected && resumes.some(r => selectedResumes.includes(r.id));
 
   // Handle showing version history - fetch versions from backend
   const handleShowVersionHistory = async (resume: Resume) => {

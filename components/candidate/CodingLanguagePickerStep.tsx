@@ -71,17 +71,24 @@ export default function CodingLanguagePickerStep({
     }
   };
 
+  // Render as a true modal overlay (fixed-position card on top of a
+  // dimmed backdrop) so it pops over whatever screen the candidate was
+  // just on (System Check, after my flow change). Previously this was a
+  // full-page step replacement and recruiters reported "the modal isn't
+  // showing" — visually they were looking for an overlay.
   if (compilable === null) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-lg w-full p-8 flex items-center justify-center min-h-[200px]">
+          <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[60vh] px-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 max-w-lg w-full p-6 sm:p-8">
+    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-lg w-full p-6 sm:p-8">
         <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
           <Code className="w-6 h-6 text-blue-600 dark:text-blue-400" />
         </div>
