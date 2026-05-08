@@ -156,6 +156,7 @@ export default function AdminDashboard({
 
       {/* Stats Cards */}
 
+      {false && (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         {/* Resumes Card - Clickable with navigation links (only if plan includes resume_upload) */}
         {hasPlanFeature('resume_upload') && <div className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:shadow-lg hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
@@ -275,9 +276,10 @@ export default function AdminDashboard({
           </div>
         )}
       </div>
+      )}
 
       {/* JD02A: Subscription Units */}
-      {subscriptionUnits && (
+      {false && subscriptionUnits && (
         <div className="mb-8">
           <div className="flex items-center gap-2.5 mb-4">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -506,6 +508,51 @@ export default function AdminDashboard({
                 <p className="text-xs text-gray-500">Post a new job opening</p>
               </div>
             </button>
+
+            {hasPlanFeature('resume_scoring') && (
+              <button
+                onClick={() => router.push('/recruitment/resume-scoring')}
+                className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-teal/[0.02] hover:bg-brand-teal/[0.04] hover:border-brand-teal/30 hover:shadow-sm hover:shadow-brand-teal/10 transition-all"
+              >
+                <div className="w-10 h-10 bg-brand-teal/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center group-hover:bg-brand-teal/15 transition-colors">
+                  <Zap className="w-5 h-5 text-brand-teal" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-gray-900">Resume Scoring</p>
+                  <p className="text-xs text-gray-500">Review and score candidate resumes</p>
+                </div>
+              </button>
+            )}
+
+            {hasPlanFeature('assessment') && (
+              <button
+                onClick={() => router.push('/recruitment/assessments')}
+                className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-orange/[0.02] hover:bg-brand-orange/[0.04] hover:border-brand-orange/30 hover:shadow-sm hover:shadow-brand-orange/10 transition-all"
+              >
+                <div className="w-10 h-10 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center group-hover:bg-brand-orange/15 transition-colors">
+                  <ClipboardCheck className="w-5 h-5 text-brand-orange-deep" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-gray-900">Assessment</p>
+                  <p className="text-xs text-gray-500">Create and manage candidate assessments</p>
+                </div>
+              </button>
+            )}
+
+            {hasPlanFeature('ai_interview') && (
+              <button
+                onClick={() => router.push('/recruitment/ai-interviews')}
+                className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-blue/[0.02] hover:bg-brand-blue/[0.04] hover:border-brand-blue/30 hover:shadow-sm hover:shadow-brand-blue/10 transition-all"
+              >
+                <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center group-hover:bg-brand-blue/15 transition-colors">
+                  <Video className="w-5 h-5 text-brand-blue" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-gray-900">AI Interview</p>
+                  <p className="text-xs text-gray-500">Launch and monitor interview workflows</p>
+                </div>
+              </button>
+            )}
 
             <button
               onClick={onNavigateToTenants}
