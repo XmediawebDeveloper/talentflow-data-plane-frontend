@@ -280,7 +280,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
         <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
+          <div className="flex-shrink-0 flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
                 <Ban className="w-6 h-6 text-red-600" />
@@ -299,7 +299,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           </div>
 
           {/* Content */}
-          <div className="p-6">
+          <div className="flex-1 overflow-y-auto p-6">
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
               <h4 className="font-medium text-red-900 mb-2 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" />
@@ -336,7 +336,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+          <div className="flex-shrink-0 flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
             <button
               onClick={() => {
                 // Resolve all as discarded immediately
@@ -366,7 +366,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
+        <div className="flex-shrink-0 flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
               <AlertTriangle className="w-6 h-6 text-amber-600" />
@@ -386,7 +386,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
         </div>
 
         {/* File Counter */}
-        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex-shrink-0 px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-gray-700">
               Resume {currentVersionIndex + 1} of {versionsWithChanges.length}
@@ -405,7 +405,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-320px)]">
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Candidate Info */}
           <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
             <div className="flex items-center gap-3 mb-2">
@@ -667,7 +667,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex-shrink-0 flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
           {/* Navigation */}
           <div className="flex items-center gap-2">
             <button
@@ -727,8 +727,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     {/* Inline Preview Modal */}
     {showPreviewModal && (
       <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
-        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-4xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200">
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-blue-600" />
               <h3 className="font-semibold text-gray-900">{previewTitle}</h3>

@@ -48,19 +48,19 @@ export default function AIInterviewJDSelection() {
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
       <div className="w-full">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
               onClick={() => router.push('/recruitment/ai-interviews')}
-              className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors"
+              className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0"
             >
               <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                 <Briefcase className="w-5 h-5 text-brand-blue" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-gray-900 text-lg font-semibold tracking-tight">Select Job Description</h1>
                 <p className="text-sm text-gray-500">Choose the JD that this AI interview will be based on</p>
               </div>
@@ -69,7 +69,7 @@ export default function AIInterviewJDSelection() {
           {canCreateJD && (
             <button
               onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-nowrap"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-nowrap flex-shrink-0"
             >
               <Plus className="w-4 h-4" />
               Create New Job

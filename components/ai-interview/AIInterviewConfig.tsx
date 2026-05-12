@@ -490,9 +490,9 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center bg-gradient-to-br ${
             category === 'mth' ? 'from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15' : 'from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15'
           }`}>
             <Brain className={`w-5 h-5 ${color.accent}`} />
@@ -797,13 +797,13 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
 
   return (
     <div className={`rounded-xl transition-all ${enabled ? 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5' : 'border border-gray-100 bg-slate-50 opacity-60'}`}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <label className="relative inline-flex items-center cursor-pointer">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
             <input type="checkbox" checked={enabled} onChange={onToggle} className="sr-only peer" />
             <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
           </label>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
+          <div className="w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
             <Users className="w-5 h-5 text-brand-blue" />
           </div>
           <span className="font-semibold text-gray-900 text-sm tracking-tight">HR Round</span>
@@ -863,13 +863,13 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
 
           {/* Question bank selection — both modes */}
           <>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-medium text-gray-600">
                 {mode === 'fixed'
                   ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`
                   : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`}
               </span>
-              <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-green-600' : 'text-gray-500'}`}>
+              <span className={`text-xs font-semibold flex-shrink-0 whitespace-nowrap ${selectedIds.length >= effectiveCount ? 'text-green-600' : 'text-gray-500'}`}>
                 {selectedIds.length} / {effectiveCount} selected
               </span>
             </div>
@@ -922,9 +922,9 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
           {/* Add Question — available in both modes, persists to HR Question Bank */}
           {addingQuestion ? (
             <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-slate-50 ring-1 ring-black/[0.02]">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
-                <span className="text-[11px] text-gray-400">Saved to database</span>
+                <span className="text-[11px] text-gray-400 flex-shrink-0">Saved to database</span>
               </div>
               <textarea
                 autoFocus
@@ -2184,24 +2184,24 @@ export default function AIInterviewConfig() {
         </div>
 
         {/* Step indicators */}
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center gap-2 mb-8 overflow-x-auto scrollbar-auto-hide -mx-1 px-1">
           {STEPS.map((step, i) => {
             const stepNum = i + 1;
             const isCompleted = stepNum < CURRENT_STEP;
             const isCurrent = stepNum === CURRENT_STEP;
             return (
               <React.Fragment key={step}>
-                {i > 0 && <div className="w-8 h-px bg-gray-200" />}
+                {i > 0 && <div className="w-4 sm:w-8 h-px bg-gray-200 flex-shrink-0" />}
                 {isCompleted ? (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200 flex-shrink-0">
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                   </div>
                 ) : (
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 ${
                     isCurrent ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-slate-100 text-gray-400'
                   }`}>{stepNum}</div>
                 )}
-                <span className={`text-sm ${isCurrent ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>{step}</span>
+                <span className={`text-sm whitespace-nowrap ${isCurrent ? 'text-brand-blue font-medium' : 'text-gray-400 hidden sm:inline'}`}>{step}</span>
               </React.Fragment>
             );
           })}
@@ -2233,7 +2233,7 @@ export default function AIInterviewConfig() {
                   </div>
                   <span className="font-semibold text-gray-900 text-sm tracking-tight">Interview Mode</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Fixed */}
                   <button
                     onClick={() => { setMode('fixed'); setBufferEnabled(false); }}

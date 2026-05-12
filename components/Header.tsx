@@ -481,17 +481,15 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
   const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
-  const roleLabels = {
+  const roleLabels: Record<string, string> = {
     tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
+    billing_manager: 'Billing Manager',
+    standard_user: 'Standard User',
   };
 
-  const roleBadgeColors = {
-    tenant_admin: 'bg-brand-blue text-white',
-    recruiter: 'bg-brand-blue/10 text-brand-blue',
-    viewer: 'bg-gray-100 text-gray-600',
-  };
+  const roleLabel = roleLabels[user.role] ?? user.role?.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) ?? '';
 
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-8">
@@ -1049,7 +1047,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </div>
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-[10px] lg:text-xs text-gray-500">{roleLabels[user.role]}</div>
+              <div className="text-[10px] lg:text-xs text-gray-500">{roleLabel}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1060,7 +1058,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:left-auto sm:right-3 lg:right-6 sm:top-[68px] lg:top-[80px] sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-30 max-h-[calc(100vh-80px)] overflow-hidden overflow-y-auto">
                 {/* User Profile Header */}
                 <div className="bg-brand-blue px-5 py-4">
                   <div className="flex items-center gap-4">
@@ -1072,7 +1070,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-white/80 text-sm truncate">{user.email}</p>
                       <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
                         <Shield className="w-3 h-3" />
-                        {roleLabels[user.role]}
+                        {roleLabel}
                       </span>
                     </div>
                   </div>
