@@ -491,36 +491,105 @@ export function AssessmentInterface({
     }
   }, [answer, token, currentQuestion.question_id, isCurrentAnswerLocked]);
 
-  // 🔄 BEFORE UNLOAD: Flush current answer to backend via sendBeacon
+  // 🔄 BEFORE UNLOAD: Flush current answer + show browser's native close
+  // warning. The browser shows its own dialog ("Leave site? Changes may not
+  // be saved" / Leave / Cancel) — its wording and buttons cannot be
+  // customised. If the candidate clicks Leave, `pagehide` fires next and
+  // marks the attempt completed server-side via sendBeacon (handler below).
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-      if (!hasAnswer || isCurrentAnswerLocked) return;
+      if (hasAnswer && !isCurrentAnswerLocked) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const url = `${apiUrl}/candidate/assessment/${token}/answer`;
+        const payload = JSON.stringify({
+          question_id: currentQuestion.question_id,
+          text_response: answer.text_response,
+          selected_options: answer.selected_options,
+          code_submission: answer.code_submission,
+          code_input: answer.code_input,
+          language: answer.language,
+          code_execution_status: answer.code_execution_status,
+          code_execution_output: answer.code_execution_output,
+          code_execution_error: answer.code_execution_error,
+          is_draft: true,
+          time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
+        });
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-      const url = `${apiUrl}/candidate/assessment/${token}/answer`;
-      const payload = JSON.stringify({
-        question_id: currentQuestion.question_id,
-        text_response: answer.text_response,
-        selected_options: answer.selected_options,
-        code_submission: answer.code_submission,
-        code_input: answer.code_input,
-        language: answer.language,
-        code_execution_status: answer.code_execution_status,
-        code_execution_output: answer.code_execution_output,
-        code_execution_error: answer.code_execution_error,
-        is_draft: true,
-        time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
-      });
+        navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+        sendPauseBeacon(token, 'beforeunload');
+        console.log('[UNLOAD] Flushed answer via sendBeacon');
+      }
 
-      navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
-      sendPauseBeacon(token, 'beforeunload');
-      console.log('[UNLOAD] Flushed answer via sendBeacon');
+      // Trigger the browser's native "Leave site?" confirmation. Without
+      // both lines below, modern browsers silently allow the close. The
+      // returnValue string is ignored — the browser shows generic text we
+      // can't override.
+      event.preventDefault();
+      event.returnValue = '';
+      return '';
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [answer, token, currentQuestion.question_id, isCurrentAnswerLocked, questionStartTime]);
+
+  // 🚪 PAGE HIDE: Fires only when the page is actually being unloaded
+  // (i.e., the candidate clicked "Leave" in the browser's close dialog OR
+  // the OS killed the tab). If they clicked "Cancel" in the close dialog,
+  // pagehide does NOT fire and the assessment continues normally.
+  //
+  // When this fires we mark the attempt completed server-side so it gets
+  // scored. The backend's /complete endpoint is idempotent — calling it
+  // on an already-completed attempt is harmless.
+  //
+  // We use `fetch` with `keepalive: true` (not `sendBeacon`) because
+  // sendBeacon with a JSON body triggers a CORS preflight that browsers
+  // commonly cancel during page unload, so the actual POST never lands
+  // and the attempt stays stuck at status='in_progress'. `keepalive` is
+  // designed for exactly this case — the browser holds the request open
+  // through the unload and delivers it properly. A bare sendBeacon (no
+  // body, no headers) runs as a fallback in case keepalive isn't
+  // supported on the browser.
+  useEffect(() => {
+    const handlePageHide = () => {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const url = `${apiUrl}/candidate/assessment/${token}/complete`;
+      let delivered = false;
+      try {
+        // Primary path — fetch with keepalive. Returns synchronously; the
+        // browser delivers the request after the page is gone.
+        if (typeof fetch === 'function') {
+          fetch(url, {
+            method: 'POST',
+            keepalive: true,
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          }).catch(() => { /* unload — nothing to log */ });
+          delivered = true;
+          console.log('[UNLOAD] Sent /complete via fetch+keepalive — candidate closed tab');
+        }
+      } catch (err) {
+        console.warn('[UNLOAD] fetch+keepalive failed:', err);
+      }
+      // Fallback — bare sendBeacon with no body/content-type. This is a
+      // "simple" CORS request that doesn't need preflight, so the browser
+      // accepts it without delay. The endpoint reads the token from the
+      // URL path; no body needed.
+      if (!delivered) {
+        try {
+          navigator.sendBeacon(url);
+          console.log('[UNLOAD] Sent /complete via sendBeacon fallback');
+        } catch (err) {
+          console.warn('[UNLOAD] sendBeacon fallback failed:', err);
+        }
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, [token]);
 
   // 🌐 NETWORK STATUS: Pause timer on disconnect, reload silently on restore
   useEffect(() => {

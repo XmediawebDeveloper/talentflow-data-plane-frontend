@@ -204,7 +204,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                   {jds.map((jd) => (
                     <button
                       key={jd.id}
-                      onClick={() => handleSelect(`/recruitment/jd-details/${jd.id}`)}
+                      onClick={() => handleSelect(`/recruitment/jd-details?id=${jd.id}`)}
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">

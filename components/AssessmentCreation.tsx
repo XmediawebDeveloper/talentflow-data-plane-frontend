@@ -12,6 +12,22 @@ import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 
+// Languages that have an executable runtime in the candidate's coding round.
+// Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
+// in this set (SQL, Scala, R, Bash, Dart, Perl, etc.) is filtered out before
+// it reaches the assessment's coding_languages, because there is no compiler
+// to run candidate submissions against. SQL questions can still appear in the
+// Technical round as MCQ/text.
+const COMPILABLE_LANGUAGES = [
+  'Python', 'JavaScript', 'TypeScript', 'Java', 'C', 'C++', 'C#',
+  'Go', 'Rust', 'Ruby', 'PHP', 'Kotlin', 'Swift',
+] as const;
+const COMPILABLE_LANGUAGES_LOWER = new Set(COMPILABLE_LANGUAGES.map(l => l.toLowerCase()));
+const filterCompilable = (langs: string[] | undefined | null): string[] => {
+  if (!Array.isArray(langs)) return [];
+  return langs.filter(l => l && COMPILABLE_LANGUAGES_LOWER.has(String(l).trim().toLowerCase()));
+};
+
 // Dynamic import to break circular dependency chain that causes TDZ error
 // when navigating to Assessment Results (AssessmentCreation → JDCreation creates
 // a synchronous module init cycle in the assessments page bundle)
@@ -262,7 +278,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           }
         }
 
-        // Store JD-extracted languages
+        // Store JD-extracted languages — strip non-compilable ones (SQL, etc.)
+        // so they never appear in the coding-round language list.
+        codingLanguages = filterCompilable(codingLanguages);
         setJdExtractedLanguages(codingLanguages);
 
         // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
@@ -342,9 +360,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           }
         ]);
 
-        // Set coding languages if present
+        // Set coding languages if present. Filter out any non-compilable
+        // languages — older drafts may have stored SQL etc. before this
+        // filter existed; we don't want them to keep appearing.
         if (assessment.coding_languages?.length > 0) {
-          setSelectedCodingLanguages(assessment.coding_languages);
+          setSelectedCodingLanguages(filterCompilable(assessment.coding_languages));
         }
 
         // We can't recover whether the original creator enabled Coding
@@ -690,15 +710,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [isCodingLockedBySmartConfig, setIsCodingLockedBySmartConfig] = useState<boolean>(false);
   const [codingLockReason, setCodingLockReason] = useState<string>('');
 
-  // Available programming languages for the coding round.
-  // SQL is intentionally excluded — the coding round runs candidate code
-  // against stdin/stdout test cases via Piston, and SQL doesn't fit that
-  // pattern. SQL questions can still be asked in the Technical round as
-  // MCQs / text-based questions when relevant.
-  const programmingLanguages = [
-    'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go',
-    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R'
-  ];
+  // Available programming languages for the coding round. Tied to the
+  // module-level COMPILABLE_LANGUAGES so the recruiter can only pick
+  // languages the candidate runner can actually execute. SQL, Scala, R,
+  // etc. are intentionally excluded — the coding round runs candidate
+  // code against stdin/stdout test cases via Piston and those languages
+  // either don't fit that pattern or have no compiler. They can still
+  // appear in the Technical round as MCQ / text-based questions.
+  const programmingLanguages = [...COMPILABLE_LANGUAGES];
 
   // Handle when JD is published from the modal
   const handleJDPublished = async (publishedJob: Job) => {
@@ -992,7 +1011,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       }
     }
 
-    // Store JD-extracted languages so we can restore them when re-enabling coding
+    // Store JD-extracted languages — strip non-compilable ones (SQL, etc.) so
+    // they never appear in the coding-round language list.
+    codingLanguages = filterCompilable(codingLanguages);
     setJdExtractedLanguages(codingLanguages);
 
     // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
@@ -2007,10 +2028,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 )}
                               </div>
                               <p className="text-xs text-gray-500 mt-0.5 leading-snug truncate">
-                                {isAutoEnabled
-                                  ? `Languages: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
-                                  : 'No programming languages detected — enable manually if needed'
-                                }
+                                {(() => {
+                                  if (!isAutoEnabled) return 'No programming languages detected — enable manually if needed';
+                                  // Filter at render so any non-compilable language that snuck into
+                                  // state from older data (e.g., a draft saved before this filter
+                                  // existed) doesn't get displayed.
+                                  const visible = filterCompilable(
+                                    selectedCodingLanguages.length > 0 ? selectedCodingLanguages : jdExtractedLanguages
+                                  );
+                                  return visible.length > 0
+                                    ? `Languages: ${visible.join(', ')}`
+                                    : 'No compilable programming languages — enable manually if needed';
+                                })()}
                               </p>
                             </div>
                           </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SkillCard } from './SkillCard';
 import { SkillRadarChart } from './SkillRadarChart';
 import { EvaluationBreakdown } from './EvaluationBreakdown';
+import { TimedEvaluationBreakdown } from './TimedEvaluationBreakdown';
 import { Target, TrendingUp, CheckCircle2, Circle } from 'lucide-react';
 import type { DashboardData } from './types';
 
@@ -128,8 +129,23 @@ export function AnalysisView({ data }: { data: DashboardData }) {
         </div>
       )}
 
-      {/* Radar + Breakdown */}
-      {allClusters.length > 0 && (
+      {/* Radar + Breakdown.
+       *
+       * Timed mode follows the doc spec: skill → weighted question score →
+       * section avg → MHS≥7 pass/fail gate. The TimedEvaluationBreakdown
+       * renders the actual per-question math with real numbers, so it gets a
+       * full-width row below the radar.
+       *
+       * Conversational mode keeps the legacy 70/20/10 weighted breakdown
+       * (cluster-weighted, scaled to 0-100). */}
+      {allClusters.length > 0 && data.interview.mode === 'Timed' ? (
+        <>
+          <div className="grid grid-cols-1 gap-8">
+            <SkillRadarChart mustHaveClusters={data.mustHaveClusters} niceToHaveClusters={data.niceToHaveClusters} />
+          </div>
+          <TimedEvaluationBreakdown data={data} />
+        </>
+      ) : allClusters.length > 0 && (
         <div className="grid grid-cols-2 gap-8">
           <SkillRadarChart mustHaveClusters={data.mustHaveClusters} niceToHaveClusters={data.niceToHaveClusters} />
           <EvaluationBreakdown mustHaveScore={data.scores.mustHave} niceToHaveScore={data.scores.niceToHave} hrScore={data.scores.hr} finalScore={data.scores.final} mustHaveClusters={data.mustHaveClusters} niceToHaveClusters={data.niceToHaveClusters} weights={data.weights} sectionsPresent={data.sectionsPresent} />

@@ -35,6 +35,27 @@ export interface SectionWeights {
   hr: number;
 }
 
+/** Per-question evaluation row driving the timed-mode doc-spec breakdown.
+ *  One PerQuestionDetail per question asked. Skills are the multi-skill set
+ *  assessed by that question; each carries its priority weight (10/7/4) and
+ *  per-skill 0-10 score so the Σ(score × weight)/Σ(weights) math can be
+ *  shown directly in the UI. */
+export interface PerQuestionSkill {
+  name: string;
+  priority: Level;       // High / Medium / Low
+  weight: number;        // 10 / 7 / 4
+  score: number;         // 0-10
+  note: string;          // short LLM rationale
+}
+
+export interface PerQuestionDetail {
+  qNum: number;                          // 1-based display index (matches Q&A tab)
+  section: 'mth' | 'nth' | 'hr';
+  question: string;
+  skills: PerQuestionSkill[];
+  questionScore: number;                 // 0-10, weighted average
+}
+
 export interface DashboardData {
   candidate: { name: string; role: string; email?: string };
   interview: { mode: 'Timed' | 'Conversational'; duration: string; date: string };
@@ -56,4 +77,15 @@ export interface DashboardData {
   mustHaveClusters: Cluster[];
   niceToHaveClusters: Cluster[];
   interviewResponses: InterviewResponse[];
+
+  // ── Timed-mode doc-spec fields (simplified evaluation) ──────────────────
+  /** Pass/Fail result driven by MHS section_question_avg ≥ mhsThreshold.
+   *  null when MHS data unavailable (e.g. incomplete interview). */
+  finalResult: 'Pass' | 'Fail' | null;
+  /** Threshold used for the Pass/Fail gate (doc spec: 7.0 / 10). */
+  mhsThreshold: number;
+  /** Per-question weighted scores keyed by display q-num (1-based). */
+  questionScores: Record<number, number>;
+  /** Per-question detail rows for the timed-mode breakdown table. */
+  perQuestionDetails: PerQuestionDetail[];
 }
