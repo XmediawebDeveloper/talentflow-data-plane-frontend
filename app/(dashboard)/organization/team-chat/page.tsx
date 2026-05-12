@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useState, useRef, useEffect } from 'react';
 import {
   Search,
@@ -401,8 +402,11 @@ export default function TeamChatPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-80px)] bg-slate-50 overflow-x-hidden">
-      <div className="flex h-full w-full max-w-[1400px] mx-auto p-3 md:p-4 gap-3 md:gap-4">
+    <div className="flex h-[calc(100dvh-80px)] flex-col bg-slate-50 overflow-x-hidden">
+      <div className="shrink-0 w-full max-w-[1400px] mx-auto px-3 pt-3 md:px-4 md:pt-4">
+        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} className="mb-0" />
+      </div>
+      <div className="flex flex-1 min-h-0 w-full max-w-[1400px] mx-auto p-3 md:p-4 gap-3 md:gap-4">
         {/* Left Sidebar - Channels List */}
         <aside className="hidden md:flex md:w-72 lg:w-80 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal px-4 py-4 text-white">

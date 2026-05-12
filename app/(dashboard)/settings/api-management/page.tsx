@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Key, Plus, Copy, Eye, EyeOff, Trash2, RefreshCw, Clock, Loader2, X, Sparkles, BookOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { apiKeysApi, ApiKey, ApiKeyCreateResponse } from '@/lib/services/settingsService';
@@ -137,6 +138,8 @@ export default function ApiManagementPage() {
     <FeatureGate feature="api_access">
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

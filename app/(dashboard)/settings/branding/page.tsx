@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Palette, Upload, Save, Eye, Check, Loader2, X, ShieldCheck, ShieldAlert, RefreshCw, Sparkles, Image as ImageIcon, Globe, Layers } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/settingsService';
@@ -151,6 +152,8 @@ export default function BrandingPage() {
   return (
     <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto">
+        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Branding & White Label' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />

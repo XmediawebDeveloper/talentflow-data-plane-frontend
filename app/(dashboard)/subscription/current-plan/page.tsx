@@ -1,11 +1,13 @@
 'use client';
 
-import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield } from 'lucide-react';
+import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield, BarChart3, Wallet, Receipt, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized } from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -468,6 +470,16 @@ function CurrentPlanContent() {
   const searchParams = useSearchParams();
   const { logout, user, isBillingManager, isTenantAdmin, hasPermission } = useAuth();
   const canUpgradePlan = hasPermission('canUpgradePlan');
+
+  // Quick links to the billing sub-pages — surfaced on this page instead of the sidebar (plain links, not a dropdown)
+  const billingLinks = [
+    { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage') },
+    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods') },
+    { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory') },
+    { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory') },
+    { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory') },
+    { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage') },
+  ].filter(link => link.visible);
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -1822,6 +1834,9 @@ function CurrentPlanContent() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 md:p-8">
       <div className="mx-auto w-full max-w-[1400px]">
+        {/* Breadcrumb */}
+        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -1859,6 +1874,29 @@ function CurrentPlanContent() {
             )}
           </div>
         </section>
+
+        {/* Billing & subscription pages — quick links (moved here from the sidebar) */}
+        {billingLinks.length > 0 && (
+          <section className="mb-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
+              {billingLinks.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.id}
+                    href={link.href}
+                    className="group flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-sm"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 group-hover:text-brand-blue">{link.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {error && (
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">

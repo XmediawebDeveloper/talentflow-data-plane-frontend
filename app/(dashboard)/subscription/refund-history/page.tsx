@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Calendar, Sparkles, X, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -287,6 +288,8 @@ export default function RefundHistoryPage() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Refund History' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />

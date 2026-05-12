@@ -1,7 +1,9 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Sparkles } from 'lucide-react';
+import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Sparkles, Key, ScrollText, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
@@ -215,6 +217,17 @@ export default function Settings() {
   ];
   const visibleTabs = tabs.filter(tab => tab.visible);
 
+  // Quick links to the workspace / admin settings pages. These are separate routes,
+  // so they are shown as plain navigation links (not tabs and not a dropdown).
+  const adminSettingsLinks = [
+    { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', visible: isTenantAdmin || hasPermission('canViewRoles') },
+    { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', visible: isTenantAdmin || hasPermission('canViewApiManagement') },
+    { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', visible: isTenantAdmin || hasPermission('canViewBranding') },
+    { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', visible: isTenantAdmin || hasPermission('canViewSecuritySettings') },
+    { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', visible: isTenantAdmin || hasPermission('canManageSettings') },
+  ];
+  const visibleAdminSettingsLinks = adminSettingsLinks.filter(link => link.visible);
+
   useEffect(() => {
     if (!visibleTabs.some(tab => tab.id === activeTab)) {
       setActiveTab(visibleTabs[0]?.id || 'profile');
@@ -235,6 +248,9 @@ export default function Settings() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Breadcrumb */}
+      <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />
+
       {/* SaaS Hero Header */}
       <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
         <div className="relative flex items-start gap-3">
@@ -275,6 +291,30 @@ export default function Settings() {
                   </button>
                 );
               })}
+
+              {/* Workspace & admin settings — plain links to their own pages (not a dropdown) */}
+              {visibleAdminSettingsLinks.length > 0 && (
+                <>
+                  <div className="hidden lg:block my-1.5 border-t border-gray-100" />
+                  <span className="hidden lg:block px-4 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-[0.1em]">
+                    Workspace &amp; Admin
+                  </span>
+                  {visibleAdminSettingsLinks.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <Link
+                        key={link.id}
+                        href={link.href}
+                        className="group w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue"
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span>{link.label}</span>
+                        <ChevronRight className="hidden lg:block w-4 h-4 ml-auto text-gray-300 group-hover:text-brand-blue" />
+                      </Link>
+                    );
+                  })}
+                </>
+              )}
             </nav>
 
             {/* Role Info */}

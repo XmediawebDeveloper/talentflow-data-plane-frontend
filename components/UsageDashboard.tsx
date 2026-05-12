@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Sparkles, ShoppingCart, RefreshCw, ChevronRight, BarChart3, Package, CreditCard, Info } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import QuotaDisplay from './QuotaDisplay';
@@ -761,6 +762,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 sm:pt-6">
+        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />

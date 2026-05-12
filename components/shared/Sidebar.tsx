@@ -5,47 +5,26 @@ import {
   Building2,
   CreditCard,
   Settings,
-  BarChart3,
   HelpCircle,
-  FileText,
   Target,
   Sparkles,
   ClipboardList,
   Video,
   Users,
   Database,
-  UserCog,
-  Shield,
-  Key,
-  Palette,
-  Link as LinkIcon,
-  Lock,
-  Receipt,
-  Wallet,
-  RefreshCw,
-  AlertTriangle,
   Activity,
-  TrendingUp,
-  ChevronDown,
-  ChevronRight,
   Briefcase,
-  Layers,
   GraduationCap,
   Clock,
   Factory,
-  History,
   ScrollText,
-  MessageCircle,
   Headphones,
-  Inbox,
-  ShieldCheck
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
-import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
+import { PlanFeatureKey } from '@/lib/types/planFeatures';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 interface SidebarProps {
@@ -223,10 +202,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'USER MANAGEMENT',
       items: [
         { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
-        { id: 'usage-history', label: 'Usage History', icon: History, href: '/organization/usage-history', adminOnly: true },
-        { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canViewTeams', planFeature: 'teams' },
-        { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
+        // Usage History, Roles & Permissions, Teams and Chat are reached from the quick links on the Users (/organization/user-management) page.
       ]
     },
 
@@ -236,12 +212,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'SUBSCRIPTION & BILLING',
       items: [
         { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewCurrentPlan' },
-        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'canViewUsage' },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewPaymentMethods' },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewBillingHistory' },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewRefundHistory' },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewDisputeHistory' },
-        { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', permission: 'canViewUsage' },
+        // Usage & Quotas, Payment Methods, Billing History, Refund History, Dispute History and Unit Disputes
+        // are reached from the quick links on the Current Plan (/subscription/current-plan) page.
       ]
     },
 
@@ -271,12 +243,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'SETTINGS',
       items: [
         { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewRoles' },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canViewApiManagement', planFeature: 'api_access' },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
-        // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canViewSecuritySettings' },
-        { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', permission: 'canManageSettings' },
+        // Permissions & Roles, API Management, Branding & White Label, Security Settings and Legal & Compliance
+        // are reached from the "Workspace & Admin" links inside the Profile Settings (/settings/general-settings) page.
       ]
     },
 

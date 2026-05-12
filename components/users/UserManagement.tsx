@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   CUSTOM_PERMISSION_CATEGORIES,
@@ -8,6 +9,7 @@ import {
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Search,
   Plus,
@@ -30,6 +32,8 @@ import {
   UserX,
   Sparkles,
   Info,
+  History,
+  MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -474,7 +478,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1
 
 export default function UserManagement() {
   const router = useRouter();
-  const { user: currentUser, refreshUser } = useAuth();
+  const { user: currentUser, refreshUser, isTenantAdmin, hasPermission: hasAuthPermission } = useAuth();
   const dialog = useGlobalDialog();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1823,9 +1827,19 @@ export default function UserManagement() {
     return true;
   };
 
+  // Quick links to the other user-management areas — surfaced on this page instead of the sidebar
+  const userMgmtLinks = [
+    { id: 'usage-history', label: 'Usage History', icon: History, href: '/organization/usage-history', visible: isTenantAdmin },
+    { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', visible: isTenantAdmin },
+    { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', visible: (isTenantAdmin || hasAuthPermission('canViewTeams')) && hasPlanFeature('teams') },
+    { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat', visible: true },
+  ].filter(link => link.visible);
+
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="w-full max-w-[1400px] mx-auto">
+      <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
+
       {/* Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1885,6 +1899,27 @@ export default function UserManagement() {
           </div>
         )}
       </div>
+
+      {/* User-management areas — quick links (moved here from the sidebar) */}
+      {userMgmtLinks.length > 0 && (
+        <div className="mb-4 sm:mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {userMgmtLinks.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.id}
+                href={link.href}
+                className="group flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 group-hover:text-brand-blue">{link.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Search Bar */}
       <div className="mb-4 sm:mb-6">
