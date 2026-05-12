@@ -239,7 +239,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             </h2>
 
             {/* Category Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+            <div className="grid grid-cols-3 gap-4 mb-6">
               {/* Full Deductions */}
               <div className="bg-white border-2 border-green-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -284,7 +284,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             </div>
 
             {/* Unit Type Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-3 gap-4">
               {(['RS', 'AS', 'AIU'] as UnitType[]).map(unitType => {
                 const typeData = summary.summary.by_unit_type?.[unitType];
                 return (
@@ -589,7 +589,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         {/* Legend */}
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-semibold text-gray-900 mb-4">Deduction Categories Explained</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <CheckCircle2 className="w-4 h-4 text-green-600" />

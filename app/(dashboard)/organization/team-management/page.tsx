@@ -378,11 +378,11 @@ export default function TeamManagementPage() {
                   {canCreateTeams && (
                     <button
                       onClick={handleOpenCreateModal}
-                      className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-white px-3 py-2 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
-                      <Plus className="h-4 w-4 flex-shrink-0" />
+                      <Plus className="h-4 w-4" />
                       Create Team
-                      <ArrowUpRight className="h-4 w-4 flex-shrink-0" />
+                      <ArrowUpRight className="h-4 w-4" />
                     </button>
                   )}
                 </div>
