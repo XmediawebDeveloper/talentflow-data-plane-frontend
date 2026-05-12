@@ -6,6 +6,7 @@
 
 import type {
   DashboardData, Cluster, Skill, Level, Recommendation, InterviewResponse,
+  PerQuestionDetail, PerQuestionSkill,
 } from './types';
 
 interface ClusterConfigDef {
@@ -229,6 +230,89 @@ function formatMinSec(totalSec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// Doc-spec priority → weight (10/7/4). Used by per-question breakdown table.
+const PRIORITY_WEIGHT: Record<Level, number> = { High: 10, Medium: 7, Low: 4 };
+
+function priorityLabelToLevel(raw: any): Level {
+  const s = String(raw || '').toLowerCase();
+  if (s === 'high') return 'High';
+  if (s === 'low') return 'Low';
+  return 'Medium';
+}
+
+/** Build per-question detail rows for the timed-mode evaluation breakdown.
+ *
+ *  Backend already emits:
+ *    - `skill_question_map`: { skill → [{ q_num, score, note }] } keyed by display q-num
+ *    - `question_scores`: { q_num → 0-10 weighted score }
+ *    - `skill_priority_map`: { skill → 'high'|'medium'|'low' }
+ *    - `question_groups`: ordered list with `round_type` and `question` text per Q
+ *
+ *  We reverse skill_question_map into per-question rows so the UI can render
+ *  the Σ(score × weight) / Σ(weights) calculation row-by-row.
+ */
+function buildPerQuestionDetails(eval_: any): PerQuestionDetail[] {
+  const skillQMap = (eval_?.skill_question_map || {}) as Record<
+    string,
+    Array<{ q_num: number; score: number; note?: string }>
+  >;
+  const questionScores = (eval_?.question_scores || {}) as Record<string | number, number>;
+  const skillPrioMap = (eval_?.skill_priority_map || {}) as Record<string, string>;
+  const groups = (eval_?.question_groups || []) as Array<any>;
+
+  // q_num (1-based display index) → { section, question text }
+  const qMeta: Record<number, { section: PerQuestionDetail['section']; question: string }> = {};
+  groups.forEach((g, idx) => {
+    const display = idx + 1;
+    const rt = String(g?.round_type || '').toLowerCase();
+    let section: PerQuestionDetail['section'] = 'mth';
+    if (rt === 'nice_to_have_skills') section = 'nth';
+    else if (rt === 'hr') section = 'hr';
+    qMeta[display] = { section, question: String(g?.question || g?.main_question || '') };
+  });
+
+  // Reverse skill_question_map → per-question skill rows
+  const perQ: Record<number, PerQuestionSkill[]> = {};
+  for (const [topic, rows] of Object.entries(skillQMap || {})) {
+    const priority = priorityLabelToLevel(skillPrioMap[topic]);
+    const weight = PRIORITY_WEIGHT[priority];
+    for (const r of rows || []) {
+      const q = Number(r?.q_num || 0);
+      if (!q) continue;
+      const score = Math.max(0, Math.min(10, Number(r?.score) || 0));
+      (perQ[q] = perQ[q] || []).push({
+        name: topic,
+        priority,
+        weight,
+        score: Math.round(score * 10) / 10,
+        note: String(r?.note || '').slice(0, 250),
+      });
+    }
+  }
+
+  // Sort skills within each question by weight desc (High→Low) so the
+  // breakdown reads top-down by importance — matches the doc example.
+  Object.values(perQ).forEach(rows => rows.sort((a, b) => b.weight - a.weight || b.score - a.score));
+
+  return Object.entries(perQ)
+    .map(([qStr, skills]): PerQuestionDetail => {
+      const qNum = Number(qStr);
+      const meta = qMeta[qNum] || { section: 'mth' as const, question: '' };
+      const qsRaw = questionScores[qNum] ?? questionScores[String(qNum)];
+      const questionScore = typeof qsRaw === 'number'
+        ? Math.round(qsRaw * 10) / 10
+        : 0;
+      return {
+        qNum,
+        section: meta.section,
+        question: meta.question,
+        skills,
+        questionScore,
+      };
+    })
+    .sort((a, b) => a.qNum - b.qNum);
+}
+
 function formatDurationMinutes(min: number): string {
   if (!min || min < 1) return `${Math.round((min || 0) * 60)}s`;
   if (min < 60) return `${Math.round(min * 10) / 10} min`;
@@ -332,6 +416,29 @@ export function buildDashboardData(params: {
   const modeNormalized = (interview.mode || '').toLowerCase();
   const mode: 'Timed' | 'Conversational' = modeNormalized === 'fixed' ? 'Timed' : 'Conversational';
 
+  // ── Timed-mode doc-spec result (MHS section_question_avg ≥ 7.0 → Pass) ──
+  // backendFinal already normalised above ('pass'/'fail'/'') — prefer it.
+  // Fall back to recomputing locally so older sessions without `final_result`
+  // still render a Pass/Fail when MHS data is available.
+  const MHS_THRESHOLD = 7.0;
+  let finalResult: 'Pass' | 'Fail' | null = null;
+  if (backendFinal === 'pass') finalResult = 'Pass';
+  else if (backendFinal === 'fail') finalResult = 'Fail';
+  else if (typeof mthQAvg === 'number') {
+    finalResult = mthQAvg >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+  }
+
+  const questionScoresRaw = (eval_?.question_scores || {}) as Record<string | number, number>;
+  const questionScores: Record<number, number> = {};
+  for (const [k, v] of Object.entries(questionScoresRaw)) {
+    const n = Number(k);
+    if (Number.isFinite(n) && typeof v === 'number') {
+      questionScores[n] = Math.round(v * 10) / 10;
+    }
+  }
+
+  const perQuestionDetails = buildPerQuestionDetails(eval_);
+
   return {
     candidate: {
       name: candidate.name,
@@ -362,5 +469,9 @@ export function buildDashboardData(params: {
     mustHaveClusters,
     niceToHaveClusters,
     interviewResponses: buildInterviewResponses(eval_),
+    finalResult,
+    mhsThreshold: MHS_THRESHOLD,
+    questionScores,
+    perQuestionDetails,
   };
 }

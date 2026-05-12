@@ -1,4 +1,4 @@
-import { Mail, User, Shield, CheckCircle, TrendingUp, TrendingDown, Award, AlertCircle, Zap, Target, Star, Brain } from 'lucide-react';
+import { Mail, User, Shield, CheckCircle, TrendingUp, TrendingDown, Award, AlertCircle, Zap, Target, Star, Brain, XCircle } from 'lucide-react';
 import type { DashboardData } from './types';
 
 interface Props {
@@ -10,12 +10,18 @@ interface Props {
 }
 
 export function OverviewSection({ data, livenessVerified = false, candidateImage }: Props) {
-  const { candidate, interview, scores, mustHaveClusters, niceToHaveClusters, strengths, weaknesses, recommendation, interviewResponses } = data;
+  const { candidate, interview, scores, mustHaveClusters, niceToHaveClusters, strengths, weaknesses, recommendation, interviewResponses, finalResult, mhsThreshold, sectionsPresent } = data;
   const allClusters = [...mustHaveClusters, ...niceToHaveClusters];
   const allSkills = allClusters.flatMap(c => c.skills);
   const coveredNames = new Set(interviewResponses.flatMap(r => r.skillsCovered.map(s => s.toLowerCase())));
   const coveredSkills = allSkills.filter(s => s.score > 0 || coveredNames.has(s.name.toLowerCase()));
   const coveragePct = allSkills.length > 0 ? (coveredSkills.length / allSkills.length) * 100 : 0;
+
+  // Timed-mode doc-spec gate: PASS if MHS section avg >= mhsThreshold, else FAIL.
+  // Only rendered when we actually have a final_result (timed interviews; FE
+  // computes a fallback when backend omits it but MHS data is present).
+  const showPassFailGate = interview.mode === 'Timed' && finalResult !== null;
+  const isPass = finalResult === 'Pass';
 
   function getRecStyle(rec: string) {
     switch (rec) {
@@ -80,6 +86,109 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
           </div>
         </div>
       </div>
+
+      {/* Timed-mode Pass/Fail Gate — MHS section avg ≥ 7.0 = Pass (doc spec). */}
+      {showPassFailGate && (
+        <div
+          className={`rounded-2xl p-8 border-2 shadow-md ${
+            isPass
+              ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300'
+              : 'bg-gradient-to-br from-red-50 to-red-100 border-red-300'
+          }`}
+        >
+          <div className="flex items-center justify-between flex-wrap gap-6">
+            <div className="flex items-center gap-5">
+              <div
+                className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg ${
+                  isPass ? 'bg-emerald-500' : 'bg-red-500'
+                }`}
+              >
+                {isPass
+                  ? <CheckCircle size={40} className="text-white" />
+                  : <XCircle size={40} className="text-white" />}
+              </div>
+              <div>
+                <div
+                  className={`text-xs uppercase tracking-wider font-semibold mb-1 ${
+                    isPass ? 'text-emerald-700' : 'text-red-700'
+                  }`}
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  Final Result
+                </div>
+                <div
+                  className={`text-5xl font-bold ${
+                    isPass ? 'text-emerald-900' : 'text-red-900'
+                  }`}
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  {finalResult?.toUpperCase()}
+                </div>
+                <div
+                  className={`text-sm mt-2 ${
+                    isPass ? 'text-emerald-700' : 'text-red-700'
+                  }`}
+                >
+                  {isPass
+                    ? `Must-Have score meets the ≥ ${mhsThreshold.toFixed(1)} threshold.`
+                    : `Must-Have score is below the ≥ ${mhsThreshold.toFixed(1)} threshold.`}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 min-w-[320px]">
+              {sectionsPresent.mustHave && (
+                <div
+                  className={`p-4 rounded-xl border-2 ${
+                    isPass ? 'bg-white border-emerald-300' : 'bg-white border-red-300'
+                  }`}
+                >
+                  <div
+                    className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-1"
+                    style={{ fontFamily: 'var(--font-mono)' }}
+                  >
+                    Must-Have
+                  </div>
+                  <div
+                    className={`text-3xl font-bold ${
+                      isPass ? 'text-emerald-900' : 'text-red-900'
+                    }`}
+                    style={{ fontFamily: 'var(--font-mono)' }}
+                  >
+                    {scores.mustHave.toFixed(2)}
+                    <span className="text-base text-gray-500 font-normal">/10</span>
+                  </div>
+                  <div
+                    className={`text-[11px] mt-1 ${
+                      isPass ? 'text-emerald-700' : 'text-red-700'
+                    }`}
+                  >
+                    {isPass ? '≥' : '<'} {mhsThreshold.toFixed(1)} threshold
+                  </div>
+                </div>
+              )}
+              {sectionsPresent.niceToHave && (
+                <div className="p-4 rounded-xl bg-white border-2 border-amber-300">
+                  <div
+                    className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-1"
+                    style={{ fontFamily: 'var(--font-mono)' }}
+                  >
+                    Nice-to-Have
+                  </div>
+                  <div
+                    className="text-3xl font-bold text-amber-900"
+                    style={{ fontFamily: 'var(--font-mono)' }}
+                  >
+                    {scores.niceToHave.toFixed(2)}
+                    <span className="text-base text-gray-500 font-normal">/10</span>
+                  </div>
+                  <div className="text-[11px] mt-1 text-amber-700">informational only</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Performance Highlights */}
       <div className="grid grid-cols-2 gap-8">

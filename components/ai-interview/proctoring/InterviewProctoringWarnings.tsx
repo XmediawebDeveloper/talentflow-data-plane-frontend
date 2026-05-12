@@ -6,9 +6,17 @@
  * Forked from components/candidate/ProctoringWarningModal.tsx.
  * Uses InterviewEventBus (not shared ProctoringEventBus).
  * Positioned at bottom of viewport (interview context).
+ *
+ * Render isolation: the toast container is mounted into document.body via
+ * a Portal so re-renders triggered by InterviewUI (timer ticks, transcript
+ * updates, TalkingHead amplitude reads — many times per second) do NOT
+ * cascade into the toast tree. Without this, a re-render of the parent
+ * interview UI re-runs the warnings consumer's reconciliation pass even
+ * though no toast props changed.
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, ShieldAlert, AudioLines } from 'lucide-react';
 import { InterviewEventBus, ProctoringEvent, ProctoringEventType } from './InterviewEventBus';
 
@@ -21,6 +29,11 @@ interface WarningItem {
 }
 
 const AUTO_DISMISS_MS = 2000;
+// Hard cap on simultaneously-visible toasts. When the cap is reached and a
+// new violation fires, the OLDEST toast is evicted so the newest stays in
+// view. Without this, rapid-fire violations stack indefinitely and each
+// pushed toast triggers a re-render of the entire warnings container.
+const MAX_VISIBLE_WARNINGS = 2;
 
 // Icon mapping
 const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
@@ -77,7 +90,11 @@ const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; bor
   severe:   { bg: 'bg-red-50',    border: 'border-red-400',    text: 'text-red-800',    icon: 'text-red-500'    },
 };
 
-// Individual warning card — memoized to prevent re-renders of siblings
+// Individual warning card — memoized to prevent re-renders of siblings.
+// Custom equality check compares ONLY the warning object's id; the onDismiss
+// closure is recreated on every parent render which would otherwise break
+// the default referential equality memo and re-render every card on every
+// parent state change.
 const WarningCard = memo(function WarningCard({
   warning,
   onDismiss,
@@ -136,6 +153,11 @@ const WarningCard = memo(function WarningCard({
       </div>
     </div>
   );
+}, (prev, next) => {
+  // Custom prop-equality: skip re-render unless the underlying warning's id
+  // changed. onDismiss is re-created on each parent render and would defeat
+  // the default referential check.
+  return prev.warning.id === next.warning.id;
 });
 
 /**
@@ -149,13 +171,23 @@ export function InterviewProctoringWarnings() {
   // Subscribe to interview event bus on mount
   useEffect(() => {
     const unsubscribe = InterviewEventBus.subscribe((event: ProctoringEvent) => {
-      setWarnings(prev => [...prev, {
-        id: event.id,
-        type: event.type,
-        message: event.message,
-        severity: event.severity,
-        timestamp: event.timestamp,
-      }]);
+      setWarnings(prev => {
+        const next: WarningItem = {
+          id: event.id,
+          type: event.type,
+          message: event.message,
+          severity: event.severity,
+          timestamp: event.timestamp,
+        };
+        const combined = [...prev, next];
+        // Hard-cap: drop oldest when over the limit. Keeps the render tree
+        // small + bounded so a flood of violations doesn't compound into a
+        // re-render storm.
+        if (combined.length > MAX_VISIBLE_WARNINGS) {
+          return combined.slice(combined.length - MAX_VISIBLE_WARNINGS);
+        }
+        return combined;
+      });
     });
 
     return () => { unsubscribe(); };
@@ -165,9 +197,16 @@ export function InterviewProctoringWarnings() {
     setWarnings(prev => prev.filter(w => w.id !== id));
   }, []);
 
-  if (warnings.length === 0) return null;
+  // Track whether we've mounted client-side (Portal cannot run during SSR
+  // because document is undefined). Only mount the Portal after first effect.
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => { setPortalReady(true); }, []);
 
-  return (
+  if (warnings.length === 0 || !portalReady || typeof document === 'undefined') {
+    return null;
+  }
+
+  const overlay = (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none">
       {warnings.map((warning) => (
         <div key={warning.id} className="pointer-events-auto">
@@ -191,4 +230,8 @@ export function InterviewProctoringWarnings() {
       `}</style>
     </div>
   );
+
+  // Portal to document.body so toast renders are siblings of the React root,
+  // not children of InterviewUI. Cuts the re-render cascade.
+  return createPortal(overlay, document.body);
 }

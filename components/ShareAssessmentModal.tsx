@@ -29,6 +29,12 @@ interface ShareAssessmentModalProps {
     jd_short_id?: string; // JD ID like JD-025
     jd_title?: string; // JD title
     jd_version?: number; // JD version number
+    // Section-enable flags so the modal can render all configured sections
+    // ("Technical • Coding • HR" etc.) instead of the single legacy `type`
+    // label which only showed one section.
+    hr_enabled?: boolean;
+    technical_enabled?: boolean;
+    coding_enabled?: boolean;
   };
   prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
   inviteSource?: string; // Source context: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
@@ -42,6 +48,9 @@ interface ShareAssessmentModalProps {
     jd_short_id?: string; // JD ID like JD-025
     jd_title?: string; // JD title
     jd_version?: number; // JD version number
+    hr_enabled?: boolean;
+    technical_enabled?: boolean;
+    coding_enabled?: boolean;
   }>; // Additional assessments for bulk invite
 }
 
@@ -581,10 +590,30 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                     {assessment.duration}
                   </span>
-                  <span className="hidden sm:inline">•</span>
-                  <span>{assessment.questions} questions</span>
-                  <span className="hidden sm:inline">•</span>
-                  <span className="hidden sm:inline">{assessment.type}</span>
+                  {/* Static question count removed — the actual count is
+                      generated dynamically per attempt by the AI and was
+                      misleading as a fixed badge.
+                      Section labels now reflect every enabled round on the
+                      assessment ("Technical • Coding" / "HR • Technical"
+                      etc.) instead of the single legacy `type` field which
+                      only ever surfaced one round. */}
+                  {(() => {
+                    const sections: string[] = [];
+                    if (assessment.hr_enabled) sections.push('HR');
+                    if (assessment.technical_enabled) sections.push('Technical');
+                    if (assessment.coding_enabled) sections.push('Coding');
+                    // Fall back to the legacy `type` label if none of the
+                    // enable flags are populated (older callers that haven't
+                    // been updated yet).
+                    const label = sections.length > 0 ? sections.join(' • ') : assessment.type;
+                    if (!label) return null;
+                    return (
+                      <>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="hidden sm:inline">{label}</span>
+                      </>
+                    );
+                  })()}
                 </div>
                 {assessment.jd_short_id && (
                   <div className="text-[10px] sm:text-xs text-gray-600 mt-1">

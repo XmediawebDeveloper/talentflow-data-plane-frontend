@@ -93,7 +93,21 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
               <div className="p-3 sm:p-4 bg-brand-orange/10 rounded-lg flex sm:block items-center justify-between">
                 <div className="text-xs sm:text-sm text-brand-orange-deep sm:mb-1">Status</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900">
-                  {assessment.status === 'published' ? 'Published' : 'Draft'}
+                  {/* The Assessments list maps the backend's lowercase status
+                      ('published' / 'draft' / 'closed' / 'archived') into UI
+                      labels ('Active' / 'Draft' / 'Completed' / 'Archived')
+                      before passing the row here. The preview modal was only
+                      checking for the raw backend value, so an Active
+                      assessment fell through to "Draft". Resolve via a
+                      case-insensitive lookup that handles both forms. */}
+                  {(() => {
+                    const raw = String(assessment.status || '').toLowerCase();
+                    if (raw === 'published' || raw === 'active') return 'Active';
+                    if (raw === 'closed' || raw === 'completed') return 'Completed';
+                    if (raw === 'archived') return 'Archived';
+                    if (raw === 'draft') return 'Draft';
+                    return assessment.status || 'Draft';
+                  })()}
                 </div>
               </div>
             </div>

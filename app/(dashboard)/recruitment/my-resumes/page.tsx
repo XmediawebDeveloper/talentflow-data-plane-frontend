@@ -768,9 +768,7 @@ export default function MyResumesPage() {
         sort_by: sortByMap[sortBy] || 'date-desc',
       };
 
-      // Add folder filter if not viewing all. The 'uncategorized' sentinel
-      // tells the backend to return resumes whose folder isn't in this
-      // user's visible folder list (or is NULL).
+      // Add folder filter if not viewing all.
       if (folderId && folderId !== 'all') {
         searchParams.folder_id = folderId;
       }
@@ -946,24 +944,9 @@ export default function MyResumesPage() {
         count: nextAllTotal,
       };
 
-      // Virtual "Uncategorized" — resumes whose folder isn't in this user's
-      // sidebar (folder_id NULL or pointing at a folder owned by someone
-      // else). Without this, the per-folder counts won't add up to the
-      // All Resumes total. Count = global total - sum of own-folder counts.
-      const sumOfFolderCounts = apiFolders.reduce(
-        (sum, f) => sum + (f.count || 0),
-        0
-      );
-      const uncategorizedCount = Math.max(0, nextAllTotal - sumOfFolderCounts);
-      const uncategorizedFolder: FolderType | null =
-        uncategorizedCount > 0
-          ? { id: 'uncategorized', name: 'Uncategorized', count: uncategorizedCount }
-          : null;
-
       const convertedFolders: FolderType[] = [
         allResumesFolder,
         ...apiFolders,
-        ...(uncategorizedFolder ? [uncategorizedFolder] : []),
       ];
 
       setResumes(convertedResumes);
@@ -1038,8 +1021,6 @@ export default function MyResumesPage() {
     // and shows an empty grid in Edge/Firefox.
     if (folderId === null) {
       setSelectedFolder('all');
-    } else if (folderId === 'all' || folderId === 'uncategorized') {
-      setSelectedFolder(folderId);
     } else {
       setSelectedFolder(folderId);
     }
@@ -2552,15 +2533,13 @@ export default function MyResumesPage() {
             {(() => {
               // Get current folder data and children
               const currentFolderData = cardViewFolder ? getFolderById(cardViewFolder) : null;
-              const folderName = cardViewFolder === 'uncategorized'
-                ? 'Uncategorized'
-                : currentFolderData?.name || 'All Folders';
+              const folderName = currentFolderData?.name || 'All Folders';
 
               // Get folders to display (top-level or children of current folder)
               const foldersToDisplay = cardViewFolder === null
                 ? folders.filter(f => f.id !== 'all' && !f.parentId) // Top-level folders
-                : cardViewFolder === 'all' || cardViewFolder === 'uncategorized'
-                  ? [] // No subfolders in All Resumes or Uncategorized view
+                : cardViewFolder === 'all'
+                  ? [] // No subfolders in All Resumes view
                   : currentFolderData?.children || []; // Children of current folder
 
               // Get resumes for current folder (only direct resumes, not nested)
@@ -2568,20 +2547,15 @@ export default function MyResumesPage() {
                 ? [] // No resumes at root level view
                 : cardViewFolder === 'all'
                   ? filteredResumes // Show all resumes
-                  : cardViewFolder === 'uncategorized'
-                    ? filteredResumes.filter(r => !r.folderId)
-                    : filteredResumes.filter(r => r.folderId === cardViewFolder);
+                  : filteredResumes.filter(r => r.folderId === cardViewFolder);
 
               // Group resumes by folder for counts (only needed at root level)
               const resumesByFolder = new Map<string, Resume[]>();
-              const unfolderedResumes: Resume[] = [];
               if (cardViewFolder === null) {
                 filteredResumes.forEach(resume => {
                   if (resume.folderId) {
                     const existing = resumesByFolder.get(resume.folderId) || [];
                     resumesByFolder.set(resume.folderId, [...existing, resume]);
-                  } else {
-                    unfolderedResumes.push(resume);
                   }
                 });
               }
@@ -2624,12 +2598,6 @@ export default function MyResumesPage() {
                           )}
                         </div>
                       ))}
-                      {cardViewFolder === 'uncategorized' && (
-                        <>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-900 font-medium">Uncategorized</span>
-                        </>
-                      )}
                       {cardViewFolder === 'all' && (
                         <>
                           <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -2640,7 +2608,7 @@ export default function MyResumesPage() {
                   )}
 
                   {/* Current Folder Header (when inside a folder) */}
-                  {cardViewFolder !== null && cardViewFolder !== 'uncategorized' && cardViewFolder !== 'all' && currentFolderData && (
+                  {cardViewFolder !== null && cardViewFolder !== 'all' && currentFolderData && (
                     <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
                       <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
                         currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
@@ -2684,19 +2652,6 @@ export default function MyResumesPage() {
                       <div className="min-w-0">
                         <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
                         <p className="text-xs sm:text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Uncategorized Header */}
-                  {cardViewFolder === 'uncategorized' && (
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <Folder className="w-6 h-6 text-gray-600" />
-                      </div>
-                      <div>
-                        <h2 className="font-semibold text-gray-900 text-lg">Uncategorized</h2>
-                        <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
@@ -2751,33 +2706,12 @@ export default function MyResumesPage() {
                           );
                         })}
 
-                        {/* Uncategorized card at root level */}
-                        {cardViewFolder === null && unfolderedResumes.length > 0 && (
-                          <div
-                            className="bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all duration-150"
-                            onClick={() => {
-                              setCardViewFolder('uncategorized');
-                              setBreadcrumbPath([]);
-                            }}
-                          >
-                            <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Folder className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">Uncategorized</h3>
-                                <p className="text-xs sm:text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
-                              </div>
-                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
 
                   {/* Loading state at root level (folders/resumes not yet fetched) */}
-                  {loading && cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
+                  {loading && cardViewFolder === null && foldersToDisplay.length === 0 && (
                     <div className="text-center py-12">
                       <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
                       <p className="text-sm text-gray-500">Loading folders…</p>
@@ -2785,7 +2719,7 @@ export default function MyResumesPage() {
                   )}
 
                   {/* Empty state for root level */}
-                  {!loading && cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
+                  {!loading && cardViewFolder === null && foldersToDisplay.length === 0 && (
                     <div className="text-center py-12">
                       <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                         <Folder className="w-8 h-8 text-brand-blue" />
@@ -2973,10 +2907,11 @@ export default function MyResumesPage() {
           tenant={null}
           // Pre-select whichever folder the user is currently browsing.
           // Card view uses `cardViewFolder` (drill-down navigation), list view
-          // uses `selectedFolder`. Skip the synthetic 'all'/'uncategorized'
-          // values — they're filters, not real folders the API knows about.
+          // uses `selectedFolder`. Skip the synthetic 'all' value — it's a
+          // filter, not a real folder the API knows about. When no folder is
+          // selected, the backend routes the upload to the user's root folder.
           targetFolder={(() => {
-            const card = cardViewFolder && cardViewFolder !== 'all' && cardViewFolder !== 'uncategorized'
+            const card = cardViewFolder && cardViewFolder !== 'all'
               ? cardViewFolder
               : null;
             const list = selectedFolder && selectedFolder !== 'all' ? selectedFolder : null;

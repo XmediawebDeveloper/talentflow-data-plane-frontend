@@ -29,7 +29,7 @@ const CURRENT_STEP = 2;
 /* ─────────────────────────────────────────────────────────────────────── */
 
 type InterviewMode = 'fixed' | 'flexible';
-type SkillType = 'Skill' | 'Command' | 'Certification';
+type SkillType = 'Skill' | 'Command';
 
 interface HRBankQuestion {
   id: string;
@@ -421,7 +421,6 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   const SKILL_TYPE_COLORS: Record<SkillType, string> = {
     'Skill': 'bg-slate-100 text-gray-700 border-gray-200',
     'Command': 'bg-brand-blue/10 text-brand-blue border-brand-blue/20',
-    'Certification': 'bg-green-50 text-green-700 border-green-200',
   };
 
   const renderSkillTag = (skill: SkillEntry) => {
@@ -443,7 +442,6 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
           >
             <option value="Skill">Skill</option>
             <option value="Command">Command</option>
-            <option value="Certification">Certification</option>
           </select>
           {/* Flexible mode: move skill to the other category */}
           {mode === 'flexible' && onMoveSkill && !isLocked && (
@@ -543,14 +541,14 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
       <div className="p-4 space-y-4">
 
-        {/* Inline warning when all entries are Command/Certification — the
+        {/* Inline warning when all entries are Command — the
             interview needs at least one type "Skill" to assess as a competency. */}
         {config.skills.length > 0 && !config.skills.some(s => (s.type ?? 'Skill') === 'Skill') && (
           <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
             <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-red-700">
               Add at least one entry of type <strong>Skill</strong> here.
-              All current entries are Commands or Certifications, which can&apos;t be assessed as a standalone competency.
+              All current entries are Commands, which can&apos;t be assessed as a standalone competency.
             </p>
           </div>
         )}
@@ -1618,10 +1616,10 @@ export default function AIInterviewConfig() {
       return 'At least one Must-Have skill is required before generating clusters.';
     }
     if (!mth.skills.some(s => (s.type ?? 'Skill') === 'Skill')) {
-      return 'Must-Have must include at least one entry of type "Skill" (not just Commands or Certifications).';
+      return 'Must-Have must include at least one entry of type "Skill" (not just Commands).';
     }
     if (nth.enabled && nth.skills.length > 0 && !nth.skills.some(s => (s.type ?? 'Skill') === 'Skill')) {
-      return 'Nice-to-Have must include at least one entry of type "Skill" (not just Commands or Certifications).';
+      return 'Nice-to-Have must include at least one entry of type "Skill" (not just Commands).';
     }
     return '';
   })();
@@ -1868,11 +1866,17 @@ export default function AIInterviewConfig() {
     ...(loadedSiRef.current.nth_skill_types_snapshot !== undefined && { nth_skill_types_snapshot: loadedSiRef.current.nth_skill_types_snapshot }),
     ...(loadedSiRef.current.nth_enabled_snapshot !== undefined && { nth_enabled_snapshot: loadedSiRef.current.nth_enabled_snapshot }),
     ...(loadedSiRef.current.hr_enabled_snapshot !== undefined && { hr_enabled_snapshot: loadedSiRef.current.hr_enabled_snapshot }),
-    // Recruiter-typed "main" skills, captured before AI expansion runs.
-    // Persisted once on first navigate; the Clusters page uses this to
-    // visually distinguish original skills from expansion-added sub-skills.
-    ...(loadedSiRef.current.mth_main_skills !== undefined && { mth_main_skills: loadedSiRef.current.mth_main_skills }),
-    ...(loadedSiRef.current.nth_main_skills !== undefined && { nth_main_skills: loadedSiRef.current.nth_main_skills }),
+    // Recruiter-typed "main" skills — the set visible on the Configure page,
+    // captured before AI expansion runs. Always save the CURRENT mth/nth.skills
+    // because the user may have added/removed skills since the draft was loaded.
+    // Reading from loadedSiRef.current here would drop newly added skills when
+    // the user navigates back from the Clusters page.
+    mth_main_skills: mth.skills.map(s => s.name),
+    ...(nth.enabled ? { nth_main_skills: nth.skills.map(s => s.name) } : (
+      loadedSiRef.current.nth_main_skills !== undefined
+        ? { nth_main_skills: loadedSiRef.current.nth_main_skills }
+        : {}
+    )),
     skill_comments: {
       mth: Object.fromEntries(mth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
       nth: Object.fromEntries(nth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
@@ -1958,17 +1962,17 @@ export default function AIInterviewConfig() {
     }
 
     // Validate skill-type mix: each enabled bucket must contain at least one
-    // entry of type "Skill". If everything is marked Command/Certification,
-    // there's nothing for the AI interview to assess as a competency.
+    // entry of type "Skill". If everything is marked Command, there's nothing
+    // for the AI interview to assess as a competency.
     const hasMthSkillEntry = mth.skills.some(s => (s.type ?? 'Skill') === 'Skill');
     if (!hasMthSkillEntry) {
-      toast.error('Must-Have Skills must include at least one entry of type "Skill" (not just Commands or Certifications).');
+      toast.error('Must-Have Skills must include at least one entry of type "Skill" (not just Commands).');
       return;
     }
     if (nth.enabled) {
       const hasNthSkillEntry = nth.skills.some(s => (s.type ?? 'Skill') === 'Skill');
       if (!hasNthSkillEntry) {
-        toast.error('Nice-to-Have Skills must include at least one entry of type "Skill" (not just Commands or Certifications).');
+        toast.error('Nice-to-Have Skills must include at least one entry of type "Skill" (not just Commands).');
         return;
       }
     }
@@ -2012,8 +2016,8 @@ export default function AIInterviewConfig() {
       ? currentNthSet.size !== nthSnapshotSet.size || [...currentNthSet].some(s => !nthSnapshotSet.has(s))
       : false;
 
-    // Skill TYPE comparison — type change (Skill ↔ Command ↔ Certification)
-    // affects clustering even when names are unchanged.
+    // Skill TYPE comparison — type change (Skill ↔ Command) affects
+    // clustering even when names are unchanged.
     const buildTypesMap = (entries: { name: string; type?: string }[]): Record<string, string> => {
       const out: Record<string, string> = {};
       for (const e of entries) {
