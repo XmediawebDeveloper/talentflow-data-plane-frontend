@@ -164,13 +164,6 @@ function LevelBadge({ level }: { level: string }) {
   );
 }
 
-function ScorePill({ score }: { score: number | null }) {
-  if (score == null) return null;
-  const rounded = Math.round(score);
-  const color = rounded >= 4 ? 'bg-emerald-100 text-emerald-700' : rounded >= 3 ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700';
-  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{rounded}/5</span>;
-}
-
 function CovBadge({ level }: { level: CovLevel }) {
   const s = COV_STYLES[level];
   const Icon = s.icon;
@@ -227,7 +220,6 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
                 if (isFu) return <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
                 return null;
               })()}
-              {entry.score != null && <ScorePill score={entry.score} />}
               {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-gray-300" />}
             </div>
           </div>
@@ -421,7 +413,6 @@ export default function CoverageTab({
   const [coverageView, setCoverageView] = useState<'overview' | 'table'>('overview');
 
   const coverageMap: Record<string, string> = eval_?.skill_coverage_map || {};
-  const skillScoresMap: Record<string, number> = eval_?.skill_scores_map || {};
   const coverageTrail: Record<string, TrailEntry[]> = eval_?.coverage_trail || {};
   const questionGroups: QuestionGroup[] = eval_?.question_groups || [];
   // Per-skill evidence from the backend — lists which questions produced
@@ -690,15 +681,6 @@ export default function CoverageTab({
             </div>
           </div>
           <div className="flex items-center gap-4 flex-shrink-0">
-            {capabilityScore != null && capabilityScore > 0 && (
-              <div className="text-right">
-                <div className="flex items-baseline gap-1 justify-end">
-                  <span className="text-4xl font-bold tracking-tight">{Math.round(capabilityScore)}</span>
-                  <span className="text-sm text-gray-400">/100</span>
-                </div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Capability Score</p>
-              </div>
-            )}
             {isCompleted && (() => {
               const dashData = buildDashboardData({
                 ai_evaluation: eval_,
@@ -718,11 +700,6 @@ export default function CoverageTab({
             })()}
           </div>
         </div>
-        {capabilityScoreReasoning && (
-          <div className="relative mt-4 pt-3 border-t border-white/10">
-            <p className="text-[11px] text-gray-300 leading-relaxed">{capabilityScoreReasoning}</p>
-          </div>
-        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -869,10 +846,6 @@ export default function CoverageTab({
           SECTIONS — MTH / NTH / HR — each with clusters + skills + questions
           ═══════════════════════════════════════════════════════════════════ */}
       {SECTIONS.map(section => {
-        const sec = sectionScores?.[section.key];
-        const sectionScore = sec?.score ?? null;
-        const sectionWeight = sec?.section_pct ?? null;
-
         // Section-level stats
         const tracking = roundTracking.find(r =>
           (section.key === 'mth' && r.type === 'must_have_skills') ||
@@ -918,26 +891,7 @@ export default function CoverageTab({
                       {hrGroups.length} question{hrGroups.length !== 1 ? 's' : ''}
                     </span>
                   )}
-                  {sectionWeight != null && section.key !== 'hr' && (
-                    <span className="text-xs text-gray-500">{sectionWeight}% of final score</span>
-                  )}
                 </div>
-                {sectionScore != null && (() => {
-                  const rounded = Math.round(sectionScore);
-                  return (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600">Section Score</span>
-                      <span className={`text-sm font-bold px-2 py-0.5 rounded ${
-                        rounded >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                        rounded >= 50 ? 'bg-amber-100 text-amber-700' :
-                        rounded > 0 ? 'bg-orange-100 text-orange-700' :
-                        'bg-gray-100 text-gray-500'
-                      }`}>
-                        {rounded}%
-                      </span>
-                    </div>
-                  );
-                })()}
               </div>
               <div className="flex items-center gap-4 flex-wrap text-[11px]">
                 {allocatedQs > 0 && (
@@ -1000,9 +954,6 @@ export default function CoverageTab({
                     clusterPct >= 40 ? 'bg-amber-400' :
                     clusterPct > 0 ? 'bg-orange-400' : 'bg-gray-200';
 
-                  const bandScore = ci_?.band_score ?? null;
-                  const bandLabel = ci_?.band ?? null;
-
                   return (
                     <div key={cKey}>
                       {/* Cluster Header */}
@@ -1020,15 +971,6 @@ export default function CoverageTab({
                             <span className="text-[11px] text-gray-400">
                               {skillsCovered.length}/{cluster.skills.length} skills addressed
                             </span>
-                            {bandLabel && bandLabel !== 'Not Covered' && (
-                              <span className={`px-1.5 py-0.5 text-[10px] rounded font-semibold ${
-                                bandLabel === 'High' ? 'bg-emerald-100 text-emerald-700' :
-                                bandLabel === 'Medium' ? 'bg-amber-100 text-amber-700' :
-                                'bg-orange-100 text-orange-700'
-                              }`}>
-                                Band: {bandLabel}
-                              </span>
-                            )}
                           </div>
                           {/* Cluster progress bar */}
                           <div className="mt-2 flex items-center gap-2">
@@ -1047,12 +989,6 @@ export default function CoverageTab({
                             </span>
                           </div>
                         </div>
-                        {bandScore != null && (
-                          <div className="flex-shrink-0 text-right ml-2">
-                            <div className="text-sm font-bold text-gray-900">{Math.round(bandScore)}</div>
-                            <div className="text-[9px] text-gray-400 uppercase">/100</div>
-                          </div>
-                        )}
                       </button>
 
                       {/* Cluster Body — skills accordions */}
@@ -1068,14 +1004,10 @@ export default function CoverageTab({
                               const sk = skill.toLowerCase();
                               const trailKey = Object.keys(coverageTrail).find(k => k.toLowerCase() === sk);
                               const trail = trailKey ? coverageTrail[trailKey] : [];
-                              const scoreKey = Object.keys(skillScoresMap).find(k => k.toLowerCase() === sk);
-                              const skillScore = scoreKey ? skillScoresMap[scoreKey] : null;
                               const isExpanded = expandedSkills.has(skill);
                               const totalFollowUps = groups.reduce((s, g) => s + (g.follow_ups?.length || 0), 0);
-
-                              // Find per-skill score from ClusterInsights if available
+                              // Note kept for the evaluator note below the expanded skill row.
                               const ciSkill = ci_?.skill_scores.find(ss => ss.skill.toLowerCase() === sk);
-                              const effectiveScore = skillScore ?? ciSkill?.score ?? null;
 
                               return (
                                 <div key={skill}>
@@ -1086,20 +1018,6 @@ export default function CoverageTab({
                                     {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
                                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
                                     <span className="text-sm font-medium text-gray-900 flex-1 min-w-0 truncate">{skill}</span>
-                                    {effectiveScore != null && (() => {
-                                      const rounded = Math.round(effectiveScore);
-                                      return (
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                          rounded >= 8 ? 'bg-emerald-100 text-emerald-700' :
-                                          rounded >= 5 ? 'bg-amber-100 text-amber-700' :
-                                          rounded >= 2 ? 'bg-orange-100 text-orange-700' :
-                                          rounded > 0 ? 'bg-orange-100 text-orange-700' :
-                                          'bg-gray-100 text-gray-400'
-                                        }`}>
-                                          {rounded}{rounded <= 10 ? '/10' : ''}
-                                        </span>
-                                      );
-                                    })()}
                                     <LevelBadge level={level} />
                                     {groups.length > 0 && (
                                       <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-500">
@@ -1146,7 +1064,6 @@ export default function CoverageTab({
                                                     <span className="flex-shrink-0 font-mono font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                                                       Q{e.q_num}
                                                     </span>
-                                                    <ScorePill score={e.score} />
                                                     {e.note && <span className="text-gray-600 leading-snug">{e.note}</span>}
                                                   </div>
                                                 ))}

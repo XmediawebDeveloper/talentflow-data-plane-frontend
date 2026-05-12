@@ -58,23 +58,31 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="text-sm text-gray-500 mb-1">Cluster Score</div>
-            <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)', color: priorityStyle.border }}>
-              {Math.round(cluster.clusterScore)}
+        {(() => {
+          const totalSkills = cluster.skills.length;
+          const coveredCount = cluster.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+          const coveragePct = totalSkills > 0 ? Math.round((coveredCount / totalSkills) * 100) : 0;
+          return (
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <div className="text-sm text-gray-500 mb-1">Coverage</div>
+                <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)', color: priorityStyle.border }}>
+                  {coveragePct}%
+                </div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{coveredCount}/{totalSkills} skills</div>
+              </div>
+              <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-out"
+                  style={{
+                    width: `${coveragePct}%`,
+                    background: `linear-gradient(90deg, ${priorityStyle.border} 0%, ${priorityStyle.text} 100%)`,
+                  }}
+                />
+              </div>
             </div>
-          </div>
-          <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-1000 ease-out"
-              style={{
-                width: `${(cluster.clusterScore / 10) * 100}%`,
-                background: `linear-gradient(90deg, ${priorityStyle.border} 0%, ${priorityStyle.text} 100%)`,
-              }}
-            />
-          </div>
-        </div>
+          );
+        })()}
       </button>
 
       {expanded && (

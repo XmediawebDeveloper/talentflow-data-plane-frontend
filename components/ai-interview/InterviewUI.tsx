@@ -5149,11 +5149,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <button
                 onClick={() => {
                   setShowEndConfirm(false);
+                  // Send end_interview and DO NOT close the WS yet — closing it
+                  // the same tick races against the server reading the message,
+                  // which leaves the DB stuck at in_progress. The server will
+                  // emit auto_disconnect once _save_interview_results completes,
+                  // and the existing auto_disconnect handler tears down the WS.
+                  // The 5s safety-net below forces a disconnect if the server
+                  // never acks (e.g. backend crash), so the UI can't hang.
+                  setIsClosing(true);
+                  isClosingRef.current = true;
+                  setStatus("Ending interview…");
                   if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
-                  disconnect();
-                  // onInterviewComplete is called by ws.onclose after recording upload completes
+                  setTimeout(() => {
+                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                      disconnect();
+                    }
+                  }, 5000);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}

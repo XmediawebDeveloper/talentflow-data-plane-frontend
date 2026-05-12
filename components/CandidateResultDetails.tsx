@@ -1345,11 +1345,28 @@ export default function CandidateResultDetails({
                                 const isMCQQuestion = ['mcq', 'single_choice', 'multiple_choice'].includes(
                                   String(q.question_type || '').toLowerCase()
                                 );
+                                // Detect "Not Answered" — candidate left the
+                                // question blank (no selection, no text, no
+                                // code). Counting this as "Incorrect" with a
+                                // red badge is misleading because there's
+                                // nothing to evaluate. Mirrors the
+                                // hasActualAnswer helper used for the round
+                                // progress bar above.
+                                const hasAnyAnswer = (() => {
+                                  if (q.question_type === 'coding') return !!q.candidate_code_submission?.trim();
+                                  if (q.candidate_selected_options && q.candidate_selected_options.length > 0) return true;
+                                  return !!q.candidate_answer_text?.trim();
+                                })();
+                                const isNotAnswered = !hasAnyAnswer;
                                 return (
                                   <>
                               {/* Question Header */}
                               <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 ${
-                                isTextQuestion ? 'bg-slate-50' : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
+                                isTextQuestion
+                                  ? 'bg-slate-50'
+                                  : isNotAnswered
+                                    ? 'bg-slate-50'
+                                    : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
@@ -1364,11 +1381,15 @@ export default function CandidateResultDetails({
                                           already makes the type obvious
                                           (options grid for MCQ, code block
                                           for coding, free text otherwise). */}
-                                      {!isTextQuestion && (q.is_correct ? (
-                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">Correct</span>
-                                      ) : (
-                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded text-xs font-medium">Incorrect</span>
-                                      ))}
+                                      {!isTextQuestion && (
+                                        isNotAnswered ? (
+                                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs font-medium">Not Answered</span>
+                                        ) : q.is_correct ? (
+                                          <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">Correct</span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded text-xs font-medium">Incorrect</span>
+                                        )
+                                      )}
                                     </div>
                                     {q.question_type === 'coding' ? (
                                       // Coding question — mirror the candidate

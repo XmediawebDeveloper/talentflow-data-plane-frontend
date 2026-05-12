@@ -7,9 +7,15 @@ interface Props {
 }
 
 export function SkillRadarChart({ mustHaveClusters, niceToHaveClusters }: Props) {
+  const coverageOf = (c: Cluster) => {
+    const total = c.skills.length;
+    if (total === 0) return 0;
+    const covered = c.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+    return Math.round((covered / total) * 100);
+  };
   const data = [
-    ...mustHaveClusters.map(c => ({ cluster: c.name, score: c.clusterScore })),
-    ...niceToHaveClusters.map(c => ({ cluster: c.name, score: c.clusterScore })),
+    ...mustHaveClusters.map(c => ({ cluster: c.name, coverage: coverageOf(c) })),
+    ...niceToHaveClusters.map(c => ({ cluster: c.name, coverage: coverageOf(c) })),
   ];
 
   const allSkills = [...mustHaveClusters, ...niceToHaveClusters].flatMap(c => c.skills);
@@ -26,14 +32,14 @@ export function SkillRadarChart({ mustHaveClusters, niceToHaveClusters }: Props)
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
       <h2 className="text-2xl font-bold mb-2">Skill Coverage Analysis</h2>
-      <p className="text-gray-500 mb-6">Visual breakdown of performance across all skill clusters</p>
+      <p className="text-gray-500 mb-6">Coverage % across all skill clusters</p>
 
       <ResponsiveContainer width="100%" height={360}>
         <RadarChart data={data}>
           <PolarGrid stroke="var(--border)" />
           <PolarAngleAxis dataKey="cluster" tick={{ fontSize: 11 }} />
-          <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 10 }} />
-          <Radar name="Performance" dataKey="score" stroke="var(--score-high)" fill="var(--score-high)" fillOpacity={0.3} strokeWidth={2} />
+          <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
+          <Radar name="Coverage %" dataKey="coverage" stroke="var(--score-high)" fill="var(--score-high)" fillOpacity={0.3} strokeWidth={2} />
           <Tooltip />
         </RadarChart>
       </ResponsiveContainer>

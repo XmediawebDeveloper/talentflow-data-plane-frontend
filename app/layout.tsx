@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+// import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ModalProvider } from "@/components/providers/ModalProvider";
@@ -11,8 +11,13 @@ import SessionExpiredModal from "@/components/SessionExpiredModal";
 import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+import localFont from "next/font/local";
 
+const inter = localFont({
+  src: "./fonts/Inter-Variable.woff2",
+  variable: "--font-inter",
+  display: "swap",
+});
 export const metadata: Metadata = {
   title: "TalentFlow - Recruitment Dashboard",
   description: "AI-powered recruitment and talent management platform",

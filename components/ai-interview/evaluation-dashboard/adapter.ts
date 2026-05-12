@@ -363,10 +363,10 @@ export function buildDashboardData(params: {
     hr: hr > 0 || !!eval_?.section_scores?.hr,
   };
 
-  // Base weights (canonical 70/20/10). Renormalize to sum to 100 based on
-  // which sections actually exist — missing sections get 0%, present sections
-  // keep their proportion.
-  const BASE_MTH = 70, BASE_NTH = 20, BASE_HR = 10;
+  // Base weights — HR is excluded from scoring evaluation per product spec,
+  // so its base weight is 0. Remaining 100% splits between MTH and NTH.
+  // Renormalize to sum to 100 based on which sections actually exist.
+  const BASE_MTH = 70, BASE_NTH = 30, BASE_HR = 0;
   const baseSum =
     (sectionsPresent.mustHave   ? BASE_MTH : 0) +
     (sectionsPresent.niceToHave ? BASE_NTH : 0) +

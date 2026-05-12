@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2,
+  Download, Loader2, Sparkles,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -1563,8 +1563,339 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   );
                 };
 
+                // ── Build skill → priority/cluster lookup from clusterConfig ──
+                const skillPriority: Record<string, number> = {};
+                const skillCluster: Record<string, string> = {};
+                [...clusterConfig.mth, ...clusterConfig.nth].forEach((c: any) => {
+                  (c.skills || []).forEach((s: string) => {
+                    if (s) {
+                      skillPriority[s.toLowerCase()] = c.priority;
+                      skillCluster[s.toLowerCase()] = c.name;
+                    }
+                  });
+                });
+                const getPrio = (skill?: string) => skill ? (skillPriority[skill.toLowerCase()] || 0) : 0;
+                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : p === 3 ? 5 : 3;
+
+                // ── Build evaluations lookup by question_number ──
+                // Used to surface per-skill rows + one_line_note for the AI Analysis Summary.
+                const evalsByQ: Record<number, any[]> = {};
+                (eval_.evaluations || []).forEach((e: any) => {
+                  const q = e.question_number ?? 0;
+                  (evalsByQ[q] = evalsByQ[q] || []).push(e);
+                });
+
+                // ── Group questions by section (mth / nth / hr) ──
+                type GroupT = typeof groups[number];
+                const mthGroups: GroupT[] = [];
+                const nthGroups: GroupT[] = [];
+                const hrGroups: GroupT[] = [];
+                groups.forEach((g, idx) => {
+                  let rt = (g.main.round_type || '').toLowerCase();
+                  if (!rt || rt === 'general') {
+                    for (let k = idx + 1; k < groups.length; k++) {
+                      const nxt = groups[k].main;
+                      if (nxt.round_type) { rt = String(nxt.round_type).toLowerCase(); break; }
+                    }
+                    if (!rt) rt = 'must_have_skills';
+                  }
+                  if (rt === 'hr') hrGroups.push(g);
+                  else if (rt === 'nice_to_have_skills') nthGroups.push(g);
+                  else mthGroups.push(g);
+                });
+
+                const renderFollowUps = (followUps: any[], parentKey: string) => {
+                  if (followUps.length === 0) return null;
+                  let _fuC = 0, _ddC = 0;
+                  return (
+                    <div className="ml-2 mt-3 space-y-3 pl-3 border-l-2 border-brand-cyan/30">
+                      {followUps.map((fu: any, fIdx: number) => {
+                        const fuSkipped = fu.response_type === 'skipped';
+                        const isDd = fu.question_intent === 'deep_dive';
+                        let badge: string, badgeCls: string;
+                        if (isDd) { _ddC += 1; badge = `D${_ddC}`; badgeCls = 'text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/20'; }
+                        else { _fuC += 1; badge = `F${_fuC}`; badgeCls = 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20'; }
+                        return (
+                          <div key={fIdx} className="flex items-start gap-2">
+                            <span className={`flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>{badge}</span>
+                            <div className="flex-1 min-w-0">
+                              {fuSkipped && (
+                                <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
+                                  Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
+                                </span>
+                              )}
+                              <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
+                              {renderAnswer(fu, `${parentKey}-f-${fIdx}`)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                };
+
+                const renderClarifications = (item: any, parentKey: string) => {
+                  if (!Array.isArray(item.clarifications) || item.clarifications.length === 0) return null;
+                  return (
+                    <div className="ml-2 mt-3 space-y-3 pl-3 border-l-2 border-brand-orange/30">
+                      {item.clarifications.map((cl: any, cIdx: number) => {
+                        const clKey = `${parentKey}-cl-${cIdx}`;
+                        return (
+                          <div key={clKey} className="flex items-start gap-2">
+                            <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
+                              CL{cl.clarification_number ?? cIdx + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
+                              {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                };
+
+                // ── Scored card (Must-Have / Nice-to-Have) ──
+                const renderScoredCard = (g: GroupT, idx: number, sectionKey: 'mth' | 'nth') => {
+                  const item = g.main;
+                  const cardKey = `${sectionKey}-${idx}-${item.question_number ?? idx}`;
+                  const isExpanded = expandedQuestions.has(cardKey);
+                  const isSkipped = item.response_type === 'skipped';
+
+                  // Collect all skills for this question: primary topic + secondary_skills
+                  type SkillRow = { skill: string; score: number; priority: number };
+                  const skillsForQ: SkillRow[] = [];
+                  const seen = new Set<string>();
+                  const pushSkill = (skill?: string, score?: number) => {
+                    if (!skill) return;
+                    const k = skill.toLowerCase();
+                    if (seen.has(k)) return;
+                    seen.add(k);
+                    skillsForQ.push({ skill, score: Number(score) || 0, priority: getPrio(skill) });
+                  };
+                  pushSkill(item.topic, item.score);
+                  (item.secondary_skills || []).forEach((s: any) => pushSkill(s.skill, s.score));
+                  // Also pull additional per-skill rows from evaluations if missing
+                  (evalsByQ[item.question_number] || []).forEach((e: any) => pushSkill(e.topic, e.score));
+
+                  // Weighted final score using priority-derived weights
+                  const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority || 3), 0);
+                  const weightedSum = skillsForQ.reduce((acc, s) => acc + s.score * priorityWeight(s.priority || 3), 0);
+                  const finalScore = totalW > 0 ? weightedSum / totalW : (item.score ?? 0);
+
+                  // AI summary: take the rep evaluation's one_line_note
+                  const repEval = (evalsByQ[item.question_number] || []).reduce<any | null>(
+                    (best, e) => (best == null || (e.score || 0) > (best.score || 0) ? e : best), null
+                  );
+                  const aiSummary = repEval?.one_line_note || '';
+
+                  const duration = item.duration_seconds;
+                  const finalScoreColor = finalScore >= 8 ? 'text-green-600' : finalScore >= 6 ? 'text-blue-600' : finalScore >= 4 ? 'text-yellow-600' : 'text-orange-600';
+
+                  return (
+                    <div key={cardKey} className={`bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 ${isSkipped ? 'bg-slate-50/50' : ''}`}>
+                      <button
+                        onClick={() => toggleQuestion(cardKey)}
+                        className="w-full text-left p-4 hover:bg-gray-50/50 rounded-xl transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
+                                Question {item.question_number ?? idx + 1}
+                              </span>
+                              {duration != null && (
+                                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                  <Clock className="w-3 h-3" />
+                                  {duration} seconds
+                                </span>
+                              )}
+                              {isSkipped && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                  Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 leading-snug mb-2">{item.question}</p>
+                            {skillsForQ.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {skillsForQ.map((s, i) => (
+                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                                    {s.skill}
+                                    {s.priority > 0 && (
+                                      <span className="text-[10px] text-slate-500">(P{s.priority})</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-start gap-2 flex-shrink-0">
+                            {!isSkipped && (
+                              <div className="text-right">
+                                <div className={`text-2xl font-bold ${finalScoreColor}`}>{finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wider">Final Score</div>
+                              </div>
+                            )}
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 mt-1" /> : <ChevronDown className="w-5 h-5 text-gray-400 mt-1" />}
+                          </div>
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+                          {/* Candidate Answer */}
+                          <div className="pt-4">
+                            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Candidate Answer</div>
+                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                              {item.answer || '—'}
+                            </div>
+                          </div>
+
+                          {/* AI Analysis Summary */}
+                          {aiSummary && (
+                            <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg p-3">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+                                <span className="text-xs font-semibold text-brand-blue">AI Analysis Summary</span>
+                              </div>
+                              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                            </div>
+                          )}
+
+                          {/* Skill Scoring Breakdown */}
+                          {skillsForQ.length > 0 && !isSkipped && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
+                              <div className="space-y-2">
+                                {skillsForQ.map((s, i) => {
+                                  const w = priorityWeight(s.priority || 3);
+                                  const contribution = s.score * w;
+                                  const pct = Math.min(100, Math.max(0, (s.score / 10) * 100));
+                                  return (
+                                    <div key={i} className="bg-slate-50 rounded-lg p-3">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-sm font-medium text-gray-900">{s.skill}</span>
+                                          {s.priority > 0 && (
+                                            <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200">P{s.priority}</span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-4 text-xs">
+                                          <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}</span></div>
+                                          <div><span className="text-gray-500">Weight</span> <span className="font-semibold text-gray-900">{w}</span></div>
+                                          <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{contribution.toFixed(contribution % 1 === 0 ? 0 : 0)}</span></div>
+                                        </div>
+                                      </div>
+                                      <div className="h-1.5 bg-white rounded-full overflow-hidden ring-1 ring-slate-200">
+                                        <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Weighted Formula */}
+                          {skillsForQ.length > 0 && !isSkipped && totalW > 0 && (
+                            <div className="bg-brand-blue/5 ring-1 ring-dashed ring-brand-blue/30 rounded-lg p-3">
+                              <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
+                              <div className="font-mono text-xs text-gray-700 space-y-0.5">
+                                <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
+                                <div>= ({skillsForQ.map(s => `${s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}×${priorityWeight(s.priority || 3)}`).join(' + ')}) / {totalW} = {finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Clarifications + Follow-ups */}
+                          {renderClarifications(item, cardKey)}
+                          {renderFollowUps(g.followUps, cardKey)}
+
+                          {/* View Full Transcript */}
+                          <div className="flex justify-center pt-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setActiveTab('transcript'); }}
+                              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              View Full Transcript
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                // ── HR card (no scoring — answer only) ──
+                const renderHRCard = (g: GroupT, idx: number) => {
+                  const item = g.main;
+                  const cardKey = `hr-${idx}-${item.question_number ?? idx}`;
+                  const isExpanded = expandedQuestions.has(cardKey);
+                  const isSkipped = item.response_type === 'skipped';
+                  const duration = item.duration_seconds;
+
+                  return (
+                    <div key={cardKey} className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                      <button
+                        onClick={() => toggleQuestion(cardKey)}
+                        className="w-full text-left p-4 hover:bg-gray-50/50 rounded-xl transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
+                                Question {item.question_number ?? idx + 1}
+                              </span>
+                              {duration != null && (
+                                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                  <Clock className="w-3 h-3" />
+                                  {duration} seconds
+                                </span>
+                              )}
+                              {item.topic && item.topic !== 'general' && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-xs rounded-full">{item.topic}</span>
+                              )}
+                              {isSkipped && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                  Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                          </div>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="px-4 pb-4 border-t border-gray-100 pt-4 space-y-3">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Candidate Answer</div>
+                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                              {item.answer || '—'}
+                            </div>
+                          </div>
+                          {renderClarifications(item, cardKey)}
+                          {renderFollowUps(g.followUps, cardKey)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                const SectionHeader = ({ title, badge, badgeCls }: { title: string; badge: string; badgeCls: string }) => (
+                  <div className="flex items-center gap-3 mb-3">
+                    <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${badgeCls}`}>{badge}</span>
+                  </div>
+                );
+
                 return (
-                  <div className="space-y-3">
+                  <div className="space-y-6">
                     {/* Export toolbar */}
                     <div className="flex justify-end relative">
                       <button
@@ -1589,133 +1920,45 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         </>
                       )}
                     </div>
-                    {groups.map(({ main: item, followUps }, idx: number) => {
-                      const isSkipped = item.response_type === 'skipped';
-                      // If the first question has no round_type/topic (backend occasionally
-                      // leaves Q1 un-tagged because the round only activates on Q2), inherit
-                      // from the next available group. Final fallback: must_have_skills.
-                      let effectiveRtype = (item.round_type || '').toLowerCase();
-                      let effectiveTopic = item.topic;
-                      if (!effectiveRtype || effectiveRtype === 'general') {
-                        for (let k = idx + 1; k < groups.length; k++) {
-                          const nxt = groups[k].main;
-                          if (nxt.round_type) { effectiveRtype = String(nxt.round_type).toLowerCase(); break; }
-                        }
-                        if (!effectiveRtype) effectiveRtype = 'must_have_skills';
-                      }
-                      if (!effectiveTopic || effectiveTopic === 'general') {
-                        for (let k = idx + 1; k < groups.length; k++) {
-                          const nxt = groups[k].main;
-                          if (nxt.topic && nxt.topic !== 'general') { effectiveTopic = nxt.topic; break; }
-                        }
-                      }
-                      const rtype = effectiveRtype;
-                      const isHR = rtype === 'hr';
-                      const isMustHave = rtype === 'must_have_skills';
-                      const isNiceToHave = rtype === 'nice_to_have_skills';
-                      // Same color scheme for the full round — not position-dependent.
-                      // Must Have → amber; Nice To Have → blue; HR → purple.
-                      const roundBadge = isHR
-                        ? { label: 'HR', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' }
-                        : isMustHave
-                        ? { label: 'Must Have Skills', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' }
-                        : isNiceToHave
-                        ? { label: 'Nice To Have Skills', cls: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20' }
-                        : item.round_type
-                        ? { label: item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), cls: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200' }
-                        : null;
 
-                      return (
-                        <div key={idx} className={`bg-white rounded-xl border ring-1 shadow-sm ${isSkipped ? 'border-gray-100 ring-black/[0.02] bg-slate-50/50 shadow-brand-blue/5' : 'border-gray-100 ring-black/[0.02] shadow-brand-blue/5'} p-4`}>
-                          <div className="flex items-start gap-3 mb-2">
-                            <span className="flex-shrink-0 text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5 mt-0.5">
-                              Q{item.question_number ?? idx + 1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                                {roundBadge && (
-                                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${roundBadge.cls}`}>
-                                    {roundBadge.label}
-                                  </span>
-                                )}
-                                {effectiveTopic && effectiveTopic !== 'general' && (
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-xs rounded-full">{effectiveTopic}</span>
-                                )}
-                                {isSkipped && (
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
-                                    Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
-                              {renderAnswer(item, `q-${idx}`)}
-                            </div>
-                          </div>
-
-                          {Array.isArray(item.clarifications) && item.clarifications.length > 0 && (
-                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-brand-orange/30">
-                              {item.clarifications.map((cl: any, cIdx: number) => {
-                                const clKey = `q-${idx}-cl-${cIdx}`;
-                                return (
-                                  <div key={clKey}>
-                                    <div className="flex items-start gap-2">
-                                      <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
-                                        CL{cl.clarification_number ?? cIdx + 1}
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
-                                        {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {followUps.length > 0 && (() => {
-                            let _qaFuC = 0, _qaDdC = 0;
-                            return (
-                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-brand-cyan/30">
-                              {followUps.map((fu: any, fIdx: number) => {
-                                const fuSkipped = fu.response_type === 'skipped';
-                                const isDd = fu.question_intent === 'deep_dive';
-                                let badge: string;
-                                let badgeCls: string;
-                                if (isDd) {
-                                  _qaDdC += 1;
-                                  badge = `D${_qaDdC}`;
-                                  badgeCls = 'text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/20';
-                                } else {
-                                  _qaFuC += 1;
-                                  badge = `F${_qaFuC}`;
-                                  badgeCls = 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20';
-                                }
-                                return (
-                                  <div key={fIdx}>
-                                    <div className="flex items-start gap-2">
-                                      <span className={`flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>
-                                        {badge}
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        {fuSkipped && (
-                                          <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
-                                            Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
-                                          </span>
-                                        )}
-                                        <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
-                                        {renderAnswer(fu, `q-${idx}-f-${fIdx}`)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            );
-                          })()}
+                    {mthGroups.length > 0 && (
+                      <section>
+                        <SectionHeader
+                          title="Must-Have Section"
+                          badge="Scored for Pass/Fail"
+                          badgeCls="bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20"
+                        />
+                        <div className="space-y-3">
+                          {mthGroups.map((g, i) => renderScoredCard(g, i, 'mth'))}
                         </div>
-                      );
-                    })}
+                      </section>
+                    )}
+
+                    {nthGroups.length > 0 && (
+                      <section>
+                        <SectionHeader
+                          title="Nice-to-Have Section"
+                          badge="Informative Only"
+                          badgeCls="bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20"
+                        />
+                        <div className="space-y-3">
+                          {nthGroups.map((g, i) => renderScoredCard(g, i, 'nth'))}
+                        </div>
+                      </section>
+                    )}
+
+                    {hrGroups.length > 0 && (
+                      <section>
+                        <SectionHeader
+                          title="HR Section"
+                          badge="Not scored — review only"
+                          badgeCls="bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
+                        />
+                        <div className="space-y-3">
+                          {hrGroups.map((g, i) => renderHRCard(g, i))}
+                        </div>
+                      </section>
+                    )}
                   </div>
                 );
               })()

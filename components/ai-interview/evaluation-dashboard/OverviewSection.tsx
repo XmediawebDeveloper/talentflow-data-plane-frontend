@@ -235,9 +235,13 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
           </div>
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border-2 border-blue-300 shadow-md">
             <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center mb-3"><Star size={20} className="text-white" /></div>
-            <div className="text-3xl font-bold mb-1" style={{ fontFamily: 'var(--font-mono)' }}>{allClusters.filter(c => (c.clusterScore / 10 * 100) >= 80).length}/{allClusters.length}</div>
+            <div className="text-3xl font-bold mb-1" style={{ fontFamily: 'var(--font-mono)' }}>{allClusters.filter(c => {
+              const total = c.skills.length;
+              const covered = c.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+              return total > 0 && (covered / total) >= 0.7;
+            }).length}/{allClusters.length}</div>
             <div className="text-sm text-blue-900 font-medium">Top Clusters</div>
-            <div className="text-xs text-blue-700 mt-1">Scored ≥80%</div>
+            <div className="text-xs text-blue-700 mt-1">Coverage ≥70%</div>
           </div>
           <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-5 border-2 border-amber-300 shadow-md">
             <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center mb-3"><Brain size={20} className="text-white" /></div>
@@ -255,7 +259,6 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
           {[
             { label: 'Must-Have Skills', desc: `Critical competencies • ${data.weights.mustHave.toFixed(1)}% weight`, score: scores.mustHave, count: mustHaveClusters.length, icon: CheckCircle, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', barBg: 'bg-emerald-100', barFill: 'from-emerald-500 to-emerald-600', textColor: 'text-emerald-900', present: data.sectionsPresent.mustHave },
             { label: 'Nice-to-Have Skills', desc: `Additional competencies • ${data.weights.niceToHave.toFixed(1)}% weight`, score: scores.niceToHave, count: niceToHaveClusters.length, icon: TrendingUp, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', barBg: 'bg-amber-100', barFill: 'from-amber-500 to-amber-600', textColor: 'text-amber-900', present: data.sectionsPresent.niceToHave },
-            { label: 'HR Assessment', desc: `Cultural fit & soft skills • ${data.weights.hr.toFixed(1)}% weight`, score: scores.hr, count: 0, icon: User, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', barBg: 'bg-blue-100', barFill: 'from-blue-500 to-blue-600', textColor: 'text-blue-900', present: data.sectionsPresent.hr },
           ].filter(s => s.present).map((s, idx) => (
             <div key={idx} className="relative">
               <div className="flex items-center justify-between mb-3">
@@ -363,7 +366,6 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               {[
                 { label: 'Must-Have Skills', score: scores.mustHave, bg: 'bg-emerald-100', fill: 'from-emerald-500 to-emerald-600', text: 'text-emerald-900', present: data.sectionsPresent.mustHave },
                 { label: 'Nice-to-Have Skills', score: scores.niceToHave, bg: 'bg-amber-100', fill: 'from-amber-500 to-amber-600', text: 'text-amber-900', present: data.sectionsPresent.niceToHave },
-                { label: 'HR Assessment', score: scores.hr, bg: 'bg-blue-100', fill: 'from-blue-500 to-blue-600', text: 'text-blue-900', present: data.sectionsPresent.hr },
               ].filter(s => s.present).map((s, idx) => (
                 <div key={idx}>
                   <div className="flex items-center justify-between mb-2">
@@ -405,17 +407,19 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
         </div>
       )}
 
-      {/* Cluster Performance Heatmap */}
+      {/* Cluster Coverage Overview — coverage %, not score */}
       {allClusters.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-2xl font-bold mb-2">Cluster Performance Overview</h2>
-          <p className="text-sm text-gray-500 mb-6">Visual representation of performance across all skill clusters</p>
+          <h2 className="text-2xl font-bold mb-2">Cluster Coverage Overview</h2>
+          <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across all clusters</p>
           <div className="grid grid-cols-3 gap-4">
             {allClusters.map((cluster, idx) => {
-              const percentage = (cluster.clusterScore / 10) * 100;
-              const colors = percentage >= 80
+              const totalSkills = cluster.skills.length;
+              const coveredCount = cluster.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+              const coveragePct = totalSkills > 0 ? Math.round((coveredCount / totalSkills) * 100) : 0;
+              const colors = coveragePct >= 70
                 ? { bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300', fill: 'linear-gradient(90deg, var(--score-high) 0%, #059669 100%)' }
-                : percentage >= 60
+                : coveragePct >= 40
                   ? { bg: 'bg-gradient-to-br from-amber-50 to-amber-100', text: 'text-amber-900', border: 'border-amber-300', fill: 'linear-gradient(90deg, var(--score-medium) 0%, #d97706 100%)' }
                   : { bg: 'bg-gradient-to-br from-red-50 to-red-100', text: 'text-red-900', border: 'border-red-300', fill: 'linear-gradient(90deg, var(--score-low) 0%, #dc2626 100%)' };
               return (
@@ -425,16 +429,16 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                       Cluster {cluster.clusterNumber}
                     </div>
                     <div className={`text-3xl font-bold ${colors.text}`} style={{ fontFamily: 'var(--font-mono)' }}>
-                      {cluster.clusterScore.toFixed(1)}
+                      {coveragePct}%
                     </div>
                   </div>
                   <div className={`text-base font-medium mb-3 ${colors.text}`}>{cluster.name}</div>
                   <div className="w-full h-2 bg-white/50 rounded-full overflow-hidden mb-3">
-                    <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${percentage}%`, background: colors.fill }} />
+                    <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${coveragePct}%`, background: colors.fill }} />
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={`text-xs ${colors.text} opacity-75 font-semibold`} style={{ fontFamily: 'var(--font-mono)' }}>{cluster.priority} Priority</span>
-                    <span className={`text-xs ${colors.text} opacity-75 font-semibold`} style={{ fontFamily: 'var(--font-mono)' }}>{cluster.weight}% weight</span>
+                    <span className={`text-xs ${colors.text} opacity-75 font-semibold`} style={{ fontFamily: 'var(--font-mono)' }}>{coveredCount}/{totalSkills} skills</span>
                   </div>
                 </div>
               );

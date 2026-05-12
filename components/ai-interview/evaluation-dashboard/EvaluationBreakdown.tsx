@@ -4,7 +4,7 @@ import type { Cluster, SectionWeights } from './types';
 interface Props {
   mustHaveScore: number;
   niceToHaveScore: number;
-  hrScore: number;
+  hrScore?: number;          // accepted but no longer rendered — HR is excluded from scoring
   finalScore: number;
   mustHaveClusters: Cluster[];
   niceToHaveClusters: Cluster[];
@@ -12,16 +12,14 @@ interface Props {
   sectionsPresent: { mustHave: boolean; niceToHave: boolean; hr: boolean };
 }
 
-/** Full 5-step Evaluation Breakdown — displayed math ALWAYS reconciles with the
+/** Full Evaluation Breakdown — displayed math ALWAYS reconciles with the
  *  category and final scores (adapter computes those from the same sums shown here).
  *
- *  Weights renormalize based on which sections actually exist in the interview.
- *  Base canonical weights are 70/20/10 (MTH/NTH/HR); when a section is missing,
- *  its share is redistributed proportionally among the remaining sections. */
+ *  HR is excluded from scoring (review-only). Base canonical weights are 70/30
+ *  (MTH/NTH); when a section is missing, its share is redistributed to the other. */
 export function EvaluationBreakdown({
   mustHaveScore,
   niceToHaveScore,
-  hrScore,
   finalScore,
   mustHaveClusters,
   niceToHaveClusters,
@@ -30,12 +28,10 @@ export function EvaluationBreakdown({
 }: Props) {
   const wMth = weights.mustHave / 100;
   const wNth = weights.niceToHave / 100;
-  const wHr  = weights.hr / 100;
   const mthContribution = mustHaveScore * wMth;
   const nthContribution = niceToHaveScore * wNth;
-  const hrContribution  = hrScore * wHr;
-  const weightedSum = mthContribution + nthContribution + hrContribution;
-  const presentCount = [sectionsPresent.mustHave, sectionsPresent.niceToHave, sectionsPresent.hr].filter(Boolean).length;
+  const weightedSum = mthContribution + nthContribution;
+  const presentCount = [sectionsPresent.mustHave, sectionsPresent.niceToHave].filter(Boolean).length;
 
   // Per-cluster contributions (exactly what the category score is summed from).
   const mthItems = mustHaveClusters.map(c => ({
@@ -159,7 +155,7 @@ export function EvaluationBreakdown({
             Final Score Weight Distribution
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 pl-8 mb-2">
-            Canonical weights: <strong>MHS 70%, NHS 20%, HR 10%</strong>. When a section is absent, its share is
+            Canonical weights: <strong>MHS 70%, NHS 30%</strong> (HR is review-only, excluded from scoring). When a section is absent, its share is
             redistributed proportionally so the present sections sum to 100%.
           </p>
           {presentCount < 3 && (
@@ -172,21 +168,14 @@ export function EvaluationBreakdown({
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                 <div className="text-xs text-emerald-700 mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>MUST-HAVE</div>
                 <div className="text-xl text-emerald-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(weights.mustHave)}%</div>
-                {presentCount < 3 && <div className="text-[10px] text-emerald-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 70% → {Math.round(weights.mustHave)}%</div>}
+                {presentCount < 2 && <div className="text-[10px] text-emerald-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 70% → {Math.round(weights.mustHave)}%</div>}
               </div>
             )}
             {sectionsPresent.niceToHave && (
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
                 <div className="text-xs text-amber-700 mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>NICE-TO-HAVE</div>
                 <div className="text-xl text-amber-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(weights.niceToHave)}%</div>
-                {presentCount < 3 && <div className="text-[10px] text-amber-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 20% → {Math.round(weights.niceToHave)}%</div>}
-              </div>
-            )}
-            {sectionsPresent.hr && (
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                <div className="text-xs text-blue-700 mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>HR ASSESSMENT</div>
-                <div className="text-xl text-blue-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(weights.hr)}%</div>
-                {presentCount < 3 && <div className="text-[10px] text-blue-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 10% → {Math.round(weights.hr)}%</div>}
+                {presentCount < 2 && <div className="text-[10px] text-amber-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 30% → {Math.round(weights.niceToHave)}%</div>}
               </div>
             )}
           </div>
@@ -195,10 +184,10 @@ export function EvaluationBreakdown({
             <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/30 rounded border border-gray-200 dark:border-gray-700" style={{ fontFamily: 'var(--font-mono)' }}>
               <div className="mb-1">w_section = (base_section / Σ base_of_present_sections) × 100</div>
               <div className="text-[11px] text-gray-400 mt-2">Examples:</div>
-              <div className="text-[11px]">• All 3: 70 / 100 = 70%, 20 / 100 = 20%, 10 / 100 = 10%</div>
-              <div className="text-[11px]">• MHS+NHS only: 70/90 = 77.78%, 20/90 = 22.22%</div>
-              <div className="text-[11px]">• MHS+HR only: 70/80 = 87.50%, 10/80 = 12.50%</div>
-              <div className="text-[11px]">• Single section: 100%</div>
+              <div className="text-[11px]">• Both: MHS = 70%, NHS = 30%</div>
+              <div className="text-[11px]">• MHS only: 100%</div>
+              <div className="text-[11px]">• NHS only: 100%</div>
+              <div className="text-[11px] text-gray-400 mt-1">HR section is review-only and excluded from scoring.</div>
             </div>
           </details>
         </div>
@@ -218,7 +207,6 @@ export function EvaluationBreakdown({
                 Weighted Score = {[
                   sectionsPresent.mustHave   ? `(MHS × ${Math.round(wMth)})` : null,
                   sectionsPresent.niceToHave ? `(NHS × ${Math.round(wNth)})` : null,
-                  sectionsPresent.hr         ? `(HR × ${Math.round(wHr)})`   : null,
                 ].filter(Boolean).join(' + ')}
               </code>
               <code className="text-sm block" style={{ fontFamily: 'var(--font-mono)' }}>
@@ -243,12 +231,6 @@ export function EvaluationBreakdown({
                     <span>= {Math.round(nthContribution)}</span>
                   </div>
                 )}
-                {sectionsPresent.hr && (
-                  <div className="flex justify-between text-emerald-900">
-                    <span>({Math.round(hrScore)} × {Math.round(wHr)})</span>
-                    <span>= {Math.round(hrContribution)}</span>
-                  </div>
-                )}
                 <div className="border-t border-emerald-300 pt-2 mt-2"></div>
                 <div className="flex justify-between text-emerald-900 font-semibold">
                   <span>Weighted Score</span>
@@ -267,7 +249,7 @@ export function EvaluationBreakdown({
       <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200 flex items-start gap-3">
         <TrendingUp size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
         <p className="text-sm text-blue-900">
-          This weighted scoring approach ensures that critical skills have the most impact on the final evaluation, while still considering additional competencies and cultural fit.
+          This weighted scoring approach ensures that critical skills have the most impact on the final evaluation, while still considering additional competencies. HR responses are reviewed separately and do not affect the final score.
         </p>
       </div>
     </div>
