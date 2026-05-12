@@ -669,7 +669,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-gray-500 mb-1">Folder</div>
-                  <div className="text-gray-900">{resume.folderId || 'Uncategorized'}</div>
+                  <div className="text-gray-900">{resume.folderId || '—'}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-gray-500 mb-1">Status</div>

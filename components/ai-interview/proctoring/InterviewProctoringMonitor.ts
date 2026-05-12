@@ -344,8 +344,17 @@ export function useInterviewProctoringMonitor({
   const lastNoiseWarningRef = useRef<number>(0);
 
   // ==================== CORE: emitEvent ====================
-  // 1. Always queues event for backend (every event recorded)
+  // 1. Queues event for backend with per-type cooldown (prevents flooding)
   // 2. Emits UI warning via InterviewEventBus (with per-type cooldown)
+  //
+  // Backend cooldown: high-volume detectors like voice_detected can fire
+  // multiple times per second during normal candidate speech. Without a
+  // backend cooldown, a 20-minute interview produces 200+ POSTs to
+  // /proctor-event, hammering the candidate's browser and freezing the UI
+  // (observed in production: 185 voice_detected events / 1 min). Per-type
+  // cooldown lets the recruiter still see a representative timeline without
+  // drowning the page in network I/O.
+  const lastBackendEnqueueTimeRef = useRef<Record<string, number>>({});
   const emitEvent = useCallback((
     eventType: ProctoringEventType,
     details?: Record<string, any>,
@@ -354,18 +363,26 @@ export function useInterviewProctoringMonitor({
 
     const now = Date.now();
     const timestamp = new Date().toISOString();
-
-    // 1. ALWAYS queue for backend — no event is ever lost
-    backendQueueRef.current.push({
-      event_type: eventType,
-      timestamp,
-      severity: getSeverity(eventType),
-      details: details || {},
-    });
-
-    // 2. UI warning with per-type cooldown
-    const lastShown = lastUiWarningTimeRef.current[eventType] || 0;
     const cooldown = UI_COOLDOWN_PER_TYPE[eventType] || 5000;
+
+    // 1. Queue for backend, throttled to one event per cooldown window per type.
+    //    Recovery events (e.g. fullscreen_exit_recovered) and rare events
+    //    (camera_disabled, voice_mismatch) pass through fast since their
+    //    natural firing rate is already low.
+    const lastEnqueued = lastBackendEnqueueTimeRef.current[eventType] || 0;
+    if (now - lastEnqueued >= cooldown) {
+      lastBackendEnqueueTimeRef.current[eventType] = now;
+      backendQueueRef.current.push({
+        event_type: eventType,
+        timestamp,
+        severity: getSeverity(eventType),
+        details: details || {},
+      });
+    }
+
+    // 2. UI warning with per-type cooldown (same window — keeps toast and
+    //    backend log in lockstep).
+    const lastShown = lastUiWarningTimeRef.current[eventType] || 0;
     if (now - lastShown >= cooldown) {
       lastUiWarningTimeRef.current[eventType] = now;
       InterviewEventBus.emit(eventType, details);

@@ -2,7 +2,8 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Ca
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { assessmentService } from '@/lib/services';
+import { assessmentService, jdService } from '@/lib/services';
+import type { JDResponse } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
@@ -36,6 +37,14 @@ interface Section {
 // IST timezone constant
 const INDIA_TIMEZONE = 'Asia/Kolkata';
 
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 export default function AssessmentDetailsView({
   assessment,
   onBack,
@@ -54,7 +63,7 @@ export default function AssessmentDetailsView({
   const { isTenantAdmin, user } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info' | 'viewjd'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
@@ -62,6 +71,9 @@ export default function AssessmentDetailsView({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [versionHistory, setVersionHistory] = useState<any[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
+  const [jdData, setJdData] = useState<JDResponse | null>(null);
+  const [jdLoading, setJdLoading] = useState(false);
+  const [jdError, setJdError] = useState<string | null>(null);
 
   // Fetch recent activity when assessment changes.
   // Each invitation is expanded into MULTIPLE timeline events (Invited,
@@ -126,6 +138,27 @@ export default function AssessmentDetailsView({
     };
     fetchVersions();
   }, [assessment?.id, activeTab]);
+
+  // Lazy-fetch the linked JD when the View JD tab is opened. Cached per
+  // assessment.jd_id so switching tabs doesn't re-fetch.
+  useEffect(() => {
+    const fetchJd = async () => {
+      if (activeTab !== 'viewjd' || !assessment?.jd_id) return;
+      if (jdData && jdData.id === assessment.jd_id) return;
+      setJdLoading(true);
+      setJdError(null);
+      try {
+        const response = await jdService.get(assessment.jd_id);
+        setJdData(response);
+      } catch (error: any) {
+        console.error('Failed to fetch JD:', error);
+        setJdError(error?.message || 'Failed to load job description');
+      } finally {
+        setJdLoading(false);
+      }
+    };
+    fetchJd();
+  }, [assessment?.jd_id, activeTab, jdData]);
 
   // Construct sections array from individual assessment fields
   const sections = useMemo<Section[]>(() => {
@@ -437,6 +470,16 @@ export default function AssessmentDetailsView({
               }`}
             >
               Assessment Info
+            </button>
+            <button
+              onClick={() => setActiveTab('viewjd')}
+              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'viewjd'
+                  ? 'border-brand-blue text-brand-blue font-medium'
+                  : 'border-transparent text-gray-600 hover:text-brand-blue'
+              }`}
+            >
+              View JD
             </button>
           </div>
         </div>
@@ -1460,6 +1503,204 @@ export default function AssessmentDetailsView({
           </div>
         );
       })()}
+
+      {activeTab === 'viewjd' && (
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+              </div>
+              <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Job Description</h3>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600">The full Job Description this assessment was generated from</p>
+          </div>
+
+          {jdLoading ? (
+            <div className="px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+            </div>
+          ) : jdError ? (
+            <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
+              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+              <p className="text-sm text-red-600">{jdError}</p>
+            </div>
+          ) : !jdData ? (
+            <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
+              <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No linked job description found</p>
+            </div>
+          ) : (
+            <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+              {/* JD Title + Job ID */}
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">{jdData.title}</h4>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {jdData.job_id && (
+                      <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-semibold font-mono">
+                        {jdData.job_id}
+                      </span>
+                    )}
+                    {jdData.status && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                        jdData.status === 'published'
+                          ? 'bg-green-100 text-green-700 ring-1 ring-green-200'
+                          : jdData.status === 'draft'
+                          ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200'
+                          : jdData.status === 'archived'
+                          ? 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'
+                          : 'bg-slate-100 text-gray-700 ring-1 ring-gray-200'
+                      }`}>
+                        {jdData.status}
+                      </span>
+                    )}
+                    {jdData.department && (
+                      <span className="text-xs text-gray-600 flex items-center gap-1">
+                        <Layers className="w-3 h-3" />
+                        {jdData.department}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Job Details grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {jdData.employment_type && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Briefcase className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500">Employment</div>
+                      <div className="text-sm text-gray-900 truncate">{formatEmploymentType(jdData.employment_type)}</div>
+                    </div>
+                  </div>
+                )}
+                {jdData.remote_type && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500">Work Mode</div>
+                      <div className="text-sm text-gray-900 truncate">{formatEmploymentType(jdData.remote_type)}</div>
+                    </div>
+                  </div>
+                )}
+                {(jdData.experience_min != null || jdData.experience_max != null) && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500">Experience</div>
+                      <div className="text-sm text-gray-900 truncate">
+                        {jdData.experience_min ?? 0} - {jdData.experience_max ?? '10+'} years
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {jdData.industry_type && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Layers className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500">Industry</div>
+                      <div className="text-sm text-gray-900 truncate">{jdData.industry_type}</div>
+                    </div>
+                  </div>
+                )}
+                {jdData.job_level && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500">Level</div>
+                      <div className="text-sm text-gray-900 truncate capitalize">{jdData.job_level}</div>
+                    </div>
+                  </div>
+                )}
+                {jdData.location && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500">Location</div>
+                      <div className="text-sm text-gray-900 truncate">{jdData.location}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Skills */}
+              {(jdData.must_have_skills?.length || jdData.nice_to_have_skills?.length) ? (
+                <div className="space-y-3">
+                  {jdData.must_have_skills && jdData.must_have_skills.length > 0 && (
+                    <div>
+                      <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                        <Star className="w-3.5 h-3.5 text-brand-blue" />
+                        Must-Have Skills ({jdData.must_have_skills.length})
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {jdData.must_have_skills.map((skill, i) => (
+                          <span key={`mh-${i}`} className="inline-flex items-center px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-medium">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {jdData.nice_to_have_skills && jdData.nice_to_have_skills.length > 0 && (
+                    <div>
+                      <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-brand-cyan" />
+                        Nice-to-Have Skills ({jdData.nice_to_have_skills.length})
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {jdData.nice_to_have_skills.map((skill, i) => (
+                          <span key={`nh-${i}`} className="inline-flex items-center px-2.5 py-1 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-medium">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Description */}
+              {jdData.description && (
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-gray-500" />
+                    Description
+                  </div>
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-slate-50 rounded-lg ring-1 ring-black/[0.02] text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {jdData.description}
+                  </div>
+                </div>
+              )}
+
+              {/* Assessment Guidance */}
+              {jdData.assessment_guidance && (
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-brand-blue" />
+                    Assessment Guidance
+                  </div>
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {jdData.assessment_guidance}
+                  </div>
+                </div>
+              )}
+
+              {/* Open full JD page link */}
+              <div className="pt-2 border-t border-gray-100 flex justify-end">
+                <button
+                  onClick={() => router.push(`/recruitment/jd-details?id=${jdData.id}`)}
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
+                >
+                  Open full JD page
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       </div>
     </div>
   );

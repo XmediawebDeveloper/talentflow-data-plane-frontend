@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, Lock } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -689,10 +689,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // ✅ SMART CONFIG: Track if coding was enabled/disabled by smart config (locked state)
   const [isCodingLockedBySmartConfig, setIsCodingLockedBySmartConfig] = useState<boolean>(false);
   const [codingLockReason, setCodingLockReason] = useState<string>('');
-
-  // Collapsible sections state
-  const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
-  const [isScoringRulesExpanded, setIsScoringRulesExpanded] = useState(false);
 
   // Available programming languages for the coding round.
   // SQL is intentionally excluded — the coding round runs candidate code
@@ -2032,91 +2028,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
               </div>
 
-              {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                  <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Duration</h3>
-                  <span className="text-xs text-gray-500 ml-2 hidden sm:inline">(Fixed at 30 minutes)</span>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
-                  {(() => {
-                    const techSection = sections.find(s => s.name === 'Technical');
-                    const codeSection = sections.find(s => s.name === 'Coding');
-                    const techMin = techSection?.enabled ? Math.round(30 * (techSection.percentage / 100)) : 0;
-                    const codeMin = codeSection?.enabled ? 30 - techMin : 0;
-                    return (
-                      <>
-                        {techSection?.enabled && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Technical ({techSection.percentage}%)</span>
-                            <span className="font-medium text-gray-900">{techMin} min</span>
-                          </div>
-                        )}
-                        {codeSection?.enabled && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Coding ({codeSection.percentage}%)</span>
-                            <span className="font-medium text-gray-900">{codeMin} min</span>
-                          </div>
-                        )}
-                        <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-sm font-semibold">
-                          <span className="text-gray-700">Total Assessment Duration</span>
-                          <span className="text-gray-900">30 min</span>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-                {/* Skill & Experience based calculation info */}
-                {selectedJob && (() => {
-                  const { min: expMin, max: expMax } = getExperienceRange(selectedJob);
-                  const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
-                  const skillCount = selectedJob.skills?.length || 0;
-                  let level = 'Entry';
-                  if (avgExp > 10) level = 'Expert';
-                  else if (avgExp > 7) level = 'Senior';
-                  else if (avgExp > 4) level = 'Mid';
-                  else if (avgExp > 2) level = 'Junior';
-
-                  const techSection = sections.find(s => s.name === 'Technical');
-                  const codeSection = sections.find(s => s.name === 'Coding');
-
-                  return (
-                    <div className="mt-3 bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3">
-                      <p className="text-xs font-medium text-brand-blue mb-2">Auto-calculated from JD:</p>
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between text-brand-blue/80">
-                          <span>Experience</span>
-                          <span className="font-semibold">{expMin}-{expMax} yrs ({level})</span>
-                        </div>
-                        <div className="flex items-center justify-between text-brand-blue/80">
-                          <span>Skills count</span>
-                          <span className="font-semibold">{skillCount} skills {skillCount >= 8 ? '(broad)' : skillCount <= 3 ? '(deep)' : '(balanced)'}</span>
-                        </div>
-                        <div className="border-t border-brand-blue/15 pt-1.5 space-y-1">
-                          <div className="flex items-center justify-between text-brand-blue">
-                            <span>Technical</span>
-                            <span className="font-semibold">{techSection?.percentage || 0}% → {Math.round(30 * ((techSection?.percentage || 0) / 100))} min</span>
-                          </div>
-                          {codeSection?.enabled && (
-                            <div className="flex items-center justify-between text-brand-blue">
-                              <span>Coding</span>
-                              <span className="font-semibold">{codeSection.percentage}% → {30 - Math.round(30 * ((techSection?.percentage || 0) / 100))} min</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-brand-blue/70 mt-2">
-                        {level} level + {skillCount} skills = Technical {techSection?.percentage || 0}% / Coding {codeSection?.percentage || 0}%. Recruiter can adjust above.
-                      </p>
-                    </div>
-                  );
-                })()}
-                <p className="text-xs text-gray-500 mt-2">
-                  HR questions (from Question Bank) are separate and not timed.
-                </p>
-              </div>
-
               {/* Proctoring & Security - Hidden for now */}
               {/* <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center gap-2 mb-4">
@@ -2407,103 +2318,86 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             {/* Right Column - Sidebar */}
             <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4">
-              {/* AI Assessment Generation Info */}
+              {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
-                <div
-                  className="flex items-center justify-between cursor-pointer"
-                  onClick={() => setIsAIGenerationExpanded(!isAIGenerationExpanded)}
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-brand-blue" />
-                    <h4 className="font-medium text-gray-900 text-sm tracking-tight">AI Assessment Generation</h4>
-                  </div>
-                  {isAIGenerationExpanded ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  )}
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-5 h-5 text-brand-blue" />
+                  <h4 className="font-medium text-gray-900 text-sm tracking-tight">Assessment Duration</h4>
                 </div>
-                {isAIGenerationExpanded && (
-                  <div className="text-xs text-gray-600 space-y-2 mt-3">
-                    <p>• <strong>Unique Question Sets:</strong> Each candidate receives freshly generated questions for fairness</p>
-                    <p>• LLM will analyze the JD and generate questions dynamically per candidate</p>
-                    <p>• Question difficulty adjusted based on experience level</p>
-                    <p>• Number of questions and time allocation calculated automatically</p>
-                    <p>• Topics you provide will guide the question generation process</p>
-                  </div>
-                )}
-              </div>
+                <span className="text-xs text-gray-500 block mb-3">Fixed at 30 minutes</span>
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  {(() => {
+                    const techSection = sections.find(s => s.name === 'Technical');
+                    const codeSection = sections.find(s => s.name === 'Coding');
+                    const techMin = techSection?.enabled ? Math.round(30 * (techSection.percentage / 100)) : 0;
+                    const codeMin = codeSection?.enabled ? 30 - techMin : 0;
+                    return (
+                      <>
+                        {techSection?.enabled && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">Technical ({techSection.percentage}%)</span>
+                            <span className="font-medium text-gray-900">{techMin} min</span>
+                          </div>
+                        )}
+                        {codeSection?.enabled && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">Coding ({codeSection.percentage}%)</span>
+                            <span className="font-medium text-gray-900">{codeMin} min</span>
+                          </div>
+                        )}
+                        <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-xs font-semibold">
+                          <span className="text-gray-700">Total Duration</span>
+                          <span className="text-gray-900">30 min</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                {/* Skill & Experience based calculation info */}
+                {selectedJob && (() => {
+                  const { min: expMin, max: expMax } = getExperienceRange(selectedJob);
+                  const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
+                  const skillCount = selectedJob.skills?.length || 0;
+                  let level = 'Entry';
+                  if (avgExp > 10) level = 'Expert';
+                  else if (avgExp > 7) level = 'Senior';
+                  else if (avgExp > 4) level = 'Mid';
+                  else if (avgExp > 2) level = 'Junior';
 
-              {/* Assessment Scoring Rules */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
-                <div
-                  className="flex items-center justify-between cursor-pointer"
-                  onClick={() => setIsScoringRulesExpanded(!isScoringRulesExpanded)}
-                >
-                  <div className="flex items-center gap-2">
-                    <BarChart className="w-5 h-5 text-brand-blue" />
-                    <h4 className="font-medium text-gray-900 text-sm tracking-tight">Assessment Scoring Rules</h4>
-                  </div>
-                  {isScoringRulesExpanded ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  )}
-                </div>
-                {isScoringRulesExpanded && (
-                  <>
-                    <p className="text-xs text-gray-500 mb-3 mt-3">Understanding how candidates are evaluated for PASS/FAIL determination</p>
+                  const techSection = sections.find(s => s.name === 'Technical');
+                  const codeSection = sections.find(s => s.name === 'Coding');
 
-                {/* Technical Section */}
-                <div className="mb-3 pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Brain className="w-4 h-4 text-brand-cyan" />
-                    <span className="text-xs font-medium text-gray-900">Technical Section</span>
-                  </div>
-                  <div className="text-xs text-gray-600 ml-6 space-y-0.5">
-                    <p>• 0-10 rating per question</p>
-                    <p>• Min passing score: 7/10</p>
-                  </div>
-                  <div className="ml-6 mt-1 px-2 py-1 bg-green-100 rounded text-xs text-green-700">
-                    <strong>Counts toward PASS/FAIL</strong>
-                  </div>
-                </div>
-
-                {/* Coding Section */}
-                <div className="mb-3 pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Code className="w-4 h-4 text-brand-orange-deep" />
-                    <span className="text-xs font-medium text-gray-900">Coding Section</span>
-                  </div>
-                  <div className="text-xs text-gray-600 ml-6 space-y-0.5">
-                    <p>• 0-10 rating per question</p>
-                    <p>• Min passing score: 7/10</p>
-                  </div>
-                  <div className="ml-6 mt-1 px-2 py-1 bg-green-100 rounded text-xs text-green-700">
-                    <strong>Counts toward PASS/FAIL</strong>
-                  </div>
-                </div>
-
-                {/* Pass/Fail Logic */}
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle2 className="w-4 h-4 text-brand-blue" />
-                    <span className="text-xs font-medium text-gray-900">Pass/Fail Logic (Technical & Coding Only)</span>
-                  </div>
-                  <div className="text-xs text-gray-600 ml-6 space-y-1">
-                    <p><strong>For each section (Technical/Coding):</strong></p>
-                    <p>• At least 70% of questions must score ≥7, <strong>OR</strong></p>
-                    <p>• Overall section average must be ≥7</p>
-                  </div>
-                  <div className="mt-2 ml-6 text-xs text-gray-500">
-                    <p><strong>Example:</strong> If 10 Technical questions exist:</p>
-                    <p>✅ Pass: 7+ questions score ≥7</p>
-                    <p>✅ Pass: Average score ≥7.0</p>
-                    <p>❌ Fail: Only 6 questions score ≥7 AND average &lt;7</p>
-                  </div>
-                </div>
-                  </>
-                )}
+                  return (
+                    <div className="mt-3 bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3">
+                      <p className="text-xs font-medium text-brand-blue mb-2">Auto-calculated from JD:</p>
+                      <div className="space-y-1.5 text-[11px]">
+                        <div className="flex items-center justify-between text-brand-blue/80">
+                          <span>Experience</span>
+                          <span className="font-semibold">{expMin}-{expMax} yrs ({level})</span>
+                        </div>
+                        <div className="flex items-center justify-between text-brand-blue/80">
+                          <span>Skills</span>
+                          <span className="font-semibold">{skillCount} {skillCount >= 8 ? '(broad)' : skillCount <= 3 ? '(deep)' : '(balanced)'}</span>
+                        </div>
+                        <div className="border-t border-brand-blue/15 pt-1.5 space-y-1">
+                          <div className="flex items-center justify-between text-brand-blue">
+                            <span>Technical</span>
+                            <span className="font-semibold">{techSection?.percentage || 0}% → {Math.round(30 * ((techSection?.percentage || 0) / 100))}m</span>
+                          </div>
+                          {codeSection?.enabled && (
+                            <div className="flex items-center justify-between text-brand-blue">
+                              <span>Coding</span>
+                              <span className="font-semibold">{codeSection.percentage}% → {30 - Math.round(30 * ((techSection?.percentage || 0) / 100))}m</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <p className="text-[11px] text-gray-500 mt-2 leading-snug">
+                  HR questions (from Question Bank) are separate and not timed.
+                </p>
               </div>
 
               {/* Summary */}

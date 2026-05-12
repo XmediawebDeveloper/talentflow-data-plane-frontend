@@ -1128,6 +1128,85 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => clearTimeout(t);
   }, [isClarification]);
 
+  // Fullscreen-exit watchdog: the per-question + global timers both pause
+  // while `isFullscreenExited` is true. If the browser misses the return
+  // event (alt-tab race, OS workspace switch, `fullscreenchange` doesn't
+  // re-fire) the flag stays true forever and the timer appears frozen. Poll
+  // every 2s — if the flag is true but the page IS visible AND we are still
+  // inside fullscreen, the exit isn't real anymore; clear the flag and let
+  // the timers resume. This is a safety net; the normal recovery paths are
+  // `handleFullscreenChange` and `handleVisibilityChange` above.
+  useEffect(() => {
+    if (!isFullscreenExited) return;
+    const id = setInterval(() => {
+      if (!isFullscreenExitedRef.current) return;
+      const isActuallyExited =
+        document.hidden ||
+        !(
+          document.fullscreenElement ||
+          (document as any).webkitFullscreenElement ||
+          (document as any).mozFullScreenElement ||
+          (document as any).msFullscreenElement
+        );
+      if (!isActuallyExited) {
+        console.warn('[Timer watchdog] isFullscreenExited stuck true while page is visible + fullscreen — auto-clearing');
+        isFullscreenExitedRef.current = false;
+        setIsFullscreenExited(false);
+      }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [isFullscreenExited]);
+
+  // Generic "timer didn't decrement" watchdog. If questionTimerSeconds hasn't
+  // changed in N seconds AND no legitimate pause flag is set, the timer is
+  // stuck — likely because a pause condition flipped true and never flipped
+  // back. Logs the full flag state for diagnostics + force-restarts from the
+  // current frozen value. Catches the cases the more specific watchdogs miss
+  // (e.g. all pause flags are false but the interval got cleared during a GC
+  // pause and was never re-armed).
+  useEffect(() => {
+    if (!isConnected || isClosing) return;
+    let lastSeen = questionTimerSecondsRef.current;
+    let stableSinceMs = performance.now();
+    const id = setInterval(() => {
+      const cur = questionTimerSecondsRef.current;
+      // Reset the "stable since" stopwatch whenever the value changes (timer
+      // is alive) or the timer is null (no active question).
+      if (cur === null || cur !== lastSeen) {
+        lastSeen = cur;
+        stableSinceMs = performance.now();
+        return;
+      }
+      // Value unchanged. If we're inside a legitimate pause window, that's
+      // expected — keep waiting.
+      if (
+        isAiSpeakingRef.current
+        || isClarificationRef.current
+        || isFullscreenExitedRef.current
+        || questionTimerExpiredRef.current
+        || questionTimerPendingRef.current !== null
+      ) {
+        stableSinceMs = performance.now();
+        return;
+      }
+      // No pause excuse — if it's been > 3s without a tick, the timer is
+      // stuck. Restart from the frozen value.
+      const stuckMs = performance.now() - stableSinceMs;
+      if (stuckMs > 3000 && cur > 0) {
+        console.warn('[Timer watchdog] Per-Q timer hasn\'t decremented in', Math.round(stuckMs), 'ms — restarting', {
+          frozenValue: cur,
+          intervalAlive: questionTimerIntervalRef.current !== null,
+          isAiSpeaking: isAiSpeakingRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
+        ensureQuestionTimerRunning(cur);
+        stableSinceMs = performance.now();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isConnected, isClosing, ensureQuestionTimerRunning]);
+
   // Start pending per-question countdown the moment Linda stops speaking.
   // Always starts from the full duration so the candidate sees the complete
   // time available to them from the moment they can actually answer.
@@ -4145,9 +4224,64 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
     };
 
+    // Visibility-change handler: when the candidate MINIMIZES the browser
+    // window (or switches OS workspace, or the OS hides the window), the
+    // `fullscreenchange` event does NOT fire — the browser still considers
+    // itself fullscreen. Without this handler the Fullscreen-Required overlay
+    // never appears after a minimize, so the candidate can return to a
+    // running interview with no warning. Reuse the same grace + pause path
+    // as fullscreenchange so the recruiter timeline / silence handling are
+    // consistent.
+    const handleVisibilityChange = async () => {
+      // Ignore while not connected, or while the fullscreen-exit overlay is
+      // already showing (fullscreenchange already handled it).
+      if (!isConnected || isFullscreenExitedRef.current) return;
+      if (document.hidden) {
+        setIsFullscreenExited(true);
+        isFullscreenExitedRef.current = true;
+        graceExitAtMs = Date.now();
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'window_blur',
+          severity: 'low',
+          details: { phase: 'in_interview', reason: 'window_hidden', grace_period_ms: GRACE_PERIOD_MS },
+        }).catch(() => { /* best-effort */ });
+        clearGrace();
+        setGracePeriodRemaining(Math.ceil(GRACE_PERIOD_MS / 1000));
+        graceCountdownId = setInterval(() => {
+          if (graceExitAtMs === null) return;
+          const left = Math.max(0, Math.ceil((GRACE_PERIOD_MS - (Date.now() - graceExitAtMs)) / 1000));
+          setGracePeriodRemaining(left);
+        }, 200);
+        graceTimerId = setTimeout(() => {
+          if (graceCountdownId !== null) { clearInterval(graceCountdownId); graceCountdownId = null; }
+          setGracePeriodRemaining(null);
+          graceTimerId = null;
+          if (document.hidden || !document.fullscreenElement) executeHardPause();
+        }, GRACE_PERIOD_MS);
+      } else {
+        // Window became visible again. Treat the same as returning to
+        // fullscreen — let the existing fullscreen handler run if fullscreen
+        // is also lost (it'll be invoked by the user clicking the "Resume"
+        // path). If fullscreen was never lost, tear down the overlay here.
+        if (document.fullscreenElement) {
+          if (graceTimerId !== null) {
+            clearGrace();
+            graceExitAtMs = null;
+            setIsFullscreenExited(false);
+            isFullscreenExitedRef.current = false;
+            return;
+          }
+          // Past grace — fall through to the fullscreen-change handler's
+          // resume path by leaving overlay visible; user clicks Resume.
+        }
+      }
+    };
+
     document.addEventListener(getFullscreenChangeEvent(), handleFullscreenChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       document.removeEventListener(getFullscreenChangeEvent(), handleFullscreenChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       // If the component unmounts mid-enforcement, make sure we don't leave
       // the mic stuck muted in some other downstream consumer that holds a
       // ref. setIsMuted is a no-op here (component gone) so just null out

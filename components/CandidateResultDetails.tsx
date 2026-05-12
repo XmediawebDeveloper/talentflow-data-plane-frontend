@@ -1497,8 +1497,41 @@ export default function CandidateResultDetails({
                                     //   - candidate's wrong selection  → red bg
                                     //   - candidate's correct selection → green (selected pill shows green "Your answer")
                                     //   - everything else              → neutral
+                                    //
+                                    // Resolve each correct_answer entry to an option ID. The backend
+                                    // (mcq_correct_answer_labels) returns display strings like
+                                    // "(b) Attach the context..." — not raw IDs — so we need to
+                                    // extract the ID from the "(x)" prefix or by matching against
+                                    // option text. Falls back to the raw value so unformatted
+                                    // payloads still work.
+                                    const optionIdSet = new Set(
+                                      (q.options || []).map((o: any) => String(o.id || '').trim().toLowerCase()).filter(Boolean),
+                                    );
+                                    const optionTextToId: Record<string, string> = {};
+                                    for (const o of (q.options || [])) {
+                                      const oid = String(o.id || '').trim().toLowerCase();
+                                      const otext = String(o.text || '').trim().toLowerCase();
+                                      if (oid && otext) optionTextToId[otext] = oid;
+                                    }
+                                    const resolveToOptionId = (raw: any): string => {
+                                      const value = String(raw || '').trim().toLowerCase();
+                                      if (!value) return '';
+                                      // Already an option ID? ("a", "b", …)
+                                      if (optionIdSet.has(value)) return value;
+                                      // "(a) some text" prefix?
+                                      const prefixed = value.match(/^\(([a-z0-9]+)\)\s*(.*)$/);
+                                      if (prefixed) {
+                                        const id = prefixed[1];
+                                        if (optionIdSet.has(id)) return id;
+                                        const rest = prefixed[2].trim();
+                                        if (rest && optionTextToId[rest]) return optionTextToId[rest];
+                                      }
+                                      // Bare option text?
+                                      if (optionTextToId[value]) return optionTextToId[value];
+                                      return value;
+                                    };
                                     const correctSet = new Set(
-                                      (q.correct_answer || []).map((c: any) => String(c).trim().toLowerCase()),
+                                      (q.correct_answer || []).map(resolveToOptionId).filter(Boolean),
                                     );
                                     const selectedSet = new Set(
                                       (q.candidate_selected_options || []).map((s: any) => String(s).trim().toLowerCase()),
@@ -1601,7 +1634,7 @@ export default function CandidateResultDetails({
                                                     )}
                                                     {isSelected && (
                                                       <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
-                                                        • Your answer
+                                                        • Candidate answer
                                                       </span>
                                                     )}
                                                   </div>

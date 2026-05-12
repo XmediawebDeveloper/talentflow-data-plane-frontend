@@ -832,6 +832,15 @@ export const aiInterviewService = {
      * Certifications back into Skill clusters. */
     mthSkillTypes?: Record<string, string>;
     nthSkillTypes?: Record<string, string>;
+    /** Recruiter-configured per-question duration in seconds. Passed so refine
+     * uses the actual setting (default 120s) instead of a hardcoded "2 minutes"
+     * string in the LLM prompt. */
+    perQuestionSeconds?: number;
+    /** Total assessment time per bucket (minutes). Lets the LLM judge
+     * meaningful coverage against the real time budget instead of just Q
+     * count. */
+    mthTimeMin?: number;
+    nthTimeMin?: number;
   }): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -851,6 +860,9 @@ export const aiInterviewService = {
         nth_parent_groups: args.nthParentGroups,
         mth_skill_types: args.mthSkillTypes,
         nth_skill_types: args.nthSkillTypes,
+        per_question_seconds: args.perQuestionSeconds,
+        mth_time_min: args.mthTimeMin,
+        nth_time_min: args.nthTimeMin,
       });
       return response.data;
     } catch (error) {

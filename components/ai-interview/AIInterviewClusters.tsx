@@ -21,7 +21,7 @@ import {
 /*  Types                                                                  */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-type SkillType = 'Skill' | 'Command' | 'Certification';
+type SkillType = 'Skill' | 'Command';
 
 interface Cluster {
   id: string;
@@ -159,7 +159,7 @@ function DraggableClusterSkill({
   onRemove: (skillName: string, clusterId: string) => void;
   isReadOnly?: boolean;
   /** Tailwind classes for the chip's background/border/text — used by
-   * ClusterRow to color-code Skill / Command / Certification badges. */
+   * ClusterRow to color-code Skill / Command badges. */
   chipClass?: string;
   /** True when the skill name didn't come from the recruiter's typed list
    * (i.e. it was merged/renamed by /refine-clusters or expanded by
@@ -223,9 +223,9 @@ function ClusterRow({
   onMoveSkill: (skillName: string, fromClusterId: string, toClusterId: string) => void;
   onRemoveSkill: (skillName: string, clusterId: string) => void;
   isReadOnly?: boolean;
-  /** Lowercased skill name → 'Skill' | 'Command' | 'Certification', so the
-   * cluster card can group its badges by type and render a sub-header per
-   * group instead of one flat list. */
+  /** Lowercased skill name → 'Skill' | 'Command', so the cluster card can
+   * group its badges by type and render a sub-header per group instead of
+   * one flat list. */
   skillTypeLookup?: Map<string, SkillType>;
   /** Lowercased recruiter-typed skill names. When present, sub-skills
    * (auto-extracted from /expand-skills) are filtered out of the cluster
@@ -378,13 +378,16 @@ function ClusterRow({
             />
           </div>
 
-          {/* Skills — grouped by type (Skill / Command / Certification) */}
+          {/* Skills — grouped by type (Skill / Command) */}
           <div>
             {visibleClusterSkills.length > 0 ? (
               (() => {
-                const groups: Record<SkillType, string[]> = { Skill: [], Command: [], Certification: [] };
+                const groups: Record<SkillType, string[]> = { Skill: [], Command: [] };
                 for (const s of visibleClusterSkills) {
-                  const t = skillTypeLookup?.get(s.toLowerCase().trim()) ?? 'Skill';
+                  const rawType = skillTypeLookup?.get(s.toLowerCase().trim()) ?? 'Skill';
+                  // Coerce any legacy 'Certification' entries (from older saved
+                  // sessions) into 'Skill' so they still render somewhere.
+                  const t: SkillType = rawType === 'Command' ? 'Command' : 'Skill';
                   groups[t].push(s);
                 }
                 // Order within each type: recruiter-typed main skills first,
@@ -398,19 +401,17 @@ function ClusterRow({
                   });
                 groups.Skill = sortMainFirst(groups.Skill);
                 groups.Command = sortMainFirst(groups.Command);
-                groups.Certification = sortMainFirst(groups.Certification);
                 const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
                   { type: 'Skill', label: 'Skills', chipClass: 'bg-purple-50 border-purple-200 text-purple-700' },
                   { type: 'Command', label: 'Commands', chipClass: 'bg-blue-50 border-blue-200 text-blue-700' },
-                  { type: 'Certification', label: 'Certifications', chipClass: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
                 ];
                 const visible = groupOrder.filter(g => groups[g.type].length > 0);
                 return (
                   <div className="space-y-2 mt-1.5">
                     {visible.map(g => (
                       <div key={g.type}>
-                        {/* Always show the type sub-header so Skills / Commands /
-                            Certifications are visually separated within every
+                        {/* Always show the type sub-header so Skills and
+                            Commands are visually separated within every
                             cluster card, even when only one type is present. */}
                         <div className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
                           {g.label} ({groups[g.type].length})
@@ -506,8 +507,8 @@ function CategorySection({
   const [skillInputError, setSkillInputError] = useState('');
 
   // Lowercased skill name → type, derived from the recruiter's per-skill
-  // dropdown choice. Used by each ClusterRow to render Skill / Command /
-  // Certification badges in separate type-grouped sub-sections.
+  // dropdown choice. Used by each ClusterRow to render Skill / Command
+  // badges in separate type-grouped sub-sections.
   const skillTypeLookup = useMemo(() => {
     const m = new Map<string, SkillType>();
     for (const e of skills) {
@@ -574,19 +575,21 @@ function CategorySection({
         )}
       </div>
 
-      {/* ── Pool section: split into Skills / Commands / Certifications ── */}
+      {/* ── Pool section: split into Skills / Commands ── */}
       {(() => {
         // Show only recruiter-typed (main) entries. Auto-derived sub-skills
         // from /expand-skills are intentionally hidden here per spec.
         const visibleSkills = mainSkillSet && mainSkillSet.size > 0
           ? skills.filter(s => mainSkillSet.has(s.name.toLowerCase().trim()))
           : skills;
-        const groups: Record<SkillType, SkillEntry[]> = { Skill: [], Command: [], Certification: [] };
-        for (const e of visibleSkills) groups[e.type ?? 'Skill'].push(e);
+        const groups: Record<SkillType, SkillEntry[]> = { Skill: [], Command: [] };
+        for (const e of visibleSkills) {
+          const t: SkillType = (e.type === 'Command') ? 'Command' : 'Skill';
+          groups[t].push(e);
+        }
         const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
           { type: 'Skill',         label: 'Skills',         chipClass: 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200' },
           { type: 'Command',       label: 'Commands',       chipClass: 'bg-blue-50 text-blue-700 border-blue-200' },
-          { type: 'Certification', label: 'Certifications', chipClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
         ];
         const visibleGroups = groupOrder.filter(g => groups[g.type].length > 0);
 
@@ -1281,8 +1284,8 @@ export default function AIInterviewClusters() {
       console.log('[CLUSTER-DEBUG] Final gate result (LLM-decided scenario):', { applyRefine, allowMerge, isFixed });
 
       // Build {skillName: type} maps so the backend can keep [Command]
-      // and [Certification] skills in separate clusters. Source of truth
-      // is the per-row dropdown the recruiter set on the Skills step.
+      // skills in separate clusters. Source of truth is the per-row
+      // dropdown the recruiter set on the Skills step.
       const buildTypesMap = (entries: SkillEntry[]): Record<string, string> => {
         const out: Record<string, string> = {};
         for (const e of entries) {
@@ -1362,6 +1365,16 @@ export default function AIInterviewClusters() {
           nthQuestions: nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0,
         });
         try {
+          // Pull recruiter-set per-Q seconds from saved special_instructions
+          // (Configure page writes it as `per_question_seconds`). Refine uses
+          // this instead of a hardcoded "2 minutes" string in its LLM prompt.
+          let _perQSeconds: number | undefined;
+          try {
+            const _si = JSON.parse(config?.special_instructions || '{}');
+            if (typeof _si.per_question_seconds === 'number') {
+              _perQSeconds = _si.per_question_seconds;
+            }
+          } catch { /* noop */ }
           const refineResult = await aiInterviewService.refineClusters({
             mthClusters: newMthClusters,
             nthClusters: nthEnabled ? newNthClusters : [],
@@ -1376,9 +1389,14 @@ export default function AIInterviewClusters() {
             preserveSkillNames: !allowMerge,
             mthParentGroups,
             nthParentGroups: nthEnabled ? nthParentGroups : undefined,
-            // Per-skill type so refine keeps Commands/Certifications separate.
+            // Per-skill type so refine keeps Commands separate.
             mthSkillTypes: mthTypesMap,
             nthSkillTypes: nthTypesMap,
+            // Real time-budget signals so the LLM judges capacity against
+            // the recruiter's actual configuration, not a baked-in 2min/Q.
+            perQuestionSeconds: _perQSeconds,
+            mthTimeMin: fixedMthMin,
+            nthTimeMin: nthEnabled ? fixedNthMin : 0,
           });
           console.log('[CLUSTER-DEBUG] /refine-clusters response:', {
             mthClusterCount: refineResult.mth_clusters?.length ?? 0,
