@@ -299,9 +299,9 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Preview mode ───────────── */
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50"><div className="w-full pb-28">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50"><div className="w-full pb-36 sm:pb-28">
       {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex items-center gap-2 mb-8 overflow-x-auto scrollbar-auto-hide -mx-1 px-1">
         {STEPS.map((label, i) => {
           const stepNum = i + 1;
           const isCompleted = stepNum < CURRENT_STEP;
@@ -310,23 +310,23 @@ export default function AIInterviewPreview() {
             <React.Fragment key={label}>
               {isCompleted ? (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
+                  <div className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                   </div>
-                  <span className="text-sm text-gray-400">{label}</span>
+                  <span className="text-sm whitespace-nowrap text-gray-400 hidden sm:inline">{label}</span>
                 </>
               ) : isCurrent ? (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
-                  <span className="text-sm text-gray-900 font-medium">{label}</span>
+                  <div className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
+                  <span className="text-sm whitespace-nowrap text-gray-900 font-medium">{label}</span>
                 </>
               ) : (
                 <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 text-gray-400 text-sm ring-1 ring-gray-200">{stepNum}</div>
-                  <span className="text-sm text-gray-400">{label}</span>
+                  <div className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-slate-100 text-gray-400 text-sm ring-1 ring-gray-200">{stepNum}</div>
+                  <span className="text-sm whitespace-nowrap text-gray-400 hidden sm:inline">{label}</span>
                 </>
               )}
-              {i < STEPS.length - 1 && <div className="w-10 h-px bg-gray-200" />}
+              {i < STEPS.length - 1 && <div className="w-4 sm:w-10 h-px bg-gray-200 flex-shrink-0" />}
             </React.Fragment>
           );
         })}
@@ -358,7 +358,7 @@ export default function AIInterviewPreview() {
             <h2 className="text-lg font-bold text-white tracking-tight">{position}</h2>
           </div>
           <div className="bg-white px-5 py-4">
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">JD ID</p>
                 {interview.jd_short_id ? (
@@ -624,8 +624,8 @@ export default function AIInterviewPreview() {
 
       {/* ── Sticky Footer ── */}
       <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={goBack}
               className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium flex items-center gap-2"
@@ -640,7 +640,7 @@ export default function AIInterviewPreview() {
               Discard
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleSaveAsDraft}
               className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium"

@@ -84,7 +84,7 @@ export default function Analytics() {
       </div>
 
       {/* Key Metrics Grid - Recruiter Focused */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
         {/* My Active Jobs */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-4">
@@ -138,7 +138,7 @@ export default function Analytics() {
       </div>
 
       {/* Secondary Metrics - Recruiter Pipeline */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -189,7 +189,7 @@ export default function Analytics() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
         {/* My Applications Over Time */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
