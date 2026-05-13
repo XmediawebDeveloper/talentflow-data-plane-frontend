@@ -1265,7 +1265,7 @@ export default function AssessmentDetailsView({
                               {assessment.title && (
                                 <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                   <span className="text-brand-blue mt-0.5">•</span>
-                                  <span>Linked to job posting: {assessment.title}</span>
+                                  <span>Linked to job posting: {stripVersionFromTitle(assessment.title)}</span>
                                 </li>
                               )}
                               <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">

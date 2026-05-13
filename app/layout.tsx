@@ -11,13 +11,19 @@ import SessionExpiredModal from "@/components/SessionExpiredModal";
 import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 
-import localFont from "next/font/local";
+// import localFont from "next/font/local";
 
-const inter = localFont({
-  src: "./fonts/Inter-Variable.woff2",
-  variable: "--font-inter",
-  display: "swap",
-});
+// const inter = localFont({
+//   src: "./fonts/Inter-Variable.woff2",
+//   variable: "--font-inter",
+//   display: "swap",
+// });
+
+import { Inter } from 'next/font/google'
+
+const inter = Inter({
+  subsets: ['latin']
+})
 export const metadata: Metadata = {
   title: "TalentFlow - Recruitment Dashboard",
   description: "AI-powered recruitment and talent management platform",

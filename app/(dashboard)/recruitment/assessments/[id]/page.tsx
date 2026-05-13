@@ -74,6 +74,12 @@ export default function AssessmentDetailsPage() {
           jd_title: response.jd_title,
           jd_short_id: response.jd_short_id,
           jd_version: response.jd_version,
+          // Live assessment version drives the V19 badge in
+          // AssessmentDetailsView. Without this mapping the prop is
+          // undefined and VersionBadge silently renders null — the bug
+          // where the assessment details header showed no version badge
+          // even though the live version was 19.
+          version: response.version,
           sequence_number: response.sequence_number,
           short_id: response.short_id,
           // Section configuration
