@@ -237,9 +237,10 @@ export default function PermissionsPage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
-        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Permissions & Roles' }]} />
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Permissions & Roles' }]} />
 
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
@@ -370,7 +371,7 @@ export default function PermissionsPage() {
 
                 <div className="space-y-4 sm:space-y-6 max-h-[500px] sm:max-h-[600px] overflow-y-auto">
                   {Object.entries(permissionsByModule).map(([module, modulePermissions]) => (
-                    <div key={module} className="border border-gray-100 rounded-lg p-3 sm:p-4 bg-slate-50 ring-1 ring-black/[0.02]">
+                    <div key={module} className="border border-gray-100 rounded-lg p-3 sm:p-4 bg-white ring-1 ring-black/[0.02]">
                       <h3 className="font-semibold text-brand-blue mb-2 sm:mb-3 text-xs sm:text-sm lg:text-base">
                         {moduleDisplayNames[module] || module.charAt(0).toUpperCase() + module.slice(1)}
                       </h3>
@@ -429,6 +430,7 @@ export default function PermissionsPage() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </main>
   );

@@ -4,6 +4,7 @@ import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Pla
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AssessmentCreation from './AssessmentCreation';
 import ListPagination from './ListPagination';
 import AssessmentResults from './AssessmentResults';
@@ -49,6 +50,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
   const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
+  // HR Question Bank is reached via a quick link here (moved out of the sidebar)
+  const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
 
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
@@ -995,8 +998,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
 
   return (
-    <div className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <div className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div className="flex items-start gap-3">
@@ -1070,6 +1075,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 </div>
               </div>
+            )}
+            {canAccessHRQuestionBank && (
+              <button
+                onClick={() => router.push('/recruitment/hr-question-bank')}
+                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
+              >
+                <ClipboardList className="w-4 h-4" />
+                <span className="hidden sm:inline">HR Question Bank</span>
+                <span className="sm:hidden">Questions</span>
+              </button>
             )}
             {onOpenCandidateView && (
               <button
@@ -2703,6 +2718,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         </div>
 
+      </div>
       </div>
 
       {/* Share Assessment Modal */}

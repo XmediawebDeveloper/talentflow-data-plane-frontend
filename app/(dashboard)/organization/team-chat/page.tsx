@@ -403,8 +403,8 @@ export default function TeamChatPage() {
 
   return (
     <div className="flex h-[calc(100dvh-80px)] flex-col bg-slate-50 overflow-x-hidden">
-      <div className="shrink-0 w-full max-w-[1400px] mx-auto px-3 pt-3 md:px-4 md:pt-4">
-        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} className="mb-0" />
+      <div className="shrink-0 mx-auto w-full max-w-[1400px] px-4 py-3 md:px-8 md:py-5 bg-white rounded-2xl mt-4 md:mt-5">
+        <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
       </div>
       <div className="flex flex-1 min-h-0 w-full max-w-[1400px] mx-auto p-3 md:p-4 gap-3 md:gap-4">
         {/* Left Sidebar - Channels List */}

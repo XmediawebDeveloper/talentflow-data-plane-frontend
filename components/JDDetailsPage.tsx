@@ -160,7 +160,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-gray-900">{results.assessments_count}</div>
           <div className="text-sm text-gray-500">Total Assessments</div>

@@ -1,9 +1,10 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -60,6 +61,8 @@ export default function AIInterview() {
   const canPublishAIInterviews = isTenantAdmin || !!user?.permissions?.canPublishAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
+  // HR Question Bank is reached via a quick link here (moved out of the sidebar)
+  const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
   const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
   const { quotaData } = useQuota();
 
@@ -635,8 +638,10 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <div className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <div className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
           <div className="flex items-start gap-3 min-w-0">
@@ -712,6 +717,15 @@ export default function AIInterview() {
                   )}
                 </div>
               </div>
+            )}
+            {canAccessHRQuestionBank && (
+              <button
+                onClick={() => router.push('/recruitment/hr-question-bank')}
+                className="inline-flex items-center gap-1.5 border border-brand-blue/30 bg-white text-brand-blue px-3.5 py-2 rounded-lg hover:bg-brand-blue/5 transition-all duration-200 text-xs font-medium shadow-sm"
+              >
+                <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>HR Question Bank</span>
+              </button>
             )}
             {canCreateAIInterviews && (
               <button
@@ -1581,6 +1595,7 @@ export default function AIInterview() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Share Modal */}

@@ -7,6 +7,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Error display component for pre-condition failures
 function AccessBlockedError({
@@ -412,14 +413,26 @@ function JDCreationContent() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="h-[calc(100vh-64px)] overflow-hidden">
-        <JDCreation
-          onBack={handleViewAllJobs}
-          onPublish={handleJDPublish}
-          editingJD={memoizedEditingJD}
-          isJDInUse={isJDInUse}
-          jdUsageMessage={jdUsageMessage}
-        />
+      <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px] px-4 py-3 md:px-8 md:py-5 flex-shrink-0 bg-white rounded-2xl mt-4 md:mt-5">
+          <PageBreadcrumb
+            className="mb-0"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+              { label: editingJD ? 'Edit Job Description' : 'Create Job Description' },
+            ]}
+          />
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <JDCreation
+            onBack={handleViewAllJobs}
+            onPublish={handleJDPublish}
+            editingJD={memoizedEditingJD}
+            isJDInUse={isJDInUse}
+            jdUsageMessage={jdUsageMessage}
+          />
+        </div>
       </div>
     </DndProvider>
   );

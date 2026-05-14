@@ -44,6 +44,7 @@ import {
 } from '@/lib/types/auditSession';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -743,13 +744,17 @@ export default function AuditTrailPage() {
   });
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Trail' }]} />
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+        <section className="relative mb-6 rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+            <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
+            <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
+            <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          </div>
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
@@ -789,7 +794,7 @@ export default function AuditTrailPage() {
                   <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 </button>
                 {exportDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-20 overflow-hidden min-w-[120px]">
+                  <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 overflow-hidden min-w-[120px]">
                     <button
                       onClick={() => openExportModal('csv')}
                       className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-brand-cyan/[0.06] hover:text-brand-blue transition-colors"
@@ -1214,6 +1219,7 @@ export default function AuditTrailPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Detail Modal */}

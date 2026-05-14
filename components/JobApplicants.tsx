@@ -152,7 +152,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2.5 bg-gray-50 rounded-lg">

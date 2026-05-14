@@ -1,5 +1,6 @@
 import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
@@ -481,18 +482,21 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
   const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
-  const roleLabels: Record<string, string> = {
+  const roleLabels = {
     tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
-    billing_manager: 'Billing Manager',
-    standard_user: 'Standard User',
   };
 
-  const roleLabel = roleLabels[user.role] ?? user.role?.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) ?? '';
+  const roleBadgeColors = {
+    tenant_admin: 'bg-brand-blue text-white',
+    recruiter: 'bg-brand-blue/10 text-brand-blue',
+    viewer: 'bg-gray-100 text-gray-600',
+  };
 
   return (
-    <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-8">
+    <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
+      <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-4 md:px-8">
       {/* Hamburger Menu Button - Only on Mobile */}
       {onMenuClick && (
         <button
@@ -508,8 +512,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         </button>
       )}
 
+      {/* Brand logo — shown in the header so the dashboard route (where the sidebar is hidden) still has a brand mark. */}
+      <Link href="/dashboard" prefetch={false} aria-label="TalentFlow home" className="flex items-center mr-3 sm:mr-4 lg:mr-6 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logos/talent_flow_logo.png" alt="TalentFlow" className="h-8 sm:h-10 lg:h-12 w-auto" />
+      </Link>
+
       {/* Global Search Bar - Hidden on mobile, visible on desktop */}
-      <GlobalSearch className="hidden lg:flex items-center flex-1 max-w-2xl" />
+      <GlobalSearch className="hidden lg:flex items-center flex-1 max-w-sm" />
 
       {/* Spacer for mobile to push icons to the right */}
       <div className="flex-1 lg:hidden" />
@@ -550,29 +560,29 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 setShowNotifications(false);
                 setShowUserMenu(false);
               }}
-              className="flex items-center gap-2 lg:gap-3 px-2 sm:px-3 lg:px-4 py-2 lg:py-2.5 bg-white border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
+              className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-2.5 py-1 lg:py-1.5 bg-white border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
             >
-              <div className="w-7 h-7 lg:w-9 lg:h-9 bg-brand-blue/10 rounded-md flex items-center justify-center">
-                <CreditCard className="w-4 h-4 lg:w-5 lg:h-5 text-brand-blue" />
+              <div className="w-6 h-6 lg:w-7 lg:h-7 bg-brand-blue/10 rounded-md flex items-center justify-center">
+                <CreditCard className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-brand-blue" />
               </div>
-              <div className="flex flex-col gap-0.5 min-w-0 text-left">
-                <span className="text-xs lg:text-sm font-semibold text-gray-900 truncate max-w-[100px] lg:max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
+              <div className="flex flex-col min-w-0 text-left">
+                <span className="text-[11px] lg:text-xs font-semibold text-gray-900 truncate max-w-[80px] lg:max-w-[110px] leading-tight" title={loadingQuota ? 'Loading...' : planName}>
                   {loadingQuota ? 'Loading...' : planName}
                 </span>
                 {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && (
-                  <div className="flex items-center gap-1 lg:gap-1.5">
-                    <span className="text-xs lg:text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
-                    <span className="text-[10px] lg:text-xs text-gray-500">units left</span>
+                  <div className="flex items-center gap-1 leading-tight">
+                    <span className="text-[11px] lg:text-xs font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
+                    <span className="text-[9px] lg:text-[10px] text-gray-500">units left</span>
                   </div>
                 )}
                 {isPendingStatus && (
-                  <span className="text-[10px] lg:text-xs text-orange-600 font-medium">
+                  <span className="text-[9px] lg:text-[10px] text-orange-600 font-medium">
                     {tenantStatus}
                   </span>
                 )}
               </div>
               {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && totalUnits.limit > 0 && (
-                <div className="w-12 lg:w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-10 lg:w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       usagePercentage > 90 ? 'bg-red-500' :
@@ -582,7 +592,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   />
                 </div>
               )}
-              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showPlanMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${showPlanMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {showPlanMenu && !isExpiredSubscription && (
@@ -1047,7 +1057,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </div>
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-[10px] lg:text-xs text-gray-500">{roleLabel}</div>
+              <div className="text-[10px] lg:text-xs text-gray-500">{roleLabels[user.role]}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1058,7 +1068,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:left-auto sm:right-3 lg:right-6 sm:top-[68px] lg:top-[80px] sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-30 max-h-[calc(100vh-80px)] overflow-hidden overflow-y-auto">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
                 {/* User Profile Header */}
                 <div className="bg-brand-blue px-5 py-4">
                   <div className="flex items-center gap-4">
@@ -1070,7 +1080,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-white/80 text-sm truncate">{user.email}</p>
                       <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
                         <Shield className="w-3 h-3" />
-                        {roleLabel}
+                        {roleLabels[user.role]}
                       </span>
                     </div>
                   </div>
@@ -1207,6 +1217,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </>
           )}
         </div>
+      </div>
       </div>
     </header>
   );

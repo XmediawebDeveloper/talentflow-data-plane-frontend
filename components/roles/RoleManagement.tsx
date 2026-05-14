@@ -292,8 +292,9 @@ export default function RoleManagement() {
 
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
-      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
-        <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
@@ -331,11 +332,11 @@ export default function RoleManagement() {
               </div>
               <button
                 onClick={() => router.push('/organization/role-management/create')}
-                className="inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
-                <Plus className="h-4 w-4 flex-shrink-0" />
+                <Plus className="h-4 w-4" />
                 Create Role
-                <ArrowUpRight className="h-4 w-4 flex-shrink-0" />
+                <ArrowUpRight className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -741,6 +742,7 @@ export default function RoleManagement() {
             )}
           </section>
         )}
+      </div>
       </div>
 
       {viewingRole && (

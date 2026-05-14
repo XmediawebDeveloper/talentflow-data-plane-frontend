@@ -75,7 +75,7 @@ function DetailsContent() {
 
   if (!candidateId) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         <div className="flex flex-col items-center justify-center h-64 space-y-3">
           <div className="text-red-500 text-base">No candidate selected</div>
           <button
@@ -91,7 +91,7 @@ function DetailsContent() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         <div className="flex items-center justify-center h-64 bg-slate-50">
           <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
         </div>
@@ -101,7 +101,7 @@ function DetailsContent() {
 
   if (error) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         <div className="flex flex-col items-center justify-center h-64 space-y-3">
           <div className="text-red-500 text-base">{error}</div>
           <button
@@ -116,7 +116,7 @@ function DetailsContent() {
   }
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto">
+    <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
       <CandidateResultDetails
         onBack={handleBack}
         assessmentId={assessmentId}
@@ -140,7 +140,7 @@ export default function CandidateResultDetailsPage() {
   return (
     <FeatureGate feature="assessment">
       <Suspense fallback={
-        <div className="w-full max-w-[1400px] mx-auto">
+        <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
           </div>

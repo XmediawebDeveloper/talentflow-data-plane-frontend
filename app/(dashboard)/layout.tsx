@@ -4,7 +4,6 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
-import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
 import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
@@ -129,8 +128,8 @@ export default function DashboardLayout({
   const [suspendedAt, setSuspendedAt] = useState<string | undefined>(undefined);
   const [supportEmail, setSupportEmail] = useState<string>('support@talentflow.com');
 
-  // Mobile menu state
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Mobile menu state — retained because Header still reads the prop, but no longer toggled.
+  const [isMobileMenuOpen] = useState(false);
 
   // Track whether the session-expired modal is showing.
   // While true, the dashboard's "redirect to login if not authenticated" effect
@@ -353,24 +352,7 @@ export default function DashboardLayout({
     // FIX-002: Skeleton loader instead of spinner
     return (
       <div className="flex h-screen bg-gray-50">
-        {/* Sidebar Skeleton - hidden on mobile */}
-        <div className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col">
-          {/* Logo area */}
-          <div className="h-16 px-4 flex items-center border-b border-gray-100">
-            <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
-          </div>
-          {/* Nav items skeleton */}
-          <div className="flex-1 p-4 space-y-2">
-            {[75, 85, 65, 90, 70, 80, 95, 72].map((width, i) => (
-              <div key={i} className="flex items-center gap-3 p-2">
-                <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
-                <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: `${width}%` }} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Main content area */}
+        {/* Main content area (no sidebar) */}
         <div className="flex-1 flex flex-col">
           {/* Header Skeleton */}
           <div className="h-16 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -428,6 +410,9 @@ export default function DashboardLayout({
 
   console.log('[DASHBOARD] Authenticated, rendering dashboard');
 
+  // No sidebar anywhere — /dashboard is the navigation hub (in-page Quick Access).
+  // Per-page breadcrumbs (PageBreadcrumb) orient users on every other route.
+
   return (
     <QuotaProvider>
       <PlanFeaturesProvider>
@@ -438,45 +423,20 @@ export default function DashboardLayout({
             <SearchParamsErrorHandler />
           </Suspense>
           <div className="flex h-screen bg-gray-50">
-            {/* Mobile Menu Overlay */}
-            {isMobileMenuOpen && (
-              <div
-                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                onClick={() => setIsMobileMenuOpen(false)}
-              />
-            )}
-
-            {/* Sidebar - Hidden on mobile, slide-in overlay when open */}
-            <div
-              className={`
-                fixed lg:static inset-y-0 left-0 z-50
-                transform transition-transform duration-300 ease-in-out
-                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-              `}
-            >
-              <Sidebar
-                user={user || undefined}
-                tenant={tenant || undefined}
-                subscriptionExpired={subscriptionExpired}
-                accountSuspended={accountSuspended}
-                onClose={() => setIsMobileMenuOpen(false)}
-              />
-            </div>
-
             <div className="flex-1 flex flex-col overflow-hidden">
               <Header
                 user={user}
                 tenant={tenant}
                 onLogout={logout}
                 onOpenSettings={() => router.push('/settings')}
-                onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                onMenuClick={undefined}
                 isMobileMenuOpen={isMobileMenuOpen}
                 subscriptionExpired={subscriptionExpired === true}
               />
 
               <TermsReminderBanner />
               <PlanChangeReviewBanner />
-              <div className="flex-1 overflow-y-auto flex flex-col scrollbar-auto-hide scrollbar-auto-hide-area">
+              <div className={`flex-1 overflow-y-auto flex flex-col ${pathname === '/dashboard' ? 'scrollbar-hide' : 'scrollbar-auto-hide scrollbar-auto-hide-area'}`}>
                 {children}
               </div>
             </div>

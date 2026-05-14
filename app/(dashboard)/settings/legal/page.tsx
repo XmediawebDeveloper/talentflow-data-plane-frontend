@@ -86,9 +86,10 @@ export default function LegalCompliancePage() {
   const DocIcon = viewingDocType ? DOCUMENT_TYPE_ICON[viewingDocType] : FileText;
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 md:p-8">
-      <div className="mx-auto w-full max-w-[1400px] space-y-6">
-      <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Legal & Compliance' }]} />
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full space-y-6 p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Legal & Compliance' }]} />
 
       {/* SaaS Hero Header */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
@@ -251,7 +252,7 @@ export default function LegalCompliancePage() {
 
             {/* Footer */}
             {viewingDoc && (
-              <div className="border-t border-gray-100 bg-slate-50/50 px-6 py-3 flex items-center justify-between text-xs text-gray-500 shrink-0">
+              <div className="border-t border-gray-100 bg-white/50 px-6 py-3 flex items-center justify-between text-xs text-gray-500 shrink-0">
                 <span>Version: <span className="font-semibold text-brand-blue">{viewingDoc.version}</span></span>
                 <span>Effective: {formatIST(viewingDoc.effective_date)}</span>
               </div>
@@ -259,6 +260,7 @@ export default function LegalCompliancePage() {
           </div>
         </div>
       )}
+      </div>
       </div>
     </main>
   );

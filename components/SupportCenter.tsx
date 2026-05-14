@@ -12,6 +12,8 @@ import {
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
+import FeatureGate from '@/components/shared/FeatureGate';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Main API - Local backend handles everything including support tickets
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -715,10 +717,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = internalStats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-slate-50 h-screen overflow-x-hidden overflow-y-auto">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <div className="flex-1 bg-slate-50 overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full bg-white rounded-2xl my-4 md:my-5">
+      <div className="px-4 md:px-8 pt-4 md:pt-6">
+        <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
+      </div>
       {/* SaaS Hero Header */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
+      <div className="px-4 md:px-8 pt-4 md:pt-6">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
@@ -738,6 +744,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
                     {activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
                   </p>
+                  <FeatureGate feature="priority_support" mode="hidden">
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-50 ring-1 ring-emerald-300/30 backdrop-blur-sm">
+                      <Sparkles className="h-3 w-3 text-emerald-200" />
+                      Priority Support is enabled for your plan — tickets are handled with higher priority and faster response times.
+                    </div>
+                  </FeatureGate>
                 </div>
               </div>
 
@@ -2187,6 +2199,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
           </div>
         )}
+      </div>
       </div>
       </div>
     </div>

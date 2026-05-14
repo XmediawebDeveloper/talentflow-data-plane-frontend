@@ -266,7 +266,7 @@ export default function BulkScoringProgress({
       </div>
 
       {/* Progress Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Resumes</span>

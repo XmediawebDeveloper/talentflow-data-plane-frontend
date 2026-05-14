@@ -13,6 +13,7 @@ import {
   IndustryTypeCreate,
 } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -260,8 +261,17 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   };
 
   return (
-    <div className="bg-slate-50 p-4 sm:p-6 lg:p-8 min-h-screen overflow-x-hidden">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <div className="bg-slate-50 flex-1 overflow-x-hidden">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full bg-white rounded-2xl p-4 md:p-8 my-4 md:my-5">
+      <PageBreadcrumb
+        className="mb-4"
+        items={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: type === 'experience' ? 'Experience Levels' : type === 'education' ? 'Education Levels' : 'Industry Types' },
+        ]}
+      />
       {/* SaaS Hero Header */}
       <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -561,6 +571,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
           </div>
         </div>
       )}
+      </div>
       </div>
     </div>
   );

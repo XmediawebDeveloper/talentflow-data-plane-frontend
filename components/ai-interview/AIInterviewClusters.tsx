@@ -1884,7 +1884,7 @@ export default function AIInterviewClusters() {
           {/* Header */}
           <div className="mb-6">
             {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-auto-hide -mx-1 px-1">
+            <div className="flex items-center gap-2 mb-6">
               {STEPS.map((label, i) => {
                 const stepNum = i + 1;
                 const isCompleted = stepNum < CURRENT_STEP;
@@ -1893,49 +1893,49 @@ export default function AIInterviewClusters() {
                   <React.Fragment key={label}>
                     {isCompleted ? (
                       <>
-                        <div className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
                           <CheckCircle2 className="w-4 h-4 text-green-600" />
                         </div>
-                        <span className="text-sm whitespace-nowrap text-gray-500 hidden sm:inline">{label}</span>
+                        <span className="text-sm text-gray-500">{label}</span>
                       </>
                     ) : isCurrent ? (
                       <>
-                        <div className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
-                        <span className="text-sm whitespace-nowrap text-brand-blue font-medium">{label}</span>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
+                        <span className="text-sm text-brand-blue font-medium">{label}</span>
                       </>
                     ) : (
                       <>
-                        <div className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-gray-100 text-gray-400 text-sm">{stepNum}</div>
-                        <span className="text-sm whitespace-nowrap text-gray-400 hidden sm:inline">{label}</span>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 text-gray-400 text-sm">{stepNum}</div>
+                        <span className="text-sm text-gray-400">{label}</span>
                       </>
                     )}
-                    {i < STEPS.length - 1 && <div className="w-4 sm:w-10 h-px bg-gray-200 flex-shrink-0" />}
+                    {i < STEPS.length - 1 && <div className="w-10 h-px bg-gray-200" />}
                   </React.Fragment>
                 );
               })}
             </div>
 
             {/* Header row */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleBack}
                   disabled={saving}
-                  className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex-shrink-0"
+                  className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Layers className="w-5 h-5 text-brand-blue" />
                 </div>
-                <div className="min-w-0">
+                <div>
                   <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Organize skills into weighted clusters for focused interview coverage
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2">
                 {/* Skill Importance toggle REMOVED — per-skill High/Med/Low
                     selection is no longer surfaced on the cluster page. */}
                 {/* Hide regenerate when flexible mode clusters are finalized */}
@@ -1959,7 +1959,7 @@ export default function AIInterviewClusters() {
 
           {/* ── Two-column layout: main content + config summary sidebar ── */}
           <div className="flex gap-6 items-start">
-          <div className="flex-1 min-w-0 space-y-6 pb-36 sm:pb-24">
+          <div className="flex-1 min-w-0 space-y-6 pb-24">
 
           {/* Flexible mode: finalized lock banner */}
           {isFlexible && isFinalized && (
@@ -2223,8 +2223,8 @@ export default function AIInterviewClusters() {
 
       {/* ── Sticky footer ── */}
       <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-10">
-        <div className="px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <button
               onClick={handleBack}
               disabled={saving}
@@ -2242,7 +2242,7 @@ export default function AIInterviewClusters() {
               Discard
             </button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={handleSaveAsDraft}
               disabled={saving || generating}

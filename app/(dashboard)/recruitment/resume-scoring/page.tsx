@@ -760,7 +760,8 @@ export default function ResumeScoringRoute() {
 
   return (
     <FeatureGate feature="resume_scoring">
-      <ResumeScoringPage
+      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+        <ResumeScoringPage
         jobs={jobs}
         resumes={resumes}
         folders={folders}
@@ -777,6 +778,7 @@ export default function ResumeScoringRoute() {
         pendingScoringData={pendingScoringData}
         batchProgress={batchProgress}
       />
+      </div>
     </FeatureGate>
   );
 }

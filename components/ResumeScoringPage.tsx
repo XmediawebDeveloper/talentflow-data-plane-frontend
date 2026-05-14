@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 const formatEmploymentType = (type: string | undefined): string => {
@@ -1214,8 +1215,10 @@ export default function ResumeScoringPage({
     const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
 
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-        <div className="w-full max-w-[1400px] mx-auto">
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header with Back Button + Prev/Next nav */}
         <div className="mb-5">
           {(() => {
@@ -1468,6 +1471,7 @@ export default function ResumeScoringPage({
         )}
 
         </div>
+        </div>
       </main>
     );
   }
@@ -1547,8 +1551,10 @@ export default function ResumeScoringPage({
     ].filter(Boolean).length;
 
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-        <div className="w-full max-w-[1400px] mx-auto">
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           {/* Left: back + icon + title */}
@@ -2513,14 +2519,17 @@ export default function ResumeScoringPage({
       })()}
 
       </div>
+      </div>
       </main>
     );
   }
 
   // New Scoring Flow
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
+      <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -2997,6 +3006,7 @@ export default function ResumeScoringPage({
       )}
 
 
+    </div>
     </main>
   );
 }

@@ -236,7 +236,7 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 flex items-center justify-center">
+      <main className="flex-1 overflow-x-hidden bg-slate-50 flex items-center justify-center">
         <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
           <p className="font-semibold text-gray-600">Loading settings...</p>
@@ -246,10 +246,10 @@ export default function Settings() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Breadcrumb */}
-      <PageBreadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />
 
       {/* SaaS Hero Header */}
       <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
@@ -1031,6 +1031,7 @@ export default function Settings() {
             )}
           </div>
         </div>
+      </div>
       </div>
       </div>
     </main>

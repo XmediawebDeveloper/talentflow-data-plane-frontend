@@ -156,7 +156,9 @@ export default function AITalentMatchRoute() {
 
   return (
     <FeatureGate feature="ai_talent_match">
-      <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} />
+      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+        <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} />
+      </div>
     </FeatureGate>
   );
 }

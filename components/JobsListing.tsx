@@ -1,12 +1,15 @@
 'use client'
 
 import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -78,9 +81,11 @@ interface JobsListingProps {
   };
   // Initial status filter from URL
   initialStatusFilter?: string;
+  // Quick links to master-data screens — surfaced on this page instead of the sidebar
+  masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
@@ -542,8 +547,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
         {/* SaaS Header */}
         <div className="mb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
@@ -581,6 +588,28 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               )}
             </div>
           </div>
+
+          {/* Master-data quick links (moved here from the sidebar) */}
+          {masterDataLinks && masterDataLinks.length > 0 && (
+            <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+              {masterDataLinks.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.id}
+                    href={link.href}
+                    className="group flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 group-hover:text-brand-blue">{link.label}</span>
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
 
           {/* SaaS Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
@@ -1749,6 +1778,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             </div>
           </div>
         )}
+      </div>
       </div>
 
       {/* AI Match Modal */}

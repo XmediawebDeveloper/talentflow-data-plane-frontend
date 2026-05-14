@@ -137,7 +137,7 @@ export default function AssessmentDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         <div className="flex items-center justify-center h-64 bg-slate-50">
           <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>
@@ -147,7 +147,7 @@ export default function AssessmentDetailsPage() {
 
   if (error || !assessment) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-slate-50">
           <div className="text-red-500 text-base">{error || 'Assessment not found'}</div>
           <button
@@ -163,7 +163,7 @@ export default function AssessmentDetailsPage() {
 
   return (
     <FeatureGate feature="assessment">
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
         <AssessmentDetailsView
           assessment={assessment}
           onBack={handleBack}

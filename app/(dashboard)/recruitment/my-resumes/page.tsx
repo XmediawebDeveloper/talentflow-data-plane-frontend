@@ -28,6 +28,7 @@ import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
 import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
@@ -2299,8 +2300,10 @@ export default function MyResumesPage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-4 md:p-8 overflow-x-hidden bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'My Resumes' }]} />
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto flex items-start gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -4584,6 +4587,7 @@ export default function MyResumesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
       </div>
     </main>
     </DndProvider>
