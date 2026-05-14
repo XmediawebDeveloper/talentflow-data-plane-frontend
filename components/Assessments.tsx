@@ -561,9 +561,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Handle edit assessment - redirect to config page instead of modal
   const handleEditAssessment = (assessment: any) => {
-    // Check if candidates have been invited - if so, block editing
-    if (assessment.invitations_count > 0 || assessment.candidates > 0) {
-      toast.warning(`Cannot edit this assessment - ${assessment.invitations_count || assessment.candidates} candidate(s) have already been invited. Please create a new assessment instead.`);
+    // Block edits once the assessment is published AND candidates have
+    // been invited. Editing after invites would diverge questions across
+    // candidates and break fairness. Buttons are also visually disabled
+    // in the dropdowns for this case; this is the last-line defence for
+    // any caller that bypasses the dropdown (e.g. AssessmentDetailsView's
+    // onEdit callback or future code paths).
+    const inviteCount = assessment.invitations_count || assessment.candidates || 0;
+    if (assessment.status === 'Active' && inviteCount > 0) {
+      toast.warning(`Cannot edit — assessment is published and ${inviteCount} candidate(s) have been invited. Please clone it as a new draft instead.`);
       return;
     }
 
@@ -2137,7 +2143,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
-                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
+                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
+                            // Lock the Edit option once the assessment is
+                            // published AND at least one candidate has been
+                            // invited — editing after invites would diverge
+                            // questions across candidates and break fairness.
+                            const _inviteCount = assessment.invitations_count || assessment.candidates || 0;
+                            const _publishedWithInvites = assessment.status === 'Active' && _inviteCount > 0;
+                            const _editBlocked = !canUpdateAssessment || _publishedWithInvites;
+                            const _editBlockReason = !canUpdateAssessment
+                              ? 'You do not have permission to edit assessments'
+                              : _publishedWithInvites
+                                ? `Cannot edit — assessment is published and ${_inviteCount} candidate(s) have been invited`
+                                : '';
+                            return (
                             <button
                               onClick={() => {
                                 if (!canUpdateAssessment) {
@@ -2145,13 +2164,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   setOpenMenuId(null);
                                   return;
                                 }
+                                if (_publishedWithInvites) {
+                                  toast.warning(_editBlockReason);
+                                  setOpenMenuId(null);
+                                  return;
+                                }
                                 handleEditAssessment(assessment);
                                 setOpenMenuId(null);
                               }}
-                              disabled={!canUpdateAssessment}
-                              title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
+                              disabled={_editBlocked}
+                              title={_editBlockReason}
                               className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                !canUpdateAssessment
+                                _editBlocked
                                   ? 'text-gray-400 cursor-not-allowed opacity-60'
                                   : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
@@ -2159,7 +2183,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                               Edit
                             </button>
-                          )}
+                            );
+                          })()}
                           <button
                             onClick={() => {
                               setSelectedAssessmentForPreview(assessment);
@@ -2494,7 +2519,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 onClick={() => setOpenMenuId(null)}
                               />
                               <div className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
-                                {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
+                                {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
+                                  // Mirror of the Edit-lock logic in the
+                                  // table-row dropdown above: editing is
+                                  // disallowed once the assessment is
+                                  // published AND candidates have been
+                                  // invited.
+                                  const _inviteCount = assessment.invitations_count || assessment.candidates || 0;
+                                  const _publishedWithInvites = assessment.status === 'Active' && _inviteCount > 0;
+                                  const _editBlocked = !canUpdateAssessment || _publishedWithInvites;
+                                  const _editBlockReason = !canUpdateAssessment
+                                    ? 'You do not have permission to edit assessments'
+                                    : _publishedWithInvites
+                                      ? `Cannot edit — assessment is published and ${_inviteCount} candidate(s) have been invited`
+                                      : '';
+                                  return (
                                   <button
                                     onClick={() => {
                                       if (!canUpdateAssessment) {
@@ -2502,13 +2541,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         setOpenMenuId(null);
                                         return;
                                       }
+                                      if (_publishedWithInvites) {
+                                        toast.warning(_editBlockReason);
+                                        setOpenMenuId(null);
+                                        return;
+                                      }
                                       handleEditAssessment(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    disabled={!canUpdateAssessment}
-                                    title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
+                                    disabled={_editBlocked}
+                                    title={_editBlockReason}
                                     className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                      !canUpdateAssessment
+                                      _editBlocked
                                         ? 'text-gray-400 cursor-not-allowed opacity-60'
                                         : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                                     }`}
@@ -2516,7 +2560,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                     Edit Assessment
                                   </button>
-                                )}
+                                  );
+                                })()}
                                 <button
                                   onClick={() => {
                                     setSelectedAssessmentForPreview(assessment);

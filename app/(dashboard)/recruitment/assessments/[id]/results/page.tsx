@@ -25,6 +25,7 @@ export default function AssessmentResultsPage() {
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
+  const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [jdTitle, setJdTitle] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +37,11 @@ export default function AssessmentResultsPage() {
         const response = await assessmentService.get(assessmentId);
         if (response) {
           // Strip any "Version N" suffix baked into the stored title — the
-          // live version is rendered separately. Without this, old
-          // assessments whose title still says "Version 1" show v1 in the
-          // header while the metadata correctly shows v19, which looks
-          // like a bug to recruiters.
+          // live version is rendered separately as a badge so recruiters
+          // see the actual current version (v19) rather than the stale
+          // suffix that was frozen at creation time (v1).
           setAssessmentTitle(stripVersionFromTitle(response.title));
+          setAssessmentVersion(response.version ?? null);
           setJdTitle(response.jd_title || '');
         } else {
           setError('Assessment not found');
@@ -131,6 +132,7 @@ export default function AssessmentResultsPage() {
         onBack={handleBack}
         assessmentId={assessmentId}
         assessmentTitle={assessmentTitle}
+        assessmentVersion={assessmentVersion}
         jdTitle={jdTitle}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}

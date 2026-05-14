@@ -26,9 +26,10 @@ interface ShareAssessmentModalProps {
     questions: number;
     type: string;
     short_id?: string; // Assessment ID like AS-022
+    version?: number; // Assessment's live version (e.g., 19) — drives the AS-version badge
     jd_short_id?: string; // JD ID like JD-025
     jd_title?: string; // JD title
-    jd_version?: number; // JD version number
+    jd_version?: number; // JD version number — distinct from assessment.version
     // Section-enable flags so the modal can render all configured sections
     // ("Technical • Coding • HR" etc.) instead of the single legacy `type`
     // label which only showed one section.
@@ -45,6 +46,7 @@ interface ShareAssessmentModalProps {
     questions: number;
     type: string;
     short_id?: string; // Assessment ID like AS-022
+    version?: number; // Assessment's live version
     jd_short_id?: string; // JD ID like JD-025
     jd_title?: string; // JD title
     jd_version?: number; // JD version number
@@ -550,7 +552,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <h2 className="text-gray-900 tracking-tight">Share Assessment via Email</h2>
               <div className="flex items-center gap-2">
                 <p className="text-gray-600 text-sm">{assessmentTitleForEmail}</p>
-                <VersionBadge version={assessment.jd_version} size="sm" variant="success" />
+                <VersionBadge version={assessment.version} size="sm" variant="success" />
               </div>
             </div>
           </div>
@@ -578,7 +580,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </span>
                   )}
                   <span className="text-gray-900">{assessmentTitleForEmail}</span>
-                  <VersionBadge version={assessment.jd_version} size="sm" variant="secondary" />
+                  <VersionBadge version={assessment.version} size="sm" variant="secondary" />
                   {allAssessments.length > 1 && (
                     <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
                       +{allAssessments.length - 1} more

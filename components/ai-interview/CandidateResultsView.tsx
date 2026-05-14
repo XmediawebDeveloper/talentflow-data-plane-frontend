@@ -18,7 +18,13 @@ import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
 import EvaluationReportTab from './tabs/EvaluationReportTab';
 import CoverageTab from './tabs/CoverageTab';
-import { OverviewSection } from './evaluation-dashboard/OverviewSection';
+// import { OverviewSection } from './evaluation-dashboard/OverviewSection'; // replaced by OverviewSectionV2 (Vite design)
+import { OverviewSectionV2 } from './evaluation-dashboard/OverviewSectionV2';
+import { EvaluationReportV2 } from './evaluation-dashboard/EvaluationReportV2';
+// EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
+// import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
+import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
+import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -30,7 +36,7 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations';
+type TabKey = 'overview' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -973,21 +979,23 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const pagedViolations = groupedViolations.slice((violationPage - 1) * ROWS_PER_PAGE, violationPage * ROWS_PER_PAGE);
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
-    { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
+    { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
       ? [
-          // 'evaluation' tab hidden per product requirement — its data is now shown
-          // via the Evaluation Dashboard tab's Analysis view.
-          { key: 'eval_report' as TabKey, label: 'Evaluation Report', icon: <FileText className="w-4 h-4" /> },
-          { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
+          { key: 'eval_report'        as TabKey, label: 'Evaluation Report',  icon: <FileText className="w-4 h-4" /> },
+          { key: 'skill_breakdown'    as TabKey, label: 'Skill Breakdown',    icon: <Brain    className="w-4 h-4" /> },
+          { key: 'question_analysis'  as TabKey, label: 'Question Analysis',  icon: <Target   className="w-4 h-4" /> },
         ]
       : []),
-    { key: 'coverage',       label: 'Coverage',         icon: <Activity className="w-4 h-4" />, live: isInProgress },
-    { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
-    { key: 'qa',             label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
-    { key: 'recording',      label: 'Recording',        icon: <Video className="w-4 h-4" /> },
-    { key: 'transcript',     label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
-    { key: 'violations',     label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
+    { key: 'coverage',         label: 'Cluster Coverage', icon: <Activity className="w-4 h-4" />, live: isInProgress },
+    // 'eval_dashboard' removed — its content (Skills/Questions/Formula) is now mounted as 3 individual tabs above.
+    // { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
+    // Sentiment tab removed per Vite design — Sentiment had no equivalent in the Vite source. Block below kept (commented) for revert.
+    // { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
+    { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
+    { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
+    { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
+    { key: 'violations',       label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1248,6 +1256,29 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   created_at: liveSession.created_at,
                 },
               });
+              // Compute avg response time from evaluations (seconds)
+              const responseTimes = (eval_.evaluations || [])
+                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
+                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
+              const avgResponseSeconds = responseTimes.length > 0
+                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
+                : null;
+              // AI confidence: prefer backend-provided, fallback in component to scaled final
+              const aiConfidence = typeof eval_.ai_confidence === 'number'
+                ? eval_.ai_confidence
+                : typeof eval_.confidence === 'number'
+                  ? eval_.confidence
+                  : null;
+              return (
+                <OverviewSectionV2
+                  data={data}
+                  livenessVerified={!!interview.identity_verified}
+                  candidateImage={identityPhotoUrl}
+                  avgResponseSeconds={avgResponseSeconds}
+                  aiConfidence={aiConfidence}
+                />
+              );
+              /* Old Vite-pre design (kept for reference, can be restored):
               return (
                 <OverviewSection
                   data={data}
@@ -1255,9 +1286,32 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   candidateImage={identityPhotoUrl}
                 />
               );
+              */
             })()}
 
-            {/* Coverage Tab — unified Skill Coverage + Cluster Insights in one view */}
+            {/* Coverage Tab — Vite design (V2): per-cluster skill coverage cards */}
+            {!evaluationPending && activeTab === 'coverage' && (() => {
+              const placeholderMsg = getPlaceholderMessage('coverage');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+              });
+              return <CoverageV2 data={data} />;
+            })()}
+            {/* Old CoverageTab (with live WS skill coverage + cluster insights) — kept for reference:
             {!evaluationPending && activeTab === 'coverage' && (
               <CoverageTab
                 sessionId={liveSession.id}
@@ -1274,8 +1328,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
               />
             )}
+            */}
 
-            {/* Sentiment Tab */}
+            {/* Sentiment Tab — UNREACHABLE: 'sentiment' removed from tabs[] per Vite design.
+              Kept as dead code so the data plumbing (sentimentTimeline, sentimentSummary)
+              and chart layout can be restored if the tab is ever re-enabled. */}
             {!evaluationPending && activeTab === 'sentiment' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <div className="space-y-6">
@@ -1361,16 +1418,37 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 // Fall back to evaluations if history not present
                 const qaItemsRaw: any[] = eval_.question_history?.length > 0
                   ? eval_.question_history
-                  : evaluations.map((e: any, i: number) => ({
-                      question_number: i + 1,
-                      question: e.question,
-                      answer: e.response,
-                      topic: e.evaluation?.topic,
-                      round_type: null,
-                      response_type: 'answered',
-                      skip_source: null,
-                      timestamp: null,
-                    }));
+                  : (() => {
+                      // Follow-ups in `evaluations` don't share a question_number with
+                      // their parent the way question_history entries do. Assign numbers
+                      // so follow-ups inherit the most recent main question's number —
+                      // the downstream grouper then picks them up via the "same number
+                      // as previous" branch even if intent tagging is missing.
+                      let lastMainNum = 0;
+                      return evaluations.map((e: any, i: number) => {
+                        const intent = (e.question_intent || '').toLowerCase();
+                        const isFu = !!e.is_follow_up || ['follow_up', 'probe', 'deep_dive'].includes(intent);
+                        let qNum: number;
+                        if (isFu && lastMainNum > 0) {
+                          qNum = lastMainNum;
+                        } else {
+                          lastMainNum = i + 1;
+                          qNum = lastMainNum;
+                        }
+                        return {
+                          question_number: qNum,
+                          question: e.question,
+                          answer: e.response,
+                          topic: e.evaluation?.topic,
+                          round_type: null,
+                          response_type: 'answered',
+                          skip_source: null,
+                          timestamp: null,
+                          is_follow_up: e.is_follow_up,
+                          question_intent: e.question_intent,
+                        };
+                      });
+                    })();
                 // Group follow-ups with their parent main question. Follow-ups
                 // are rendered as F1, F2… nested inside the parent's Q box.
                 // Detect follow-ups by: (a) explicit is_follow_up flag, OR
@@ -1703,7 +1781,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
-                                Question {item.question_number ?? idx + 1}
+                                Question {idx + 1}
                               </span>
                               {duration != null && (
                                 <span className="inline-flex items-center gap-1 text-xs text-gray-500">
@@ -1847,7 +1925,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
-                                Question {item.question_number ?? idx + 1}
+                                Question {idx + 1}
                               </span>
                               {duration != null && (
                                 <span className="inline-flex items-center gap-1 text-xs text-gray-500">
@@ -2519,7 +2597,40 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               />
             )}
 
-            {/* Evaluation Report Tab — Final report with PDF/Excel/JSON downloads */}
+            {/* Evaluation Report Tab — Vite design (V2). Wired to live DashboardData. */}
+            {!evaluationPending && activeTab === 'eval_report' && (() => {
+              const placeholderMsg = getPlaceholderMessage('eval_report');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+              });
+              const aiConfidence = typeof eval_.ai_confidence === 'number'
+                ? eval_.ai_confidence
+                : typeof eval_.confidence === 'number'
+                  ? eval_.confidence
+                  : null;
+              return (
+                <EvaluationReportV2
+                  data={data}
+                  aiConfidence={aiConfidence}
+                  evaluationId={liveSession.display_id || null}
+                />
+              );
+            })()}
+            {/* Old EvaluationReportTab (with PDF/Excel/JSON exports) — kept for reference:
             {!evaluationPending && activeTab === 'eval_report' && (
               <EvaluationReportTab
                 sessionId={liveSession.id}
@@ -2540,8 +2651,66 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 }}
               />
             )}
+            */}
 
-            {/* Evaluation Dashboard Tab — Analysis / Timeline / Table views */}
+            {/* Skill Breakdown Tab — Vite SkillBreakdown.tsx as its own tab */}
+            {!evaluationPending && activeTab === 'skill_breakdown' && (() => {
+              const placeholderMsg = getPlaceholderMessage('skill_breakdown');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+              });
+              return <SkillsView data={data} />;
+            })()}
+
+            {/* Question Analysis Tab — Vite QuestionAnalysis.tsx as its own tab */}
+            {!evaluationPending && activeTab === 'question_analysis' && (() => {
+              const placeholderMsg = getPlaceholderMessage('question_analysis');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+              });
+              return <QuestionsView data={data} />;
+            })()}
+
+            {/* Example Scenarios Tab — Vite ExampleScenarios.tsx (scoring formula reference) */}
+            {!evaluationPending && activeTab === 'example_scenarios' && (
+              <FormulaView />
+            )}
+
+            {/* Old merged 'eval_dashboard' tab — kept for reference:
+            {!evaluationPending && activeTab === 'eval_dashboard' && (() => {
+              const data = buildDashboardData({ ... });
+              return <EvaluationDashboardV2 data={data} />;
+            })()}
+            */}
+            {/* Old EvaluationDashboardTab (Analysis / Timeline / Table) — kept for reference:
             {!evaluationPending && activeTab === 'eval_dashboard' && (
               <EvaluationDashboardTab
                 sessionId={liveSession.id}
@@ -2562,6 +2731,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 }}
               />
             )}
+            */}
 
             {/* Legacy evaluation block removed — replaced by EvaluationTab above.
               Original inline block handled: capability_score hero, section_scores,

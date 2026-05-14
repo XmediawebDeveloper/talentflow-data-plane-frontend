@@ -1,18 +1,42 @@
 'use client';
 
 import { CheckCircle, Clock, FileText, X } from 'lucide-react';
+import { useState } from 'react';
 
 interface CompletedScreenProps {
   assessmentTitle?: string;
   candidateName?: string;
 }
 
+// Detect the candidate's OS so the manual-close shortcut hint matches.
+const getCloseShortcut = (): string => {
+  if (typeof navigator === 'undefined') return 'Ctrl + W';
+  const ua = navigator.userAgent.toLowerCase();
+  return /mac|iphone|ipad|ipod/.test(ua) ? '⌘ + W' : 'Ctrl + W';
+};
+
 export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScreenProps) {
+  // `window.close()` only succeeds if the page was opened by a script
+  // (e.g., window.open). Candidates arrive from an email link or the
+  // address bar, so the call is silently blocked by every modern browser
+  // and the button appears dead. We attempt the close, then check after a
+  // short delay whether we're still alive — if so, surface a clear
+  // fallback message instead of leaving the candidate stuck.
+  const [closeBlocked, setCloseBlocked] = useState(false);
+  const [shortcut] = useState(getCloseShortcut);
+
   const handleClose = () => {
-    window.close();
-    // If window.close() is blocked (tab not opened by script), show a fallback
+    try {
+      window.close();
+    } catch {
+      /* swallow — we'll fall through to the fallback below */
+    }
+    // If after 300ms the tab is still alive, the browser blocked the
+    // close. Switch the UI to tell the candidate exactly how to close.
     setTimeout(() => {
-      // If we're still here, the close was blocked — the text already tells them to close manually
+      if (!window.closed) {
+        setCloseBlocked(true);
+      }
     }, 300);
   };
 
@@ -71,13 +95,28 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
           </div>
 
           {/* Close Button */}
-          <button
-            onClick={handleClose}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-colors"
-          >
-            <X className="w-4 h-4" />
-            Close Window
-          </button>
+          {closeBlocked ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left">
+              <p className="text-sm font-medium text-amber-900 mb-1">
+                Your browser blocked the auto-close.
+              </p>
+              <p className="text-xs text-amber-800">
+                Please close this tab manually — press{' '}
+                <kbd className="px-1.5 py-0.5 bg-white border border-amber-300 rounded text-[11px] font-mono">
+                  {shortcut}
+                </kbd>{' '}
+                or click the ✕ on the tab. Your assessment has been submitted and your responses are saved.
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={handleClose}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Close Window
+            </button>
+          )}
 
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-100">

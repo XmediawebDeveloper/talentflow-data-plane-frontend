@@ -12,6 +12,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
   normalizePriority as sharedNormalizePriority,
@@ -739,6 +740,8 @@ export default function AIInterviewClusters() {
   const jdMthSkillNamesRef = useRef<Set<string>>(new Set());
   const jdNthSkillNamesRef = useRef<Set<string>>(new Set());
   const [nthEnabled, setNthEnabled] = useState(true);
+  // Question Distribution panel — collapsed by default; expands on click
+  const [showQuestionDistribution, setShowQuestionDistribution] = useState(false);
 
   /* Time / mode */
   const [isFixed, setIsFixed] = useState(true);
@@ -1929,7 +1932,297 @@ export default function AIInterviewClusters() {
                   <Layers className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
+                    {/* Stealth dot — only the admin knows it's there. Click opens the
+                      Question Distribution popover. Tiny (6×6), neutral gray, no hover ring,
+                      sits flush with the heading so casual users don't register it. */}
+                    {isFixed && (mthClusters.length > 0 || (nthEnabled && nthClusters.length > 0)) && (() => {
+                      type DistRow = { q: number; primary: string; secondaries: string[]; cluster: string; priority: number };
+                      // Distribute skills across N questions deterministically.
+                      // Spec-fixes vs the naive version:
+                      //   - Primary eligibility uses ONLY the "used-as-primary" set.
+                      //     Being a secondary in an earlier Q never blocks a skill
+                      //     from getting its own primary slot later. (This is what
+                      //     caused Q4=SQL and Q8=SQL collision before.)
+                      //   - Forced duplication kicks in only when EVERY skill has
+                      //     already been primary at least once. Then we round-robin
+                      //     primaries by appearance count (least-used first).
+                      //   - Secondary picks prefer "never used as secondary" within
+                      //     the same cluster; fall back to other same-cluster mates,
+                      //     and finally skip rather than dup the primary.
+                      const distribute = (clusters: Cluster[], qCount: number): DistRow[] => {
+                        if (qCount <= 0 || clusters.length === 0) return [];
+                        // Filter empty + sort by priority desc.
+                        const sorted = [...clusters]
+                          .filter(c => (c.skills?.length ?? 0) > 0)
+                          .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+                        if (sorted.length === 0) return [];
+
+                        // ── STEP 1: per-cluster Q allocation ─────────────────────────
+                        // Weight = priority × skill_count. Each cluster gets a share of
+                        // qCount proportional to its weight, capped at its skill count
+                        // (a cluster with 3 skills never needs more than 3 primary slots).
+                        // Guarantees every non-empty cluster gets at least 1 slot when
+                        // qCount >= cluster count (so no cluster goes orphaned with all
+                        // its skills lost). Any leftover skills become secondaries.
+                        const skillCounts = sorted.map(c => (c.skills?.length ?? 0));
+                        const totalWeight = sorted.reduce(
+                          (sum, c, i) => sum + ((c.priority ?? 1) * skillCounts[i]),
+                          0,
+                        );
+                        const rawAlloc = sorted.map((c, i) =>
+                          totalWeight > 0
+                            ? (qCount * (c.priority ?? 1) * skillCounts[i]) / totalWeight
+                            : 0,
+                        );
+                        // Initial: round down, min 1 if cluster has skills and budget allows
+                        const allocations = rawAlloc.map((r, i) => {
+                          const floor = Math.floor(r);
+                          // Cap at skill count — never allocate more Qs than there are
+                          // unique skills in that cluster.
+                          return Math.min(skillCounts[i], floor);
+                        });
+                        // If qCount < cluster_count, give the TOP `qCount` priority clusters 1 each.
+                        if (qCount < sorted.length) {
+                          for (let i = 0; i < allocations.length; i++) {
+                            allocations[i] = i < qCount ? 1 : 0;
+                          }
+                        } else {
+                          // Ensure min-1 for every cluster that has skills
+                          for (let i = 0; i < allocations.length; i++) {
+                            if (allocations[i] === 0 && skillCounts[i] > 0) allocations[i] = 1;
+                          }
+                        }
+                        // Reconcile to total qCount.
+                        let diff = qCount - allocations.reduce((a, b) => a + b, 0);
+                        // Over-allocated → trim from the cluster with the largest slack first.
+                        while (diff < 0) {
+                          let trimIdx = -1;
+                          let trimSlack = -1;
+                          for (let i = 0; i < allocations.length; i++) {
+                            if (allocations[i] > 1) {
+                              const slack = allocations[i] - (qCount < sorted.length ? 1 : 0);
+                              if (slack > trimSlack) { trimSlack = slack; trimIdx = i; }
+                            }
+                          }
+                          if (trimIdx < 0) break;
+                          allocations[trimIdx] -= 1;
+                          diff += 1;
+                        }
+                        // Under-allocated → distribute to clusters by fractional remainder,
+                        // skipping clusters already at their skill-count cap.
+                        while (diff > 0) {
+                          const fracs = rawAlloc
+                            .map((r, i) => ({ frac: r - Math.floor(r), i }))
+                            .filter(({ i }) => allocations[i] < skillCounts[i])
+                            .sort((a, b) => b.frac - a.frac);
+                          if (fracs.length === 0) break;
+                          allocations[fracs[0].i] += 1;
+                          diff -= 1;
+                        }
+
+                        // ── STEP 2: build per-Q rows ─────────────────────────────────
+                        const out: DistRow[] = [];
+                        let qNum = 0;
+                        // Track orphan skills (from clusters with alloc=0) for later assignment
+                        const orphanSkills: { skill: string; cluster: Cluster }[] = [];
+                        for (let ci = 0; ci < sorted.length; ci++) {
+                          const cluster = sorted[ci];
+                          const alloc = allocations[ci];
+                          const skills = (cluster.skills ?? []).filter(
+                            s => typeof s === 'string' && s.trim()
+                          );
+                          if (alloc === 0) {
+                            // Orphan cluster — all its skills go to be placed as secondaries elsewhere.
+                            for (const s of skills) orphanSkills.push({ skill: s, cluster });
+                            continue;
+                          }
+                          const primaries = skills.slice(0, alloc);
+                          const leftover = skills.slice(alloc); // become secondaries within this cluster
+                          for (let i = 0; i < primaries.length; i++) {
+                            qNum += 1;
+                            // Distribute leftover skills as 2-per-Q secondaries, starting from Q1 of the cluster.
+                            const secs = leftover.slice(i * 2, i * 2 + 2);
+                            out.push({
+                              q: qNum,
+                              primary: primaries[i],
+                              secondaries: secs,
+                              cluster: cluster.name ?? '',
+                              priority: cluster.priority ?? 1,
+                            });
+                          }
+                        }
+
+                        // ── STEP 3: place orphan-cluster skills as cross-cluster secondaries ──
+                        // Cap at 2 secondaries per Q. Skip if full. (Rare edge case when
+                        // q_count < cluster_count → some clusters had alloc=0.)
+                        for (const o of orphanSkills) {
+                          const target = out.find(r => r.secondaries.length < 2);
+                          if (!target) break;
+                          target.secondaries.push(o.skill);
+                        }
+                        return out;
+                      };
+                      const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
+                      const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : [];
+                      const totalQ = mthDist.length + nthDist.length;
+                      const totalSkillsCovered = new Set([
+                        ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+                        ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+                      ]).size;
+                      const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
+                      const priorityClass = (p: number) =>
+                        p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                          : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
+                          : 'bg-rose-100 text-rose-700 ring-rose-200';
+                      const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
+                        <div
+                          key={`${sectionKey}-${row.q}`}
+                          className="grid grid-cols-[36px_1fr_auto] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                        >
+                          <span className={`text-[11px] font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
+                            Q{row.q}
+                          </span>
+                          <div className="min-w-0 flex flex-wrap items-center gap-1">
+                            <span className="text-xs font-medium text-gray-900">{row.primary}</span>
+                            {row.secondaries.length > 0 && (
+                              <>
+                                <span className="text-gray-300 text-[10px]">+</span>
+                                {row.secondaries.map((s, i) => (
+                                  <span key={`${row.q}-sec-${i}`} className="px-1 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
+                                    {s}
+                                  </span>
+                                ))}
+                              </>
+                            )}
+                            <span className="text-[10px] text-gray-400 ml-0.5 truncate max-w-[140px]">· {row.cluster}</span>
+                          </div>
+                          <span className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
+                            {priorityLabel(row.priority)}
+                          </span>
+                        </div>
+                      );
+                      return (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label=" "
+                              title=""
+                              className="inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-gray-300 hover:bg-brand-blue transition-colors ml-1"
+                            />
+                          </PopoverTrigger>
+                          <PopoverContent
+                            side="bottom"
+                            align="start"
+                            className="w-[480px] max-h-[70vh] overflow-y-auto p-0"
+                          >
+                            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
+                                <div className="text-[11px] text-gray-500">
+                                  {totalQ} questions · {totalSkillsCovered} skills covered
+                                </div>
+                              </div>
+                            </div>
+                            <div className="p-4 space-y-4">
+                              {mthDist.length > 0 && (
+                                <div>
+                                  <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Must-To-Have ({mthDist.length})
+                                  </div>
+                                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
+                                    {mthDist.map(r => renderRow(r, 'mth'))}
+                                  </div>
+                                </div>
+                              )}
+                              {nthDist.length > 0 && (
+                                <div>
+                                  <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Nice-To-Have ({nthDist.length})
+                                  </div>
+                                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
+                                    {nthDist.map(r => renderRow(r, 'nth'))}
+                                  </div>
+                                </div>
+                              )}
+                              {mthDist.length === 0 && nthDist.length === 0 && (
+                                <div className="text-xs text-gray-500 italic text-center py-4">
+                                  Generate clusters first.
+                                </div>
+                              )}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      );
+                    })()}
+                    {/* Skill Distribution info popover removed per product feedback — user-facing
+                      recruiters should not see the distribution concept. Backend still stores
+                      mth_question_skill_map / nth_question_skill_map for internal inspection.
+                      Original block kept commented for revert.
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="What is skill distribution?"
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+                        >
+                          <Info className="w-3.5 h-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="bottom"
+                        align="start"
+                        className="w-[440px] max-h-[70vh] overflow-y-auto p-5 text-sm leading-relaxed"
+                      >
+                        <div className="space-y-3 text-gray-700">
+                          <div className="text-sm font-semibold text-gray-900">Skill Distribution</div>
+                          <p className="italic text-gray-600">
+                            Intelligently distribute refined skills across the allocated interview
+                            questions so all important skills are evaluated efficiently within the
+                            given time.
+                          </p>
+                          <p>
+                            After cluster refinement completes, the system maps refined skills to
+                            the allocated number of questions. Skills are spread evenly and
+                            logically across questions; each question may evaluate multiple related
+                            skills.
+                          </p>
+                          <div>
+                            <div className="font-semibold text-gray-900 mb-1.5">User flow</div>
+                            <ol className="list-decimal pl-5 space-y-1 text-gray-700">
+                              <li><span className="font-medium">Input from refinement:</span> optimized clusters, refined skill list, question allocation.</li>
+                              <li><span className="font-medium">Cluster prioritization applied:</span> clusters already sorted by priority.</li>
+                              <li><span className="font-medium">Skill mapping to questions:</span> distribute skills across available questions with a balanced load.</li>
+                              <li><span className="font-medium">Multi-skill question structuring:</span> each question gets a primary skill (high priority) plus secondary skills (supporting).</li>
+                              <li><span className="font-medium">Final output:</span> each question carries its assigned skills and cluster reference.</li>
+                            </ol>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs">
+                            <div className="font-semibold text-gray-900 mb-1">Example</div>
+                            <div className="text-gray-700 mb-2">
+                              <span className="font-medium">Refined MHS:</span> Java (High), Spring Boot (High), Microservices (Medium), REST API (Medium), Docker (Low). <span className="font-medium">Allocated:</span> 3 questions.
+                            </div>
+                            <div className="space-y-0.5 font-mono text-[11px] text-gray-800">
+                              <div>Q1 → Java (High) · Spring Boot (Medium)</div>
+                              <div>Q2 → Microservices (Medium) · REST API (High)</div>
+                              <div>Q3 → Docker (Low) + integration with backend</div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900 mb-1.5">Acceptance criteria</div>
+                            <ol className="list-decimal pl-5 space-y-1 text-gray-700">
+                              <li><span className="font-medium">Distribute skills across questions</span> — given refined skills and a question allocation, the system maps skills across the allocated questions.</li>
+                              <li><span className="font-medium">Support multi-skill questions</span> — assign more than one skill per question where related skills exist.</li>
+                              <li><span className="font-medium">Output question-skill mapping</span> — return a mapping of each question to its assigned skills.</li>
+                            </ol>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    */}
+                  </div>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Organize skills into weighted clusters for focused interview coverage
                   </p>
@@ -2109,6 +2402,192 @@ export default function AIInterviewClusters() {
                 />
               )}
             </>
+            );
+          })()}
+
+          {/* ── Question Distribution panel REMOVED from UI per product feedback ─
+              User-facing recruiters should not see the per-question skill mapping.
+              Backend storage (special_instructions.mth_question_skill_map /
+              nth_question_skill_map) is untouched — inspect via SQL only.
+              Original render block is preserved below (wrapped in `false &&`) so
+              it can be re-enabled by flipping the guard if the requirement changes.
+          */}
+          {false && isFixed && (mthClusters.length > 0 || (nthEnabled && nthClusters.length > 0)) && (() => {
+            // Deterministic distribution — mirrors backend _fallback_distribute.
+            type DistRow = { q: number; primary: string; secondaries: string[]; cluster: string; priority: number };
+            const distribute = (clusters: Cluster[], qCount: number): DistRow[] => {
+              if (qCount <= 0 || clusters.length === 0) return [];
+              const sorted = [...clusters]
+                .filter(c => (c.skills?.length ?? 0) > 0)
+                .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+              const flat: { skill: string; cluster: Cluster }[] = [];
+              for (const c of sorted) {
+                for (const s of (c.skills ?? [])) {
+                  if (typeof s === 'string' && s.trim()) flat.push({ skill: s, cluster: c });
+                }
+              }
+              if (flat.length === 0) return [];
+              const used = new Set<string>();
+              const out: DistRow[] = [];
+              let idx = 0;
+              for (let q = 1; q <= qCount; q++) {
+                let pick: { skill: string; cluster: Cluster } | null = null;
+                for (let attempts = 0; attempts < flat.length; attempts++) {
+                  const cand = flat[idx % flat.length];
+                  idx++;
+                  if (!used.has(cand.skill.toLowerCase())) { pick = cand; break; }
+                }
+                if (!pick) pick = flat[(q - 1) % flat.length]; // forced duplication
+                used.add(pick.skill.toLowerCase());
+                // Secondaries: up to 2 from the SAME cluster as the primary —
+                // prefer unused; fall back to same-cluster duplicates so a
+                // question always evaluates the multi-skill set when possible.
+                const sameCluster = (pick.cluster.skills ?? []).filter(
+                  s => typeof s === 'string' && s.trim()
+                    && s.toLowerCase() !== pick!.skill.toLowerCase()
+                );
+                const unusedSecs = sameCluster.filter(s => !used.has(s.toLowerCase()));
+                const secondaries = (unusedSecs.length >= 2 ? unusedSecs : sameCluster).slice(0, 2);
+                for (const s of secondaries) used.add(s.toLowerCase());
+                out.push({
+                  q,
+                  primary: pick.skill,
+                  secondaries,
+                  cluster: pick.cluster.name ?? '',
+                  priority: pick.cluster.priority ?? 1,
+                });
+              }
+              return out;
+            };
+            const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
+            const nthDist = nthEnabled
+              ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0)
+              : [];
+            const totalQ = mthDist.length + nthDist.length;
+            const totalSkillsCovered = new Set([
+              ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+              ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+            ]).size;
+            const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
+            const priorityClass = (p: number) =>
+              p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
+                : 'bg-rose-100 text-rose-700 ring-rose-200';
+
+            const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
+              <div
+                key={`${sectionKey}-${row.q}`}
+                className="grid grid-cols-[44px_1fr_auto] items-start gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors"
+              >
+                <span className={`text-xs font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
+                  Q{row.q}
+                </span>
+                <div className="min-w-0 flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-medium text-gray-900">{row.primary}</span>
+                  {row.secondaries.length > 0 && (
+                    <>
+                      <span className="text-gray-300">+</span>
+                      {row.secondaries.map((s, i) => (
+                        <span key={`${row.q}-sec-${i}`} className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
+                          {s}
+                        </span>
+                      ))}
+                    </>
+                  )}
+                  <span className="text-[11px] text-gray-400 ml-1 truncate max-w-[180px]">· {row.cluster}</span>
+                </div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
+                  {priorityLabel(row.priority)}
+                </span>
+              </div>
+            );
+
+            return (
+              <div className="mt-6">
+                {/* Collapsed card — click to expand */}
+                {!showQuestionDistribution ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuestionDistribution(true)}
+                    className="w-full bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-5 py-3 flex items-center justify-between hover:border-brand-blue/30 hover:shadow-brand-blue/10 transition-all"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <Layers className="w-3.5 h-3.5 text-brand-blue" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
+                        <div className="text-[11px] text-gray-500">
+                          {totalQ} question{totalQ !== 1 ? 's' : ''} · {totalSkillsCovered} skill{totalSkillsCovered !== 1 ? 's' : ''} covered
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-brand-blue">
+                      Show
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </div>
+                  </button>
+                ) : (
+                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <Layers className="w-4 h-4 text-brand-blue" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-semibold text-gray-900 tracking-tight">Question Distribution</h2>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {totalQ} planned questions · {totalSkillsCovered} skills covered (primary + secondary)
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuestionDistribution(false)}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+                        aria-label="Hide question distribution"
+                      >
+                        Hide
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="p-5 space-y-5">
+                      {mthDist.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+                            Must-To-Have ({mthDist.length} questions)
+                          </div>
+                          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                            {mthDist.map(r => renderRow(r, 'mth'))}
+                          </div>
+                        </div>
+                      )}
+
+                      {nthDist.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+                            Nice-To-Have ({nthDist.length} questions)
+                          </div>
+                          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                            {nthDist.map(r => renderRow(r, 'nth'))}
+                          </div>
+                        </div>
+                      )}
+
+                      {mthDist.length === 0 && nthDist.length === 0 && (
+                        <div className="text-sm text-gray-500 italic text-center py-6">
+                          Generate clusters above to see how questions will be distributed.
+                        </div>
+                      )}
+
+                      <div className="text-[11px] text-gray-400 italic">
+                        Each question evaluates a primary skill plus up to 2 secondary skills from the same cluster.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })()}
 

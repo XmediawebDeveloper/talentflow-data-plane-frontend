@@ -40,6 +40,12 @@ interface UseInterviewProctoringMonitorOptions {
   voiceDetectionSensitivity?: number;
   obstructionThreshold?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; severity: string; details: Record<string, any> }) => Promise<any>;
+  // Returns true when voice-detection must be suppressed because the audio
+  // currently in the candidate's mic is expected (Linda's TTS echo or the
+  // candidate's own answer). Without this, both phases are misclassified as
+  // "another voice detected" and the proctor floods the report with false
+  // violations.
+  shouldSuppressVoiceCheck?: () => boolean;
 }
 
 interface ProctoringState {
@@ -283,6 +289,7 @@ export function useInterviewProctoringMonitor({
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
   reportEvent,
+  shouldSuppressVoiceCheck,
 }: UseInterviewProctoringMonitorOptions) {
   // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
@@ -302,6 +309,7 @@ export function useInterviewProctoringMonitor({
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
   const obstructionThresholdRef = useRef(obstructionThreshold);
   const isMonitoringRef = useRef(false);
+  const shouldSuppressVoiceCheckRef = useRef(shouldSuppressVoiceCheck);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { streamRef.current = stream; }, [stream]);
@@ -310,6 +318,7 @@ export function useInterviewProctoringMonitor({
   useEffect(() => { reportEventRef.current = reportEvent; }, [reportEvent]);
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
+  useEffect(() => { shouldSuppressVoiceCheckRef.current = shouldSuppressVoiceCheck; }, [shouldSuppressVoiceCheck]);
 
   // Worker refs
   const videoWorkerRef = useRef<Worker | null>(null);
@@ -569,6 +578,17 @@ export function useInterviewProctoringMonitor({
       // Send frequency data to worker at low frequency
       voiceIntervalRef.current = setInterval(() => {
         if (!isMonitoringRef.current || !analyserRef.current || !audioWorkerRef.current) return;
+
+        // Skip the check entirely while the audio in the mic is expected —
+        // Linda's TTS echo or the candidate's own answer. Otherwise the
+        // candidate's own speech is flagged as voice_detected (~60+ false
+        // violations per session observed in production).
+        // Worker state is reset so consecutive-frame counters don't carry
+        // over across the suppression window.
+        if (shouldSuppressVoiceCheckRef.current?.()) {
+          audioWorkerRef.current.postMessage({ type: 'RESET' });
+          return;
+        }
 
         analyserRef.current.getByteFrequencyData(dataArray);
         const threshold = 128 - (voiceSensitivityRef.current * 1.28);

@@ -447,7 +447,17 @@ export default function CandidateResultDetails({
               </div>
               <div className="min-w-0">
                 <div className="text-white/80 text-xs mb-0.5 sm:mb-1">Assessment</div>
-                <h1 className="text-white text-base sm:text-xl truncate tracking-tight">{assessmentTitle}</h1>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-white text-base sm:text-xl truncate tracking-tight">{assessmentTitle}</h1>
+                  {assessmentVersion != null && (
+                    <span
+                      className="inline-flex items-center text-xs sm:text-sm font-semibold rounded-md border border-white/30 bg-white/15 text-white px-2 py-0.5"
+                      title={`Version ${assessmentVersion}`}
+                    >
+                      v{assessmentVersion}
+                    </span>
+                  )}
+                </div>
                 {jdTitle && (
                   <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
                     <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white/80 flex-shrink-0" />

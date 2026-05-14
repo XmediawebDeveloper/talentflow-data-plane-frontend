@@ -1569,7 +1569,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           {completingStuck && (
             <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
               <button
-                onClick={() => window.close()}
+                onClick={() => {
+                  // window.close() only works when the page was opened by
+                  // a script. For candidates arriving from an email link
+                  // it's silently blocked, so we fall back to instructing
+                  // the candidate to close manually.
+                  try { window.close(); } catch { /* ignore */ }
+                  setTimeout(() => {
+                    if (!window.closed) {
+                      const isMac = /mac|iphone|ipad|ipod/i.test(
+                        typeof navigator !== 'undefined' ? navigator.userAgent : ''
+                      );
+                      const sc = isMac ? '⌘ + W' : 'Ctrl + W';
+                      alert(
+                        `Your browser blocked auto-close. Please close this tab manually (${sc}). ` +
+                        `Your assessment has been submitted and your responses are saved.`
+                      );
+                    }
+                  }, 300);
+                }}
                 className="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl shadow-lg transition-colors flex items-center gap-2"
               >
                 Close Window

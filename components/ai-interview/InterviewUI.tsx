@@ -323,11 +323,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // fire DURING the candidate's answer window and the global clock
       // must keep ticking so the 30-min budget is enforced.
       if (isClarificationRef.current) return;
-      // Pause while fullscreen is exited — the interview is frozen behind
-      // the "Fullscreen Required" overlay, backend continues to tick its
-      // own clock but the candidate must not be charged for that lost
-      // time on the visible global timer.
-      if (isFullscreenExitedRef.current) return;
       // Both global AND per-question timer only tick during the candidate's
       // turn (when they can actually speak). Pause during Linda's regular
       // speech. EXCEPTION: keep ticking during the silence nudge ("Are you
@@ -570,6 +565,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
+    // Suppress voice_detected while Linda is speaking (TTS echo) or while we
+    // are actively recording the candidate's answer — both are expected audio
+    // and must not count as "another voice in the room."
+    shouldSuppressVoiceCheck: () => isAiSpeakingRef.current || isRecordingRef.current,
   });
   // Stable ref so ws.onclose closure can always call the latest flush function
   const flushProctoringEventsRef = useRef(flushEvents);
@@ -579,30 +578,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const isFullscreenActive = true;
 
   // Face detection & gaze tracking (Phase 2 & 3)
+  // Violations log to backend only — they MUST NOT stop the mic, kill the
+  // per-question timer, end the turn, or show a blocking overlay.
+  // stopRecordingSilent had heavy side-effects (clears interval, deducts
+  // global timer, sends end_turn) so calling it on every violation was
+  // freezing the question slot mid-answer; the full-screen "Face Not
+  // Detected" overlay made it worse by hiding the question + timer from
+  // the candidate. Violation is still surfaced via the toast warning system
+  // (InterviewProctoringWarnings) and logged to the recruiter timeline.
   const handleFaceMissing = useCallback(() => {
-    // emitEvent queues to backend via proctoring monitor (flushBackendQueue every 5s)
     emitEvent('face_missing', { timestamp: new Date().toISOString() });
-    if (!isFaceBlockedRef.current) {
-      isFaceBlockedRef.current = true;
-      setIsFaceBlocked(true);
-      // Stop mic recording silently so audio isn't sent while face is absent
-      stopRecordingSilentRef.current();
-    }
   }, [emitEvent]);
 
   const handleFaceRestored = useCallback(() => {
-    if (isFaceBlockedRef.current) {
-      isFaceBlockedRef.current = false;
-      setIsFaceBlocked(false);
-      // Restart recording if it was stopped by face blocking and Linda isn't speaking
-      if (!isAiSpeakingRef.current && !isProcessingRef.current && !isRecordingRef.current) {
-        setTimeout(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN && !isFaceBlockedRef.current) {
-            startRecordingInternal();
-          }
-        }, 500);
-      }
-    }
+    // No-op: we never blocked the interview, so nothing to restore.
   }, []);
 
   const handleMultipleFaces = useCallback((count: number) => {
@@ -1043,7 +1032,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // remaining even when the event loop is busy. The compute is monotonic
     // (`computeQuestionRemaining`), so accuracy vs. backend is preserved.
     questionTimerIntervalRef.current = setInterval(() => {
-      if (isClarificationRef.current || isFullscreenExitedRef.current) {
+      if (isClarificationRef.current) {
         if (questionTimerPausedAtRef.current === null) {
           questionTimerPausedAtRef.current = performance.now();
         }
@@ -1102,7 +1091,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         && questionTimerIntervalRef.current === null
         && !isAiSpeakingRef.current
         && !isClarificationRef.current
-        && !isFullscreenExitedRef.current
         && questionTimerPendingRef.current === null
       ) {
         console.warn('[INTERVIEW-DEBUG] STUCK TIMER detected — interval was null, restarting', {
@@ -1182,7 +1170,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (
         isAiSpeakingRef.current
         || isClarificationRef.current
-        || isFullscreenExitedRef.current
         || questionTimerExpiredRef.current
         || questionTimerPendingRef.current !== null
       ) {
@@ -1851,13 +1838,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           );
         }
         // Restore global timer ONLY if we're not currently mid-fullscreen-exit.
-        // When the candidate exits fullscreen the timer is frozen (we want it
-        // maintained across the pause) — if a WS reconnect fires session_resumed
-        // during that window, the server's wall-clock elapsed would clobber the
-        // frozen value and make the timer appear to jump / reset. The
-        // fullscreen-change return handler will restore from the frozen ref
-        // when the candidate re-enters.
-        if (data.elapsed_seconds && data.elapsed_seconds > 0 && !isFullscreenExitedRef.current) {
+        if (data.elapsed_seconds && data.elapsed_seconds > 0) {
           const totalSeconds = (isFlexibleMode || isNewFlexibleMode) ? 30 * 60 : interviewInfo.duration_minutes * 60;
           const restored = Math.max(0, totalSeconds - data.elapsed_seconds);
           setRemainingSeconds(prev => {
@@ -3316,8 +3297,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (!isRecordingRef.current) return;
         if (isMutedRef.current) return;
 
-        // Collect raw audio at native sample rate for voice verification
-        if (voiceVerification?.hasBaseline()) {
+        // Collect raw audio at native sample rate for voice verification.
+        // Skip while Linda is speaking or during the post-TTS echo-guard
+        // window — capturing those frames poisons the verification buffer
+        // with the AI's voice (re-entering via speakers→mic) and causes
+        // false voice_identity_changed events on the candidate's own turns.
+        if (
+          voiceVerification?.hasBaseline() &&
+          !isAiSpeakingRef.current &&
+          Date.now() >= playbackEchoGuardUntilRef.current
+        ) {
           voiceVerifBufferRef.current.push(new Float32Array(input));
         }
 
@@ -4224,56 +4213,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
     };
 
-    // Visibility-change handler: when the candidate MINIMIZES the browser
-    // window (or switches OS workspace, or the OS hides the window), the
-    // `fullscreenchange` event does NOT fire — the browser still considers
-    // itself fullscreen. Without this handler the Fullscreen-Required overlay
-    // never appears after a minimize, so the candidate can return to a
-    // running interview with no warning. Reuse the same grace + pause path
-    // as fullscreenchange so the recruiter timeline / silence handling are
-    // consistent.
+    // Visibility-change handler: when the candidate switches tabs / minimizes
+    // the window, we LOG the violation but do NOT pause the timer or trigger
+    // the grace-period / hard-pause path. Rationale: timer must keep ticking
+    // through tab switches (cheating attempts cost the candidate their
+    // remaining question time as a penalty). Fullscreen exit (Esc/F11) is
+    // handled separately by `handleFullscreenChange` and still pauses.
     const handleVisibilityChange = async () => {
-      // Ignore while not connected, or while the fullscreen-exit overlay is
-      // already showing (fullscreenchange already handled it).
-      if (!isConnected || isFullscreenExitedRef.current) return;
+      if (!isConnected) return;
       if (document.hidden) {
-        setIsFullscreenExited(true);
-        isFullscreenExitedRef.current = true;
-        graceExitAtMs = Date.now();
+        // Fire-and-forget violation log; do not gate UI on the result.
         candidateAIInterviewService.reportProctorEvent(token, {
           event_type: 'window_blur',
           severity: 'low',
-          details: { phase: 'in_interview', reason: 'window_hidden', grace_period_ms: GRACE_PERIOD_MS },
+          details: {
+            phase: 'in_interview',
+            reason: 'window_hidden',
+            timer_paused: false,
+          },
         }).catch(() => { /* best-effort */ });
-        clearGrace();
-        setGracePeriodRemaining(Math.ceil(GRACE_PERIOD_MS / 1000));
-        graceCountdownId = setInterval(() => {
-          if (graceExitAtMs === null) return;
-          const left = Math.max(0, Math.ceil((GRACE_PERIOD_MS - (Date.now() - graceExitAtMs)) / 1000));
-          setGracePeriodRemaining(left);
-        }, 200);
-        graceTimerId = setTimeout(() => {
-          if (graceCountdownId !== null) { clearInterval(graceCountdownId); graceCountdownId = null; }
-          setGracePeriodRemaining(null);
-          graceTimerId = null;
-          if (document.hidden || !document.fullscreenElement) executeHardPause();
-        }, GRACE_PERIOD_MS);
-      } else {
-        // Window became visible again. Treat the same as returning to
-        // fullscreen — let the existing fullscreen handler run if fullscreen
-        // is also lost (it'll be invoked by the user clicking the "Resume"
-        // path). If fullscreen was never lost, tear down the overlay here.
-        if (document.fullscreenElement) {
-          if (graceTimerId !== null) {
-            clearGrace();
-            graceExitAtMs = null;
-            setIsFullscreenExited(false);
-            isFullscreenExitedRef.current = false;
-            return;
-          }
-          // Past grace — fall through to the fullscreen-change handler's
-          // resume path by leaving overlay visible; user clicks Resume.
-        }
       }
     };
 

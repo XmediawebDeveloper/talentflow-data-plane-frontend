@@ -1606,6 +1606,7 @@ export default function AITalentMatchPage({
                       (selectedAssessments[0].coding_enabled ? 1 : 0),
             type: 'AI-Generated',
             short_id: selectedAssessments[0].short_id,
+            version: selectedAssessments[0].version,
             jd_short_id: selectedAssessments[0].jd_short_id,
             jd_title: selectedAssessments[0].jd_title,
             jd_version: selectedAssessments[0].jd_version,
@@ -1617,6 +1618,7 @@ export default function AITalentMatchPage({
             questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
             type: 'AI-Generated',
             short_id: a.short_id,
+            version: a.version,
             jd_short_id: a.jd_short_id,
             jd_title: a.jd_title,
             jd_version: a.jd_version
@@ -2731,6 +2733,7 @@ export default function AITalentMatchPage({
                       (selectedAssessments[0].coding_enabled ? 1 : 0),
             type: 'AI-Generated',
             short_id: selectedAssessments[0].short_id,
+            version: selectedAssessments[0].version,
             jd_short_id: selectedAssessments[0].jd_short_id,
             jd_title: selectedAssessments[0].jd_title,
             jd_version: selectedAssessments[0].jd_version,
@@ -2742,6 +2745,7 @@ export default function AITalentMatchPage({
             questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
             type: 'AI-Generated',
             short_id: a.short_id,
+            version: a.version,
             jd_short_id: a.jd_short_id,
             jd_title: a.jd_title,
             jd_version: a.jd_version

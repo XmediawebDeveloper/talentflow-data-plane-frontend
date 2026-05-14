@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import VersionBadge from './VersionBadge';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
@@ -16,6 +17,7 @@ interface AssessmentResultsProps {
   onBack: () => void;
   assessmentId: string;
   assessmentTitle: string;
+  assessmentVersion?: number | null;
   jdTitle?: string;
   canDownloadPDF?: boolean;
   canBatchDownload?: boolean;
@@ -81,7 +83,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -950,7 +952,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </button>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
-              <h1 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2 truncate tracking-tight">{assessmentTitle}</h1>
+              <div className="flex items-center gap-2 mb-1 sm:mb-2 flex-wrap">
+                <h1 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate tracking-tight">{assessmentTitle}</h1>
+                {assessmentVersion != null && (
+                  <VersionBadge version={assessmentVersion} size="sm" variant="primary" />
+                )}
+              </div>
               <p className="text-xs sm:text-sm text-gray-600">
                 Assessment Results - {totalItems} total candidates
                 {selectedRows.length > 0 && (
