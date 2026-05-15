@@ -20,10 +20,14 @@ function niceToHaveTagColor(priority: 'High' | 'Medium' | 'Low') {
   return                          { tag: 'P3', bg: '#FCD34D' };
 }
 
-/** A skill is "covered" when it was meaningfully addressed during the interview.
- *  Heuristic: positive score AND level is not Low. Falls back to score > 0. */
-function isCovered(score: number, level: 'High' | 'Medium' | 'Low'): boolean {
-  return score > 0 && level !== 'Low';
+/** A skill is "covered" when it was asked about during the interview, regardless
+ *  of how well the candidate answered. Any score > 0 indicates the evaluator
+ *  emitted a row for this skill (i.e. it was probed). The previous heuristic
+ *  also required `level !== 'Low'`, which conflated "weak answer" with
+ *  "never asked" — a skill scored 1.5 (level='Low') was wrongly shown as
+ *  "Not Covered" even though it was clearly evaluated in the interview. */
+function isCovered(score: number, _level: 'High' | 'Medium' | 'Low'): boolean {
+  return score > 0;
 }
 
 function coverageStats(cluster: Cluster) {

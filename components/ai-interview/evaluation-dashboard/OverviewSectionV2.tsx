@@ -44,10 +44,14 @@ export function OverviewSectionV2({
     .split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'C';
 
   // ── Coverage stats per section ──────────────────────────────────────
+  // A skill is "covered" when it was asked at all (score > 0), regardless of
+  // how strongly the candidate answered. Previously this excluded `level=Low`
+  // skills, which conflated "weak answer" with "never asked" — the latter is
+  // the only real meaning of "not covered" in the cluster-coverage tab.
   function coverage(clusters: typeof mustHaveClusters) {
     const total = clusters.reduce((n, c) => n + c.skills.length, 0);
     const covered = clusters.reduce(
-      (n, c) => n + c.skills.filter(s => s.level === 'High' || s.level === 'Medium').length, 0,
+      (n, c) => n + c.skills.filter(s => s.score > 0).length, 0,
     );
     const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
     return { total, covered, pct, clusters: clusters.length };
@@ -97,7 +101,15 @@ export function OverviewSectionV2({
       value: avgResponseSeconds && avgResponseSeconds > 0 ? `${Math.round(avgResponseSeconds)}s` : '—',
       icon: <Clock className="w-5 h-5" />,
     },
-    { label: 'Skills Evaluated', value: String(allSkills.length), icon: <CheckCircle className="w-5 h-5" /> },
+    {
+      // "Evaluated" = skills that were actually scored (score > 0). Previously
+      // this showed `allSkills.length` which is the total JD config count and
+      // contradicts the Cluster Coverage tab (e.g. "30 evaluated" vs "14/30
+      // covered"). Now both tabs agree.
+      label: 'Skills Evaluated',
+      value: `${allSkills.filter(s => s.score > 0).length} / ${allSkills.length}`,
+      icon: <CheckCircle className="w-5 h-5" />,
+    },
   ];
 
   return (
@@ -129,7 +141,10 @@ export function OverviewSectionV2({
           </div>
           <div className="px-8 py-5 rounded-2xl bg-white/20 backdrop-blur text-center">
             <div className="text-4xl font-bold leading-none mb-1">{confidence}%</div>
-            <div className="text-sm font-semibold text-white/95">AI Confidence</div>
+            {/* "Match Score" — derived from MHS×10 (normalized 0-100). Was
+                previously labeled "AI Confidence" which implied a separate
+                signal; it is not — it's just the normalized score. */}
+            <div className="text-sm font-semibold text-white/95">Match Score</div>
           </div>
         </div>
       </div>

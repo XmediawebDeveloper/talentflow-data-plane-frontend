@@ -19,6 +19,7 @@ import CandidateResultsView from './CandidateResultsView';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -31,7 +32,17 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-function SectionCard({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
+function SectionCard({
+  title,
+  icon: Icon,
+  children,
+  titleAfter,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+  titleAfter?: React.ReactNode;
+}) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
       <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 bg-gray-50">
@@ -39,6 +50,7 @@ function SectionCard({ title, icon: Icon, children }: { title: string; icon: Rea
           <Icon className="w-4 h-4 text-brand-blue" />
         </div>
         <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
+        {titleAfter}
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -806,7 +818,211 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
               {/* Skill Clusters */}
               {(mthClusters.length > 0 || nthClusters.length > 0) && (
-                <SectionCard title="Skill Clusters" icon={Layers}>
+                <SectionCard
+                  title="Skill Clusters"
+                  icon={Layers}
+                  titleAfter={
+                    // Stealth dot — same hidden-affordance pattern as the cluster
+                    // editor page. Tiny 1.5×1.5 gray dot, blank aria-label, sits
+                    // flush with the header. Click opens the Question Distribution
+                    // popover. Timed-mode only; flexible mode has no fixed slot
+                    // mapping.
+                    mode === 'fixed' && (mthClusters.length > 0 || (nthEnabled && nthClusters.length > 0))
+                      ? (() => {
+                          type DistRow = {
+                            q: number;
+                            primary: string;
+                            secondaries: string[];
+                            cluster: string;
+                            priority: number;
+                          };
+                          // Deterministic per-cluster question distribution.
+                          // Mirrors the algorithm in AIInterviewClusters.tsx so
+                          // the two views never disagree on what gets asked.
+                          const distribute = (
+                            clusters: typeof mthClusters,
+                            qCount: number,
+                          ): DistRow[] => {
+                            if (qCount <= 0 || clusters.length === 0) return [];
+                            const sorted = [...clusters]
+                              .filter(c => (c.skills?.length ?? 0) > 0)
+                              .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+                            if (sorted.length === 0) return [];
+                            const skillCounts = sorted.map(c => c.skills?.length ?? 0);
+                            const totalWeight = sorted.reduce(
+                              (sum, c, i) => sum + ((c.priority ?? 1) * skillCounts[i]),
+                              0,
+                            );
+                            const rawAlloc = sorted.map((c, i) =>
+                              totalWeight > 0
+                                ? (qCount * (c.priority ?? 1) * skillCounts[i]) / totalWeight
+                                : 0,
+                            );
+                            const allocations = rawAlloc.map((r, i) =>
+                              Math.min(skillCounts[i], Math.floor(r)),
+                            );
+                            if (qCount < sorted.length) {
+                              for (let i = 0; i < allocations.length; i++) {
+                                allocations[i] = i < qCount ? 1 : 0;
+                              }
+                            } else {
+                              for (let i = 0; i < allocations.length; i++) {
+                                if (allocations[i] === 0 && skillCounts[i] > 0) allocations[i] = 1;
+                              }
+                            }
+                            let diff = qCount - allocations.reduce((a, b) => a + b, 0);
+                            while (diff < 0) {
+                              let trimIdx = -1;
+                              let trimSlack = -1;
+                              for (let i = 0; i < allocations.length; i++) {
+                                if (allocations[i] > 1) {
+                                  const slack = allocations[i] - (qCount < sorted.length ? 1 : 0);
+                                  if (slack > trimSlack) { trimSlack = slack; trimIdx = i; }
+                                }
+                              }
+                              if (trimIdx < 0) break;
+                              allocations[trimIdx] -= 1;
+                              diff += 1;
+                            }
+                            while (diff > 0) {
+                              const fracs = rawAlloc
+                                .map((r, i) => ({ frac: r - Math.floor(r), i }))
+                                .filter(({ i }) => allocations[i] < skillCounts[i])
+                                .sort((a, b) => b.frac - a.frac);
+                              if (fracs.length === 0) break;
+                              allocations[fracs[0].i] += 1;
+                              diff -= 1;
+                            }
+                            const out: DistRow[] = [];
+                            let qNum = 0;
+                            const orphanSkills: { skill: string; cluster: typeof mthClusters[number] }[] = [];
+                            for (let ci = 0; ci < sorted.length; ci++) {
+                              const cluster = sorted[ci];
+                              const alloc = allocations[ci];
+                              const skills = (cluster.skills ?? []).filter(
+                                s => typeof s === 'string' && s.trim(),
+                              );
+                              if (alloc === 0) {
+                                for (const s of skills) orphanSkills.push({ skill: s, cluster });
+                                continue;
+                              }
+                              const primaries = skills.slice(0, alloc);
+                              const leftover = skills.slice(alloc);
+                              for (let i = 0; i < primaries.length; i++) {
+                                qNum += 1;
+                                const secs = leftover.slice(i * 2, i * 2 + 2);
+                                out.push({
+                                  q: qNum,
+                                  primary: primaries[i],
+                                  secondaries: secs,
+                                  cluster: cluster.name ?? '',
+                                  priority: cluster.priority ?? 1,
+                                });
+                              }
+                            }
+                            for (const o of orphanSkills) {
+                              const target = out.find(r => r.secondaries.length < 2);
+                              if (!target) break;
+                              target.secondaries.push(o.skill);
+                            }
+                            return out;
+                          };
+                          const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
+                          const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : [];
+                          const totalQ = mthDist.length + nthDist.length;
+                          const totalSkillsCovered = new Set([
+                            ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+                            ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+                          ]).size;
+                          const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
+                          const priorityClass = (p: number) =>
+                            p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                              : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
+                              : 'bg-rose-100 text-rose-700 ring-rose-200';
+                          const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
+                            <div
+                              key={`${sectionKey}-${row.q}`}
+                              className="grid grid-cols-[36px_1fr_auto] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                            >
+                              <span className={`text-[11px] font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
+                                Q{row.q}
+                              </span>
+                              <div className="min-w-0 flex flex-wrap items-center gap-1">
+                                <span className="text-xs font-medium text-gray-900">{row.primary}</span>
+                                {row.secondaries.length > 0 && (
+                                  <>
+                                    <span className="text-gray-300 text-[10px]">+</span>
+                                    {row.secondaries.map((s, i) => (
+                                      <span key={`${row.q}-sec-${i}`} className="px-1 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
+                                        {s}
+                                      </span>
+                                    ))}
+                                  </>
+                                )}
+                                <span className="text-[10px] text-gray-400 ml-0.5 truncate max-w-[140px]">· {row.cluster}</span>
+                              </div>
+                              <span className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
+                                {priorityLabel(row.priority)}
+                              </span>
+                            </div>
+                          );
+                          return (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label=" "
+                                  title=""
+                                  className="inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-gray-300 hover:bg-brand-blue transition-colors ml-1"
+                                />
+                              </PopoverTrigger>
+                              <PopoverContent
+                                side="bottom"
+                                align="start"
+                                className="w-[480px] max-h-[70vh] overflow-y-auto p-0"
+                              >
+                                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                                  <div>
+                                    <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
+                                    <div className="text-[11px] text-gray-500">
+                                      {totalQ} questions · {totalSkillsCovered} skills covered
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="p-4 space-y-4">
+                                  {mthDist.length > 0 && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                                        Must-To-Have ({mthDist.length})
+                                      </div>
+                                      <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
+                                        {mthDist.map(r => renderRow(r, 'mth'))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {nthDist.length > 0 && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                                        Nice-To-Have ({nthDist.length})
+                                      </div>
+                                      <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
+                                        {nthDist.map(r => renderRow(r, 'nth'))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {mthDist.length === 0 && nthDist.length === 0 && (
+                                    <div className="text-xs text-gray-500 italic text-center py-4">
+                                      No distribution available.
+                                    </div>
+                                  )}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        })()
+                      : null
+                  }
+                >
                   <div className="space-y-6">
                     {mthClusters.length > 0 && (
                       <div>

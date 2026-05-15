@@ -1449,20 +1449,59 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         };
                       });
                     })();
+                // Some re-evaluated sessions store question_history with every
+                // entry flagged as a main question even when the conversation
+                // clearly contained follow-ups (intent="main_question",
+                // is_follow_up=false across the board). The conversation_transcript
+                // remains the source of truth for follow-up tagging on the
+                // assistant side — mirror the Transcript tab's lookup so the Q/A
+                // grouper can recover the structure.
+                const _convoTranscript: any[] = (liveSession.conversation_transcript
+                  || interview.conversation_transcript
+                  || []) as any[];
+                const _fuKeySet = new Set<string>();
+                const _ddKeySet = new Set<string>();
+                for (const m of _convoTranscript) {
+                  if (m?.role !== 'assistant' || !m?.content) continue;
+                  const key = String(m.content).trim().slice(0, 60);
+                  const intent = String(m.question_intent || '').toLowerCase();
+                  if (intent === 'deep_dive' || m.is_deep_dive) _ddKeySet.add(key);
+                  else if (m.is_follow_up || intent === 'follow_up' || intent === 'probe') _fuKeySet.add(key);
+                }
+                const _matchKey = (q: string, set: Set<string>): boolean => {
+                  if (!q || set.size === 0) return false;
+                  const key = q.trim().slice(0, 60);
+                  if (set.has(key)) return true;
+                  for (const k of set) {
+                    if (key.startsWith(k.slice(0, 40)) || k.startsWith(key.slice(0, 40))) return true;
+                  }
+                  return false;
+                };
+
                 // Group follow-ups with their parent main question. Follow-ups
-                // are rendered as F1, F2… nested inside the parent's Q box.
-                // Detect follow-ups by: (a) explicit is_follow_up flag, OR
-                // (b) same question_number as the previous entry (follow-ups
-                // share their parent's question_number in question_history).
+                // are rendered as F1, F2… (deep-dives as D1, D2…) nested inside
+                // the parent's Q box. Detection order:
+                //   1. explicit is_follow_up / question_intent on the entry
+                //   2. shared question_number with previous entry (live-mode)
+                //   3. text match against conversation_transcript follow-up flags
+                //      (fallback for re-evaluated sessions where question_history
+                //      lost the tagging).
                 type QaGroup = { main: any; followUps: any[] };
                 const groups: QaGroup[] = [];
                 for (const it of qaItemsRaw) {
                   const prev = groups.length > 0 ? groups[groups.length - 1] : null;
                   const _intent = (it.question_intent || '').toLowerCase();
+                  const _qText = String(it.question || '');
+                  const _txtIsDd = _matchKey(_qText, _ddKeySet);
+                  const _txtIsFu = _matchKey(_qText, _fuKeySet);
                   const isFu = !!it.is_follow_up
                     || ['follow_up', 'probe', 'deep_dive'].includes(_intent)
-                    || (prev != null && it.question_number != null && prev.main.question_number != null && String(it.question_number) === String(prev.main.question_number));
+                    || (prev != null && it.question_number != null && prev.main.question_number != null && String(it.question_number) === String(prev.main.question_number))
+                    || _txtIsDd
+                    || _txtIsFu;
                   if (isFu && prev) {
+                    if (_txtIsDd && !it.question_intent) it.question_intent = 'deep_dive';
+                    else if (_txtIsFu && !it.question_intent) it.question_intent = 'follow_up';
                     prev.followUps.push(it);
                   } else {
                     groups.push({ main: it, followUps: [] });

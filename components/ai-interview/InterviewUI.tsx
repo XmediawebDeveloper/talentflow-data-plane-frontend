@@ -1305,6 +1305,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const postSpeechNoiseCountRef = useRef(0);
   const MIN_RESPEECH_FRAMES = 2; // ~186ms of sustained audio resets silence timer (lower = more responsive)
 
+  // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
+  // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
+  // FIRST WORD is not lost. Without this, ~850ms of audio gets dropped before
+  // `speechDetectedRef` flips true → Whisper transcribes from the middle of
+  // the answer ("half la irunthuthan eduthkuthu" symptom).
+  // On speech confirmation, the buffer is flushed to backend BEFORE live
+  // frames start flowing. Sized at 16000 samples/s × 2s = 32000 Int16s.
+  const preSpeechPCMRingRef = useRef<Int16Array[]>([]);
+  const preSpeechPCMSampleCountRef = useRef(0);
+  const PRE_SPEECH_BUFFER_MAX_SAMPLES = 32000; // ~2s at 16kHz
+
   // Fix 4: playback_complete delivery is the single gate that unblocks the
   // backend's silence clock. Dropping this one message stalls the 8s silence
   // detection for up to 30 s (until the backend's safety timeout fires). To
@@ -3275,6 +3286,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       speechStartSentRef.current = false;
       speechFrameCountRef.current = 0;
       postSpeechNoiseCountRef.current = 0;
+      // Pre-speech ring buffer: cleared at turn start so the previous turn's
+      // tail can't leak into this turn's flush.
+      preSpeechPCMRingRef.current = [];
+      preSpeechPCMSampleCountRef.current = 0;
       // Suppress VAD for the first VAD_WARMUP_MS after mic opens.
       // Gives the echo canceller time to calibrate so Linda's TTS echo doesn't
       // immediately register as candidate speech.
@@ -3318,8 +3333,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Skip empty frames — AudioWorklet can produce zero-filled frames
         if (avgLevel < 0.0001) return;
 
-        // During warmup period, capture audio (echo canceller calibrates) but
-        // do NOT run VAD — Linda's TTS echo may still be present in these frames.
+        // ── Encode PCM up-front so warmup / pre-detection audio can also be
+        // captured into the ring buffer. The old code returned early on
+        // `vadWarmupUntilRef` which silently dropped ~600ms of audio. Combined
+        // with the 3-frame speech-confirmation delay (~280ms), the candidate's
+        // first ~850ms of speech never reached the backend.
+        let samplesEarly: Float32Array;
+        if (downsampleRatio > 1) {
+          const outputLen = Math.floor(input.length / downsampleRatio);
+          samplesEarly = new Float32Array(outputLen);
+          for (let i = 0; i < outputLen; i++) {
+            const pos = i * downsampleRatio;
+            const idx = Math.floor(pos);
+            const frac = pos - idx;
+            const a = input[idx] ?? 0;
+            const b = input[Math.min(idx + 1, input.length - 1)] ?? 0;
+            samplesEarly[i] = a + frac * (b - a);
+          }
+        } else {
+          samplesEarly = input;
+        }
+        const pcmEarly = new Int16Array(samplesEarly.length);
+        for (let i = 0; i < samplesEarly.length; i++) {
+          pcmEarly[i] = Math.max(-32768, Math.min(32767, samplesEarly[i] * 32768));
+        }
+
+        // While Linda is mid-speech the mic might still be hot — never buffer
+        // those frames (they're TTS echo). Otherwise, if speech hasn't been
+        // confirmed yet, push into the pre-speech ring so the first word is
+        // captured.
+        if (!speechDetectedRef.current && !isAiSpeakingRef.current) {
+          preSpeechPCMRingRef.current.push(pcmEarly);
+          preSpeechPCMSampleCountRef.current += pcmEarly.length;
+          while (
+            preSpeechPCMSampleCountRef.current > PRE_SPEECH_BUFFER_MAX_SAMPLES &&
+            preSpeechPCMRingRef.current.length > 1
+          ) {
+            const dropped = preSpeechPCMRingRef.current.shift();
+            if (dropped) preSpeechPCMSampleCountRef.current -= dropped.length;
+          }
+        }
+
+        // During warmup period, mic frames are being captured into the ring
+        // buffer above. Skip VAD analysis for the warmup window — Linda's TTS
+        // echo may still be present and would otherwise falsely trip speech
+        // detection. The ring buffer will flush to backend the moment VAD
+        // does confirm speech (post-warmup), preserving the warmup-window
+        // audio that used to be discarded.
         if (Date.now() < vadWarmupUntilRef.current) return;
         // Fix 3 (revised): the echo guard and "Linda still speaking" check
         // must NOT `return` — that drops the PCM send block at the bottom of
@@ -3355,11 +3415,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
                   questionTimerSeconds: questionTimerSecondsRef.current,
                   questionNumber: questionNumberRef.current,
+                  preBufferedSamples: preSpeechPCMSampleCountRef.current,
                 });
               }
               speechDetectedRef.current = true;
               speechDetectedAtRef.current = Date.now();
               postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES; // start confirmed
+              // Flush the pre-speech ring buffer to backend so Whisper gets
+              // the candidate's FIRST WORDS (the ones spoken during VAD
+              // warmup + the 3-frame confirmation delay). Without this flush,
+              // Whisper transcribes from mid-sentence and the start of the
+              // answer is lost.
+              if (
+                wsRef.current?.readyState === WebSocket.OPEN &&
+                !isAiSpeakingRef.current &&
+                preSpeechPCMRingRef.current.length > 0
+              ) {
+                for (const buf of preSpeechPCMRingRef.current) {
+                  wsRef.current.send(buf.buffer);
+                }
+              }
+              preSpeechPCMRingRef.current = [];
+              preSpeechPCMSampleCountRef.current = 0;
               // Unfreeze the per-question timer on VAD-confirmed speech as well.
               questionTimerAwaitingSpeechRef.current = false;
               if (!speechStartSentRef.current) {
@@ -3405,44 +3482,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
         }
 
-        // Downsample to 16kHz using linear interpolation
-        let samples: Float32Array;
-        if (downsampleRatio > 1) {
-          const outputLen = Math.floor(input.length / downsampleRatio);
-          samples = new Float32Array(outputLen);
-          for (let i = 0; i < outputLen; i++) {
-            const pos = i * downsampleRatio;
-            const idx = Math.floor(pos);
-            const frac = pos - idx;
-            const a = input[idx] ?? 0;
-            const b = input[Math.min(idx + 1, input.length - 1)] ?? 0;
-            samples[i] = a + frac * (b - a);
-          }
-        } else {
-          samples = input;
-        }
-
+        // PCM was already encoded at the top of this function into `pcmEarly`.
         // Only forward audio once speech is detected — sending silence/noise
-        // causes Whisper to hallucinate prompt text as the transcript.
-        // Uses simple fixed threshold (no adaptive calibration) so speech is
-        // reliably detected even in noisy environments.
-        //
-        // Block PCM transmission while Linda is speaking at all — including
-        // during the "Are you there?" silence nudge. Per spec: candidate's
-        // response must only be captured AFTER the nudge finishes, so even
-        // if the mic is open, no audio frames should reach the backend
-        // while Linda is mid-prompt.
+        // causes Whisper to hallucinate prompt text as the transcript. Block
+        // PCM transmission while Linda is speaking at all — including during
+        // the "Are you there?" silence nudge. Per spec: candidate's response
+        // must only be captured AFTER the nudge finishes.
         const lindaHoldingTurn = isAiSpeakingRef.current;
         if (
           speechDetectedRef.current &&
           !lindaHoldingTurn &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
-          const pcm = new Int16Array(samples.length);
-          for (let i = 0; i < samples.length; i++) {
-            pcm[i] = Math.max(-32768, Math.min(32767, samples[i] * 32768));
-          }
-          wsRef.current.send(pcm.buffer);
+          wsRef.current.send(pcmEarly.buffer);
         }
       };
 

@@ -116,7 +116,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 Final Decision: {finalResultLabel}
               </div>
               <div className={`text-sm ${isPassed ? 'text-emerald-800' : 'text-red-800'}`}>
-                {isPassed ? 'Recommended for Hire' : 'Not Recommended for Hire'} • AI Confidence: {confidence}%
+                {isPassed ? 'Recommended for Hire' : 'Not Recommended for Hire'} • Match Score: {confidence}%
               </div>
             </div>
           </div>

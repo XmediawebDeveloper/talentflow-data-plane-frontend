@@ -251,13 +251,20 @@ function priorityLabelToLevel(raw: any): Level {
  *  We reverse skill_question_map into per-question rows so the UI can render
  *  the Σ(score × weight) / Σ(weights) calculation row-by-row.
  */
-function buildPerQuestionDetails(eval_: any): PerQuestionDetail[] {
+function buildPerQuestionDetails(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
+): PerQuestionDetail[] {
   const skillQMap = (eval_?.skill_question_map || {}) as Record<
     string,
     Array<{ q_num: number; score: number; note?: string }>
   >;
   const questionScores = (eval_?.question_scores || {}) as Record<string | number, number>;
-  const skillPrioMap = (eval_?.skill_priority_map || {}) as Record<string, string>;
+  // skill_priority_map is the SECTION map ("must_have" | "nice_to_have" | "hr"),
+  // NOT the priority. It's a misnomer in the backend payload. Real per-skill
+  // P1/P2/P3 priority comes from the cluster the skill lives in — passed in
+  // here as `clusterPriorityBySkill` so the per-question breakdown shows the
+  // same priority chip as the Skills Assessment Summary tab.
   const groups = (eval_?.question_groups || []) as Array<any>;
 
   // q_num (1-based display index) → { section, question text }
@@ -274,7 +281,7 @@ function buildPerQuestionDetails(eval_: any): PerQuestionDetail[] {
   // Reverse skill_question_map → per-question skill rows
   const perQ: Record<number, PerQuestionSkill[]> = {};
   for (const [topic, rows] of Object.entries(skillQMap || {})) {
-    const priority = priorityLabelToLevel(skillPrioMap[topic]);
+    const priority = clusterPriorityBySkill[topic.toLowerCase().trim()] || 'Medium';
     const weight = PRIORITY_WEIGHT[priority];
     for (const r of rows || []) {
       const q = Number(r?.q_num || 0);
@@ -437,7 +444,17 @@ export function buildDashboardData(params: {
     }
   }
 
-  const perQuestionDetails = buildPerQuestionDetails(eval_);
+  // Build skill → cluster priority map so the Question-by-Question breakdown
+  // shows the same P1/P2/P3 chip as the Skills Assessment Summary (same skill
+  // can't appear as P1 in one tab and P2 in another).
+  const clusterPriorityBySkill: Record<string, Level> = {};
+  for (const c of [...mustHaveClusters, ...niceToHaveClusters]) {
+    for (const s of c.skills) {
+      const key = (s.name || '').toLowerCase().trim();
+      if (key) clusterPriorityBySkill[key] = c.priority;
+    }
+  }
+  const perQuestionDetails = buildPerQuestionDetails(eval_, clusterPriorityBySkill);
 
   return {
     candidate: {
