@@ -736,53 +736,59 @@ export default function AssessmentDetailsView({
                         <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                           <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Technical Performance</h5>
                           <div className="space-y-3">
-                            {/* Passed (≥70%) */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                <span className="text-sm font-semibold text-green-700">
-                                  {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div
-                                  className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
-                                  style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                            {(() => {
+                              const completedInvites = _uniqueInvites.filter((a: any) => _bucket(a) === 'completed');
+                              const denom = completedInvites.length || analyticsData.completed || 0;
+                              const pct = (count: number) => denom > 0 ? Math.min(100, Math.round((count / denom) * 100)) : 0;
+                              const passed = completedInvites.filter((a: any) => (a.technical_score || 0) >= 70).length;
+                              const average = completedInvites.filter((a: any) => (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length;
+                              const below = completedInvites.filter((a: any) => (a.technical_score || 0) < 50).length;
+                              return (
+                                <>
+                                  {/* Passed (≥70%) */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                                      <span className="text-sm font-semibold text-green-700">{pct(passed)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                      <div
+                                        className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
+                                        style={{ width: `${pct(passed)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
 
-                            {/* Average (50-69%) */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm text-gray-700">Average (50-69%)</span>
-                                <span className="text-sm font-semibold text-brand-orange-deep">
-                                  {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div
-                                  className="bg-brand-orange h-2 rounded-full transition-all"
-                                  style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                                  {/* Average (50-69%) */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-gray-700">Average (50-69%)</span>
+                                      <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                      <div
+                                        className="bg-brand-orange h-2 rounded-full transition-all"
+                                        style={{ width: `${pct(average)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
 
-                            {/* Below Average (<50%) */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
-                                <span className="text-sm font-semibold text-red-600">
-                                  {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) < 50).length / analyticsData.completed) * 100) || 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div
-                                  className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
-                                  style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) < 50).length / analyticsData.completed) * 100 || 0}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                                  {/* Below Average (<50%) */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
+                                      <span className="text-sm font-semibold text-red-600">{pct(below)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                      <div
+                                        className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
+                                        style={{ width: `${pct(below)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}
@@ -792,53 +798,59 @@ export default function AssessmentDetailsView({
                         <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
                           <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Coding Performance</h5>
                           <div className="space-y-3">
-                            {/* Passed (≥70%) */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                <span className="text-sm font-semibold text-green-700">
-                                  {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div
-                                  className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
-                                  style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                            {(() => {
+                              const completedInvites = _uniqueInvites.filter((a: any) => _bucket(a) === 'completed');
+                              const denom = completedInvites.length || analyticsData.completed || 0;
+                              const pct = (count: number) => denom > 0 ? Math.min(100, Math.round((count / denom) * 100)) : 0;
+                              const passed = completedInvites.filter((a: any) => (a.coding_score || 0) >= 70).length;
+                              const average = completedInvites.filter((a: any) => (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length;
+                              const below = completedInvites.filter((a: any) => (a.coding_score || 0) < 50).length;
+                              return (
+                                <>
+                                  {/* Passed (≥70%) */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                                      <span className="text-sm font-semibold text-green-700">{pct(passed)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                      <div
+                                        className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
+                                        style={{ width: `${pct(passed)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
 
-                            {/* Average (50-69%) */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm text-gray-700">Average (50-69%)</span>
-                                <span className="text-sm font-semibold text-brand-orange-deep">
-                                  {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div
-                                  className="bg-brand-orange h-2 rounded-full transition-all"
-                                  style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                                  {/* Average (50-69%) */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-gray-700">Average (50-69%)</span>
+                                      <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                      <div
+                                        className="bg-brand-orange h-2 rounded-full transition-all"
+                                        style={{ width: `${pct(average)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
 
-                            {/* Below Average (<50%) */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
-                                <span className="text-sm font-semibold text-red-600">
-                                  {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) < 50).length / analyticsData.completed) * 100) || 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div
-                                  className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
-                                  style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) < 50).length / analyticsData.completed) * 100 || 0}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                                  {/* Below Average (<50%) */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
+                                      <span className="text-sm font-semibold text-red-600">{pct(below)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                      <div
+                                        className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
+                                        style={{ width: `${pct(below)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}
