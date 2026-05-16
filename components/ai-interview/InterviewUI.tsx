@@ -3217,13 +3217,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       return;
     }
     if (isMutedRef.current) {
-      console.log('[INTERVIEW-DEBUG] startRecording BLOCKED — mic is muted', {
+      // Auto-unmute when a new question's recording is starting, unless the
+      // mic was force-muted by armMediaBlock (camera/mic permission denied)
+      // or by fullscreen-exit grace-expiry. Those legitimate mutes have their
+      // own state flags (mediaBlocked / isFullscreenExited) — if neither is
+      // set, the mute is stale (e.g. left over from a prior user toggle or
+      // an implicit mute) and we should lift it so the candidate can answer
+      // without manually clicking the mic icon every question.
+      if (mediaBlockedRef.current || isFullscreenExitedRef.current) {
+        console.log('[INTERVIEW-DEBUG] startRecording BLOCKED — mic is muted (legitimate force-mute)', {
+          questionTimerSeconds: questionTimerSecondsRef.current,
+          mediaBlocked: mediaBlockedRef.current,
+          isFullscreenExited: isFullscreenExitedRef.current,
+        });
+        console.log(`[Recording ${timestamp}] startRecordingInternal blocked by force-mute`);
+        return;
+      }
+      console.log('[INTERVIEW-DEBUG] Auto-unmuting stale mic state so candidate can answer', {
         questionTimerSeconds: questionTimerSecondsRef.current,
-        mediaBlocked: mediaBlockedRef.current,
-        isFullscreenExited: isFullscreenExitedRef.current,
       });
-      console.log(`[Recording ${timestamp}] startRecordingInternal blocked by mute`);
-      return;
+      isMutedRef.current = false;
+      setIsMuted(false);
+      // Proceed past the gate — recording will start normally.
     }
     if (isMicForceOffRef.current) {
       console.log(`[Recording ${timestamp}] startRecordingInternal blocked by force_mic_off`);
@@ -3494,7 +3509,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           !lindaHoldingTurn &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
-          wsRef.current.send(pcmEarly.buffer);
+          try {
+            wsRef.current.send(pcmEarly.buffer);
+            (window as any).__audioFramesSent = ((window as any).__audioFramesSent || 0) + 1;
+            (window as any).__audioBytesSent = ((window as any).__audioBytesSent || 0) + pcmEarly.byteLength;
+            if ((window as any).__audioFramesSent % 50 === 1) {
+              console.log(`[AUDIO-SEND] frames=${(window as any).__audioFramesSent} bytes=${(window as any).__audioBytesSent} bufferedAmount=${wsRef.current.bufferedAmount} wsState=${wsRef.current.readyState}`);
+            }
+          } catch (sendErr) {
+            console.error('[AUDIO-SEND] send() threw:', sendErr);
+          }
+        } else if (speechDetectedRef.current && Math.random() < 0.02) {
+          console.log(`[AUDIO-SEND-BLOCKED] speechDetected=${speechDetectedRef.current} aiSpeaking=${isAiSpeakingRef.current} wsState=${wsRef.current?.readyState}`);
         }
       };
 
@@ -4035,9 +4061,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     mediaBlockedRef.current = result;
     setMediaBlocked(result);
     setStatus("Camera / microphone access is required to continue.");
-    // Force-mute and stop recording so no further audio can reach the backend.
-    isMutedRef.current = true;
-    setIsMuted(true);
+    // User spec: NEVER auto-mute the mic, regardless of media-block state.
+    // (Previously the code force-muted on permission denial — but the user
+    // wants the mic to stay open in all scenarios so they don't have to
+    // manually re-unmute after each pause/permission event.)
     stopRecordingSilentRef.current();
     // Report as a severe proctoring violation (backend persists to
     // proctoring_events and surfaces it in the recruiter's results view).
@@ -4137,11 +4164,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (preExitMuteState === null) {
         preExitMuteState = isMutedRef.current;
       }
-      if (!isMutedRef.current) {
-        console.log('[INTERVIEW-DEBUG] MIC FORCE-MUTED by fullscreen-exit grace expiry');
-        isMutedRef.current = true;
-        setIsMuted(true);
-      }
+      // User spec: NEVER auto-mute on fullscreen-exit grace expiry.
+      // The recording-blocked overlay still appears during pause, but the
+      // mic state itself is preserved so the candidate doesn't lose their
+      // turn when they return to fullscreen.
+      console.log('[INTERVIEW-DEBUG] Fullscreen-exit grace expired — mic state preserved (no force-mute)');
     };
 
     const handleFullscreenChange = async () => {
