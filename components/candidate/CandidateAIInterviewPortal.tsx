@@ -629,6 +629,62 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
       sr.start(5000);
       screenRecorderRef.current = sr;
+
+      // ── Periodic checkpoint upload (every 30s) ──────────────────────────
+      // Mirrors the webcam recording checkpoint logic in InterviewUI. Without
+      // this, an abrupt tab close / network drop / browser crash loses ALL
+      // screen recording (it only uploads at interview-complete). Periodic
+      // uploads make sure the server always has the latest screen state.
+      const screenCheckpointInProgressRef = { current: false };
+      const screenCheckpoint = async () => {
+        if (screenCheckpointInProgressRef.current) return;
+        const recorder = screenRecorderRef.current;
+        if (!recorder || recorder.state !== 'recording') return;
+        screenCheckpointInProgressRef.current = true;
+        try {
+          // Force ondataavailable to flush pending frames now.
+          await new Promise<void>((resolve) => {
+            let done = false;
+            const original = recorder.ondataavailable;
+            const finish = () => {
+              if (done) return;
+              done = true;
+              recorder.ondataavailable = original;
+              resolve();
+            };
+            recorder.ondataavailable = (e: BlobEvent) => {
+              if (e.data && e.data.size > 0) screenChunksRef.current.push(e.data);
+              finish();
+            };
+            try { recorder.requestData(); } catch { finish(); return; }
+            setTimeout(finish, 1500); // safety net for throttled tabs
+          });
+          const chunks = screenChunksRef.current;
+          if (chunks.length === 0) return;
+          const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
+          const blob = new Blob(chunks.slice(), { type: mimeType });
+          if (blob.size < 1024) return; // skip header-only payloads
+          try {
+            await candidateAIInterviewService.uploadScreenRecording(token, blob);
+            console.log(`[ScreenRecording] Checkpoint uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+          } catch (err: any) {
+            console.warn(`[ScreenRecording] Checkpoint upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
+          }
+        } finally {
+          screenCheckpointInProgressRef.current = false;
+        }
+      };
+      // 30s periodic; also fire on visibility hidden (tab switch / minimize)
+      const screenCheckpointTimer = setInterval(() => { screenCheckpoint(); }, 30000);
+      const screenVisHandler = () => { if (document.visibilityState === 'hidden') screenCheckpoint(); };
+      document.addEventListener('visibilitychange', screenVisHandler);
+      // Cleanup when recorder stops (track ended handler below already stops it)
+      const originalOnStop = sr.onstop;
+      sr.onstop = (ev) => {
+        clearInterval(screenCheckpointTimer);
+        document.removeEventListener('visibilitychange', screenVisHandler);
+        if (originalOnStop) (originalOnStop as any).call(sr, ev);
+      };
       // If candidate stops sharing manually — record as severe malpractice and block the interview
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (screenRecorderRef.current?.state !== 'inactive') {

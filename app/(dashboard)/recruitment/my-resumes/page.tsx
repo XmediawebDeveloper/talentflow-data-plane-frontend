@@ -3647,8 +3647,10 @@ export default function MyResumesPage() {
                                     );
                                   })()}
 
-                                  {/* Retry / Cancel Batch actions */}
-                                  {!isCancelled && (isProcessing || hasErrors) && (
+                                  {/* Retry / Cancel Batch actions — hidden until the optimistic
+                                      temp record is swapped for the real server batch_id, since
+                                      both endpoints require a UUID path param. */}
+                                  {!isCancelled && (isProcessing || hasErrors) && !record.id.startsWith('temp-') && (
                                     <div className="flex items-center gap-2 mb-3 sm:mb-4" onClick={e => e.stopPropagation()}>
                                       {/* Retry — show when items are stuck in pending or have errors */}
                                       {(isProcessing || hasErrors) && (

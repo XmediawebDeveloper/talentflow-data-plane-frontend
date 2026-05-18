@@ -1,12 +1,12 @@
 'use client';
 
-import { AlertCircle, RefreshCw, CheckCircle, Clock } from 'lucide-react';
+import { AlertCircle, RefreshCw, CheckCircle, Clock, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ErrorScreenProps {
   message: string;
   onRetry?: () => void;
-  variant?: 'error' | 'expired' | 'completed';
+  variant?: 'error' | 'expired' | 'completed' | 'revoked';
 }
 
 export function ErrorScreen({ message, onRetry, variant = 'error' }: ErrorScreenProps) {
@@ -25,6 +25,11 @@ export function ErrorScreen({ message, onRetry, variant = 'error' }: ErrorScreen
       iconBg: 'bg-green-100',
       icon: <CheckCircle className="w-8 h-8 text-green-600" />,
       title: 'Already Completed',
+    },
+    revoked: {
+      iconBg: 'bg-red-100',
+      icon: <Ban className="w-8 h-8 text-red-600" />,
+      title: 'Invitation Revoked',
     },
   }[variant];
 

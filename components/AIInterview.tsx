@@ -1746,9 +1746,26 @@ export default function AIInterview() {
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
         const paginatedInvitations = invitations;
 
-        const getInvStatusBadge = (status: string) => {
+        const getInvStatusBadge = (inv: any) => {
+          const status = inv.status;
           switch (status) {
-            case 'completed': return <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
+            case 'completed': {
+              // (Auto) chip surfaces when the timeout monitor finalized the
+              // session because the candidate abandoned — closing_reason starts
+              // with 'time_limit' (set by ai_interview_timeout_monitor.py).
+              // Mirrors the assessment pattern in Assessments.tsx.
+              const reason: string = (inv.ai_evaluation?.closing_reason || '').toString().toLowerCase();
+              const autoCompleted = reason.startsWith('time_limit');
+              return (
+                <span
+                  className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs flex items-center gap-1"
+                  title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined}
+                >
+                  <CheckCircle className="w-3 h-3" /> Completed
+                  {autoCompleted && <span className="text-green-600/80">(Auto)</span>}
+                </span>
+              );
+            }
             case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
             case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
             case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
@@ -1856,7 +1873,7 @@ export default function AIInterview() {
                         {/* Status + Score + Timeline */}
                         <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-10 sm:pl-0">
                           {/* Status badge */}
-                          {getInvStatusBadge(inv.status)}
+                          {getInvStatusBadge(inv)}
                           {isInvExpired(inv) && (
                             <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1">
                               <Clock className="w-3 h-3" /> Expired

@@ -142,6 +142,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // next question_timer_started arrives.
   const backendExpiredRef = useRef(false);
   const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Wall-clock of the last successful timer tick. The stuck-detection
+  // watchdog compares this against now() — if more than 3 s has passed
+  // while the timer should be running, the interval is presumed dead and
+  // restarted from the cached remaining value. Catches the case where an
+  // `interrupted` event kills the interval but no `question_timer_started`
+  // arrives to restart it (user sees "frozen at 0:39" / "frozen at 1:00").
+  const questionTimerLastTickMsRef = useRef<number>(0);
   // Ref that mirrors questionTimerSeconds state — readable synchronously in callbacks.
   // Required for stopRecording to deduct remaining seconds from the global timer.
   const questionTimerSecondsRef = useRef<number | null>(null);
@@ -1046,6 +1053,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (remaining === null) return;
       setQuestionTimerSeconds(remaining);
       questionTimerSecondsRef.current = remaining;
+      // Record wall-clock of last successful tick — used by the
+      // stuck-detection watchdog to spot a frozen UI even when the
+      // interval itself was killed by a stray event.
+      questionTimerLastTickMsRef.current = performance.now();
       if (remaining <= 0) {
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
@@ -1084,19 +1095,52 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           speechDetected: speechDetectedRef.current,
         });
       }
-      if (
+      // Stuck detection — TWO conditions can leave the timer frozen:
+      //   (a) interval ref is null (e.g. cleared by `interrupted` and no
+      //       fresh question_timer_started arrived to restart it)
+      //   (b) interval is "alive" but hasn't actually ticked for > 3 s
+      //       (e.g. tab throttling didn't recover, or a stuck flag is
+      //       holding the inner pause branch). Wall-clock check.
+      const _now_ms = performance.now();
+      const _last_tick = questionTimerLastTickMsRef.current;
+      const _no_tick_ms = _last_tick > 0 ? _now_ms - _last_tick : 0;
+      const _interval_dead = questionTimerIntervalRef.current === null;
+      const _interval_stalled = _last_tick > 0 && _no_tick_ms > 3000;
+      const _should_be_running = (
         cur !== null
         && cur > 0
         && !questionTimerExpiredRef.current
-        && questionTimerIntervalRef.current === null
         && !isAiSpeakingRef.current
-        && !isClarificationRef.current
         && questionTimerPendingRef.current === null
+      );
+      // Force-clear a stuck clarification flag if the timer has been
+      // frozen for >5 s under it (in case the 60-s clarification
+      // watchdog hasn't fired yet but the candidate is clearly waiting).
+      if (
+        _should_be_running
+        && isClarificationRef.current
+        && _interval_stalled
+        && _no_tick_ms > 5000
       ) {
-        console.warn('[INTERVIEW-DEBUG] STUCK TIMER detected — interval was null, restarting', {
+        console.warn(
+          '[INTERVIEW-DEBUG] STUCK CLARIFICATION FLAG — auto-clearing after stalled timer',
+          { remaining: cur, no_tick_ms: Math.round(_no_tick_ms) }
+        );
+        setIsClarification(false);
+        isClarificationRef.current = false;
+      }
+      if (
+        _should_be_running
+        && !isClarificationRef.current
+        && (_interval_dead || _interval_stalled)
+      ) {
+        console.warn('[INTERVIEW-DEBUG] STUCK TIMER detected — restarting', {
           remaining: cur,
           isRecording: isRecordingRef.current,
           isProcessing: isProcessingRef.current,
+          interval_dead: _interval_dead,
+          interval_stalled: _interval_stalled,
+          no_tick_ms: Math.round(_no_tick_ms),
         });
         ensureQuestionTimerRunning(cur);
       }
@@ -4725,12 +4769,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   <span className="text-white/70 text-xs font-semibold tabular-nums">{totalQuestions}</span>
                 </div>
               )}
-              {/* Clarification badge — shown when backend signals is_clarification */}
-              {isClarification && (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/30 border border-amber-400/50 animate-pulse">
-                  <span className="text-amber-200 text-[10px] font-bold tracking-wide">CLARIFYING</span>
-                </div>
-              )}
+              {/* Clarification badge removed per design — no banner indicator
+                  when Linda is re-asking the same question. */}
               <style>{`@keyframes qNumPop{0%{opacity:0;transform:scale(0.7) translateY(-4px)}60%{transform:scale(1.12) translateY(0)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
               {/* Per-question timer removed from header — shown as banner above chat */}
               {/* Global timer */}
@@ -4767,59 +4807,63 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
           {/* ── Per-question timer banner — shown above chat when timer is active ── */}
           {questionTimerSeconds !== null && (
-            <div className={`flex-shrink-0 px-4 py-2.5 flex items-center gap-3 border-b transition-colors duration-500 ${
+            <div className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
               questionTimerExpired       ? 'bg-red-50 border-red-200' :
               questionTimerSeconds <= 30 ? 'bg-red-50 border-red-200' :
               questionTimerSeconds <= 60 ? 'bg-amber-50 border-amber-200' :
                                            'bg-violet-50 border-violet-200'
             }`}>
-              {/* Icon */}
-              <Clock className={`w-4 h-4 shrink-0 ${
-                questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-500' :
-                questionTimerSeconds <= 60 ? 'text-amber-500' : 'text-violet-500'
-              } ${questionTimerExpired ? 'animate-pulse' : ''}`} />
+              <div className="flex items-center gap-3">
+                {/* Icon */}
+                <Clock className={`w-4 h-4 shrink-0 ${
+                  questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-500' :
+                  questionTimerSeconds <= 60 ? 'text-amber-500' : 'text-violet-500'
+                } ${questionTimerExpired ? 'animate-pulse' : ''}`} />
 
-              {/* Label + time */}
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className={`text-xs font-semibold shrink-0 ${
-                  questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
-                  questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-600'
-                }`}>
-                  {questionTimerExpired ? "Time's up!" : isAiSpeaking ? 'Question time:' : isProcessing ? 'Answered:' : 'Answer time:'}
-                </span>
+                {/* Label + time */}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className={`text-xs font-semibold shrink-0 ${
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
+                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-600'
+                  }`}>
+                    {questionTimerExpired ? "Time's up!" : isAiSpeaking ? 'Question time:' : isProcessing ? 'Answered:' : 'Answer time:'}
+                  </span>
 
-                {/* Progress bar */}
-                <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-gray-200">
-                  {(() => {
-                    // Use the initial duration from the timer start (matches backend candidate_window)
-                    const total = questionTimerTotalRef.current || 120;
-                    const pct = questionTimerExpired ? 0 : Math.min(100, (questionTimerSeconds / total) * 100);
-                    return (
-                      <div
-                        className={`h-full rounded-full transition-[width] duration-1000 ${
-                          questionTimerExpired || questionTimerSeconds <= 30 ? 'bg-red-500' :
-                          questionTimerSeconds <= 60 ? 'bg-amber-500' : 'bg-violet-500'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    );
-                  })()}
+                  {/* Progress bar */}
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-gray-200">
+                    {(() => {
+                      // Use the initial duration from the timer start (matches backend candidate_window)
+                      const total = questionTimerTotalRef.current || 120;
+                      const pct = questionTimerExpired ? 0 : Math.min(100, (questionTimerSeconds / total) * 100);
+                      return (
+                        <div
+                          className={`h-full rounded-full transition-[width] duration-1000 ${
+                            questionTimerExpired || questionTimerSeconds <= 30 ? 'bg-red-500' :
+                            questionTimerSeconds <= 60 ? 'bg-amber-500' : 'bg-violet-500'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  {/* Countdown value */}
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
+                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700'
+                  } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
+                    {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                  </span>
                 </div>
-
-                {/* Countdown value */}
-                <span className={`text-sm font-bold tabular-nums shrink-0 ${
-                  questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
-                  questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700'
-                } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
-                  {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
-                </span>
               </div>
               {/* Fix 2: subtitle explaining the reduced window. Only shown
                   when Linda's speech ate a meaningful chunk of the 2-min slot
                   (≥5s), to avoid noise on clean cases where her question was
-                  short and the candidate effectively has the full window. */}
+                  short and the candidate effectively has the full window.
+                  Rendered as its own row BELOW the icon+timer row so it
+                  doesn't overlap (was previously inside the flex-row). */}
               {lindaSpokeSeconds !== null && fullSlotSeconds !== null && lindaSpokeSeconds >= 5 && (
-                <div className="w-full pl-6 -mt-0.5 text-[10px] text-gray-500 leading-snug">
+                <div className="pl-7 mt-1 text-[10px] text-gray-500 leading-snug">
                   Linda used {lindaSpokeSeconds}s of the {fullSlotSeconds}s question slot — you have {questionTimerTotalRef.current}s to answer.
                 </div>
               )}

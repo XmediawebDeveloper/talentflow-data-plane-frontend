@@ -8,6 +8,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 
 export default function AIInterviewJDSelection() {
   const router = useRouter();
@@ -47,6 +48,8 @@ export default function AIInterviewJDSelection() {
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
       <div className="w-full">
+        {/* Step indicator */}
+        <AIInterviewStepIndicator currentStep={1} />
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">

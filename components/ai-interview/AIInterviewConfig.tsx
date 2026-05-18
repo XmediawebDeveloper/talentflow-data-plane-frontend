@@ -17,12 +17,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
+import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Step indicator constants                                               */
 /* ─────────────────────────────────────────────────────────────────────── */
-const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
-const CURRENT_STEP = 2;
+const CURRENT_STEP = 2 as const;
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -2110,9 +2110,9 @@ export default function AIInterviewConfig() {
       }).catch(() => {});
     }
 
-    // 3. Navigate immediately. Pass autogen=1 when regeneration is needed —
-    // the Clusters page handles the expand → generate → refine pipeline with
-    // its own loading UI so the user doesn't wait on a blocked Configure page.
+    // 3. Navigate immediately. Pass autogen=1 only when something changed
+    // (needsRegeneration = skill set diff). No changes → reuse cached clusters,
+    // no wasted LLM call.
     const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}`;
     router.push(needsRegeneration ? `${base}&autogen=1` : base);
   };
@@ -2188,28 +2188,7 @@ export default function AIInterviewConfig() {
         </div>
 
         {/* Step indicators */}
-        <div className="flex items-center gap-2 mb-8">
-          {STEPS.map((step, i) => {
-            const stepNum = i + 1;
-            const isCompleted = stepNum < CURRENT_STEP;
-            const isCurrent = stepNum === CURRENT_STEP;
-            return (
-              <React.Fragment key={step}>
-                {i > 0 && <div className="w-8 h-px bg-gray-200" />}
-                {isCompleted ? (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  </div>
-                ) : (
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${
-                    isCurrent ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-slate-100 text-gray-400'
-                  }`}>{stepNum}</div>
-                )}
-                <span className={`text-sm ${isCurrent ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>{step}</span>
-              </React.Fragment>
-            );
-          })}
-        </div>
+        <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 

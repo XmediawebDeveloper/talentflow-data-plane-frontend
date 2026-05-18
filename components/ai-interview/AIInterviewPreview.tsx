@@ -13,6 +13,7 @@ import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
+import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -39,8 +40,7 @@ interface ParsedInstructions {
 /*  Constants                                                               */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
-const CURRENT_STEP = 4;
+const CURRENT_STEP = 4 as const;
 
 function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   if (!nthEnabled && !hrEnabled) {
@@ -301,36 +301,7 @@ export default function AIInterviewPreview() {
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50"><div className="w-full pb-28">
       {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-8">
-        {STEPS.map((label, i) => {
-          const stepNum = i + 1;
-          const isCompleted = stepNum < CURRENT_STEP;
-          const isCurrent = stepNum === CURRENT_STEP;
-          return (
-            <React.Fragment key={label}>
-              {isCompleted ? (
-                <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  </div>
-                  <span className="text-sm text-gray-400">{label}</span>
-                </>
-              ) : isCurrent ? (
-                <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
-                  <span className="text-sm text-gray-900 font-medium">{label}</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 text-gray-400 text-sm ring-1 ring-gray-200">{stepNum}</div>
-                  <span className="text-sm text-gray-400">{label}</span>
-                </>
-              )}
-              {i < STEPS.length - 1 && <div className="w-10 h-px bg-gray-200" />}
-            </React.Fragment>
-          );
-        })}
-      </div>
+      <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">

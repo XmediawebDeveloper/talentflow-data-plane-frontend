@@ -160,6 +160,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
   const [isExpiredLink, setIsExpiredLink] = useState(false);
+  // Distinct from isExpiredLink — set when the recruiter explicitly revoked
+  // the invitation. Drives a different icon + title on the error screen so
+  // the candidate knows to contact the recruiter rather than wait.
+  const [isRevokedLink, setIsRevokedLink] = useState(false);
   const [assessmentInfo, setAssessmentInfo] = useState<AssessmentInfo | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<CurrentQuestion | null>(null);
   const [assessmentData, setAssessmentData] = useState<StartAssessmentResponse | null>(null);
@@ -606,9 +610,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           setStepSafe('landing');
         }
       } else {
-        // Cannot start (expired, etc)
+        // Cannot start (expired, revoked, completed, etc). The revoked
+        // case must be checked BEFORE the generic "expir" string match
+        // because the revoke action also pushes expires_at to now() — so
+        // both signals fire and we want the more specific one to win.
         const msg = info.message || 'This assessment is not available';
-        if (msg.toLowerCase().includes('expir')) {
+        if (info.is_revoked) {
+          setIsRevokedLink(true);
+        } else if (msg.toLowerCase().includes('expir')) {
           setIsExpiredLink(true);
         }
         setError(msg);
@@ -1323,11 +1332,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return (
           <ErrorScreen
             message={error || 'An error occurred'}
-            variant={isExpiredLink ? 'expired' : 'error'}
-            onRetry={isExpiredLink ? undefined : () => {
+            variant={isRevokedLink ? 'revoked' : (isExpiredLink ? 'expired' : 'error')}
+            onRetry={(isExpiredLink || isRevokedLink) ? undefined : () => {
               isFlowActiveRef.current = false;
               isStartingRef.current = false;
               setIsExpiredLink(false);
+              setIsRevokedLink(false);
               setError(null);
               sessionTokenManager.setAssessmentToken(token);
               sessionStorage.removeItem(ASSESS_SESSION_KEY);

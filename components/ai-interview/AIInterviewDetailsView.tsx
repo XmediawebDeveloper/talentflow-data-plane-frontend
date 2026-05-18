@@ -7,10 +7,11 @@ import {
   ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
-  ExternalLink, Layers, Pencil, Zap, Timer, BarChart3, FileText, Settings, CheckCircle2, Download,
+  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { jdService } from '@/lib/services/jdService';
 import type {
   AIInterviewResponse,
   AIInterviewVersionHistoryItem,
@@ -90,25 +91,6 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   return { mthMinutes: 20, nthMinutes: 0, hrMinutes: 10, mthQuestions: 10, nthQuestions: 0, hrQuestions: 5 };
 }
 
-function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
-  const allocation = getTimedModeAllocation(nthEnabled, hrEnabled);
-  const total = allocation.mthQuestions + allocation.nthQuestions + allocation.hrQuestions;
-
-  if (total <= 0) {
-    return { mth: 0, nth: 0, hr: 0 };
-  }
-
-  const mth = Math.round((allocation.mthQuestions / total) * 100);
-  const nth = nthEnabled ? Math.round((allocation.nthQuestions / total) * 100) : 0;
-  const hr = hrEnabled ? 100 - mth - nth : 0;
-
-  return {
-    mth,
-    nth,
-    hr,
-  };
-}
-
 interface AIInterviewDetailsViewProps {
   config: AIInterviewResponse;
   onBack: () => void;
@@ -143,6 +125,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ type: string; title: string; message: string; onConfirm: () => void } | null>(null);
+  // Controls "Show more / less" toggle on the published JD description card
+  // inside the AI Interview Info tab. Default collapsed so long JDs don't push
+  // metadata cards below the fold.
+  const [jdDescExpanded, setJdDescExpanded] = useState(false);
+  // Fallback JD description: fixed-mode configs don't snapshot jd_description
+  // at creation time (see AIInterviewConfig.tsx — only flexible mode does).
+  // For those, fetch the live JD on demand when the Info tab is opened so the
+  // recruiter still sees the description.
+  const [fetchedJdDesc, setFetchedJdDesc] = useState<string | null>(null);
+  const [fetchedJdLoading, setFetchedJdLoading] = useState(false);
 
   const enabledRounds = useMemo(() => {
     return config.rounds_config?.filter((r) => r.enabled !== false) || [];
@@ -173,19 +165,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     return `${mins} min`;
   }, [config.duration_minutes]);
 
-  const displayPercentage = useCallback((type: string, storedPercentage: number) => {
-    if (interviewMode !== 'fixed') return storedPercentage;
-
-    const nthEnabled = enabledRounds.some((round) => round.type === 'nice_to_have_skills' || round.type === 'nice_to_have');
-    const hrEnabled = enabledRounds.some((round) => round.type === 'hr');
-    const percentages = getTimedModePercentages(nthEnabled, hrEnabled);
-
-    if (type === 'must_have_skills' || type === 'must_to_have' || type === 'technical') return percentages.mth;
-    if (type === 'nice_to_have_skills' || type === 'nice_to_have') return percentages.nth;
-    if (type === 'hr') return percentages.hr;
-    return storedPercentage;
-  }, [enabledRounds, interviewMode]);
-
   // Preview-style derived values
   const mode = interviewMode as 'fixed' | 'flexible';
   const duration = config.duration_minutes;
@@ -213,8 +192,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     if (hrRound) map[hrRound.type] = timedAllocation.hrQuestions;
     return map;
   }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
-  const roundPercentage = useCallback((round: any) => displayPercentage(round.type, round.percentage), [displayPercentage]);
-  const totalPercentage = enabledRounds.reduce((sum, r) => sum + roundPercentage(r), 0);
   const languages = config.available_languages ?? (config.ai_voice_language ? [config.ai_voice_language] : ['English']);
 
   const loadActivity = useCallback(async () => {
@@ -249,6 +226,33 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   useEffect(() => {
     if (activeTab === 'versions') loadVersionHistory();
   }, [activeTab, loadVersionHistory]);
+
+  // Preload the live JD description on mount when the config's snapshot is
+  // empty (fixed-mode case). Firing on mount instead of on Info-tab activation
+  // means the description is almost always ready by the time the recruiter
+  // navigates to the tab — no visible loading state.
+  useEffect(() => {
+    if (config.jd_description && config.jd_description.trim()) return;
+    if (!config.jd_id) return;
+    if (fetchedJdDesc !== null || fetchedJdLoading) return;
+
+    let cancelled = false;
+    setFetchedJdLoading(true);
+    jdService.getById(config.jd_id)
+      .then(jd => {
+        if (cancelled) return;
+        setFetchedJdDesc((jd?.description ?? '').trim() || '');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFetchedJdDesc(''); // mark attempted so we don't retry on every render
+      })
+      .finally(() => {
+        if (!cancelled) setFetchedJdLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [config.jd_id, config.jd_description, fetchedJdDesc, fetchedJdLoading]);
 
   // Quick actions
   const handleCopyLink = async () => {
@@ -725,46 +729,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </div>
               </SectionCard>
 
-              {/* Scoring Distribution */}
-              <SectionCard title="Scoring Distribution" icon={BarChart3}>
-                <div className="space-y-4">
-                  {mthRound && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm text-gray-700 font-medium">Must-To-Have</span>
-                        <span className="text-sm font-semibold text-brand-blue">{roundPercentage(mthRound)}%</span>
-                      </div>
-                      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-brand-blue rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  {nthRound && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm text-gray-700 font-medium">Nice-To-Have</span>
-                        <span className="text-sm font-semibold text-brand-cyan">{roundPercentage(nthRound)}%</span>
-                      </div>
-                      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-brand-cyan rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  {hrRound && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm text-gray-700 font-medium">HR Round</span>
-                        <span className="text-sm font-semibold text-brand-orange-deep">{roundPercentage(hrRound)}%</span>
-                      </div>
-                      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-brand-orange rounded-full" style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  {enabledRounds.length === 0 && <p className="text-sm text-gray-400 italic">No rounds configured</p>}
-                </div>
-              </SectionCard>
-
               {/* Time Allocation Table (fixed mode only) */}
               {mode === 'fixed' && enabledRounds.length > 0 && (
                 <SectionCard title="Time Allocation" icon={Clock}>
@@ -773,7 +737,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <thead>
                         <tr className="bg-slate-50 text-left border-b border-gray-100">
                           <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
-                          <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Weight</th>
                           <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
                           <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
                           <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
@@ -790,7 +753,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           return (
                             <tr key={r.type} className="hover:bg-brand-blue/5 transition-colors">
                               <td className="px-4 py-2.5 text-gray-900">{label}</td>
-                              <td className="px-4 py-2.5 text-gray-700 text-right">{roundPercentage(r)}%</td>
                               <td className="px-4 py-2.5 text-gray-700 text-right">{questions}</td>
                               <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
                               <td className="px-4 py-2.5 text-gray-700 text-right">{mins} min</td>
@@ -801,7 +763,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <tfoot>
                         <tr className="bg-slate-50 font-semibold border-t border-gray-100">
                           <td className="px-4 py-2.5 text-gray-900">Total</td>
-                          <td className="px-4 py-2.5 text-brand-blue text-right">{totalPercentage}%</td>
                           <td className="px-4 py-2.5 text-gray-900 text-right">
                             {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
                           </td>
@@ -832,7 +793,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           type DistRow = {
                             q: number;
                             primary: string;
-                            secondaries: string[];
+                            // Each secondary carries its own priority so the UI
+                            // can render per-skill High/Med/Low badges — secondaries
+                            // can come from the primary's cluster OR from a 0-alloc
+                            // orphan cluster with a different priority.
+                            secondaries: { name: string; priority: number }[];
                             cluster: string;
                             priority: number;
                           };
@@ -910,7 +875,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               const leftover = skills.slice(alloc);
                               for (let i = 0; i < primaries.length; i++) {
                                 qNum += 1;
-                                const secs = leftover.slice(i * 2, i * 2 + 2);
+                                const secs = leftover.slice(i * 2, i * 2 + 2).map(s => ({
+                                  name: s,
+                                  priority: cluster.priority ?? 1,
+                                }));
                                 out.push({
                                   q: qNum,
                                   primary: primaries[i],
@@ -923,7 +891,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             for (const o of orphanSkills) {
                               const target = out.find(r => r.secondaries.length < 2);
                               if (!target) break;
-                              target.secondaries.push(o.skill);
+                              target.secondaries.push({
+                                name: o.skill,
+                                priority: o.cluster.priority ?? 1,
+                              });
                             }
                             return out;
                           };
@@ -931,8 +902,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : [];
                           const totalQ = mthDist.length + nthDist.length;
                           const totalSkillsCovered = new Set([
-                            ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
-                            ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+                            ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
+                            ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
                           ]).size;
                           const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
                           const priorityClass = (p: number) =>
@@ -942,28 +913,36 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
                             <div
                               key={`${sectionKey}-${row.q}`}
-                              className="grid grid-cols-[36px_1fr_auto] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                              className="grid grid-cols-[36px_1fr] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
                             >
                               <span className={`text-[11px] font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
                                 Q{row.q}
                               </span>
                               <div className="min-w-0 flex flex-wrap items-center gap-1">
+                                {/* Primary skill — same inline priority label
+                                    style as secondaries, so every skill shows
+                                    its own priority and the trailing row-level
+                                    badge is no longer needed. */}
                                 <span className="text-xs font-medium text-gray-900">{row.primary}</span>
+                                <span className={`text-[9px] font-semibold px-1 py-0 rounded ring-1 ${priorityClass(row.priority)}`}>
+                                  {priorityLabel(row.priority)}
+                                </span>
                                 {row.secondaries.length > 0 && (
                                   <>
                                     <span className="text-gray-300 text-[10px]">+</span>
                                     {row.secondaries.map((s, i) => (
-                                      <span key={`${row.q}-sec-${i}`} className="px-1 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
-                                        {s}
+                                      <span
+                                        key={`${row.q}-sec-${i}`}
+                                        className={`inline-flex items-center gap-1 px-1 py-0 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
+                                      >
+                                        {s.name}
+                                        <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
                                       </span>
                                     ))}
                                   </>
                                 )}
                                 <span className="text-[10px] text-gray-400 ml-0.5 truncate max-w-[140px]">· {row.cluster}</span>
                               </div>
-                              <span className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
-                                {priorityLabel(row.priority)}
-                              </span>
                             </div>
                           );
                           return (
@@ -1341,6 +1320,20 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             };
             const mthSkills: string[] = config.jd_must_have_skills || [];
             const nthSkills: string[] = config.jd_nice_to_have_skills || [];
+            // Render the published-JD card only when the interview was actually
+            // wired to a JD (jd_id is the FK; short_id/title may be backfilled
+            // even for ad-hoc configs, so we anchor on jd_id).
+            const hasPublishedJd = Boolean(config.jd_id);
+            // Prefer the snapshot (what the interview was actually configured
+            // against), fall back to the live JD description we fetched on
+            // demand for fixed-mode configs that didn't snapshot it.
+            const jdDesc = ((config.jd_description ?? '').trim()
+              || (fetchedJdDesc ?? '').trim());
+            // ~280 chars ≈ 4 lines at the rendered font size; long enough to
+            // show a useful summary but short enough that we don't dominate the
+            // tab when descriptions are huge.
+            const DESC_PREVIEW_CHARS = 280;
+            const descTruncated = jdDesc.length > DESC_PREVIEW_CHARS;
             return (
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                 <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50">
@@ -1353,6 +1346,83 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <p className="text-xs sm:text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
                 </div>
                 <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+                  {/* Published JD card — anchored on jd_id so ad-hoc configs
+                      (no linked JD) don't show an empty stub. */}
+                  {hasPublishedJd && (
+                    <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
+                      <div className="bg-gradient-to-br from-brand-blue to-brand-blue-2 px-4 sm:px-5 py-3 sm:py-4 ring-1 ring-white/10">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileText className="w-4 h-4 text-white/90 flex-shrink-0" />
+                            <span className="text-xs font-medium text-white/90 uppercase tracking-wide">Job Description</span>
+                            {config.jd_short_id && (
+                              <span className="px-2 py-0.5 rounded-full bg-white/15 text-white text-[11px] font-medium ring-1 ring-white/20">
+                                {config.jd_short_id}
+                              </span>
+                            )}
+                            {config.jd_version != null && (
+                              <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/90 text-[11px] font-medium ring-1 ring-white/15">
+                                v{config.jd_version}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+                            {config.jd_title ?? 'Untitled Job Description'}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="px-4 sm:px-5 py-3 sm:py-4 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-0.5">Experience</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {expLabel(config.jd_experience_level) || config.jd_experience_level || '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-0.5">Industry</p>
+                            <p className="text-sm font-medium text-gray-900">{(config as any).jd_industry_type ?? '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-0.5">Skills</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {mthSkills.length + nthSkills.length}
+                              <span className="text-xs text-gray-500 ml-1">({mthSkills.length} must / {nthSkills.length} nice)</span>
+                            </p>
+                          </div>
+                        </div>
+                        {jdDesc ? (
+                          <div className="border-t border-gray-100 pt-3">
+                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1.5">Description</p>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                              {descTruncated && !jdDescExpanded
+                                ? `${jdDesc.slice(0, DESC_PREVIEW_CHARS).trimEnd()}…`
+                                : jdDesc}
+                            </p>
+                            {descTruncated && (
+                              <button
+                                type="button"
+                                onClick={() => setJdDescExpanded(v => !v)}
+                                className="mt-2 text-xs font-medium text-brand-blue hover:text-brand-blue-2 transition-colors"
+                              >
+                                {jdDescExpanded ? 'Show less' : 'Show more'}
+                              </button>
+                            )}
+                          </div>
+                        ) : fetchedJdLoading ? (
+                          // Brief no-op while the on-mount preload finishes —
+                          // render an empty spacer so the card height doesn't
+                          // visibly jump when the description arrives.
+                          <div className="border-t border-gray-100 pt-3 h-6" />
+                        ) : (
+                          <div className="border-t border-gray-100 pt-3">
+                            <p className="text-xs text-gray-400 italic">This JD has no description text.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Key Metadata Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Experience Level */}

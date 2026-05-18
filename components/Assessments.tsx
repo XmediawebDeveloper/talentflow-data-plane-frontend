@@ -18,7 +18,7 @@ import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send, Ban } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
@@ -82,6 +82,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Resend confirmation dialog state
   const [resendTargetInvitation, setResendTargetInvitation] = useState<any | null>(null);
   const [isResending, setIsResending] = useState(false);
+  // Clone confirmation state — simple confirm-only modal. The recruiter
+  // invites V2 candidates manually via the normal invite flow.
+  const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
+  const [isCloning, setIsCloning] = useState(false);
+  // Revoke confirmation state
+  const [revokeTargetAssessment, setRevokeTargetAssessment] = useState<any | null>(null);
+  const [revokeCount, setRevokeCount] = useState<number | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
@@ -177,6 +185,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       updated_at: a.updated_at,
       created_by_name: a.created_by_name || 'System',
       version: a.version || 1,
+      // Backend computes the 3-version cap and the "only version 1 can be
+      // cloned" rule. Frontend just disables the button when can_clone is
+      // false. Older backends that don't return this field default to true.
+      can_clone: a.can_clone !== undefined ? a.can_clone : true,
+      jd_assessment_count: a.jd_assessment_count,
       jd_id: a.jd_id,
       jd_short_id: a.jd_short_id,
       jd_version: a.jd_version,
@@ -738,6 +751,62 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
+  // Open the clone confirmation modal. The recruiter then publishes and
+  // invites V2 candidates manually via the normal invite flow.
+  const handleOpenCloneModal = (assessment: any) => {
+    setCloneTargetAssessment(assessment);
+  };
+
+  const handleConfirmClone = async () => {
+    if (!cloneTargetAssessment || isCloning) return;
+    setIsCloning(true);
+    try {
+      const response = await assessmentService.clone(cloneTargetAssessment.id);
+      await reloadAssessments();
+      toast.success(`Assessment duplicated: "${response.cloned_title}"`);
+      setCloneTargetAssessment(null);
+    } catch (error) {
+      console.error('Failed to duplicate assessment:', error);
+      toast.error('Failed to duplicate assessment. Please try again.');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  // Open the revoke confirmation modal. Fetch eligible count so the
+  // recruiter sees exactly how many links will be invalidated.
+  const handleOpenRevokeModal = async (assessment: any) => {
+    setRevokeTargetAssessment(assessment);
+    setRevokeCount(null);
+    try {
+      const count = await assessmentService.getRevokableInvitationsCount(assessment.id);
+      setRevokeCount(count);
+    } catch (err) {
+      console.error('Failed to fetch revokable count:', err);
+      setRevokeCount(null);
+    }
+  };
+
+  const handleConfirmRevoke = async () => {
+    if (!revokeTargetAssessment || isRevoking) return;
+    setIsRevoking(true);
+    try {
+      const result = await assessmentService.revokePendingInvitations(revokeTargetAssessment.id);
+      await reloadAssessments();
+      toast.success(
+        result.revoked_count > 0
+          ? `Revoked ${result.revoked_count} pending invite link(s).`
+          : 'No pending invites to revoke.'
+      );
+      setRevokeTargetAssessment(null);
+    } catch (error) {
+      console.error('Failed to revoke pending invites:', error);
+      toast.error('Failed to revoke pending invites. Please try again.');
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
   // Activate assessment (publish)
   const handleActivateAssessment = async (assessmentId: string) => {
     try {
@@ -762,26 +831,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     } catch (error) {
       console.error('Failed to archive assessment:', error);
       toast.error(`Failed to archive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setOpenMenuId(null);
-    }
-  };
-
-  // Mark assessment as completed (uses dedicated /close endpoint)
-  const handleCompleteAssessment = async (assessmentId: string) => {
-    if (!await dialog.confirm({ title: 'Complete Assessment', message: 'Mark this assessment as completed? This action cannot be undone.', variant: 'confirm', confirmText: 'Complete' })) return;
-
-    try {
-      await assessmentService.close(assessmentId);
-      await reloadAssessments();
-      setOpenMenuId(null);
-    } catch (error: any) {
-      console.error('Failed to complete assessment:', error);
-      const errorMessage = error?.message || 'Unknown error';
-      if (errorMessage.includes('403') || errorMessage.toLowerCase().includes('forbidden')) {
-        toast.error('Permission denied: You do not have permission to complete this assessment. Please contact your administrator.');
-      } else {
-        toast.error(`Failed to complete assessment: ${errorMessage}`);
-      }
       setOpenMenuId(null);
     }
   };
@@ -2261,15 +2310,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               Activate
                             </button>
                           )}
-                          {canUpdateAssessment && assessment.status !== 'Completed' && assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
-                            <button
-                              onClick={() => handleCompleteAssessment(assessment.id)}
-                              className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
-                              Completed
-                            </button>
-                          )}
                           {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
                           <button
                             onClick={() => {
@@ -2625,25 +2665,45 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Copy Link
                                 </button>
                                 )}
-                                {assessment.status !== 'Archived' && canCreateAssessment && (
+                                {assessment.status !== 'Archived' && canCreateAssessment && (() => {
+                                  // 3-version cap + only-original-can-be-cloned rule, computed
+                                  // backend-side. Disabled rows show a tooltip explaining why.
+                                  const canClone = assessment.can_clone !== false;
+                                  const disabledReason = !canClone
+                                    ? ((assessment.version || 1) > 1
+                                        ? 'Only the original assessment (Version 1) can be duplicated.'
+                                        : 'This assessment already has 3 versions. Archive or delete a version to duplicate again.')
+                                    : '';
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        if (!canClone) return;
+                                        setOpenMenuId(null);
+                                        handleOpenCloneModal(assessment);
+                                      }}
+                                      disabled={!canClone}
+                                      title={disabledReason || undefined}
+                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 transition-colors ${
+                                        canClone
+                                          ? 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                          : 'text-gray-400 cursor-not-allowed'
+                                      }`}
+                                    >
+                                      <Copy className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${canClone ? 'text-gray-600' : 'text-gray-300'}`} />
+                                      Duplicate
+                                    </button>
+                                  );
+                                })()}
+                                {assessment.status === 'Active' && canUpdateAssessment && (
                                 <button
-                                  onClick={async () => {
-                                    try {
-                                      const response = await assessmentService.clone(assessment.id);
-                                      // Reload assessments to show the new clone
-                                      // Reload assessments after cloning
-                                      await reloadAssessments();
-                                      toast.success(`Assessment duplicated: "${response.cloned_title}"`);
-                                    } catch (error) {
-                                      console.error('Failed to duplicate assessment:', error);
-                                      toast.error('Failed to duplicate assessment. Please try again.');
-                                    }
+                                  onClick={() => {
                                     setOpenMenuId(null);
+                                    handleOpenRevokeModal(assessment);
                                   }}
-                                  className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
+                                  className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-red-700 hover:bg-red-50 flex items-center gap-2 sm:gap-2.5 transition-colors"
                                 >
-                                  <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
-                                  Duplicate
+                                  <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  Revoke pending invites
                                 </button>
                                 )}
                                 <div className="border-t border-gray-100 my-1"></div>
@@ -2658,15 +2718,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   >
                                     <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                     Activate
-                                  </button>
-                                )}
-                                {canUpdateAssessment && assessment.status === 'Active' && (
-                                  <button
-                                    onClick={() => handleCompleteAssessment(assessment.id)}
-                                    className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
-                                  >
-                                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
-                                    Completed
                                   </button>
                                 )}
                                 {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
@@ -3286,6 +3337,54 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
           );
         })()}
+      </ConfirmationDialog>
+
+      {/* Clone confirmation — creates a draft copy. Recruiter publishes
+          and invites V2 candidates manually via the normal invite flow. */}
+      <ConfirmationDialog
+        isOpen={!!cloneTargetAssessment}
+        onClose={() => { if (!isCloning) setCloneTargetAssessment(null); }}
+        onConfirm={handleConfirmClone}
+        title="Duplicate assessment?"
+        description={
+          cloneTargetAssessment
+            ? `A draft copy of "${stripVersionFromTitle(cloneTargetAssessment.title || '')}" will be created. You can edit it before publishing.`
+            : ''
+        }
+        confirmText={isCloning ? 'Duplicating…' : 'Duplicate'}
+        cancelText="Cancel"
+        variant="info"
+      />
+
+      {/* Revoke confirmation — invalidates only PENDING / SENT links.
+          Candidates who have opened, started, or completed the assessment
+          are deliberately not touched. */}
+      <ConfirmationDialog
+        isOpen={!!revokeTargetAssessment}
+        onClose={() => { if (!isRevoking) setRevokeTargetAssessment(null); }}
+        onConfirm={handleConfirmRevoke}
+        title="Revoke pending invite links?"
+        description={
+          revokeTargetAssessment
+            ? `Pending invite links for "${stripVersionFromTitle(revokeTargetAssessment.title || '')}" will stop working immediately.`
+            : ''
+        }
+        confirmText={isRevoking ? 'Revoking…' : 'Revoke links'}
+        cancelText="Cancel"
+        variant="warning"
+      >
+        {revokeTargetAssessment && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+            <p className="text-amber-900 font-medium mb-1">
+              {revokeCount === null
+                ? 'Counting eligible invitations…'
+                : `${revokeCount} link${revokeCount === 1 ? '' : 's'} will be revoked.`}
+            </p>
+            <p className="text-amber-800 text-xs mt-1">
+              Only candidates who have <strong>not yet opened</strong> their invitation are affected. Anyone already in progress or completed will be left alone and can finish.
+            </p>
+          </div>
+        )}
       </ConfirmationDialog>
     </div>
   );

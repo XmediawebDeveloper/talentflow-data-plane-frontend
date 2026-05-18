@@ -128,6 +128,7 @@ export interface AIInterviewResponse {
   jd_location?: string;
   jd_must_have_skills?: string[];
   jd_nice_to_have_skills?: string[];
+  jd_description?: string;
   rounds_config?: AIInterviewRoundConfig[];
   interview_token?: string;
   interview_link?: string;
@@ -863,6 +864,53 @@ export const aiInterviewService = {
         per_question_seconds: args.perQuestionSeconds,
         mth_time_min: args.mthTimeMin,
         nth_time_min: args.nthTimeMin,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * AI-driven mapping of refined-cluster skills onto interview questions.
+   * Each question gets a PRIMARY skill + up to 2 SECONDARIES from the same
+   * cluster. Backend ensures EVERY input skill appears at least once — no
+   * silent drops (unlike a pure math formula which caps at 2/Q and loses
+   * skills when clusters are dense).
+   */
+  async distributeSkills(args: {
+    mthClusters: { id?: string; name: string; priority: number; skills: string[] }[];
+    nthClusters: { id?: string; name: string; priority: number; skills: string[] }[];
+    mthQuestions: number;
+    nthQuestions: number;
+    jdTitle?: string;
+    jdDescription?: string;
+  }): Promise<{
+    mth_questions: Array<{
+      question_number: number;
+      primary_skill: string;
+      secondary_skills: string[];
+      cluster_id?: string;
+      cluster_name?: string;
+      priority?: number;
+    }>;
+    nth_questions: Array<{
+      question_number: number;
+      primary_skill: string;
+      secondary_skills: string[];
+      cluster_id?: string;
+      cluster_name?: string;
+      priority?: number;
+    }>;
+  }> {
+    try {
+      const response = await api.post('/ai-interview/distribute-skills', {
+        mth_clusters: args.mthClusters,
+        nth_clusters: args.nthClusters,
+        mth_questions: args.mthQuestions,
+        nth_questions: args.nthQuestions,
+        jd_title: args.jdTitle,
+        jd_description: args.jdDescription,
       });
       return response.data;
     } catch (error) {

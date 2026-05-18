@@ -17,6 +17,7 @@ import {
   PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
   normalizePriority as sharedNormalizePriority,
 } from '@/lib/constants/aiInterviewPriority';
+import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -86,7 +87,6 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
 // Priority labels come from lib/constants/aiInterviewPriority (P1-P3 scale).
 const PRIORITY_LABELS = SHARED_PRIORITY_LABELS;
 
-const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
 const CURRENT_STEP = 3;
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -178,17 +178,17 @@ function DraggableClusterSkill({
     <span
       ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
       title={isAiDerived ? 'Merged or added by AI from your skills' : undefined}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-all ${
-        isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-40' : 'opacity-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'} ${isAiDerived ? 'italic' : ''}`}
+      className={`group/chip inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border transition-all duration-200 backdrop-blur-sm ${
+        isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-sm'
+      } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100 scale-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'} ${isAiDerived ? 'italic' : ''}`}
     >
-      {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 text-gray-300" />}
+      {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 opacity-40 group-hover/chip:opacity-70 transition-opacity" />}
       {isAiDerived && <Sparkles className="w-3 h-3 flex-shrink-0 opacity-70" />}
-      {skillName}
+      <span className="font-medium">{skillName}</span>
       {!isReadOnly && (
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(skillName, clusterId); }}
-          className="ml-0.5 text-gray-400 transition-colors hover:text-red-500"
+          className="ml-0.5 opacity-50 hover:opacity-100 transition-all hover:text-red-500 hover:scale-110"
          aria-label="Close">
           <X className="w-3 h-3" />
         </button>
@@ -286,30 +286,37 @@ function ClusterRow({
   return (
     <div
       ref={combinedRef}
-      className={`border rounded-lg transition-all ${
-        isDragging ? 'opacity-40' : ''
-      } ${expanded ? 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/10' : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10'
+      className={`relative rounded-xl transition-all duration-300 overflow-hidden ${
+        isDragging ? 'opacity-40 scale-[0.98]' : ''
+      } ${expanded
+        ? 'border border-brand-blue/40 bg-gradient-to-br from-white via-brand-blue/[0.03] to-brand-blue/[0.06] shadow-lg shadow-brand-blue/10 ring-1 ring-brand-blue/10'
+        : 'border border-gray-200/80 bg-white hover:border-brand-blue/40 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
       } ${isOver ? 'border-brand-blue bg-brand-blue/5' : ''
       } ${isSkillOver ? 'ring-2 ring-brand-blue/40 bg-brand-blue/10' : ''}`}
     >
+      {/* Accent strip on expanded state */}
+      {expanded && (
+        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-brand-blue/60 via-brand-blue/40 to-transparent" />
+      )}
+
       {/* Collapsed header */}
       <div
-        className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors ${expanded ? 'hover:bg-brand-blue/10' : 'hover:bg-brand-blue/5'}`}
+        className={`flex items-center gap-2 px-3.5 py-3 cursor-pointer transition-all duration-200 ${expanded ? 'hover:bg-brand-blue/[0.04]' : 'hover:bg-brand-blue/[0.025]'}`}
         onClick={() => onToggleExpand(cluster.id)}
       >
         {/* Hide drag handle when read-only (flexible finalized) */}
         {!isReadOnly && (
-          <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab active:cursor-grabbing p-0.5">
-            <GripVertical className="w-4 h-4 text-gray-300" />
+          <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab active:cursor-grabbing p-0.5 opacity-30 hover:opacity-70 transition-opacity">
+            <GripVertical className="w-4 h-4 text-gray-400" />
           </div>
         )}
         <PriorityBadge p={cluster.priority} />
         {visibleClusterSkills.length === 0 && (
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-600 border border-red-200 flex-shrink-0">
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-red-50 text-red-600 border border-red-200/70 flex-shrink-0">
             <AlertTriangle className="w-2.5 h-2.5" /> Empty
           </span>
         )}
-        <span className="text-sm font-medium text-gray-900 flex-1 truncate">
+        <span className={`text-sm font-semibold flex-1 truncate transition-colors ${expanded ? 'text-brand-blue-deep' : 'text-gray-900'}`}>
           {cluster.name || 'Unnamed Cluster'}
         </span>
         {(() => {
@@ -318,128 +325,118 @@ function ClusterRow({
           return (
             <span
               title={`${aiCount} skill${aiCount !== 1 ? 's' : ''} merged or added by AI from your inputs`}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-brand-blue/10 text-brand-blue border border-brand-blue/20 flex-shrink-0"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-gradient-to-r from-brand-blue/10 to-brand-blue/5 text-brand-blue border border-brand-blue/20 flex-shrink-0 shadow-sm shadow-brand-blue/5"
             >
               <Sparkles className="w-2.5 h-2.5" />
               {aiCount} AI
             </span>
           );
         })()}
-        <span className="text-xs text-gray-500">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
           {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
         </span>
-        {expanded ? (
-          <ChevronUp className="w-4 h-4 text-brand-blue" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400" />
-        )}
+        <div className={`flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300 ${expanded ? 'bg-brand-blue/15 text-brand-blue rotate-180' : 'text-gray-400 hover:bg-gray-100'}`}>
+          <ChevronDown className="w-3.5 h-3.5" />
+        </div>
       </div>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="px-4 pb-4 pt-1 space-y-3 border-t border-gray-100">
-          {/* Cluster name */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Cluster Name</label>
-            <input
-              type="text"
-              value={cluster.name}
-              onChange={(e) => onUpdate(cluster.id, { name: e.target.value })}
-              disabled={isReadOnly}
-              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
-              placeholder="e.g. Core Backend Skills"
-            />
+        <div className="px-4 pb-4 pt-2 space-y-3 border-t border-brand-blue/10 relative">
+          {/* Cluster name + Priority side-by-side for compactness */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="col-span-2">
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cluster Name</label>
+              <input
+                type="text"
+                value={cluster.name}
+                onChange={(e) => onUpdate(cluster.id, { name: e.target.value })}
+                disabled={isReadOnly}
+                className={`mt-1 w-full px-3 py-2 text-sm bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 focus:bg-white transition-all ${isReadOnly ? 'bg-gray-50/70 text-gray-500 cursor-not-allowed' : ''}`}
+                placeholder="e.g. Core Backend Skills"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Priority</label>
+              <select
+                value={cluster.priority}
+                onChange={(e) => onUpdate(cluster.id, { priority: Number(e.target.value) as Cluster['priority'] })}
+                disabled={isReadOnly}
+                className={`mt-1 w-full px-3 py-2 text-sm bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 focus:bg-white transition-all ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
+              >
+                {[3, 2, 1].map(p => (
+                  <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Priority dropdown */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Priority</label>
-            <select
-              value={cluster.priority}
-              onChange={(e) => onUpdate(cluster.id, { priority: Number(e.target.value) as Cluster['priority'] })}
-              disabled={isReadOnly}
-              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
-            >
-              {[3, 2, 1].map(p => (
-                <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
-              ))}
-            </select>
-          </div>
+          {/* Reason / description was removed per UX request. cluster.reason
+              is still preserved on the data model so Linda's prompts can use
+              it. Edit it from the JD config page if needed. */}
 
-          {/* Reason / description */}
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Reason / Description</label>
-            <textarea
-              value={cluster.reason ?? ''}
-              onChange={(e) => onUpdate(cluster.id, { reason: e.target.value })}
-              disabled={isReadOnly}
-              rows={2}
-              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
-              placeholder="Why is this cluster important?"
-            />
-          </div>
-
-          {/* Skills — grouped by type (Skill / Command) */}
+          {/* Skills — single section, type-coded chip colors (Skill = violet, Command = sky-blue) */}
           <div>
             {visibleClusterSkills.length > 0 ? (
               (() => {
-                const groups: Record<SkillType, string[]> = { Skill: [], Command: [] };
-                for (const s of visibleClusterSkills) {
-                  const rawType = skillTypeLookup?.get(s.toLowerCase().trim()) ?? 'Skill';
-                  // Coerce any legacy 'Certification' entries (from older saved
-                  // sessions) into 'Skill' so they still render somewhere.
-                  const t: SkillType = rawType === 'Command' ? 'Command' : 'Skill';
-                  groups[t].push(s);
-                }
-                // Order within each type: recruiter-typed main skills first,
-                // AI-derived sub-skills / merged canonicals after. Stable sort
-                // preserves original ordering within each segment.
-                const sortMainFirst = (arr: string[]) =>
-                  [...arr].sort((a, b) => {
-                    const aDerived = isAiDerivedSkill(a) ? 1 : 0;
-                    const bDerived = isAiDerivedSkill(b) ? 1 : 0;
-                    return aDerived - bDerived;
-                  });
-                groups.Skill = sortMainFirst(groups.Skill);
-                groups.Command = sortMainFirst(groups.Command);
-                const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
-                  { type: 'Skill', label: 'Skills', chipClass: 'bg-purple-50 border-purple-200 text-purple-700' },
-                  { type: 'Command', label: 'Commands', chipClass: 'bg-blue-50 border-blue-200 text-blue-700' },
-                ];
-                const visible = groupOrder.filter(g => groups[g.type].length > 0);
+                // Sort recruiter-typed main skills first, AI-derived next; within each
+                // segment, Skills before Commands so the eye groups by color naturally.
+                const sorted = [...visibleClusterSkills].sort((a, b) => {
+                  const aDerived = isAiDerivedSkill(a) ? 1 : 0;
+                  const bDerived = isAiDerivedSkill(b) ? 1 : 0;
+                  if (aDerived !== bDerived) return aDerived - bDerived;
+                  const aType = skillTypeLookup?.get(a.toLowerCase().trim()) === 'Command' ? 1 : 0;
+                  const bType = skillTypeLookup?.get(b.toLowerCase().trim()) === 'Command' ? 1 : 0;
+                  return aType - bType;
+                });
+                const totalCount = sorted.length;
+                const commandCount = sorted.filter(s =>
+                  skillTypeLookup?.get(s.toLowerCase().trim()) === 'Command'
+                ).length;
                 return (
-                  <div className="space-y-2 mt-1.5">
-                    {visible.map(g => (
-                      <div key={g.type}>
-                        {/* Always show the type sub-header so Skills and
-                            Commands are visually separated within every
-                            cluster card, even when only one type is present. */}
-                        <div className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
-                          {g.label} ({groups[g.type].length})
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {groups[g.type].map((s) => (
-                            <DraggableClusterSkill
-                              key={s}
-                              skillName={s}
-                              clusterId={cluster.id}
-                              category={category}
-                              onRemove={onRemoveSkill}
-                              isReadOnly={isReadOnly}
-                              chipClass={g.chipClass}
-                              isAiDerived={isAiDerivedSkill(s)}
-                            />
-                          ))}
-                        </div>
+                  <div className="mt-1.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                        Skills ({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})
                       </div>
-                    ))}
+                      {commandCount > 0 && (
+                        <div className="flex items-center gap-2 text-[9px] text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Command
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sorted.map((s) => {
+                        const isCmd = skillTypeLookup?.get(s.toLowerCase().trim()) === 'Command';
+                        const chipClass = isCmd
+                          ? 'bg-sky-50 border-sky-200 text-sky-700'
+                          : 'bg-violet-50 border-violet-200 text-violet-700';
+                        return (
+                          <DraggableClusterSkill
+                            key={s}
+                            skillName={s}
+                            clusterId={cluster.id}
+                            category={category}
+                            onRemove={onRemoveSkill}
+                            isReadOnly={isReadOnly}
+                            chipClass={chipClass}
+                            isAiDerived={isAiDerivedSkill(s)}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })()
             ) : (
               <p className="text-xs text-gray-400 mt-1">No skills assigned. Drag skills here from other clusters.</p>
             )}
-            {!isReadOnly && <p className="text-[9px] text-gray-300 mt-1">Drag skills to move between clusters</p>}
+            {!isReadOnly && <p className="text-[9px] text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
           </div>
 
           {/* Remove cluster button — hidden when read-only */}
@@ -536,27 +533,36 @@ function CategorySection({
   const atLimit = maxClusters > 0 && clusters.length >= maxClusters;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+    <div className="relative bg-white rounded-2xl border border-gray-200/70 ring-1 ring-black/[0.02] shadow-[0_1px_3px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(59,130,246,0.08)] overflow-hidden">
+      {/* Subtle ambient gradient on top edge */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-blue/30 to-transparent" />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
-        <div className="flex items-center gap-2.5">
-          {icon}
-          <h2 className="text-base font-semibold text-gray-900 tracking-tight">{title}</h2>
-          {timeMin > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-              <Clock className="w-3 h-3" />
-              {timeMin} min
-            </span>
-          )}
-          {maxClusters > 0 && (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-              atLimit
-                ? 'bg-red-50 text-red-700 border-red-200 ring-1 ring-red-200'
-                : 'bg-slate-50 text-gray-600 border-gray-200'
-            }`}>
-              {clusters.length}/{maxClusters} clusters
-            </span>
-          )}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100/80 bg-gradient-to-br from-slate-50/80 via-white to-brand-blue/[0.02]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue/5 ring-1 ring-brand-blue/15 text-brand-blue shadow-sm shadow-brand-blue/10">
+            {icon}
+          </div>
+          <div className="flex flex-col">
+            <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              {timeMin > 0 && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                  <Clock className="w-2.5 h-2.5" />
+                  {timeMin} min
+                </span>
+              )}
+              {maxClusters > 0 && (
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium ${
+                  atLimit
+                    ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                    : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200/70'
+                }`}>
+                  {clusters.length}/{maxClusters} clusters
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         {/* Hide Add Cluster when read-only (flexible finalized) */}
         {!isReadOnly && (
@@ -564,77 +570,88 @@ function CategorySection({
             onClick={() => onAddCluster(category)}
             disabled={atLimit}
             title={atLimit ? `Maximum ${maxClusters} clusters allowed` : undefined}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+            className={`group flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
               atLimit
                 ? 'text-gray-400 border border-gray-200 cursor-not-allowed bg-gray-50'
-                : 'text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                : 'text-white bg-gradient-to-br from-brand-blue to-brand-blue-2 hover:shadow-lg hover:shadow-brand-blue/30 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 hover:-translate-y-0.5'
             }`}
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform duration-200" />
             Add Cluster
           </button>
         )}
       </div>
 
-      {/* ── Pool section: split into Skills / Commands ── */}
+      {/* ── Pool section: unified Skills (Commands color-coded inline) ── */}
       {(() => {
         // Show only recruiter-typed (main) entries. Auto-derived sub-skills
         // from /expand-skills are intentionally hidden here per spec.
         const visibleSkills = mainSkillSet && mainSkillSet.size > 0
           ? skills.filter(s => mainSkillSet.has(s.name.toLowerCase().trim()))
           : skills;
-        const groups: Record<SkillType, SkillEntry[]> = { Skill: [], Command: [] };
-        for (const e of visibleSkills) {
-          const t: SkillType = (e.type === 'Command') ? 'Command' : 'Skill';
-          groups[t].push(e);
-        }
-        const groupOrder: { type: SkillType; label: string; chipClass: string }[] = [
-          { type: 'Skill',         label: 'Skills',         chipClass: 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200' },
-          { type: 'Command',       label: 'Commands',       chipClass: 'bg-blue-50 text-blue-700 border-blue-200' },
-        ];
-        const visibleGroups = groupOrder.filter(g => groups[g.type].length > 0);
+        // Single unified list — Commands are no longer rendered under a
+        // separate header. Skills first, Commands after, distinguishable
+        // by chip color (violet vs sky).
+        const sorted = [...visibleSkills].sort((a, b) => {
+          const aCmd = a.type === 'Command' ? 1 : 0;
+          const bCmd = b.type === 'Command' ? 1 : 0;
+          return aCmd - bCmd;
+        });
+        const totalCount = sorted.length;
+        const commandCount = sorted.filter(e => e.type === 'Command').length;
 
-        const renderChip = (name: string, chipClass: string) => (
-          <span
-            key={name}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${chipClass}`}
-          >
-            {name}
-            {!isReadOnly && (
-              <button
-                type="button"
-                onClick={() => onRemoveSkillFromPool?.(name)}
-                className="ml-0.5 hover:text-red-500 transition-colors"
-                aria-label="Remove" title="Remove"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </span>
-        );
+        const renderChip = (entry: SkillEntry) => {
+          const isCmd = entry.type === 'Command';
+          const chipClass = isCmd
+            ? 'bg-sky-50 text-sky-700 border-sky-200'
+            : 'bg-violet-50 text-violet-700 border-violet-200';
+          return (
+            <span
+              key={entry.name}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:-translate-y-0.5 hover:shadow-sm ${chipClass}`}
+            >
+              {entry.name}
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => onRemoveSkillFromPool?.(entry.name)}
+                  className="ml-0.5 opacity-50 hover:opacity-100 hover:text-red-500 transition-all hover:scale-110"
+                  aria-label="Remove" title="Remove"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </span>
+          );
+        };
 
         return (
-          <div className="px-4 pt-4 pb-2 border-b border-gray-100">
-            {visibleGroups.length === 0 ? (
+          <div className="px-4 pt-4 pb-3 border-b border-gray-100/70">
+            {totalCount === 0 ? (
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skills</span>
                 <span className="text-xs text-gray-400">0</span>
               </div>
             ) : (
-              <div className="space-y-3 mb-3">
-                {visibleGroups.map(g => (
-                  <div key={g.type}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{g.label}</span>
-                      <span className="text-xs text-gray-400">
-                        {groups[g.type].length} {g.label.toLowerCase()}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Skills <span className="text-gray-400 font-normal">({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})</span>
+                  </span>
+                  {commandCount > 0 && (
+                    <div className="flex items-center gap-2.5 text-[10px] text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Command
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {groups[g.type].map(e => renderChip(e.name, g.chipClass))}
-                    </div>
-                  </div>
-                ))}
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {sorted.map(e => renderChip(e))}
+                </div>
               </div>
             )}
 
@@ -940,7 +957,7 @@ export default function AIInterviewClusters() {
             priority: normalizePriority(c.priority),
           }));
           setMthClusters(mthRestored);
-          mthRestored.forEach((c: any) => { if (c.id) initialExpandIds.push(c.id); });
+          // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
         if (si.nth_clusters?.length) {
           const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
@@ -953,7 +970,7 @@ export default function AIInterviewClusters() {
             priority: normalizePriority(c.priority),
           }));
           setNthClusters(nthRestored);
-          nthRestored.forEach((c: any) => { if (c.id) initialExpandIds.push(c.id); });
+          // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
         // Open all clusters by default so AI-derived (sparkle) skills are
         // visible immediately. Otherwise users see only headers and think
@@ -1460,10 +1477,10 @@ export default function AIInterviewClusters() {
       if (nthExpanded) setNthSkills(nthExpanded);
       setMthClusters(newMthClusters);
       setNthClusters(newNthClusters);
-      // Auto-expand all generated clusters so AI-merged skills (with sparkle
-      // markers) are visible immediately. Without this, users only see the
-      // cluster headers and assume nothing changed.
-      setExpandedIds(new Set([...newMthClusters, ...newNthClusters].map(c => c.id)));
+      // Cluster cards stay collapsed by default per UX spec — recruiter
+      // opens individual clusters they want to inspect. Generated AI-merged
+      // skills are still discoverable via the cluster header counts.
+      setExpandedIds(new Set());
 
       // Auto-save generated clusters immediately so they survive a page refresh.
       // We use the local vars (not state) because setState is async and hasn't updated yet.
@@ -1745,6 +1762,34 @@ export default function AIInterviewClusters() {
       if (isFlexible) {
         si.flexible_finalized = finalize ? true : isFinalized;
       }
+      // AI-driven skill→question mapping (only on finalize). Replaces the local
+      // JS distribute() formula that capped secondaries at 2/Q and silently
+      // dropped extra skills. Server guarantees every input skill appears at
+      // least once (primary or secondary) — see /distribute-skills rule #5.
+      if (finalize && isFixed) {
+        try {
+          const mthQs = timedAllocation.mthQuestions ?? 0;
+          const nthQs = (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
+          if (mthQs > 0 || nthQs > 0) {
+            const dist = await aiInterviewService.distributeSkills({
+              mthClusters: mthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })),
+              nthClusters: nthEnabled ? nthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })) : [],
+              mthQuestions: mthQs,
+              nthQuestions: nthQs,
+              jdTitle: config.jd_title,
+              jdDescription: (config as any).jd_description,
+            });
+            si.skill_distribution = {
+              mth_questions: dist.mth_questions || [],
+              nth_questions: dist.nth_questions || [],
+              generated_at: new Date().toISOString(),
+            };
+          }
+        } catch (distErr) {
+          // Non-fatal — clusters still persist, the panel falls back to local distribute()
+          console.warn('[Clusters] AI skill distribution failed; falling back to local preview', distErr);
+        }
+      }
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -1887,36 +1932,7 @@ export default function AIInterviewClusters() {
           {/* Header */}
           <div className="mb-6">
             {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6">
-              {STEPS.map((label, i) => {
-                const stepNum = i + 1;
-                const isCompleted = stepNum < CURRENT_STEP;
-                const isCurrent = stepNum === CURRENT_STEP;
-                return (
-                  <React.Fragment key={label}>
-                    {isCompleted ? (
-                      <>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100 ring-1 ring-green-200">
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        </div>
-                        <span className="text-sm text-gray-500">{label}</span>
-                      </>
-                    ) : isCurrent ? (
-                      <>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-brand-blue text-white text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">{stepNum}</div>
-                        <span className="text-sm text-brand-blue font-medium">{label}</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 text-gray-400 text-sm">{stepNum}</div>
-                        <span className="text-sm text-gray-400">{label}</span>
-                      </>
-                    )}
-                    {i < STEPS.length - 1 && <div className="w-10 h-px bg-gray-200" />}
-                  </React.Fragment>
-                );
-              })}
-            </div>
+            <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
 
             {/* Header row */}
             <div className="flex items-center justify-between">
@@ -1938,7 +1954,11 @@ export default function AIInterviewClusters() {
                       Question Distribution popover. Tiny (6×6), neutral gray, no hover ring,
                       sits flush with the heading so casual users don't register it. */}
                     {isFixed && (mthClusters.length > 0 || (nthEnabled && nthClusters.length > 0)) && (() => {
-                      type DistRow = { q: number; primary: string; secondaries: string[]; cluster: string; priority: number };
+                      // Each secondary carries its own priority so the UI can
+                      // render per-skill High/Med/Low badges (secondaries may
+                      // come from a 0-alloc orphan cluster with a different
+                      // priority than the primary's cluster).
+                      type DistRow = { q: number; primary: string; secondaries: { name: string; priority: number }[]; cluster: string; priority: number };
                       // Distribute skills across N questions deterministically.
                       // Spec-fixes vs the naive version:
                       //   - Primary eligibility uses ONLY the "used-as-primary" set.
@@ -1966,14 +1986,17 @@ export default function AIInterviewClusters() {
                         // Guarantees every non-empty cluster gets at least 1 slot when
                         // qCount >= cluster count (so no cluster goes orphaned with all
                         // its skills lost). Any leftover skills become secondaries.
+                        // Allocate Qs by skill_count so a cluster with many skills
+                        // gets enough Qs to evaluate them (~5 skills/Q max).
+                        // Priority is used only for SORT order (high-priority Qs come
+                        // first), not for allocation count — otherwise low-priority
+                        // clusters with many skills get only 1 Q and pile 16 skills
+                        // onto a single question.
                         const skillCounts = sorted.map(c => (c.skills?.length ?? 0));
-                        const totalWeight = sorted.reduce(
-                          (sum, c, i) => sum + ((c.priority ?? 1) * skillCounts[i]),
-                          0,
-                        );
-                        const rawAlloc = sorted.map((c, i) =>
-                          totalWeight > 0
-                            ? (qCount * (c.priority ?? 1) * skillCounts[i]) / totalWeight
+                        const totalSkills = skillCounts.reduce((s, n) => s + n, 0);
+                        const rawAlloc = sorted.map((_, i) =>
+                          totalSkills > 0
+                            ? (qCount * skillCounts[i]) / totalSkills
                             : 0,
                         );
                         // Initial: round down, min 1 if cluster has skills and budget allows
@@ -2040,10 +2063,16 @@ export default function AIInterviewClusters() {
                           }
                           const primaries = skills.slice(0, alloc);
                           const leftover = skills.slice(alloc); // become secondaries within this cluster
+                          // Distribute leftover evenly across primaries — NO cap.
+                          // Every skill must appear somewhere; the panel shows all of them.
                           for (let i = 0; i < primaries.length; i++) {
                             qNum += 1;
-                            // Distribute leftover skills as 2-per-Q secondaries, starting from Q1 of the cluster.
-                            const secs = leftover.slice(i * 2, i * 2 + 2);
+                            const start = Math.floor((i * leftover.length) / primaries.length);
+                            const end = Math.floor(((i + 1) * leftover.length) / primaries.length);
+                            const secs = leftover.slice(start, end).map(s => ({
+                              name: s,
+                              priority: cluster.priority ?? 1,
+                            }));
                             out.push({
                               q: qNum,
                               primary: primaries[i],
@@ -2055,12 +2084,17 @@ export default function AIInterviewClusters() {
                         }
 
                         // ── STEP 3: place orphan-cluster skills as cross-cluster secondaries ──
-                        // Cap at 2 secondaries per Q. Skip if full. (Rare edge case when
-                        // q_count < cluster_count → some clusters had alloc=0.)
+                        // No cap — every orphan skill lands on the Q with the fewest secondaries
+                        // so the spread stays balanced. (Rare edge case when q_count < cluster_count.)
                         for (const o of orphanSkills) {
-                          const target = out.find(r => r.secondaries.length < 2);
+                          const target = out
+                            .slice()
+                            .sort((a, b) => a.secondaries.length - b.secondaries.length)[0];
                           if (!target) break;
-                          target.secondaries.push(o.skill);
+                          target.secondaries.push({
+                            name: o.skill,
+                            priority: o.cluster.priority ?? 1,
+                          });
                         }
                         return out;
                       };
@@ -2068,8 +2102,8 @@ export default function AIInterviewClusters() {
                       const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : [];
                       const totalQ = mthDist.length + nthDist.length;
                       const totalSkillsCovered = new Set([
-                        ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
-                        ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
+                        ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
+                        ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
                       ]).size;
                       const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
                       const priorityClass = (p: number) =>
@@ -2079,28 +2113,36 @@ export default function AIInterviewClusters() {
                       const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
                         <div
                           key={`${sectionKey}-${row.q}`}
-                          className="grid grid-cols-[36px_1fr_auto] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                          className="grid grid-cols-[36px_1fr] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
                         >
                           <span className={`text-[11px] font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
                             Q{row.q}
                           </span>
                           <div className="min-w-0 flex flex-wrap items-center gap-1">
+                            {/* Primary skill carries an inline priority label
+                                like the secondaries do, so every skill shows
+                                its own High/Med/Low and the redundant trailing
+                                row-level badge is gone. */}
                             <span className="text-xs font-medium text-gray-900">{row.primary}</span>
+                            <span className={`text-[9px] font-semibold px-1 py-0 rounded ring-1 ${priorityClass(row.priority)}`}>
+                              {priorityLabel(row.priority)}
+                            </span>
                             {row.secondaries.length > 0 && (
                               <>
                                 <span className="text-gray-300 text-[10px]">+</span>
                                 {row.secondaries.map((s, i) => (
-                                  <span key={`${row.q}-sec-${i}`} className="px-1 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
-                                    {s}
+                                  <span
+                                    key={`${row.q}-sec-${i}`}
+                                    className={`inline-flex items-center gap-1 px-1 py-0 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
+                                  >
+                                    {s.name}
+                                    <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
                                   </span>
                                 ))}
                               </>
                             )}
                             <span className="text-[10px] text-gray-400 ml-0.5 truncate max-w-[140px]">· {row.cluster}</span>
                           </div>
-                          <span className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
-                            {priorityLabel(row.priority)}
-                          </span>
                         </div>
                       );
                       return (
@@ -2361,7 +2403,7 @@ export default function AIInterviewClusters() {
                 onRemoveSkill={removeSkillFromCluster}
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
-                isReadOnly={true}
+                isReadOnly={isFlexible && isFinalized}
                 skills={mthDisplaySkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
@@ -2393,7 +2435,7 @@ export default function AIInterviewClusters() {
                   onRemoveSkill={removeSkillFromCluster}
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
-                  isReadOnly={true}
+                  isReadOnly={isFlexible && isFinalized}
                   skills={nthDisplaySkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}
@@ -2415,6 +2457,13 @@ export default function AIInterviewClusters() {
           {false && isFixed && (mthClusters.length > 0 || (nthEnabled && nthClusters.length > 0)) && (() => {
             // Deterministic distribution — mirrors backend _fallback_distribute.
             type DistRow = { q: number; primary: string; secondaries: string[]; cluster: string; priority: number };
+            // Local preview: distributes skills round-robin across Qs (primaries)
+            // and spreads ALL remaining unused skills as secondaries on Qs of
+            // the same cluster — no fixed cap, so 60 skills in = 60 covered out.
+            // The authoritative mapping is the AI-generated one persisted in
+            // si.skill_distribution at save time (see saveAndNavigate). The
+            // panel below renders that when present, falling back to this
+            // local function for the live in-progress preview.
             const distribute = (clusters: Cluster[], qCount: number): DistRow[] => {
               if (qCount <= 0 || clusters.length === 0) return [];
               const sorted = [...clusters]
@@ -2430,6 +2479,7 @@ export default function AIInterviewClusters() {
               const used = new Set<string>();
               const out: DistRow[] = [];
               let idx = 0;
+              // Pass 1: primaries
               for (let q = 1; q <= qCount; q++) {
                 let pick: { skill: string; cluster: Cluster } | null = null;
                 for (let attempts = 0; attempts < flat.length; attempts++) {
@@ -2437,25 +2487,31 @@ export default function AIInterviewClusters() {
                   idx++;
                   if (!used.has(cand.skill.toLowerCase())) { pick = cand; break; }
                 }
-                if (!pick) pick = flat[(q - 1) % flat.length]; // forced duplication
+                if (!pick) pick = flat[(q - 1) % flat.length];
                 used.add(pick.skill.toLowerCase());
-                // Secondaries: up to 2 from the SAME cluster as the primary —
-                // prefer unused; fall back to same-cluster duplicates so a
-                // question always evaluates the multi-skill set when possible.
-                const sameCluster = (pick.cluster.skills ?? []).filter(
-                  s => typeof s === 'string' && s.trim()
-                    && s.toLowerCase() !== pick!.skill.toLowerCase()
-                );
-                const unusedSecs = sameCluster.filter(s => !used.has(s.toLowerCase()));
-                const secondaries = (unusedSecs.length >= 2 ? unusedSecs : sameCluster).slice(0, 2);
-                for (const s of secondaries) used.add(s.toLowerCase());
                 out.push({
                   q,
                   primary: pick.skill,
-                  secondaries,
+                  secondaries: [],
                   cluster: pick.cluster.name ?? '',
                   priority: pick.cluster.priority ?? 1,
                 });
+              }
+              // Pass 2: distribute ALL remaining unused skills as secondaries —
+              // place each on the same-cluster Q with the fewest secondaries so
+              // they spread evenly. No cap; every skill must appear.
+              const remaining = flat.filter(({ skill }) => !used.has(skill.toLowerCase()));
+              for (const { skill, cluster } of remaining) {
+                const candidates = out
+                  .filter(row => row.cluster === (cluster.name ?? ''))
+                  .sort((a, b) => a.secondaries.length - b.secondaries.length);
+                const target = candidates[0] ?? out
+                  .slice()
+                  .sort((a, b) => a.secondaries.length - b.secondaries.length)[0];
+                if (target) {
+                  target.secondaries.push(skill);
+                  used.add(skill.toLowerCase());
+                }
               }
               return out;
             };

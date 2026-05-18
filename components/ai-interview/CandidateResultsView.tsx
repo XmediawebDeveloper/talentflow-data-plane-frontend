@@ -1656,7 +1656,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 };
 
                 const renderAnswer = (item: any, key: string) => {
-                  const isSkipped = item.response_type === 'skipped';
+                  const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
+                  const isNotAsked = item.response_type === 'not_asked';
                   const answerText = item.answer || '';
                   if (!answerText) return null;
                   const isExpanded = expandedQuestions.has(key);
@@ -1778,7 +1779,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   const item = g.main;
                   const cardKey = `${sectionKey}-${idx}-${item.question_number ?? idx}`;
                   const isExpanded = expandedQuestions.has(cardKey);
-                  const isSkipped = item.response_type === 'skipped';
+                  const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
+                  const isNotAsked = item.response_type === 'not_asked';
 
                   // Collect all skills for this question: primary topic + secondary_skills
                   type SkillRow = { skill: string; score: number; priority: number };
@@ -1830,7 +1832,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               )}
                               {isSkipped && (
                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
-                                  Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
+                                  {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
                                 </span>
                               )}
                             </div>
@@ -1951,7 +1953,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   const item = g.main;
                   const cardKey = `hr-${idx}-${item.question_number ?? idx}`;
                   const isExpanded = expandedQuestions.has(cardKey);
-                  const isSkipped = item.response_type === 'skipped';
+                  const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
+                  const isNotAsked = item.response_type === 'not_asked';
                   const duration = item.duration_seconds;
 
                   return (
@@ -1977,7 +1980,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               )}
                               {isSkipped && (
                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
-                                  Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
+                                  {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
                                 </span>
                               )}
                             </div>
@@ -2133,7 +2136,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 // Build Q/F/D numbering using question_history intent data.
                 // Strategy: build an intent lookup from ALL question_history entries
                 // (keyed by question text prefix), then classify each assistant message.
-                type QType = 'followup' | 'deepdive' | 'main';
+                type QType = 'followup' | 'deepdive' | 'main' | 'closing';
                 const _chatQh = (eval_.question_history || []) as any[];
 
                 // Map: first-60-chars of question → intent ('follow_up'|'probe'|'deep_dive'|'explore')
@@ -2178,12 +2181,40 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 let currentQtype: QType = 'main';
                 let fuCounter = 0;
                 let ddCounter = 0;
+                let clCounter = 0;  // Clarifications under current main Q
+                // Detect clarifications by either explicit flag (backend) or
+                // the recognizable rephrase opener Linda uses.
+                const isClarificationMsg = (m: any): boolean => {
+                  if (m.is_clarification === true) return true;
+                  const t = (m.content || '').toLowerCase().trim();
+                  return (
+                    t.startsWith("let's stick to this question") ||
+                    t.startsWith("let me put it another way") ||
+                    t.startsWith("to put it differently") ||
+                    t.startsWith("let me rephrase")
+                  );
+                };
+                // Detect the closing / wrap-up message — should not get a Q label.
+                const isClosingMsg = (m: any): boolean => {
+                  if (m.is_closing === true || m.kind === 'closing') return true;
+                  const t = (m.content || '').toLowerCase();
+                  return (
+                    t.includes('thank you for completing the interview') ||
+                    t.includes('thank you for your time today') ||
+                    (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+                  );
+                };
                 for (const m of messages) {
                   if (m.role === 'assistant') {
                     const intent = _lookupIntent(m.content);
                     const isDd = intent === 'deep_dive';
                     const isFu = !isDd && (intent === 'follow_up' || intent === 'probe' || !!m.is_follow_up);
-                    if (isDd) {
+                    const isCl = !isDd && !isFu && isClarificationMsg(m);
+                    const isClosing = !isDd && !isFu && !isCl && isClosingMsg(m);
+                    if (isClosing) {
+                      currentLabel = 'End';
+                      currentQtype = 'closing';
+                    } else if (isDd) {
                       ddCounter += 1;
                       currentLabel = `D${ddCounter}`;
                       currentQtype = 'deepdive';
@@ -2191,12 +2222,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       fuCounter += 1;
                       currentLabel = `F${fuCounter}`;
                       currentQtype = 'followup';
+                    } else if (isCl) {
+                      clCounter += 1;
+                      currentLabel = `CL${clCounter}`;
+                      currentQtype = 'main'; // clarification stays inside its parent Q's group
                     } else {
                       mainCount += 1;
                       currentLabel = m.question_id || `Q${mainCount}`;
                       currentQtype = 'main';
                       fuCounter = 0;
                       ddCounter = 0;
+                      clCounter = 0;
                     }
                   }
                   labeled.push({ msg: m, label: currentLabel, isFollowUp: currentQtype !== 'main', qtype: currentQtype });
@@ -2355,7 +2391,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         return '';
                       };
 
-                      type SubType = 'followup' | 'deepdive';
+                      type SubType = 'followup' | 'deepdive' | 'clarification';
                       type FU = {
                         label: string;
                         question: string;
@@ -2379,12 +2415,54 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       let pendingAI: { label: string; text: string; isSub: boolean; subType: SubType } | null = null;
                       let _tblFuCtr = 0;
                       let _tblDdCtr = 0;
+                      let _tblClCtr = 0;
+                      const _tblIsClarif = (m: any): boolean => {
+                        if (m.is_clarification === true) return true;
+                        const t = (m.content || '').toLowerCase().trim();
+                        return (
+                          t.startsWith("let's stick to this question") ||
+                          t.startsWith("let me put it another way") ||
+                          t.startsWith("to put it differently") ||
+                          t.startsWith("let me rephrase")
+                        );
+                      };
+                      const _tblIsClosing = (m: any): boolean => {
+                        if (m.is_closing === true || m.kind === 'closing') return true;
+                        const t = (m.content || '').toLowerCase();
+                        return (
+                          t.includes('thank you for completing the interview') ||
+                          t.includes('thank you for your time today') ||
+                          (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+                        );
+                      };
 
                       for (const m of messages) {
                         if (m.role === 'assistant') {
                           const _tblMsgIntent = _tblLookup(m.content);
                           const isDd = _tblMsgIntent === 'deep_dive';
                           const isFu = !isDd && (_tblMsgIntent === 'follow_up' || _tblMsgIntent === 'probe' || !!m.is_follow_up);
+                          const isCl = !isDd && !isFu && _tblIsClarif(m);
+                          const isClosing = !isDd && !isFu && !isCl && _tblIsClosing(m);
+                          if (isClosing) {
+                            // Close out the previous Q group, then start a standalone
+                            // 'End' group so the closing message renders as its own
+                            // row in the table with type='End' (not a Q number).
+                            if (current) groups.push(current);
+                            current = {
+                              mainLabel: 'End',
+                              mainQuestion: m.content || '',
+                              mainRaw: '',
+                              mainCorrected: '',
+                              language: '',
+                              timestamp: m.timestamp || '',
+                              followUps: [],
+                            };
+                            pendingAI = { label: 'End', text: m.content || '', isSub: false, subType: 'followup' };
+                            _tblFuCtr = 0;
+                            _tblDdCtr = 0;
+                            _tblClCtr = 0;
+                            continue;
+                          }
                           if (isDd) {
                             _tblDdCtr += 1;
                             if (!current) {
@@ -2397,6 +2475,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               current = { mainLabel: 'Q?', mainQuestion: '', mainRaw: '', mainCorrected: '', language: '', timestamp: m.timestamp || '', followUps: [] };
                             }
                             pendingAI = { label: `F${_tblFuCtr}`, text: m.content || '', isSub: true, subType: 'followup' };
+                          } else if (isCl) {
+                            _tblClCtr += 1;
+                            if (!current) {
+                              current = { mainLabel: 'Q?', mainQuestion: '', mainRaw: '', mainCorrected: '', language: '', timestamp: m.timestamp || '', followUps: [] };
+                            }
+                            pendingAI = { label: `CL${_tblClCtr}`, text: m.content || '', isSub: true, subType: 'clarification' };
                           } else {
                             if (current) groups.push(current);
                             const lbl = m.question_id || `Q${groups.length + 1}`;
@@ -2412,6 +2496,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             pendingAI = { label: lbl, text: m.content || '', isSub: false, subType: 'followup' };
                             _tblFuCtr = 0;
                             _tblDdCtr = 0;
+                            _tblClCtr = 0;
                           }
                         } else if (m.role === 'user' && current) {
                           const raw = (m.raw_content || m.content || '') as string;
@@ -2446,7 +2531,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       };
                       // Flatten groups into sequential rows: one main row + one row per follow-up.
                       // Follow-ups keep the parent's Question ID (e.g. Q1) and are tagged Type="Follow-up".
-                      type RowType = 'Main' | 'Followup' | 'Deep Dive';
+                      type RowType = 'Main' | 'Followup' | 'Deep Dive' | 'Clarification' | 'End';
                       type FlatRow = {
                         sno: number;
                         questionId: string;
@@ -2464,7 +2549,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         flatRows.push({
                           sno,
                           questionId: g.mainLabel,
-                          type: 'Main',
+                          type: g.mainLabel === 'End' ? 'End' : 'Main',
                           question: g.mainQuestion,
                           raw: g.mainRaw,
                           corrected: g.mainCorrected,
@@ -2476,7 +2561,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           flatRows.push({
                             sno,
                             questionId: g.mainLabel,
-                            type: fu.subType === 'deepdive' ? 'Deep Dive' : 'Followup',
+                            type: fu.subType === 'deepdive' ? 'Deep Dive'
+                                : fu.subType === 'clarification' ? 'Clarification'
+                                : 'Followup',
                             question: fu.question,
                             raw: fu.raw,
                             corrected: fu.corrected,

@@ -34,10 +34,14 @@ export function normalizePriority(p: number): ClusterPriority {
   return 1;              // 1 or below → Low
 }
 
+// P-label follows industry convention: P1 = highest priority (Must-Have),
+// P3 = lowest priority (Nice-to-Have). The internal numeric scale stays
+// 1=Low \u2192 3=High; only the display label maps the highest number to P1.
+// EvaluationDashboardV2.tsx uses the same convention (line 577-579).
 export const PRIORITY_LABELS: Record<ClusterPriority, PriorityLabelInfo> = {
-  3: { label: 'P3 \u2013 High',   short: 'High',   color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  3: { label: 'P1 \u2013 High',   short: 'High',   color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
   2: { label: 'P2 \u2013 Medium', short: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  1: { label: 'P1 \u2013 Low',    short: 'Low',    color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500'   },
+  1: { label: 'P3 \u2013 Low',    short: 'Low',    color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500'   },
 };
 
 export function getPriorityLabel(p: number): PriorityLabelInfo {
