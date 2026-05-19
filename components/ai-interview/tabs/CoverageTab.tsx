@@ -151,6 +151,31 @@ const COV_STYLES: Record<CovLevel, { label: string; badge: string; icon: any }> 
   not_covered: { label: 'Not Covered', badge: 'bg-gray-100 text-gray-500 border-gray-200',         icon: XCircle },
 };
 
+// Three-state Cluster Coverage status.
+//   not_asked          — skill never appeared in any question (gray)
+//   asked_no_evidence  — asked, but candidate gave no usable answer (yellow)
+//   asked_demonstrated — asked AND candidate answered at medium/high (green)
+// Note "asked_low" collapses into asked_no_evidence because a Low band means
+// the answer barely registered — recruiters generally want demonstrated vs
+// not-demonstrated, not a four-way ladder.
+type SkillStatus = 'not_asked' | 'asked_no_evidence' | 'asked_demonstrated';
+const STATUS_STYLES: Record<SkillStatus, { label: string; badge: string; icon: any; dot: string }> = {
+  not_asked:          { label: 'Not Asked',         badge: 'bg-gray-100 text-gray-500 border-gray-200',         icon: HelpCircle,    dot: 'bg-gray-300' },
+  asked_no_evidence:  { label: 'Asked · No Evidence', badge: 'bg-amber-50 text-amber-700 border-amber-200',      icon: AlertCircle,   dot: 'bg-amber-400' },
+  asked_demonstrated: { label: 'Asked · Demonstrated', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2,  dot: 'bg-emerald-500' },
+};
+function StatusBadge({ status, depth }: { status: SkillStatus; depth?: 'Low' | 'Medium' | 'High' }) {
+  const s = STATUS_STYLES[status];
+  const Icon = s.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.badge}`}>
+      <Icon className="w-3 h-3" />
+      {s.label}
+      {status === 'asked_demonstrated' && depth ? <span className="opacity-70">· {depth}</span> : null}
+    </span>
+  );
+}
+
 // ── Atoms ────────────────────────────────────────────────────────────────────
 
 function LevelBadge({ level }: { level: string }) {
@@ -413,6 +438,24 @@ export default function CoverageTab({
   const [coverageView, setCoverageView] = useState<'overview' | 'table'>('overview');
 
   const coverageMap: Record<string, string> = eval_?.skill_coverage_map || {};
+  // skill_assessed_map answers "was this skill asked about?" — independent of
+  // how well the candidate answered. Backend builds it from question text +
+  // question_history at-ask-time assignments. Falls back to deriving from the
+  // coverage map (legacy interviews predate this field) so older reports
+  // still render: anything non-not_started is treated as asked.
+  const assessedMapRaw: Record<string, boolean> = eval_?.skill_assessed_map || {};
+  const hasAssessedMap = Object.keys(assessedMapRaw).length > 0;
+  const isSkillAsked = (skill: string): boolean => {
+    const sl = skill.toLowerCase();
+    if (hasAssessedMap) {
+      const key = Object.keys(assessedMapRaw).find(k => k.toLowerCase() === sl);
+      return key ? !!assessedMapRaw[key] : false;
+    }
+    // Legacy fallback: if coverage_map says anything other than not_started,
+    // the skill must have been asked (the old score-based path).
+    const cKey = Object.keys(coverageMap).find(k => k.toLowerCase() === sl);
+    return cKey ? coverageMap[cKey] !== 'not_started' : false;
+  };
   const coverageTrail: Record<string, TrailEntry[]> = eval_?.coverage_trail || {};
   const questionGroups: QuestionGroup[] = eval_?.question_groups || [];
   // Per-skill evidence from the backend — lists which questions produced
@@ -480,6 +523,29 @@ export default function CoverageTab({
     };
   }, [skillQuestionMap]);
 
+  // Three-state status for the Cluster Coverage view. Distinguishes "skill
+  // never came up" from "skill was probed but candidate didn't demonstrate".
+  const resolveSkillStatus = (skill: string): SkillStatus => {
+    const asked = isSkillAsked(skill);
+    if (!asked) return 'not_asked';
+    const level = resolveSkillLevelInternal(skill);
+    if (level === 'covered' || level === 'medium') return 'asked_demonstrated';
+    return 'asked_no_evidence';
+  };
+  // Original score-based resolver — kept under a different name so it can be
+  // composed by resolveSkillStatus above without recursive shadowing.
+  const resolveSkillLevelInternal = (skill: string): string => {
+    const sl = skill.toLowerCase();
+    const keyMatch = Object.keys(coverageMap).find(k => k.toLowerCase() === sl);
+    if (keyMatch) return coverageMap[keyMatch];
+    if (liveSkillCoverage) {
+      if (liveSkillCoverage.covered.some(s => s.toLowerCase() === sl)) return 'covered';
+      if (liveSkillCoverage.medium_covered.some(s => s.toLowerCase() === sl)) return 'medium';
+      if (liveSkillCoverage.low_covered.some(s => s.toLowerCase() === sl)) return 'low';
+      return 'not_started';
+    }
+    return 'not_started';
+  };
   // Resolve coverage level for a skill (eval takes priority, live as fallback)
   const resolveSkillLevel = (skill: string): string => {
     const sl = skill.toLowerCase();
@@ -937,17 +1003,24 @@ export default function CoverageTab({
                   const ci_ = ciByClusterName.get(cluster.name.toLowerCase());
                   const pLabel = priorityLabel(cluster.priority, ci_?.priority_label);
 
-                  // Cluster coverage stats
+                  // Cluster coverage stats — Assessment-based: a cluster is
+                  // covered when its skills were asked about, regardless of
+                  // how well the candidate demonstrated them. Demonstration
+                  // shows up as the depth chip on each skill row below.
+                  const skillsAsked = cluster.skills.filter(s => isSkillAsked(s));
+                  const skillsDemonstrated = cluster.skills.filter(s => {
+                    const lv = resolveSkillLevel(s);
+                    return lv === 'covered' || lv === 'medium';
+                  });
+                  // Legacy alias for the rest of the JSX. Kept identical to
+                  // the previous filter so other readers (e.g. exports) don't
+                  // break, but the headline % below now uses skillsAsked.
                   const skillsCovered = cluster.skills.filter(s => {
                     const lv = resolveSkillLevel(s);
                     return lv === 'covered' || lv === 'medium' || lv === 'low';
                   });
-                  const skillsStrong = cluster.skills.filter(s => {
-                    const lv = resolveSkillLevel(s);
-                    return lv === 'covered' || lv === 'medium';
-                  });
                   const clusterPct = cluster.skills.length > 0
-                    ? Math.round((skillsStrong.length / cluster.skills.length) * 100)
+                    ? Math.round((skillsAsked.length / cluster.skills.length) * 100)
                     : 0;
                   const clusterBarColor =
                     clusterPct >= 70 ? 'bg-emerald-500' :
@@ -969,7 +1042,9 @@ export default function CoverageTab({
                               {pLabel} Priority
                             </span>
                             <span className="text-[11px] text-gray-400">
-                              {skillsCovered.length}/{cluster.skills.length} skills addressed
+                              {skillsAsked.length}/{cluster.skills.length} asked
+                              <span className="text-gray-300"> · </span>
+                              {skillsDemonstrated.length} demonstrated
                             </span>
                           </div>
                           {/* Cluster progress bar */}
@@ -999,6 +1074,11 @@ export default function CoverageTab({
                           ) : (
                             cluster.skills.map(skill => {
                               const level = resolveSkillLevel(skill);
+                              const status = resolveSkillStatus(skill);
+                              const depth: 'Low' | 'Medium' | 'High' | undefined =
+                                level === 'covered' ? 'High' :
+                                level === 'medium'  ? 'Medium' :
+                                level === 'low'     ? 'Low'    : undefined;
                               const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
                               const groups = getQuestionsForSkill(skill);
                               const sk = skill.toLowerCase();
@@ -1016,9 +1096,9 @@ export default function CoverageTab({
                                     onClick={() => toggleSkill(skill)}
                                   >
                                     {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
-                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_STYLES[status].dot}`} />
                                     <span className="text-sm font-medium text-gray-900 flex-1 min-w-0 truncate">{skill}</span>
-                                    <LevelBadge level={level} />
+                                    <StatusBadge status={status} depth={depth} />
                                     {groups.length > 0 && (
                                       <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-500">
                                         <MessageSquare className="w-3 h-3" />

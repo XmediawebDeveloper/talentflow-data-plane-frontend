@@ -90,6 +90,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [revokeTargetAssessment, setRevokeTargetAssessment] = useState<any | null>(null);
   const [revokeCount, setRevokeCount] = useState<number | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
+  // Set of assessment IDs revoked in THIS session. Survives reloadAssessments
+  // so the Share / Revoke buttons stay sealed even on backends that don't
+  // yet return the has_revoked_invites flag. Cleared on full page reload.
+  const [locallyRevokedIds, setLocallyRevokedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
@@ -186,10 +190,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       created_by_name: a.created_by_name || 'System',
       version: a.version || 1,
       // Backend computes the 3-version cap and the "only version 1 can be
-      // cloned" rule. Frontend just disables the button when can_clone is
-      // false. Older backends that don't return this field default to true.
+      // cloned" rule. We split it into two signals so the UI can express
+      // both states distinctly:
+      //   clone_button_disabled → Draft / clone (V2, V3) → greyed-out button
+      //   clone_cap_reached → V1 at the 3-version cap → button stays
+      //     clickable but click opens a "max reached" popup
+      // can_clone is the legacy combined flag (kept for safety).
       can_clone: a.can_clone !== undefined ? a.can_clone : true,
+      clone_button_disabled: a.clone_button_disabled === true,
+      clone_cap_reached: a.clone_cap_reached === true,
       jd_assessment_count: a.jd_assessment_count,
+      // Once invites are revoked the assessment is sealed: Share + Revoke
+      // both get disabled. The recruiter clones a new version if they
+      // want to start a fresh invite round. We OR the backend flag with
+      // a session-local set so the seal sticks on backends that don't
+      // yet return has_revoked_invites (graceful pre-deploy behaviour).
+      has_revoked_invites: a.has_revoked_invites === true || locallyRevokedIds.has(a.id),
       jd_id: a.jd_id,
       jd_short_id: a.jd_short_id,
       jd_version: a.jd_version,
@@ -753,7 +769,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Open the clone confirmation modal. The recruiter then publishes and
   // invites V2 candidates manually via the normal invite flow.
-  const handleOpenCloneModal = (assessment: any) => {
+  // If the JD has already hit the 3-version cap, show a max-reached popup
+  // instead of opening the duplicate confirmation.
+  const handleOpenCloneModal = async (assessment: any) => {
+    if (assessment.clone_cap_reached) {
+      await dialog.alert({
+        title: 'Maximum versions reached',
+        message: 'This assessment already has 3 versions (the maximum allowed). Archive or delete a version before duplicating again.',
+        variant: 'warning',
+      });
+      return;
+    }
     setCloneTargetAssessment(assessment);
   };
 
@@ -790,8 +816,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleConfirmRevoke = async () => {
     if (!revokeTargetAssessment || isRevoking) return;
     setIsRevoking(true);
+    const revokedId = revokeTargetAssessment.id;
     try {
-      const result = await assessmentService.revokePendingInvitations(revokeTargetAssessment.id);
+      const result = await assessmentService.revokePendingInvitations(revokedId);
+      // Seal the row both ways:
+      //   (a) immediate local-state patch so the current render flips Share
+      //       and Revoke to grey before any backend round-trip.
+      //   (b) add to locallyRevokedIds so the seal survives the upcoming
+      //       reloadAssessments() — important when the backend isn't yet
+      //       returning has_revoked_invites (mapper ORs the two sources).
+      setLocallyRevokedIds(prev => {
+        const next = new Set(prev);
+        next.add(revokedId);
+        return next;
+      });
+      setApiAssessments(prev => prev.map(a =>
+        a.id === revokedId
+          ? { ...a, has_revoked_invites: true }
+          : a
+      ));
       await reloadAssessments();
       toast.success(
         result.revoked_count > 0
@@ -2118,13 +2161,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {/* Grid Card Actions */}
                     <div className="flex items-center gap-2 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                       {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
-                        // Share is blocked for Draft (must publish first) AND
-                        // Archived (assessment is out of circulation, can't
-                        // invite candidates to it). The disabled visuals are
-                        // shared across both states.
+                        // Share is blocked for Draft (must publish first), Archived
+                        // (out of circulation), and once invites have been revoked
+                        // (assessment is sealed — recruiter should clone a new
+                        // version to start a fresh invite round).
                         const shareBlockedReason =
                           assessment.status === 'Draft' ? 'Publish assessment first to share' :
                           assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
+                          assessment.has_revoked_invites ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.' :
                           '';
                         const isShareBlocked = !!shareBlockedReason;
                         return (
@@ -2136,6 +2180,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               }
                               if (assessment.status === 'Archived') {
                                 toast.warning('Archived assessments cannot be shared');
+                                return;
+                              }
+                              if (assessment.has_revoked_invites) {
+                                toast.warning('Invites for this assessment have been revoked. Duplicate it to start fresh.');
                                 return;
                               }
                               setSelectedAssessmentForShare(assessment);
@@ -2192,48 +2240,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
-                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
-                            // Lock the Edit option once the assessment is
-                            // published AND at least one candidate has been
-                            // invited — editing after invites would diverge
-                            // questions across candidates and break fairness.
-                            const _inviteCount = assessment.invitations_count || assessment.candidates || 0;
-                            const _publishedWithInvites = assessment.status === 'Active' && _inviteCount > 0;
-                            const _editBlocked = !canUpdateAssessment || _publishedWithInvites;
-                            const _editBlockReason = !canUpdateAssessment
-                              ? 'You do not have permission to edit assessments'
-                              : _publishedWithInvites
-                                ? `Cannot edit — assessment is published and ${_inviteCount} candidate(s) have been invited`
-                                : '';
-                            return (
-                            <button
-                              onClick={() => {
-                                if (!canUpdateAssessment) {
-                                  toast.error('You do not have permission to edit assessments');
-                                  setOpenMenuId(null);
-                                  return;
-                                }
-                                if (_publishedWithInvites) {
-                                  toast.warning(_editBlockReason);
-                                  setOpenMenuId(null);
-                                  return;
-                                }
-                                handleEditAssessment(assessment);
-                                setOpenMenuId(null);
-                              }}
-                              disabled={_editBlocked}
-                              title={_editBlockReason}
-                              className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                _editBlocked
-                                  ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                  : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                              }`}
-                            >
-                              <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
-                              Edit
-                            </button>
-                            );
-                          })()}
                           <button
                             onClick={() => {
                               setSelectedAssessmentForPreview(assessment);
@@ -2245,58 +2251,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Preview
                           </button>
-                          {/* Archived assessments only expose Edit / Preview / Activate —
-                              Copy Link, Completed, Archive, Delete are hidden so the menu
-                              reflects what the recruiter can actually do on a row that's
-                              been pulled out of circulation. */}
-                          {assessment.status !== 'Archived' && canCreateAssessment && (
-                          <button
-                            onClick={async () => {
-                              if (assessment.status === 'Draft') {
-                                toast.warning('Please publish the assessment before sharing');
-                                setOpenMenuId(null);
-                                return;
-                              }
-                              try {
-                                // Create a generic invitation to get a shareable link
-                                const invitation = await assessmentService.invite(assessment.id, {
-                                  candidate_name: 'Anonymous Candidate',
-                                  candidate_email: `anonymous-${Date.now()}@example.com`,
-                                });
-                                const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
-
-                                // Copy to clipboard with fallback
-                                try {
-                                  await navigator.clipboard.writeText(shareableLink);
-                                } catch (clipboardError) {
-                                  // Fallback for when document is not focused
-                                  const textArea = document.createElement('textarea');
-                                  textArea.value = shareableLink;
-                                  textArea.style.position = 'fixed';
-                                  textArea.style.left = '-9999px';
-                                  document.body.appendChild(textArea);
-                                  textArea.select();
-                                  document.execCommand('copy');
-                                  document.body.removeChild(textArea);
-                                }
-                                toast.success('Shareable link copied! This link can be used by one candidate.');
-                              } catch (error) {
-                                console.error('Failed to generate link:', error);
-                                toast.error('Failed to generate shareable link. Please try Share via Email instead.');
-                              }
-                              setOpenMenuId(null);
-                            }}
-                            disabled={assessment.status === 'Draft'}
-                            className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                              assessment.status === 'Draft'
-                                ? 'text-gray-400 cursor-not-allowed'
-                                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                            }`}
-                          >
-                            <Link2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                            Copy Link
-                          </button>
-                          )}
                           <div className="border-t border-gray-100 my-1"></div>
                           {/* Draft assessments hide Activate/Archive — drafts go
                               through the configure-page Publish button, and an
@@ -2469,11 +2423,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* Share via Email Button — disabled for Draft (must
-                              publish first) and Archived (out of circulation). */}
+                              publish first), Archived (out of circulation), and
+                              once invites have been revoked (assessment sealed). */}
                           {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
                             const shareBlockedReason =
                               assessment.status === 'Draft' ? 'Publish assessment first to share' :
                               assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
+                              assessment.has_revoked_invites ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.' :
                               '';
                             const isShareBlocked = !!shareBlockedReason;
                             return (
@@ -2485,6 +2441,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }
                                   if (assessment.status === 'Archived') {
                                     toast.warning('Archived assessments cannot be shared');
+                                    return;
+                                  }
+                                  if (assessment.has_revoked_invites) {
+                                    toast.warning('Invites for this assessment have been revoked. Duplicate it to start fresh.');
                                     return;
                                   }
                                   setSelectedAssessmentForShare(assessment);
@@ -2559,49 +2519,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 onClick={() => setOpenMenuId(null)}
                               />
                               <div className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
-                                {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
-                                  // Mirror of the Edit-lock logic in the
-                                  // table-row dropdown above: editing is
-                                  // disallowed once the assessment is
-                                  // published AND candidates have been
-                                  // invited.
-                                  const _inviteCount = assessment.invitations_count || assessment.candidates || 0;
-                                  const _publishedWithInvites = assessment.status === 'Active' && _inviteCount > 0;
-                                  const _editBlocked = !canUpdateAssessment || _publishedWithInvites;
-                                  const _editBlockReason = !canUpdateAssessment
-                                    ? 'You do not have permission to edit assessments'
-                                    : _publishedWithInvites
-                                      ? `Cannot edit — assessment is published and ${_inviteCount} candidate(s) have been invited`
-                                      : '';
-                                  return (
-                                  <button
-                                    onClick={() => {
-                                      if (!canUpdateAssessment) {
-                                        toast.error('You do not have permission to edit assessments');
-                                        setOpenMenuId(null);
-                                        return;
-                                      }
-                                      if (_publishedWithInvites) {
-                                        toast.warning(_editBlockReason);
-                                        setOpenMenuId(null);
-                                        return;
-                                      }
-                                      handleEditAssessment(assessment);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={_editBlocked}
-                                    title={_editBlockReason}
-                                    className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                      _editBlocked
-                                        ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                        : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                                    }`}
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
-                                    Edit Assessment
-                                  </button>
-                                  );
-                                })()}
                                 <button
                                   onClick={() => {
                                     setSelectedAssessmentForPreview(assessment);
@@ -2613,99 +2530,73 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Preview
                                 </button>
-                                {/* Archived assessments only expose Edit / Preview / Activate —
-                                    Copy Link, Duplicate, Completed, Archive, Delete are hidden
-                                    so the menu reflects what the recruiter can actually do
-                                    on a row that's been pulled out of circulation. */}
-                                {assessment.status !== 'Archived' && canCreateAssessment && (
-                                <button
-                                  onClick={async () => {
-                                    if (assessment.status === 'Draft') {
-                                      toast.warning('Please publish the assessment before sharing');
-                                      setOpenMenuId(null);
-                                      return;
-                                    }
-                                    try {
-                                      // Create a generic invitation to get a shareable link
-                                      const invitation = await assessmentService.invite(assessment.id, {
-                                        candidate_name: 'Anonymous Candidate',
-                                        candidate_email: `anonymous-${Date.now()}@example.com`,
-                                      });
-                                      const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
-
-                                      // Copy to clipboard with fallback
-                                      try {
-                                        await navigator.clipboard.writeText(shareableLink);
-                                      } catch (clipboardError) {
-                                        // Fallback for when document is not focused
-                                        const textArea = document.createElement('textarea');
-                                        textArea.value = shareableLink;
-                                        textArea.style.position = 'fixed';
-                                        textArea.style.left = '-9999px';
-                                        document.body.appendChild(textArea);
-                                        textArea.select();
-                                        document.execCommand('copy');
-                                        document.body.removeChild(textArea);
-                                      }
-                                      toast.success('Shareable link copied! This link can be used by one candidate.');
-                                    } catch (error) {
-                                      console.error('Failed to generate link:', error);
-                                      toast.error('Failed to generate shareable link. Please try Share via Email instead.');
-                                    }
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={assessment.status === 'Draft'}
-                                  className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                    assessment.status === 'Draft'
-                                      ? 'text-gray-400 cursor-not-allowed'
-                                      : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                                  }`}
-                                >
-                                  <Link2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  Copy Link
-                                </button>
-                                )}
                                 {assessment.status !== 'Archived' && canCreateAssessment && (() => {
-                                  // 3-version cap + only-original-can-be-cloned rule, computed
-                                  // backend-side. Disabled rows show a tooltip explaining why.
-                                  const canClone = assessment.can_clone !== false;
-                                  const disabledReason = !canClone
-                                    ? ((assessment.version || 1) > 1
-                                        ? 'Only the original assessment (Version 1) can be duplicated.'
-                                        : 'This assessment already has 3 versions. Archive or delete a version to duplicate again.')
+                                  // Two separate gating signals from the backend:
+                                  //   clone_button_disabled → Draft / clone (V2, V3)
+                                  //   clone_cap_reached → V1 already at 3 versions
+                                  // The cap-reached case stays CLICKABLE so the recruiter
+                                  // gets a "max reached" popup explaining why, rather
+                                  // than a silently greyed-out button.
+                                  const buttonDisabled = !!assessment.clone_button_disabled;
+                                  const disabledReason = buttonDisabled
+                                    ? (assessment.status === 'Draft'
+                                        ? 'Publish the assessment before duplicating.'
+                                        : 'Only the original assessment (Version 1) can be duplicated.')
                                     : '';
                                   return (
                                     <button
                                       onClick={() => {
-                                        if (!canClone) return;
+                                        if (buttonDisabled) return;
                                         setOpenMenuId(null);
                                         handleOpenCloneModal(assessment);
                                       }}
-                                      disabled={!canClone}
+                                      disabled={buttonDisabled}
                                       title={disabledReason || undefined}
                                       className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 transition-colors ${
-                                        canClone
-                                          ? 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                                          : 'text-gray-400 cursor-not-allowed'
+                                        buttonDisabled
+                                          ? 'text-gray-400 cursor-not-allowed'
+                                          : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
                                       }`}
                                     >
-                                      <Copy className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${canClone ? 'text-gray-600' : 'text-gray-300'}`} />
+                                      <Copy className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${buttonDisabled ? 'text-gray-300' : 'text-gray-600'}`} />
                                       Duplicate
                                     </button>
                                   );
                                 })()}
-                                {assessment.status === 'Active' && canUpdateAssessment && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    handleOpenRevokeModal(assessment);
-                                  }}
-                                  className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-red-700 hover:bg-red-50 flex items-center gap-2 sm:gap-2.5 transition-colors"
-                                >
-                                  <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  Revoke pending invites
-                                </button>
-                                )}
+                                {assessment.status === 'Active' && canUpdateAssessment && (() => {
+                                  // Revoke is only meaningful once at least one invite
+                                  // exists, AND only once. After a recruiter has already
+                                  // revoked invites on this assessment the action is
+                                  // sealed — they'd duplicate the assessment to start
+                                  // a fresh invite round, not re-run revoke.
+                                  const hasInvites = (assessment.invitations_count || 0) > 0;
+                                  const alreadyRevoked = !!assessment.has_revoked_invites;
+                                  const revokeDisabled = !hasInvites || alreadyRevoked;
+                                  const revokeReason = !hasInvites
+                                    ? 'No invites have been sent yet.'
+                                    : alreadyRevoked
+                                    ? 'Invites for this assessment have already been revoked.'
+                                    : undefined;
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        if (revokeDisabled) return;
+                                        setOpenMenuId(null);
+                                        handleOpenRevokeModal(assessment);
+                                      }}
+                                      disabled={revokeDisabled}
+                                      title={revokeReason}
+                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 transition-colors ${
+                                        revokeDisabled
+                                          ? 'text-gray-400 cursor-not-allowed'
+                                          : 'text-red-700 hover:bg-red-50'
+                                      }`}
+                                    >
+                                      <Ban className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${revokeDisabled ? 'text-gray-300' : ''}`} />
+                                      Revoke pending invites
+                                    </button>
+                                  );
+                                })()}
                                 <div className="border-t border-gray-100 my-1"></div>
                                 {/* Draft assessments hide Activate/Archive — drafts
                                     go through the configure-page Publish button,

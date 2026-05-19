@@ -5,7 +5,7 @@
 // MUI Accordion/Card → Tailwind disclosure. Wired to live DashboardData.
 import { useState } from 'react';
 import {
-  ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X,
+  ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 
@@ -24,17 +24,28 @@ function priorityTag(p: 'High' | 'Medium' | 'Low') {
 }
 
 /** Best-effort split of a Skill.feedback string into strengths and growth.
- *  Heuristic: sentence-by-sentence, keyword-classified. Falls back to a
- *  single AI-Analysis paragraph when the split yields nothing useful. */
-function splitFeedback(feedback: string): { strengths: string[]; growth: string[] } {
+ *  Heuristic: sentence-by-sentence, keyword-classified, score-aware fallback
+ *  for ambiguous sentences. Single-sentence feedback isn't split — splitting
+ *  one observation into "Strengths" + "Growth" panels just duplicates the
+ *  AI Analysis box (and the original default pushed unmatched sentences to
+ *  strengths, so a vague-answer note like "I know about — no detail" would
+ *  surface as a strength). When this returns empty arrays the caller falls
+ *  back to showing the AI Analysis paragraph only. */
+function splitFeedback(
+  feedback: string,
+  score: number = -1,
+): { strengths: string[]; growth: string[] } {
   if (!feedback) return { strengths: [], growth: [] };
   const sentences = feedback
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
     .filter(Boolean);
 
-  const STRENGTH_RX = /\b(good|strong|solid|clear|excellent|deep|thorough|confident|robust|well|proficient|demonstrated|showed|exhibits|grasped)\b/i;
-  const GROWTH_RX   = /\b(weak|lacks?|missing|limited|unclear|struggled|could|should|need(s|ed)?|improvement|improve|gap|low|insufficient|consider|explore)\b/i;
+  // One sentence isn't a split — skip and let the caller render AI Analysis only.
+  if (sentences.length < 2) return { strengths: [], growth: [] };
+
+  const STRENGTH_RX = /\b(good|strong|solid|clear|excellent|deep|thorough|confident|robust|well|proficient|demonstrated|showed|exhibits|grasped|experience|skilled|knowledgeable|comprehensive|effective)\b/i;
+  const GROWTH_RX   = /\b(weak|lacks?|missing|limited|unclear|struggled|could|should|need(s|ed)?|improvement|improve|gap|low|insufficient|consider|explore|vague|brief|minimal|barely|without|didn'?t|doesn'?t|did not|does not|no detail|not specific|unanswered|skipped|short|superficial|generic)\b/i;
 
   const strengths: string[] = [];
   const growth: string[]    = [];
@@ -44,7 +55,9 @@ function splitFeedback(feedback: string): { strengths: string[]; growth: string[
     if (hasGrowth && !hasStrength)       growth.push(s);
     else if (hasStrength && !hasGrowth)  strengths.push(s);
     else if (hasGrowth)                  growth.push(s);
-    else                                 strengths.push(s);
+    else if (score >= 0 && score < 5)    growth.push(s);    // low score → unmatched sentence reads as growth
+    else if (score >= 0 && score >= 7)   strengths.push(s); // high score → reads as strength
+    else                                 strengths.push(s); // unknown score → preserve old default
   }
   return { strengths, growth };
 }
@@ -173,7 +186,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
                 </button>
 
                 {isOpen && (() => {
-                  const { strengths, growth } = splitFeedback(s.feedback);
+                  const { strengths, growth } = splitFeedback(s.feedback, s.score);
                   return (
                     <div className="px-5 pb-5">
                       <hr className="border-gray-200 mb-4" />
@@ -361,6 +374,25 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                     <div className="px-5 pb-5">
                       <hr className="border-gray-200 mb-4" />
 
+                      {/* Candidate's transcribed response — surfaces what the
+                          candidate actually said so reviewers can validate
+                          the AI's score instead of trusting it blindly. */}
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 mb-4">
+                        <div className="flex items-center gap-2 mb-2 text-gray-600">
+                          <MessageSquare className="w-4 h-4" />
+                          <div className="text-sm font-semibold">Candidate Response</div>
+                        </div>
+                        {q.answer && q.answer.trim() ? (
+                          <blockquote className="text-sm text-gray-800 leading-relaxed border-l-2 border-gray-300 pl-3 italic">
+                            {q.answer}
+                          </blockquote>
+                        ) : (
+                          <div className="text-sm italic text-gray-400">
+                            No response recorded — candidate skipped, timed out, or didn't answer.
+                          </div>
+                        )}
+                      </div>
+
                       {/* AI summary derived from skill notes */}
                       <div className="p-4 rounded-xl bg-sky-50 border border-sky-200 mb-4">
                         <div className="flex items-center gap-2 mb-2 text-sky-700">
@@ -469,7 +501,25 @@ export function QuestionsView({ data }: { data: DashboardData }) {
       })}
 
       {/* Section calculations */}
-      {data.perQuestionDetails.length > 0 && (
+      {data.perQuestionDetails.length > 0 && (() => {
+        // Denominator policy per spec: divide by PLANNED count (not delivered).
+        // Undelivered/skipped slots contribute 0 to the numerator. Falls back
+        // to delivered count if plannedCounts is missing (older sessions).
+        const mhPlanned = data.plannedCounts?.mustHave || 0;
+        const nhPlanned = data.plannedCounts?.niceToHave || 0;
+        const mhDenom = mhPlanned > 0 ? mhPlanned : (mhQs.length || 1);
+        const nhDenom = nhPlanned > 0 ? nhPlanned : (nhQs.length || 1);
+        const mhSum = mhQs.reduce((a, q) => a + q.questionScore, 0);
+        const nhSum = nhQs.reduce((a, q) => a + q.questionScore, 0);
+        // Numerator display — pad with explicit "+ 0" entries for skipped
+        // slots so the math is transparent ("8.0 + 7.5 + 0 + 0 + 0 ... ÷ 10").
+        const numeratorParts = (delivered: PerQuestionDetail[], denom: number) => {
+          const parts = delivered.map(q => q.questionScore.toFixed(2));
+          const missing = Math.max(0, denom - parts.length);
+          for (let i = 0; i < missing; i++) parts.push('0');
+          return parts.length ? parts.join(' + ') : '0';
+        };
+        return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.sectionsPresent.mustHave && (
             <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
@@ -478,14 +528,22 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               </div>
               <div className="p-5 bg-emerald-50">
                 <div className="text-sm font-semibold text-emerald-800 mb-2">
-                  Section Score = Average of all question scores
+                  Section Score = sum(question scores) ÷ planned questions ({mhDenom})
                 </div>
-                <div className="text-sm font-mono text-emerald-800 mb-1">
-                  = ({mhQs.map(q => q.questionScore.toFixed(2)).join(' + ')}) ÷ {mhQs.length || 1}
-                </div>
-                <div className="text-sm font-mono text-emerald-800 mb-3">
-                  = {mhQs.reduce((a, q) => a + q.questionScore, 0).toFixed(2)} ÷ {mhQs.length || 1} = <strong>{mhAvg.toFixed(2)}</strong>
-                </div>
+                {mhQs.length === 0 ? (
+                  <div className="text-sm font-mono italic text-emerald-800 mb-3">
+                    No Must-Have questions delivered → score 0.00
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm font-mono text-emerald-800 mb-1 break-words">
+                      = ({numeratorParts(mhQs, mhDenom)}) ÷ {mhDenom}
+                    </div>
+                    <div className="text-sm font-mono text-emerald-800 mb-3">
+                      = {mhSum.toFixed(2)} ÷ {mhDenom} = <strong>{mhAvg.toFixed(2)}</strong>
+                    </div>
+                  </>
+                )}
                 <hr className="border-emerald-200 my-3" />
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm font-bold text-emerald-800">Final Must-Have Score:</div>
@@ -509,14 +567,22 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               </div>
               <div className="p-5 bg-amber-50">
                 <div className="text-sm font-semibold text-amber-800 mb-2">
-                  Section Score = Average of all question scores
+                  Section Score = sum(question scores) ÷ planned questions ({nhDenom})
                 </div>
-                <div className="text-sm font-mono text-amber-800 mb-1">
-                  = ({nhQs.map(q => q.questionScore.toFixed(2)).join(' + ')}) ÷ {nhQs.length || 1}
-                </div>
-                <div className="text-sm font-mono text-amber-800 mb-3">
-                  = {nhQs.reduce((a, q) => a + q.questionScore, 0).toFixed(2)} ÷ {nhQs.length || 1} = <strong>{nhAvg.toFixed(2)}</strong>
-                </div>
+                {nhQs.length === 0 ? (
+                  <div className="text-sm font-mono italic text-amber-800 mb-3">
+                    No Nice-to-Have questions delivered → score 0.00
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm font-mono text-amber-800 mb-1 break-words">
+                      = ({numeratorParts(nhQs, nhDenom)}) ÷ {nhDenom}
+                    </div>
+                    <div className="text-sm font-mono text-amber-800 mb-3">
+                      = {nhSum.toFixed(2)} ÷ {nhDenom} = <strong>{nhAvg.toFixed(2)}</strong>
+                    </div>
+                  </>
+                )}
                 <hr className="border-amber-200 my-3" />
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm font-bold text-amber-800">Final Nice-to-Have Score:</div>
@@ -529,7 +595,8 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Transcript dialog */}
       {transcriptOpen && (

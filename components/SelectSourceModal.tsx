@@ -114,7 +114,29 @@ export default function SelectSourceModal({
             });
           });
 
-          setFolders(folderData || []);
+          // API returns a tree (parent.children). The folder-tree renderer
+          // below filters by `parent_id` against this array, which only ever
+          // sees top-level nodes — sub-folders live inside `children` and
+          // would never appear (this was the "sub folder doesn't show" bug).
+          // Flatten so every folder is searchable regardless of depth.
+          const flattenFolders = (list: any[]): any[] => {
+            const out: any[] = [];
+            const walk = (nodes: any[]) => {
+              for (const f of nodes || []) {
+                // Strip `children` so downstream consumers (e.g. UploadModal
+                // which re-walks the tree) don't double-count entries that
+                // already appear flat in this list.
+                const { children, ...rest } = f;
+                out.push(rest);
+                if (Array.isArray(children) && children.length > 0) {
+                  walk(children);
+                }
+              }
+            };
+            walk(list);
+            return out;
+          };
+          setFolders(flattenFolders(folderData || []));
         } catch (e) {
           console.error('Failed to fetch folders:', e);
           setFolders([]);
@@ -1037,7 +1059,7 @@ export default function SelectSourceModal({
               ) : filteredResumes.length > 0 ? (
                 <div className="space-y-2">
                   {/* Desktop Table Header - hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border border-gray-100 rounded-lg text-xs font-medium text-gray-600 uppercase sticky top-0">
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border border-gray-100 rounded-lg text-xs font-medium text-gray-600 uppercase sticky top-0 z-10">
                     <div className="col-span-1 flex items-center justify-center">
                       {(() => {
                         const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);

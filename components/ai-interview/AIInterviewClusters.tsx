@@ -564,22 +564,10 @@ function CategorySection({
             </div>
           </div>
         </div>
-        {/* Hide Add Cluster when read-only (flexible finalized) */}
-        {!isReadOnly && (
-          <button
-            onClick={() => onAddCluster(category)}
-            disabled={atLimit}
-            title={atLimit ? `Maximum ${maxClusters} clusters allowed` : undefined}
-            className={`group flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
-              atLimit
-                ? 'text-gray-400 border border-gray-200 cursor-not-allowed bg-gray-50'
-                : 'text-white bg-gradient-to-br from-brand-blue to-brand-blue-2 hover:shadow-lg hover:shadow-brand-blue/30 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 hover:-translate-y-0.5'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform duration-200" />
-            Add Cluster
-          </button>
-        )}
+        {/* "Add Cluster" button removed per product feedback — cluster
+            structure is finalized by the AI generator; manual cluster
+            additions on this page are no longer offered. Use "Regenerate
+            with AI" to rebuild the cluster set. */}
       </div>
 
       {/* ── Pool section: unified Skills (Commands color-coded inline) ── */}
@@ -655,32 +643,10 @@ function CategorySection({
               </div>
             )}
 
-            {/* Add skill input */}
-            {!isReadOnly && (
-              <div className="flex items-start gap-2">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={newSkillInput}
-                    onChange={e => { setNewSkillInput(e.target.value); if (skillInputError) setSkillInputError(''); }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSkill(); } }}
-                    placeholder={`Add a ${category === 'mth' ? 'must-have' : 'nice-to-have'} skill`}
-                    className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
-                      skillInputError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
-                    }`}
-                  />
-                  {skillInputError && <p className="mt-1 text-[11px] text-red-500">{skillInputError}</p>}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddSkill}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add
-                </button>
-              </div>
-            )}
+            {/* Add-skill input + button removed per product feedback —
+                skills are now finalized on the previous JD config page; the
+                clusters page is for grouping/refining the existing skill set,
+                not for adding new ones. Use "Back to Configure" to add. */}
           </div>
         );
       })()}
@@ -1067,14 +1033,50 @@ export default function AIInterviewClusters() {
   }, []);
 
   const removeSkillFromCluster = useCallback((skillName: string, clusterId: string) => {
-    // Check both categories
+    // Floor validation: each question needs at least 1 unique skill. If the
+    // removal would drop unique-skill count below the question count for the
+    // affected category, block it. Without this, a recruiter with 1 NTH skill
+    // (expanded to 4) could delete back down to 1 — leaving 4 questions with
+    // only 1 skill to cover them.
+    const isInMth = mthClusters.some(c => c.id === clusterId);
+    const isInNth = nthClusters.some(c => c.id === clusterId);
+    if (isFixed) {
+      if (isInMth) {
+        const mthQ = timedAllocation.mthQuestions ?? 0;
+        const projectedUnique = new Set(
+          mthClusters.flatMap(c =>
+            c.id === clusterId
+              ? c.skills.filter(s => s !== skillName).map(s => s.toLowerCase())
+              : c.skills.map(s => s.toLowerCase())
+          )
+        ).size;
+        if (mthQ > 0 && projectedUnique < mthQ) {
+          toast.error(`Cannot remove — Must-To-Have needs at least ${mthQ} unique skill(s) for ${mthQ} question(s).`);
+          return;
+        }
+      }
+      if (isInNth) {
+        const nthQ = nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+        const projectedUnique = new Set(
+          nthClusters.flatMap(c =>
+            c.id === clusterId
+              ? c.skills.filter(s => s !== skillName).map(s => s.toLowerCase())
+              : c.skills.map(s => s.toLowerCase())
+          )
+        ).size;
+        if (nthQ > 0 && projectedUnique < nthQ) {
+          toast.error(`Cannot remove — Nice-To-Have needs at least ${nthQ} unique skill(s) for ${nthQ} question(s).`);
+          return;
+        }
+      }
+    }
     setMthClusters(prev => prev.map(c =>
       c.id === clusterId ? { ...c, skills: c.skills.filter(s => s !== skillName) } : c
     ));
     setNthClusters(prev => prev.map(c =>
       c.id === clusterId ? { ...c, skills: c.skills.filter(s => s !== skillName) } : c
     ));
-  }, []);
+  }, [mthClusters, nthClusters, isFixed, timedAllocation, nthEnabled]);
 
   const addCluster = useCallback((category: 'mth' | 'nth') => {
     const maxAllowed = category === 'mth' ? mthMaxClusters : nthMaxClusters;
@@ -1111,6 +1113,24 @@ export default function AIInterviewClusters() {
   }, [mthSkills, nthSkills]);
 
   const removeSkillFromPool = useCallback((category: 'mth' | 'nth', skillName: string) => {
+    // Same floor validation as removeSkillFromCluster — pool removal also
+    // strips the skill from every cluster in the category, so it's an even
+    // bigger drop than a single-cluster removal.
+    if (isFixed) {
+      const clusters = category === 'mth' ? mthClusters : nthClusters;
+      const questionCount = category === 'mth'
+        ? (timedAllocation.mthQuestions ?? 0)
+        : (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
+      const lower = skillName.toLowerCase();
+      const projectedUnique = new Set(
+        clusters.flatMap(c => c.skills.filter(s => s.toLowerCase() !== lower).map(s => s.toLowerCase()))
+      ).size;
+      if (questionCount > 0 && projectedUnique < questionCount) {
+        const label = category === 'mth' ? 'Must-To-Have' : 'Nice-To-Have';
+        toast.error(`Cannot remove — ${label} needs at least ${questionCount} unique skill(s) for ${questionCount} question(s).`);
+        return;
+      }
+    }
     // Remove from skills list
     if (category === 'mth') {
       setMthSkills(prev => prev.filter(s => s.name !== skillName));
@@ -1126,7 +1146,7 @@ export default function AIInterviewClusters() {
         skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
       })));
     }
-  }, []);
+  }, [mthClusters, nthClusters, isFixed, timedAllocation, nthEnabled]);
 
   /* ── AI Generate ── */
   const handleGenerateClusters = async () => {
@@ -1208,7 +1228,9 @@ export default function AIInterviewClusters() {
         // longer use a hardcoded 2Q floor target — that was forcing a fixed
         // math relationship the spec rejects.
         const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ;
-        const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ;
+        // NTH expands whenever there is 1+ NTH skill (regardless of nthQ).
+        // MTH keeps the stricter "skills < questions" rule.
+        const nthShort = nthSkillNames.length >= 1 && nthQ > 0;
         const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 3;
         const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 3;
 
@@ -1263,7 +1285,11 @@ export default function AIInterviewClusters() {
             (nthShort || nthRecover)
               ? aiInterviewService.expandSkills({
                   mainSkills: nthExpandInput,
-                  targetSkillCount: nthQ,
+                  // Force expansion: target must exceed len(main) or the backend
+                  // short-circuits at ai_interview.py:1220 (`len >= target`).
+                  // nthQ remains the LLM's floor hint when it's higher than the
+                  // input count.
+                  targetSkillCount: Math.max(nthQ, nthExpandInput.length + 1),
                   bucket: 'NTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
@@ -1298,6 +1324,13 @@ export default function AIInterviewClusters() {
         // Scenario 2 applies.
         applyRefine = true;
         if (!(mthShort || nthShort || mthRecover || nthRecover)) {
+          allowMerge = true;
+        }
+        // Override: any bucket over ceiling MUST be merged, even when the
+        // other bucket triggered expansion. Backend merge loop is per-bucket
+        // (only the over-ceiling bucket gets compressed); the expanded bucket
+        // is unaffected because its _over flag stays false.
+        if (mthOverflow || nthOverflow) {
           allowMerge = true;
         }
       }
@@ -1823,6 +1856,37 @@ export default function AIInterviewClusters() {
       if (unassignedCount > 0) {
         toast.error(
           `${unassignedCount} skill${unassignedCount > 1 ? 's are' : ' is'} not assigned to any cluster. All skills must belong to a cluster.`,
+        );
+        return;
+      }
+    }
+    // Block when two or more clusters in the same section share a priority.
+    // Each priority slot (High / Medium / Low) is a distinct weight in the
+    // question-distribution algorithm — duplicate priorities make the
+    // weighting ambiguous and produce uneven question allocation across
+    // the section.
+    const labelFor = (p: number) => (p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low');
+    const findDup = (clusters: { name: string; priority: number }[]) => {
+      const seen = new Map<number, string>();
+      for (const c of clusters) {
+        const prev = seen.get(c.priority);
+        if (prev) return { priority: c.priority, names: [prev, c.name] };
+        seen.set(c.priority, c.name);
+      }
+      return null;
+    };
+    const dupMth = findDup(mthClusters);
+    if (dupMth) {
+      toast.error(
+        `Two Must-Have clusters share ${labelFor(dupMth.priority)} priority (${dupMth.names.join(' & ')}). Each priority can be assigned to only one cluster per section.`,
+      );
+      return;
+    }
+    if (nthEnabled) {
+      const dupNth = findDup(nthClusters);
+      if (dupNth) {
+        toast.error(
+          `Two Nice-to-Have clusters share ${labelFor(dupNth.priority)} priority (${dupNth.names.join(' & ')}). Each priority can be assigned to only one cluster per section.`,
         );
         return;
       }

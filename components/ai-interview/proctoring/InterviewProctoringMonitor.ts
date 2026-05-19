@@ -96,6 +96,15 @@ const NOISE_THRESHOLD = 80;
 // Minimum gap between noise warning toasts — advisory only, don't spam candidate
 const NOISE_WARNING_COOLDOWN = 30000; // 30 seconds
 
+// UI-only event types — never sent to the backend, never counted as a
+// violation. voice_detected is a coarse 300-3000 Hz energy check that fires
+// on TV/fan/neighbour audio; the authoritative "another speaker" signal is
+// voice_identity_changed/voice_mismatch from InterviewVoiceVerification.
+const UI_ONLY_EVENT_TYPES: ReadonlySet<ProctoringEventType> = new Set<ProctoringEventType>(['voice_detected']);
+// Window during which a fresh speaker-identity event suppresses the
+// voice_detected hint — the identity layer already covered it.
+const IDENTITY_SUPPRESSION_MS = 5000;
+
 // ==================== WORKER CODE ====================
 
 const getVideoWorkerCode = () => `
@@ -220,10 +229,13 @@ const getAudioWorkerCode = () => `
       if (detected) {
         consecutiveVoice++;
         consecutiveSilent = 0;
-        // Emit on every confirmed voice frame so continuous background sound
-        // (TV, music, ambient chatter) generates repeated violations rather
-        // than a single edge-triggered event.
-        if (consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
+        // Edge-triggered: only post on the silent->voice transition. The
+        // 300-3000 Hz band check is a coarse VAD (TV, fans, neighbours all
+        // pass it), so emitting per-frame produced dozens of false-positive
+        // voice_detected violations per session. Speaker identity is the
+        // authoritative "another voice" signal — voice_detected is now a
+        // UI-only hint, emitted at most once per voice burst.
+        if (consecutiveVoice >= VOICE_THRESHOLD_FRAMES && !isVoiceActive) {
           isVoiceActive = true;
           consecutiveNoisy = 0;
           consecutiveQuiet = 0;
@@ -374,12 +386,23 @@ export function useInterviewProctoringMonitor({
     const timestamp = new Date().toISOString();
     const cooldown = UI_COOLDOWN_PER_TYPE[eventType] || 5000;
 
+    // Suppress voice_detected if the smarter speaker-ID layer just fired —
+    // it already produced a real violation, no need for a duplicate hint.
+    if (eventType === 'voice_detected') {
+      const lastIdentity = Math.max(
+        lastBackendEnqueueTimeRef.current['voice_identity_changed'] || 0,
+        lastBackendEnqueueTimeRef.current['voice_mismatch'] || 0,
+      );
+      if (lastIdentity && now - lastIdentity < IDENTITY_SUPPRESSION_MS) return;
+    }
+
     // 1. Queue for backend, throttled to one event per cooldown window per type.
     //    Recovery events (e.g. fullscreen_exit_recovered) and rare events
     //    (camera_disabled, voice_mismatch) pass through fast since their
     //    natural firing rate is already low.
+    //    UI-only events skip this branch entirely.
     const lastEnqueued = lastBackendEnqueueTimeRef.current[eventType] || 0;
-    if (now - lastEnqueued >= cooldown) {
+    if (!UI_ONLY_EVENT_TYPES.has(eventType) && now - lastEnqueued >= cooldown) {
       lastBackendEnqueueTimeRef.current[eventType] = now;
       backendQueueRef.current.push({
         event_type: eventType,
@@ -1020,7 +1043,7 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     fullscreen_exit:          'minor',
     // Moderate (2 pts) — suspicious but not conclusive
     camera_obstructed:        'moderate',
-    voice_detected:           'moderate',
+    voice_detected:           'minor',
     multiple_voices:          'moderate',
     screenshot_attempt:       'moderate',
     screen_recording_attempt: 'moderate',

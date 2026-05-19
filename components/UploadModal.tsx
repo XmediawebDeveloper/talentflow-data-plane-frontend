@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard, Target, Eye } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
@@ -90,6 +90,27 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
   // Find root folder for default selection
   const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+
+  // Flatten the folder TREE (folder.children) into a single list so the
+  // dropdown can include sub-folders. Without this, only top-level folders
+  // show up — and the targetFolder ID for a sub-folder never matches an
+  // <option>, so the dropdown silently falls back to Root.
+  const allFolders = useMemo(() => {
+    const out: { folder: Folder; depth: number; path: string }[] = [];
+    const walk = (nodes: Folder[] | undefined, depth: number, parentPath: string) => {
+      if (!nodes) return;
+      for (const f of nodes) {
+        if (f.id === 'all') continue; // synthetic "All Resumes" filter
+        const path = parentPath ? `${parentPath} / ${f.name}` : f.name;
+        out.push({ folder: f, depth, path });
+        if (f.children && f.children.length > 0) {
+          walk(f.children, depth + 1, path);
+        }
+      }
+    };
+    walk(folders, 0, '');
+    return out;
+  }, [folders]);
 
   // Initialize with targetFolder, or root folder if available
   const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
@@ -939,16 +960,20 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   )}
                   {/* Only show "Choose folder" if no root folder exists */}
                   {!rootFolder && <option value="">Choose folder...</option>}
-                  {/* Then show other folders excluding 'all', root, and Archived Resumes */}
-                  {folders.filter(f =>
-                    f.id !== 'all' &&
-                    !(f.name.toLowerCase() === 'root' && !f.parentId) &&
-                    !(f.name === 'Archived Resumes' && !f.parentId)
-                  ).map(folder => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
+                  {/* Flattened tree — includes sub-folders shown with the
+                      breadcrumb path (e.g. "Arun / sub folder") and indented
+                      so the hierarchy is visually obvious. Excludes 'all',
+                      the Root folder (rendered above), and 'Archived Resumes'. */}
+                  {allFolders
+                    .filter(({ folder: f }) =>
+                      !(f.name.toLowerCase() === 'root' && !f.parentId) &&
+                      !(f.name === 'Archived Resumes' && !f.parentId),
+                    )
+                    .map(({ folder, depth, path }) => (
+                      <option key={folder.id} value={folder.id}>
+                        {`${'  '.repeat(depth)}${depth > 0 ? '↳ ' : ''}${path}`}
+                      </option>
+                    ))}
                 </select>
                 
                 <button

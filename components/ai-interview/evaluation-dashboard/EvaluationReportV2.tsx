@@ -294,6 +294,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
         {perQuestionDetails.length > 0 ? (
           <div className="divide-y divide-gray-100">
             {perQuestionDetails.map((q, i) => {
+              const isHR = q.section === 'hr';
               const sc = scoreColor(q.questionScore);
               const sectionLabel = q.section === 'mth' ? 'Must-Have' : q.section === 'nth' ? 'Nice-to-Have' : 'HR';
               const sectionClass = q.section === 'mth'
@@ -301,6 +302,14 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 : q.section === 'nth'
                   ? 'bg-amber-50 text-amber-700'
                   : 'bg-purple-50 text-purple-600';
+              // HR section is "Not scored — review only" per spec (memory:
+              // project_ai_interview_timed_eval_spec). Show the actual
+              // question text instead of skill chips (HR isn't about JD
+              // skills) and a dash for the score column so the row reads
+              // unambiguously as review-only.
+              const middleText = isHR
+                ? q.question
+                : (q.skills.map(s => s.name).join(', ') || q.question);
               return (
                 <div
                   key={i}
@@ -315,9 +324,13 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                     </span>
                   </div>
                   <div className="text-xs text-gray-500 truncate">
-                    {q.skills.map(s => s.name).join(', ') || q.question}
+                    {middleText}
                   </div>
-                  <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>
+                  {isHR ? (
+                    <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
+                  ) : (
+                    <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>
+                  )}
                 </div>
               );
             })}

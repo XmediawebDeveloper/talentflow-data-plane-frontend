@@ -921,6 +921,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Prevents TalkingHead from receiving streamStart with an empty buffer (causes early
   // onAudioEnd on Q1 when AudioContext is cold or TalkingHead is still initialising).
   const pendingStreamStartRef = useRef<(() => void) | null>(null);
+  // Set true when TalkingHead's worklet fires onAudioEnd BEFORE backend audio_end —
+  // i.e. its internal buffer drained during a streaming hiccup. New PCM chunks
+  // arriving after this point would go to a stopped worklet and be silently lost
+  // (the "Linda's voice cuts mid-sentence" bug). When set, the next chunk that
+  // arrives must call streamStart() again to wake the worklet back up.
+  const talkingHeadEndedEarlyRef = useRef(false);
 
   // Total PCM audio received for the current Linda turn (ms).
   // Used to set the audio_end fallback timeout so it always fires AFTER
@@ -1160,6 +1166,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => clearTimeout(t);
   }, [isClarification]);
 
+  // Post-expiry stuck recovery: once the timer hits 0, the backend should
+  // process the answer (or skip) and emit a fresh question_timer_started
+  // within a reasonable window. If that never happens — e.g. ASR/LLM/TTS
+  // hangs inside run_pipeline — the candidate is stranded staring at
+  // "TIME UP" forever. Re-send skip_question after 25 s so the backend's
+  // skip pipeline gets a second chance to advance.
+  useEffect(() => {
+    if (!questionTimerExpired) return;
+    const t = setTimeout(() => {
+      if (!questionTimerExpiredRef.current) return; // resolved naturally
+      console.warn("[Timer watchdog] Stuck at TIME UP for 25s — re-sending skip_question to unblock backend");
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+      }
+    }, 25_000);
+    return () => clearTimeout(t);
+  }, [questionTimerExpired]);
+
   // Fullscreen-exit watchdog: the per-question + global timers both pause
   // while `isFullscreenExited` is true. If the browser misses the return
   // event (alt-tab race, OS workspace switch, `fullscreenchange` doesn't
@@ -1252,6 +1276,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     console.log(`[Timer ${timestamp}] Starting pending timer: ${pendingDur}s`);
     questionTimerPendingRef.current = null;
     questionTimerReceivedAtRef.current = null;
+    // Clear any lingering "TIME UP" state from the previous question — the
+    // next-question expired-flag clear was deferred at receipt time so the
+    // display would stay on "TIME UP" rather than flashing "00:00" during
+    // Linda's TTS. Now that the new timer is about to tick, drop the flag.
+    if (questionTimerExpiredRef.current) {
+      setQuestionTimerExpired(false);
+      questionTimerExpiredRef.current = false;
+    }
     ensureQuestionTimerRunning(pendingDur);
   }, [isAiSpeaking, ensureQuestionTimerRunning, questionTimerPendingTick]);
 
@@ -1301,6 +1333,58 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }, 20000);
     return () => clearTimeout(stuckGuard);
   }, [questionTimerPendingTick, avatarState, ensureQuestionTimerRunning]);
+
+  // ── Message-Independent Speaking-State Watchdog ────────────────────────
+  // The pending-timer watchdog above only fires when `question_timer_started`
+  // has been received and stored as pending. If the WebSocket back-pressures
+  // (audio chunks pile up in the receive buffer, JSON messages get queued
+  // behind them, the browser's onmessage drainer falls behind), that
+  // `question_timer_started` message can be lost — and the candidate sees
+  // a frozen UI with no timer and no "Your turn" prompt.
+  //
+  // This second watchdog has NO dependency on backend messages: it fires
+  // purely off the local `isAiSpeaking` flag and the audio-chunk arrival
+  // anchor. Trigger: 30s after isAiSpeaking flipped true, if no chunks
+  // have arrived in the last 5s and the flag is still true, force-recover.
+  // Falls back to a 120s timer (the standard timed-mode per-question budget)
+  // since the actual duration message may have been dropped.
+  useEffect(() => {
+    if (!isAiSpeaking) return;
+    const startedAt = Date.now();
+    const watchdog = setTimeout(() => {
+      if (!isAiSpeakingRef.current) return; // resolved naturally
+      const lastChunkAt = lastPcmAtMsRef.current;
+      const sinceLastChunk = lastChunkAt ? Date.now() - lastChunkAt : Infinity;
+      if (sinceLastChunk < 5000) {
+        // Chunks still flowing — playback is genuinely ongoing, don't intervene.
+        return;
+      }
+      console.warn('[InterviewUI] Speaking-state watchdog firing — likely dropped audio_end/timer_started', {
+        isAiSpeakingDurationMs: Date.now() - startedAt,
+        sinceLastChunkMs: sinceLastChunk === Infinity ? 'no_chunks_ever' : sinceLastChunk,
+        hasPendingTimer: questionTimerPendingRef.current !== null,
+      });
+      isAiSpeakingRef.current = false;
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      const dur = questionTimerPendingRef.current ?? 120;
+      questionTimerPendingRef.current = null;
+      questionTimerReceivedAtRef.current = null;
+      ensureQuestionTimerRunning(dur);
+      setStatus("Your turn — speak now...");
+      if (mediaStreamRef.current && !isMutedRef.current) {
+        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
+      if (wsRef.current?.readyState === WebSocket.OPEN
+          && !isMutedRef.current
+          && !isProcessingRef.current
+          && !isRecordingRef.current
+          && !isFaceBlockedRef.current) {
+        startRecordingInternal();
+      }
+    }, 30000);
+    return () => clearTimeout(watchdog);
+  }, [isAiSpeaking, avatarState, ensureQuestionTimerRunning]);
 
   // When the per-question timer expires, the client sends skip_question to the
   // backend (see the timer-expiry block above). The backend's handle_skip_question
@@ -1929,6 +2013,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
+        talkingHeadEndedEarlyRef.current = false;
         setStatus("Linda is speaking...");
         startRevealingTokens();
         // Feed text for word-level phoneme lip sync
@@ -1949,6 +2034,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
+        talkingHeadEndedEarlyRef.current = false;
         if (data.kind === "silence_nudge") {
           isSilencePromptRef.current = true;
         }
@@ -2041,6 +2127,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           isAiSpeakingRef.current = true;
           setIsAiSpeaking(true);
           audioEndReceivedRef.current = false;
+          // Reset the early-end recovery flag for this new turn (the previous
+          // turn's mid-sentence-cutoff recovery shouldn't carry over).
+          talkingHeadEndedEarlyRef.current = false;
           candidatePlaybackEndedRef.current = false;
           setCandidatePlaybackEnded(false);
           // Reset turn-scoped audio anchors so Fix 2's reveal gate works for
@@ -2211,6 +2300,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           // not pre-empt it.
           if (!audioEndReceivedRef.current) {
             console.warn("[TalkingHead] onAudioEnd fired BEFORE backend audio_end — ignoring; waiting for audioEndFallback");
+            // Arm the re-start flag so the next PCM chunk wakes the worklet
+            // back up. Without this, mid-sentence buffer drains cause the
+            // remaining audio to stream into a stopped worklet and be lost
+            // (Linda's voice cuts off mid-sentence).
+            talkingHeadEndedEarlyRef.current = true;
             return;
           }
           // Clear safety-net fallback — normal path fired, no fallback needed
@@ -2280,16 +2374,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // window should keep ticking down from where it froze).
         setIsProcessing(false);
         isProcessingRef.current = false;
-        if (
-          questionTimerSecondsRef.current !== null
-          && questionTimerSecondsRef.current > 0
-          && !questionTimerExpiredRef.current
-          && questionTimerIntervalRef.current === null
-        ) {
-          // Re-anchor from the frozen value as the new total — the original
-          // anchor's pause accounting was torn down at question_timer_stopped.
-          ensureQuestionTimerRunning(questionTimerSecondsRef.current);
-        }
+        // Read the frozen value from state — stopRecording nulls the REF to
+        // prevent double-deduction of the global timer, but leaves React state
+        // intact so the banner stays visible. Without falling back to state
+        // here, the ref-null causes silent_discard's resume to no-op and the
+        // candidate's answer window appears stuck at the frozen value forever.
+        setQuestionTimerSeconds(prevSeconds => {
+          if (
+            prevSeconds !== null
+            && prevSeconds > 0
+            && !questionTimerExpiredRef.current
+            && questionTimerIntervalRef.current === null
+          ) {
+            // Re-sync ref so subsequent reads (heartbeat watchdog, tick interval)
+            // see the correct value, then resume the countdown from the freeze
+            // point — original anchor's pause accounting was torn down at
+            // question_timer_stopped.
+            questionTimerSecondsRef.current = prevSeconds;
+            ensureQuestionTimerRunning(prevSeconds);
+          }
+          return prevSeconds;
+        });
         if (!isAiSpeakingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
           setTimeout(() => {
             if (wsRef.current?.readyState === WebSocket.OPEN && !isAiSpeakingRef.current) {
@@ -2490,8 +2595,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         console.log(`[WS ${timestamp}] Timer duration: ${dur}s, question_number=${data.question_number}, total_questions=${data.total_questions}, is_follow_up=${data.is_follow_up}, is_clarification=${data.is_clarification}`);
         // DON'T show the timer yet if Linda is still speaking — it will be shown
         // once Linda stops (via the pending timer useEffect below).
-        setQuestionTimerExpired(false);
-        questionTimerExpiredRef.current = false;
+        // When Linda IS still speaking the next question, hold the "TIME UP"
+        // state (keep questionTimerExpired=true) until the pending timer
+        // actually starts. Otherwise the display would flicker
+        // "TIME UP" → "00:00" → "02:00" because seconds is still 0 from the
+        // expired prior slot. The pending useEffect clears the flag right
+        // before it starts ticking the new countdown.
+        if (!isAiSpeakingRef.current) {
+          setQuestionTimerExpired(false);
+          questionTimerExpiredRef.current = false;
+        }
         // Classify this event:
         //  is_follow_up=true, is_clarification=true  → Linda clarifying; PAUSE per-Q timer
         //  is_follow_up=true, is_clarification=false → Linda ack/follow-up; keep timer running
@@ -2523,6 +2636,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
           setIsFollowUp(true);
           if (data.is_clarification === true) {
+            // Bug H fix: if the interval was stray-cleared (e.g., remaining
+            // hit 0 just before the clarification arrived), the timer would
+            // never resume after clarification ends because the interval
+            // itself is null. Re-arm it BEFORE pausing so the pause-via-flag
+            // model works correctly when clarification clears.
+            if (!questionTimerIntervalRef.current && (_cur ?? dur) > 0) {
+              ensureQuestionTimerRunning(_cur ?? dur);
+            }
             // Point 4: pause per-question timer during clarification
             console.log('[INTERVIEW-DEBUG] TIMER PAUSED — clarification mode entered', {
               question_number: data.question_number,
@@ -3132,8 +3253,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // If the backend sends question_timer_started for Q2 before React re-renders,
       // the null ref prevents a double deduction.
       questionTimerSecondsRef.current = null;
-      setQuestionTimerExpired(false);
-      questionTimerExpiredRef.current = false;
+      // Do NOT clear questionTimerExpired here. If the candidate finished
+      // talking right as the timer hit 0:00, the expired flag was set by
+      // startQuestionTimerExpiry and represents the truth — wiping it here
+      // causes the "Question time: 00:00" stuck-label bug (label flips back
+      // to non-expired state while Linda speaks the next question). The
+      // pending-timer useEffect clears expired immediately before starting
+      // the next countdown, so the flag transitions cleanly TIME UP → 02:00.
       questionTimerPendingRef.current = null;
       questionTimerReceivedAtRef.current = null;
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -3188,8 +3314,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setRemainingSeconds(prev => Math.max(0, prev - questionTimerSecondsRef.current!));
         }
         questionTimerSecondsRef.current = null;
-        setQuestionTimerExpired(false);
-        questionTimerExpiredRef.current = false;
+        // Same reasoning as stopRecording: don't wipe expired here; the
+        // pending-timer useEffect clears it cleanly when the next countdown
+        // is about to start.
         questionTimerPendingRef.current = null;
         questionTimerReceivedAtRef.current = null;
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -3553,15 +3680,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           !lindaHoldingTurn &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
-          try {
-            wsRef.current.send(pcmEarly.buffer);
-            (window as any).__audioFramesSent = ((window as any).__audioFramesSent || 0) + 1;
-            (window as any).__audioBytesSent = ((window as any).__audioBytesSent || 0) + pcmEarly.byteLength;
-            if ((window as any).__audioFramesSent % 50 === 1) {
-              console.log(`[AUDIO-SEND] frames=${(window as any).__audioFramesSent} bytes=${(window as any).__audioBytesSent} bufferedAmount=${wsRef.current.bufferedAmount} wsState=${wsRef.current.readyState}`);
+          // Bug D fix: detect WS back-pressure and surface silent drops.
+          // If bufferedAmount grows unbounded, frames stall in the browser
+          // and the server gets nothing — same symptom as a dropped send.
+          const _bufAmt = wsRef.current.bufferedAmount;
+          if (_bufAmt > 5_000_000) {
+            // 5 MB buffered = network slower than our send rate. Warn loud
+            // and skip this frame so we don't grow the buffer forever.
+            (window as any).__audioFramesDropped = ((window as any).__audioFramesDropped || 0) + 1;
+            if ((window as any).__audioFramesDropped % 25 === 1) {
+              console.warn(`[AUDIO-SEND-BACKPRESSURE] bufferedAmount=${_bufAmt} — dropping frame (${(window as any).__audioFramesDropped} dropped total)`);
             }
-          } catch (sendErr) {
-            console.error('[AUDIO-SEND] send() threw:', sendErr);
+          } else {
+            try {
+              wsRef.current.send(pcmEarly.buffer);
+              (window as any).__audioFramesSent = ((window as any).__audioFramesSent || 0) + 1;
+              (window as any).__audioBytesSent = ((window as any).__audioBytesSent || 0) + pcmEarly.byteLength;
+              if ((window as any).__audioFramesSent % 50 === 1) {
+                console.log(`[AUDIO-SEND] frames=${(window as any).__audioFramesSent} bytes=${(window as any).__audioBytesSent} bufferedAmount=${_bufAmt} wsState=${wsRef.current.readyState}`);
+              }
+            } catch (sendErr) {
+              (window as any).__audioFramesFailed = ((window as any).__audioFramesFailed || 0) + 1;
+              console.error(`[AUDIO-SEND-FAILED] send() threw (${(window as any).__audioFramesFailed} failures total):`, sendErr);
+            }
           }
         } else if (speechDetectedRef.current && Math.random() < 0.02) {
           console.log(`[AUDIO-SEND-BLOCKED] speechDetected=${speechDetectedRef.current} aiSpeaking=${isAiSpeakingRef.current} wsState=${wsRef.current?.readyState}`);
@@ -3956,6 +4097,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           const cb = pendingStreamStartRef.current;
           pendingStreamStartRef.current = null;
           talkingHeadRef.current?.streamStart(24000, cb);
+        } else if (talkingHeadEndedEarlyRef.current) {
+          // Recovery path: TalkingHead's worklet ended early (buffer drained
+          // during a streaming hiccup) but new chunks are still arriving.
+          // Restart the worklet so this chunk plays instead of being lost.
+          // Without this, Linda's voice cuts off mid-sentence and the rest
+          // of the audio is silent.
+          console.log("[TalkingHead] re-arming streamStart after early end — chunk arrived");
+          talkingHeadEndedEarlyRef.current = false;
+          talkingHeadRef.current?.streamStart(24000, () => {
+            console.log("[TalkingHead] re-armed playback-ended callback fired");
+          });
         }
         // TalkingHead handles audio playback (gain:1) AND lip sync natively.
         // Now safe to pass the original — we've already copied the data.
@@ -4826,7 +4978,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
                     questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-600'
                   }`}>
-                    {questionTimerExpired ? "Time's up!" : isAiSpeaking ? 'Question time:' : isProcessing ? 'Answered:' : 'Answer time:'}
+                    {(questionTimerExpired || questionTimerSeconds <= 0) ? "Time's up!" : isAiSpeaking ? 'Question time:' : isProcessing ? 'Answered:' : 'Answer time:'}
                   </span>
 
                   {/* Progress bar */}
@@ -4852,7 +5004,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
                     questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700'
                   } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
-                    {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                    {(questionTimerExpired || questionTimerSeconds <= 0) ? 'TIME UP' : formatTime(questionTimerSeconds)}
                   </span>
                 </div>
               </div>
@@ -5311,7 +5463,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-400' :
                       questionTimerSeconds <= 60 ? 'text-amber-400' : 'text-violet-400'
                     }`}>
-                      {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                      {(questionTimerExpired || questionTimerSeconds <= 0) ? 'TIME UP' : formatTime(questionTimerSeconds)}
                     </span>
                     {questionNumber !== null && totalQuestions !== null && (
                       <span className="text-[9px] text-[#475569] font-medium">Q {questionNumber} / {totalQuestions}</span>

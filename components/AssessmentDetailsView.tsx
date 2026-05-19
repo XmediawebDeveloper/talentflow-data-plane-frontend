@@ -63,14 +63,20 @@ export default function AssessmentDetailsView({
   const { isTenantAdmin, user } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info' | 'viewjd'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'newversions' | 'info' | 'viewjd'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
   const ACTIVITY_PAGE_SIZE = 10;
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // Original per-row edit history (assessment_version_history table).
+  // Powers the "Versions" tab.
   const [versionHistory, setVersionHistory] = useState<any[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
+  // Sibling versions = every assessment sharing this assessment's jd_id
+  // (V1 + any clones). Powers the "New Versions" tab.
+  const [siblingVersions, setSiblingVersions] = useState<any[]>([]);
+  const [siblingsLoading, setSiblingsLoading] = useState(false);
   const [jdData, setJdData] = useState<JDResponse | null>(null);
   const [jdLoading, setJdLoading] = useState(false);
   const [jdError, setJdError] = useState<string | null>(null);
@@ -122,7 +128,7 @@ export default function AssessmentDetailsView({
     fetchActivity();
   }, [assessment?.id]);
 
-  // Fetch version history when versions tab is active
+  // Original per-row version_history fetch — powers the "Versions" tab.
   useEffect(() => {
     const fetchVersions = async () => {
       if (!assessment?.id || activeTab !== 'versions') return;
@@ -138,6 +144,31 @@ export default function AssessmentDetailsView({
     };
     fetchVersions();
   }, [assessment?.id, activeTab]);
+
+  // Sibling versions (V1 + V2 + V3 sharing the same JD) — powers the
+  // separate "New Versions" tab. Capped at the 3-version limit server-side.
+  useEffect(() => {
+    const fetchSiblings = async () => {
+      if (!assessment?.id || !assessment?.jd_id || activeTab !== 'newversions') return;
+      setSiblingsLoading(true);
+      try {
+        const response = await assessmentService.list({
+          jd_id: assessment.jd_id,
+          page_size: 50,
+        });
+        const items = (response.items || []).sort(
+          (a: any, b: any) => (a.version || 0) - (b.version || 0)
+        );
+        setSiblingVersions(items);
+      } catch (error) {
+        console.error('Failed to fetch sibling versions:', error);
+        setSiblingVersions([]);
+      } finally {
+        setSiblingsLoading(false);
+      }
+    };
+    fetchSiblings();
+  }, [assessment?.id, assessment?.jd_id, activeTab]);
 
   // Lazy-fetch the linked JD when the View JD tab is opened. Cached per
   // assessment.jd_id so switching tabs doesn't re-fetch.
@@ -401,18 +432,24 @@ export default function AssessmentDetailsView({
             {/* Action Buttons */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {onShare && canCreateAssessments && (() => {
-                // Archived assessments aren't candidate-facing — block Share so
-                // a recruiter can't accidentally invite someone to an inactive
-                // assessment. Mirrors the archived-row menu logic in
-                // Assessments.tsx (which hides Copy Link / Duplicate / etc.).
+                // Share is blocked for Archived (out of circulation) AND
+                // once invites have been revoked (assessment is sealed —
+                // recruiter should clone a new version for a fresh round).
                 const isArchived = assessment.status === 'Archived';
+                const hasRevoked = (assessment as any).has_revoked_invites === true;
+                const blockedReason = isArchived
+                  ? 'Archived assessments cannot be shared'
+                  : hasRevoked
+                  ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
+                  : '';
+                const disabled = !!blockedReason;
                 return (
                   <button
-                    onClick={isArchived ? undefined : onShare}
-                    disabled={isArchived}
-                    title={isArchived ? 'Archived assessments cannot be shared' : ''}
+                    onClick={disabled ? undefined : onShare}
+                    disabled={disabled}
+                    title={blockedReason}
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
-                      isArchived
+                      disabled
                         ? 'bg-white/60 text-gray-400 cursor-not-allowed'
                         : 'bg-white text-brand-blue hover:bg-brand-blue/5'
                     }`}
@@ -480,6 +517,16 @@ export default function AssessmentDetailsView({
               }`}
             >
               View JD
+            </button>
+            <button
+              onClick={() => setActiveTab('newversions')}
+              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'newversions'
+                  ? 'border-brand-blue text-brand-blue font-medium'
+                  : 'border-transparent text-gray-600 hover:text-brand-blue'
+              }`}
+            >
+              New Versions
             </button>
           </div>
         </div>
@@ -1295,6 +1342,126 @@ export default function AssessmentDetailsView({
             )}
           </div>
         )}
+
+        {/* New Versions tab — lists sibling assessments (V1 + clones)
+            sharing this assessment's jd_id. Separate from the per-row
+            edit history rendered by the Versions tab above. */}
+        {activeTab === 'newversions' && (
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                  <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                </div>
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">New Versions</h3>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600">All versions of this assessment (V1 is the original; V2 and V3 are duplicates).</p>
+            </div>
+
+            {siblingsLoading ? (
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
+                <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
+                <p className="text-gray-600">Loading versions...</p>
+              </div>
+            ) : siblingVersions.length === 0 ? (
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
+                <Layers className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
+                <p className="text-gray-600 mb-1 text-sm">No additional versions yet</p>
+                <p className="text-xs sm:text-sm text-gray-500">Duplicate this assessment to create additional versions</p>
+              </div>
+            ) : (
+              <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
+                {siblingVersions.map((sibling: any) => {
+                  const isThis = sibling.id === assessment.id;
+                  const enabledSections = [
+                    sibling.hr_enabled && 'HR',
+                    sibling.technical_enabled && 'Technical',
+                    sibling.coding_enabled && 'Coding',
+                  ].filter(Boolean).join(', ') || '—';
+                  const statusRaw = String(sibling.status || '').toLowerCase();
+                  const statusLabel = statusRaw === 'published' ? 'Active'
+                    : statusRaw === 'closed' ? 'Completed'
+                    : statusRaw === 'archived' ? 'Archived'
+                    : 'Draft';
+                  const statusChipClass = statusRaw === 'published'
+                    ? 'bg-green-100 text-green-800 ring-1 ring-green-200'
+                    : statusRaw === 'archived'
+                    ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+                    : statusRaw === 'closed'
+                    ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-200'
+                    : 'bg-amber-100 text-amber-800 ring-1 ring-amber-200';
+
+                  return (
+                    <div
+                      key={sibling.id}
+                      className={`rounded-xl border p-3 sm:p-4 ring-1 ring-black/[0.02] ${
+                        isThis ? 'border-brand-blue/40 bg-brand-blue/5' : 'border-gray-100 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-bold text-xs sm:text-sm">V{sibling.version || 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
+                            <h4 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight truncate">
+                              {stripVersionFromTitle(sibling.title || '') || sibling.short_id || 'Untitled assessment'}
+                              {sibling.version ? ` - Version ${sibling.version}` : ''}
+                            </h4>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusChipClass}`}>
+                                {statusLabel}
+                              </span>
+                              {isThis && (
+                                <span className="px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 text-xs font-medium rounded">
+                                  Viewing
+                                </span>
+                              )}
+                              {sibling.short_id && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-gray-700 ring-1 ring-gray-200 text-xs font-medium rounded">
+                                  {sibling.short_id}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-700 mt-2">
+                            <div className="flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span>Created by</span>
+                              <span className="font-medium truncate">{sibling.created_by_name || 'Unknown'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span>{formatIST(sibling.created_at)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span>{sibling.duration_minutes || assessment.duration_minutes || 30} min</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span>{enabledSections}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span>{sibling.invitations_count || 0} invited</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <CheckCircle className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                              <span>{sibling.completed_count || 0} completed</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
       {/* Assessment Info Tab */}
       {activeTab === 'info' && (() => {
         const complexityLabel = (val: string | null | undefined) => {

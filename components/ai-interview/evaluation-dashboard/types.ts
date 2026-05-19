@@ -6,9 +6,15 @@ export type Recommendation = 'Strong Hire' | 'Hire' | 'Consider' | 'No Hire';
 
 export interface Skill {
   name: string;
-  score: number;        // 0-10 scale
+  score: number;        // 0-10 scale (candidate's demonstration depth)
   level: Level;
   feedback: string;     // per-skill note from evaluator
+  /** True if this skill was probed by at least one interview question (from
+   *  ai_evaluation.skill_assessed_map or question_history). Independent of
+   *  score — a skill can be `asked: true` with score 0 ("asked but the
+   *  candidate didn't demonstrate it"). The Cluster Coverage view uses this
+   *  for its primary classification; `score`/`level` are the sub-detail. */
+  asked: boolean;
 }
 
 export interface Cluster {
@@ -52,6 +58,11 @@ export interface PerQuestionDetail {
   qNum: number;                          // 1-based display index (matches Q&A tab)
   section: 'mth' | 'nth' | 'hr';
   question: string;
+  /** Candidate's transcribed response (ASR-corrected when available).
+   *  Empty string when the candidate didn't answer (skipped / timed out / idk).
+   *  Reviewers need this on the Question Analysis page to validate the AI-
+   *  assigned score — without it, the score is a black box. */
+  answer: string;
   skills: PerQuestionSkill[];
   questionScore: number;                 // 0-10, weighted average
 }
@@ -88,4 +99,11 @@ export interface DashboardData {
   questionScores: Record<number, number>;
   /** Per-question detail rows for the timed-mode breakdown table. */
   perQuestionDetails: PerQuestionDetail[];
+  /** Planned question count per section (from rounds_config.planned_questions).
+   *  Used as the denominator for Section Score per spec:
+   *    Section Score = sum(delivered q-scores) / planned_count
+   *  with skipped/undelivered slots contributing 0. Falls back to the
+   *  delivered count in the calculation display when the planned count
+   *  isn't available (older interviews). */
+  plannedCounts: { mustHave: number; niceToHave: number };
 }

@@ -28,6 +28,188 @@ function scoreToLevel(score: number): Level {
   return 'Low';
 }
 
+// Shared client-side alias table. Used by both the Coverage lookup
+// (`lookupAsked`) and the per-question skill-attribution scan. Keys are
+// lowercased substrings that may appear inside JD skill names; values are
+// alternate tokens that may appear in the actual question text.
+const SKILL_ALIASES: Record<string, string[]> = {
+  'git':            ['git', 'github', 'gitlab', 'bitbucket', 'version control'],
+  'version control': ['git', 'github', 'gitlab', 'bitbucket', 'vcs', 'version control'],
+  'aws':            ['aws', 'amazon web services', 'ec2', 's3', 'lambda'],
+  'azure':          ['azure', 'microsoft azure'],
+  'gcp':            ['gcp', 'google cloud'],
+  'cloud':          ['cloud', 'aws', 'azure', 'gcp'],
+  'docker':         ['docker', 'container'],
+  'kubernetes':     ['kubernetes', 'k8s'],
+  'python':         ['python'],
+  'java':           ['java', 'jvm'],
+  'spring':         ['spring', 'spring boot', 'spring framework'],
+  'tensorflow':     ['tensorflow', 'tf'],
+  'pytorch':        ['pytorch', 'torch'],
+  'natural language': ['nlp', 'natural language', 'transformer', 'language model'],
+  'machine learning': ['machine learning', 'ml', 'regression', 'classifier', 'model training'],
+  'deep learning':  ['deep learning', 'neural network', 'cnn', 'rnn', 'transformer'],
+  'kafka':          ['kafka'],
+  'rabbitmq':       ['rabbitmq', 'rabbit mq'],
+  'redis':          ['redis'],
+  'mongodb':        ['mongodb', 'mongo'],
+  'postgresql':     ['postgresql', 'postgres', 'psql'],
+  'oracle':         ['oracle'],
+  'mysql':          ['mysql', 'mariadb'],
+  'prometheus':     ['prometheus'],
+  'grafana':        ['grafana'],
+  'splunk':         ['splunk'],
+  'jwt':            ['jwt', 'json web token'],
+  'elk':            ['elk', 'elasticsearch', 'logstash', 'kibana'],
+  'terraform':      ['terraform', 'iac', 'infrastructure as code'],
+  'restful':        ['rest', 'restful', 'rest api'],
+  'reactive':       ['reactive programming', 'reactive', 'rxjs'],
+  'serverless':     ['serverless', 'lambda function', 'aws lambda'],
+  'genai':          ['genai', 'generative ai', 'llm', 'chatgpt'],
+  'sso':            ['sso', 'single sign-on', 'single sign on'],
+  'single sign':    ['sso', 'single sign-on', 'single sign on'],
+  'design pattern': ['design pattern', 'design patterns'],
+  'microservice':   ['microservice', 'microservices'],
+  'hazelcast':      ['hazelcast'],
+  'ai platforms':   ['ai platforms', 'ai platform', 'modern ai'],
+};
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function wordBoundaryTest(kw: string, blob: string): boolean {
+  if (!kw || !blob) return false;
+  const esc = escapeRegex(kw);
+  const startsWithWord = /^\w/.test(kw);
+  const endsWithWord = /\w$/.test(kw);
+  const pattern = startsWithWord && endsWithWord
+    ? new RegExp(`\\b${esc}\\b`)
+    : new RegExp(esc);
+  return pattern.test(blob);
+}
+
+/** Search keywords for a JD skill name: its comma components plus any
+ *  SKILL_ALIASES entry whose key appears as a substring of the skill name.
+ *  Example: "Familiarity with version control systems like Git" picks up
+ *  the 'git' and 'version control' alias lists. */
+function keywordsForSkill(skillName: string): string[] {
+  const sl = skillName.toLowerCase();
+  const out = new Set<string>();
+  for (const c of sl.split(',').map(c => c.trim()).filter(Boolean)) out.add(c);
+  for (const [aliasKey, aliasList] of Object.entries(SKILL_ALIASES)) {
+    if (sl.includes(aliasKey)) for (const a of aliasList) out.add(a);
+  }
+  return [...out];
+}
+
+// Words that carry no real signal in a skill name — dropping them lets
+// us match arbitrary JD names (technical OR non-technical) on the
+// meaningful tokens. "Stakeholder management" → ["stakeholder",
+// "management"]; "Understanding of neural network architectures" →
+// ["neural", "network", "architectures"]; "Lead generation and CRM" →
+// ["lead", "generation", "crm"].
+const SKILL_STOPWORDS = new Set([
+  // articles / prepositions / conjunctions
+  'a', 'an', 'and', 'or', 'the', 'to', 'of', 'in', 'on', 'at', 'for', 'with',
+  'by', 'from', 'as', 'is', 'are', 'was', 'be', 'been', 'being', 'into',
+  // generic skill-name framing words that appear in many JD entries
+  'understanding', 'familiarity', 'experience', 'knowledge', 'proficiency',
+  'expertise', 'ability', 'skilled', 'skill', 'skills', 'mastery',
+  'capable', 'capacity', 'awareness', 'fluency', 'practice', 'working',
+  'demonstrated', 'strong', 'good', 'basic',
+  // generic connectives
+  'such', 'like', 'including', 'etc', 'various', 'multiple', 'related',
+  'using', 'use', 'used', 'use-case', 'use-cases', 'usage',
+]);
+
+/** Tokenize a skill name into significant words (lowercased, stopword-
+ *  filtered, ≥2 chars). Punctuation is normalized to spaces. */
+function tokenizeSkillName(s: string): string[] {
+  return s.toLowerCase()
+    .replace(/[^\w\s/+#-]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 2 && !SKILL_STOPWORDS.has(t));
+}
+
+/** Return the JD skill names whose evidence appears in `text`.
+ *
+ *  Matching strategies (any one is enough), in order:
+ *   1. Alias-table hit — for known abbreviations / synonyms (k8s ↔
+ *      kubernetes, jwt ↔ json web token, etc).
+ *   2. Significant-bigram match — distinctive 2-word phrases derived
+ *      from the skill name itself, e.g. "stakeholder management",
+ *      "lead generation", "neural network". Bigrams are the sweet
+ *      spot: specific enough to avoid false positives on common
+ *      single words like "management" or "strategy", general enough
+ *      to work without a hand-curated alias for every domain.
+ *   3. Two-or-more-token match — for skills with multiple significant
+ *      tokens that don't form an adjacent bigram in the text, require
+ *      at least two of them to appear independently (e.g. "Talent
+ *      acquisition strategy" matches "we acquire talent through ...
+ *      strategic ..." because two tokens hit).
+ *   4. Single significant token — only when the JD skill reduces to
+ *      exactly one significant token AND it's distinctive enough
+ *      (≥4 chars, since 3-letter tokens like "ai"/"ml"/"hr" are
+ *      either covered by the alias table or too noisy to single-match).
+ *
+ *  This means the matcher is **content-agnostic**: it works for any
+ *  role — software, sales, HR, finance, design, ops — without any
+ *  per-domain configuration. The alias table only adds value for
+ *  *abbreviations* and *synonyms* the bigram fallback can't catch.
+ */
+function findSkillsInText(text: string, jdSkillNames: string[]): string[] {
+  const blob = text.toLowerCase();
+  if (!blob) return [];
+  const found: string[] = [];
+  const seenLower = new Set<string>();
+  for (const skill of jdSkillNames) {
+    const sl = skill.toLowerCase();
+    if (seenLower.has(sl)) continue;
+
+    // 1) Alias-table hit (covers abbreviations / well-known synonyms).
+    let matched = false;
+    for (const kw of keywordsForSkill(skill)) {
+      if (wordBoundaryTest(kw, blob)) { matched = true; break; }
+    }
+
+    // 2-4) Token-derived fallbacks — work for any skill name without
+    // per-domain configuration.
+    if (!matched) {
+      const tokens = tokenizeSkillName(sl);
+      if (tokens.length >= 2) {
+        // 2) Bigram match.
+        for (let i = 0; i < tokens.length - 1; i++) {
+          const bg = `${tokens[i]} ${tokens[i + 1]}`;
+          if (wordBoundaryTest(bg, blob)) { matched = true; break; }
+        }
+        // 3) ≥2-token independent match (stricter than 1 to avoid noise).
+        if (!matched) {
+          let hits = 0;
+          for (const t of tokens) {
+            if (wordBoundaryTest(t, blob)) {
+              hits += 1;
+              if (hits >= 2) { matched = true; break; }
+            }
+          }
+        }
+      } else if (tokens.length === 1) {
+        // 4) Single distinctive token (≥4 chars; short tokens like
+        // "ai"/"ml"/"hr" are handled by the alias table).
+        const t = tokens[0];
+        if (t.length >= 4 && wordBoundaryTest(t, blob)) matched = true;
+      }
+    }
+
+    if (matched) {
+      found.push(skill);
+      seenLower.add(sl);
+    }
+  }
+  return found;
+}
+
 function priorityNumToLevel(p: number): Level {
   if (p >= 3) return 'High';
   if (p === 2) return 'Medium';
@@ -118,6 +300,72 @@ function buildClustersFromConfig(
   const skillScoresMap = (eval_?.skill_scores_map || {}) as Record<string, number>;
   const evaluations = eval_?.evaluations || [];
   const clusterInsights = eval_?.cluster_insights || [];
+  // ── Assessment Coverage: was each skill probed by a delivered question? ──
+  // Priority order:
+  //   1. ai_evaluation.skill_assessed_map (server-side authoritative map,
+  //      built from question_history.assigned_skills + question text).
+  //   2. question_history[i].assigned_skills — the at-ask-time planner
+  //      snapshot (primary + planned secondaries) for each delivered slot.
+  //      This is the "Question Distribution" source — every skill the slot
+  //      was meant to probe gets credit, even if the question text only
+  //      named one of them explicitly.
+  //   3. Question-text scan across evaluations[].question — fallback for
+  //      legacy interviews where assigned_skills wasn't persisted (the
+  //      transcript_evaluation_service used to drop it in _build_question_
+  //      history). Catches skill mentions inside multi-skill questions
+  //      ("How do you balance IDS/IPS, VLAN, STP, RSTP, MSTP, and Zero
+  //      Trust?") that the LLM only tagged with a single topic.
+  const assessedMap = (eval_?.skill_assessed_map || {}) as Record<string, boolean>;
+  const hasAssessedMap = Object.keys(assessedMap).length > 0;
+  const questionHistory = (eval_?.question_history || []) as any[];
+
+  // Collect every skill named in any question_history[].assigned_skills.
+  // Only counts as "available" when at least one entry actually has a
+  // non-empty list (older interviews stored []/null).
+  const assignedSkillSet = new Set<string>();
+  for (const q of questionHistory) {
+    const a = q?.assigned_skills;
+    if (Array.isArray(a)) {
+      for (const s of a) {
+        if (typeof s === 'string' && s.trim()) assignedSkillSet.add(s.toLowerCase());
+      }
+    }
+  }
+  const hasAssignedSnapshot = assignedSkillSet.size > 0;
+
+  // Always build the question-text blob — it's now used as a fallback
+  // alongside the authoritative sources (not exclusively), so older
+  // sessions whose stored skill_assessed_map was built before the
+  // backend's _SKILL_ALIASES caught git/aws/azure/etc. can still surface
+  // those skills as Covered when the question text plainly probed them.
+  const questionBlob = (evaluations as any[])
+    .map(e => (e?.question || ''))
+    .join(' ')
+    .toLowerCase();
+
+  const lookupAsked = (sname: string, score010: number): boolean => {
+    // Strongest signal: if the evaluator scored this skill above 0, it
+    // was definitely probed — that score wouldn't exist otherwise.
+    if (score010 > 0) return true;
+
+    const sl = sname.toLowerCase();
+
+    // Union semantics: a skill is "asked" if ANY authoritative source
+    // says yes. Older approach used strict priority order and trusted
+    // skill_assessed_map even when it was stale.
+    if (hasAssessedMap) {
+      for (const k of Object.keys(assessedMap)) {
+        if (k.toLowerCase() === sl && assessedMap[k]) return true;
+      }
+    }
+    if (assignedSkillSet.has(sl)) return true;
+
+    if (!questionBlob) return false;
+    for (const kw of keywordsForSkill(sname)) {
+      if (wordBoundaryTest(kw, questionBlob)) return true;
+    }
+    return false;
+  };
 
   // Weights always sum to exactly 100 so displayed math is consistent
   const weights = computeWeights(configClusters);
@@ -144,6 +392,7 @@ function buildClustersFromConfig(
         score: Math.round(score010 * 10) / 10,
         level: scoreToLevel(score010),
         feedback: lookupFeedback(sname, evaluations) || 'No specific feedback captured for this skill.',
+        asked: lookupAsked(sname, score010),
       };
     });
 
@@ -254,6 +503,243 @@ function priorityLabelToLevel(raw: any): Level {
 function buildPerQuestionDetails(
   eval_: any,
   clusterPriorityBySkill: Record<string, Level> = {},
+  clusterCanonicalNameBySkill: Record<string, string> = {},
+): PerQuestionDetail[] {
+  // Drive from question_history.assigned_skills when present — that's the
+  // planner snapshot (primary + secondaries the slot was meant to probe),
+  // so every delivered question shows the FULL multi-skill row instead of
+  // whichever single topic the LLM evaluator picked. Falls back to the
+  // legacy skill_question_map path for older interviews that pre-date the
+  // assigned_skills preservation fix (deejan's session etc.).
+  const questionHistory = (eval_?.question_history || []) as any[];
+  const hasAssignedSnapshot = questionHistory.some(
+    q => Array.isArray(q?.assigned_skills) && q.assigned_skills.length > 0
+  );
+  if (hasAssignedSnapshot) {
+    return buildPerQuestionDetailsFromHistory(eval_, clusterPriorityBySkill, clusterCanonicalNameBySkill);
+  }
+  return buildPerQuestionDetailsLegacy(eval_, clusterPriorityBySkill);
+}
+
+/**
+ * Build per-question rows from question_history (preferred path).
+ *
+ * Drives off:
+ *   - question_history[i].assigned_skills   — planner snapshot (every skill
+ *                                              the slot was meant to probe)
+ *   - question_history[i].round_type        — section assignment
+ *   - question_history[i].question / answer — display + transcript hook
+ *   - evaluations[] (filtered by question_number + topic) — per-skill score
+ *                                              + evaluator note
+ *
+ * Sequentially renumbers (1..N) for display so gaps from follow-ups /
+ * auto-skipped slots in the raw question_number stream don't surface in
+ * the UI. Filters out follow-ups and slot-auto-skips so the recruiter sees
+ * only the actually-asked main questions.
+ */
+function buildPerQuestionDetailsFromHistory(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
+  clusterCanonicalNameBySkill: Record<string, string> = {},
+): PerQuestionDetail[] {
+  const questionHistory = (eval_?.question_history || []) as any[];
+  const evaluations = (eval_?.evaluations || []) as any[];
+
+  // Group evaluations by question_number → list of skill-rows. A single
+  // delivered question can have multiple eval rows (one per assigned
+  // skill) under the multi-skill scoring scheme.
+  const evalsByQ: Record<number, any[]> = {};
+  for (const ev of evaluations) {
+    const qn = Number(ev?.question_number || 0);
+    if (!qn) continue;
+    (evalsByQ[qn] = evalsByQ[qn] || []).push(ev);
+  }
+
+  // Per-skill score lookup: prefer exact topic match, fall back to substring.
+  // Score 0 (with empty note) when the evaluator emitted no row for this skill.
+  const scoreForSkill = (qn: number, skill: string): { score: number; note: string } => {
+    const sl = skill.toLowerCase().trim();
+    const rows = evalsByQ[qn] || [];
+    const readScore = (r: any): number => {
+      const raw = Number(r?.score ?? r?.evaluation?.overall ?? 0);
+      return Math.max(0, Math.min(10, isFinite(raw) ? raw : 0));
+    };
+    const readNote = (r: any): string =>
+      String(r?.one_line_note || r?.evaluation?.brief_note || '').slice(0, 250);
+
+    for (const r of rows) {
+      const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
+      if (topic === sl) return { score: readScore(r), note: readNote(r) };
+    }
+    for (const r of rows) {
+      const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
+      if (topic && (topic.includes(sl) || sl.includes(topic))) {
+        return { score: readScore(r), note: readNote(r) };
+      }
+    }
+    return { score: 0, note: '' };
+  };
+
+  const sectionFromRT = (rt: any): PerQuestionDetail['section'] => {
+    const r = String(rt || '').toLowerCase();
+    if (r === 'nice_to_have_skills') return 'nth';
+    if (r === 'hr') return 'hr';
+    return 'mth';
+  };
+
+  // Filter: only main questions actually delivered to the candidate.
+  // - is_follow_up: skip (sub-interactions roll up under their parent)
+  // - response_type='auto_skipped_by_coverage': slot was bypassed, never asked
+  // - empty question text: synthetic placeholder rows from padding
+  // - duplicate skip rows: when a slot times out or is auto-skipped after a
+  //   candidate stops responding, the backend records a row that inherits
+  //   `current_question` (the last spoken question text). The same Q text
+  //   then appears 2-5 times in the UI with only the first being the real
+  //   ask. Collapse later skip rows that share question text + round_type
+  //   with an earlier row in the same section.
+  const _skipResponseTypes = new Set([
+    'skipped', 'not_asked', 'timeout', 'low_coverage',
+    'auto_skipped_offline', 'auto_skipped_by_coverage',
+  ]);
+  const _seenDedupeKeys = new Set<string>();
+  const mains = questionHistory.filter(q => {
+    if (q?.is_follow_up) return false;
+    const rt = String(q?.response_type || '').toLowerCase();
+    if (rt === 'auto_skipped_by_coverage') return false;
+    if (!q?.question || !String(q.question).trim()) return false;
+    const _qText = String(q.question).trim().toLowerCase();
+    const _rtKey = String(q?.round_type || '').toLowerCase();
+    const _key = `${_rtKey}::${_qText}`;
+    if (_skipResponseTypes.has(rt) && _seenDedupeKeys.has(_key)) return false;
+    _seenDedupeKeys.add(_key);
+    return true;
+  });
+
+  // Map evaluator topic strings (possibly truncated / paraphrased — e.g.
+  // "cloud platforms") back to the canonical JD skill name (e.g.
+  // "Familiarity with cloud platforms like AWS or Azure") so the per-Q
+  // breakdown uses the same wording as the cluster panels. Falls back
+  // to the raw topic when no JD match.
+  const canonicalKeys = Object.keys(clusterCanonicalNameBySkill);
+  const normalizeSkillName = (topic: string): string => {
+    const tl = String(topic || '').toLowerCase().trim();
+    if (!tl) return topic;
+    const exact = clusterCanonicalNameBySkill[tl];
+    if (exact) return exact;
+    let best: string | null = null;
+    let bestLen = 0;
+    for (const k of canonicalKeys) {
+      if (k.includes(tl) || tl.includes(k)) {
+        if (k.length > bestLen) {
+          best = clusterCanonicalNameBySkill[k];
+          bestLen = k.length;
+        }
+      }
+    }
+    return best || topic;
+  };
+
+  return mains.map((q, idx): PerQuestionDetail => {
+    // Use the actual question_number from the transcript / history so the
+    // Question Analysis tab aligns 1:1 with the Transcript view ("Q11" in
+    // Transcript shows up as "Q11" in Analysis, not "Q4 NHS"). Falls back
+    // to a sequential number when the row didn't carry one (legacy rows).
+    const origQ = Number(q?.question_number || (idx + 1));
+    const displayQ = origQ;
+    const section = sectionFromRT(q?.round_type);
+    const assigned: string[] = Array.isArray(q?.assigned_skills) ? q.assigned_skills : [];
+
+    // Source priority for the displayed skill rows:
+    //   1. Skills whose keywords appear in the actual question text
+    //      (most accurate to "what did Linda ask about"). Linda's
+    //      generated question often diverges from the planner's slot
+    //      directive — e.g. slot 3 planned for "Oracle + Spring" but
+    //      Linda asked about MongoDB/PostgreSQL/Prometheus instead.
+    //      Both `assigned_skills` and `evaluations[].topic` would then
+    //      surface the wrong skills.
+    //   2. Evaluator's topic attribution (next best — what the LLM tagged
+    //      after seeing the question).
+    //   3. Planner snapshot (`assigned_skills`).
+    //   4. `item.topic` (last-resort; backend pre-fills it with the next
+    //      uncovered skill before evaluation, which is unreliable).
+    const jdSkillNames = Object.values(clusterCanonicalNameBySkill);
+    const fromText = findSkillsInText(String(q?.question || ''), jdSkillNames);
+
+    const evalRows = evalsByQ[origQ] || [];
+    const evalTopics: string[] = [];
+    for (const r of evalRows) {
+      const t = String(r?.topic || r?.evaluation?.topic || '').trim();
+      if (t && t.toLowerCase() !== 'general') evalTopics.push(t);
+    }
+
+    let baseNames: string[];
+    if (fromText.length > 0) {
+      baseNames = fromText;
+    } else if (evalTopics.length > 0) {
+      baseNames = evalTopics.map(normalizeSkillName);
+    } else if (assigned.length > 0) {
+      baseNames = assigned;
+    } else {
+      baseNames = [];
+    }
+
+    // Case-insensitive dedupe, preserve first-seen casing.
+    const seen = new Set<string>();
+    const skillNames: string[] = [];
+    for (const s of baseNames) {
+      const k = String(s).toLowerCase().trim();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      skillNames.push(s);
+    }
+
+    const skills: PerQuestionSkill[] = skillNames.map(skillName => {
+      const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] || 'Medium';
+      const weight = PRIORITY_WEIGHT[priority];
+      const { score, note } = scoreForSkill(origQ, skillName);
+      return {
+        name: skillName,
+        priority,
+        weight,
+        score: Math.round(score * 10) / 10,
+        note,
+      };
+    });
+    skills.sort((a, b) => b.weight - a.weight || b.score - a.score);
+
+    // Weighted question score = Σ(score × weight) / Σ(weight). Prefer the
+    // backend's stored entry.score when present so forced-to-zero overrides
+    // (garbage-answer rule, etc.) survive into the display.
+    const sumW = skills.reduce((s, k) => s + k.weight, 0);
+    const sumWS = skills.reduce((s, k) => s + k.score * k.weight, 0);
+    const weighted = sumW > 0 ? sumWS / sumW : 0;
+    const entryScore = typeof q?.score === 'number' ? q.score : null;
+    const questionScore = entryScore !== null
+      ? Math.round(entryScore * 10) / 10
+      : Math.round(weighted * 10) / 10;
+
+    return {
+      qNum: displayQ,
+      section,
+      question: String(q?.question || ''),
+      answer: String(q?.answer || ''),
+      skills,
+      questionScore,
+    };
+  });
+}
+
+/**
+ * Legacy per-question builder — drives off skill_question_map (reverse
+ * index) + question_groups. Used only for interviews predating the
+ * assigned_skills preservation fix, where question_history rows lack the
+ * slot-plan snapshot. Suffers from the documented issues (single-skill
+ * attribution per question, safety-net phantom skills polluting the list,
+ * missing rows for questions with no skill_question_map entry).
+ */
+function buildPerQuestionDetailsLegacy(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
 ): PerQuestionDetail[] {
   const skillQMap = (eval_?.skill_question_map || {}) as Record<
     string,
@@ -267,15 +753,19 @@ function buildPerQuestionDetails(
   // same priority chip as the Skills Assessment Summary tab.
   const groups = (eval_?.question_groups || []) as Array<any>;
 
-  // q_num (1-based display index) → { section, question text }
-  const qMeta: Record<number, { section: PerQuestionDetail['section']; question: string }> = {};
+  // q_num (1-based display index) → { section, question, answer }
+  const qMeta: Record<number, { section: PerQuestionDetail['section']; question: string; answer: string }> = {};
   groups.forEach((g, idx) => {
     const display = idx + 1;
     const rt = String(g?.round_type || '').toLowerCase();
     let section: PerQuestionDetail['section'] = 'mth';
     if (rt === 'nice_to_have_skills') section = 'nth';
     else if (rt === 'hr') section = 'hr';
-    qMeta[display] = { section, question: String(g?.question || g?.main_question || '') };
+    qMeta[display] = {
+      section,
+      question: String(g?.question || g?.main_question || ''),
+      answer: String(g?.answer || g?.main_answer || ''),
+    };
   });
 
   // Reverse skill_question_map → per-question skill rows
@@ -304,7 +794,7 @@ function buildPerQuestionDetails(
   return Object.entries(perQ)
     .map(([qStr, skills]): PerQuestionDetail => {
       const qNum = Number(qStr);
-      const meta = qMeta[qNum] || { section: 'mth' as const, question: '' };
+      const meta = qMeta[qNum] || { section: 'mth' as const, question: '', answer: '' };
       const qsRaw = questionScores[qNum] ?? questionScores[String(qNum)];
       const questionScore = typeof qsRaw === 'number'
         ? Math.round(qsRaw * 10) / 10
@@ -313,6 +803,7 @@ function buildPerQuestionDetails(
         qNum,
         section: meta.section,
         question: meta.question,
+        answer: meta.answer,
         skills,
         questionScore,
       };
@@ -334,8 +825,28 @@ export function buildDashboardData(params: {
   cluster_config: ClusterConfig;
   candidate: { name: string; role?: string; email?: string };
   interview: { mode?: string; completed_at?: string | null; created_at?: string };
+  /** Per-round budget from the session row. Used to derive plannedCounts
+   *  (denominator for Section Score per spec). When absent, plannedCounts
+   *  fall back to 0 and the consumer can use delivered count instead. */
+  rounds_config?: Array<{ type?: string; planned_questions?: number; enabled?: boolean }>;
 }): DashboardData {
-  const { ai_evaluation: eval_, cluster_config, candidate, interview } = params;
+  const { ai_evaluation: eval_, cluster_config, candidate, interview, rounds_config } = params;
+
+  // Planned question counts per section — feeds the Question Analysis page's
+  // section-score denominator. Sum across all enabled rounds matching each
+  // type (multi-round configurations are rare but supported).
+  const plannedCounts = (() => {
+    let mh = 0, nh = 0;
+    for (const r of (rounds_config || [])) {
+      if (r?.enabled === false) continue;
+      const t = String(r?.type || '').toLowerCase();
+      const pq = Number(r?.planned_questions) || 0;
+      if (pq <= 0) continue;
+      if (t === 'must_have_skills') mh += pq;
+      else if (t === 'nice_to_have_skills') nh += pq;
+    }
+    return { mustHave: mh, niceToHave: nh };
+  })();
 
   const mustHaveClusters = buildClustersFromConfig(cluster_config?.mth || [], eval_, 1);
   const niceToHaveClusters = buildClustersFromConfig(
@@ -446,15 +957,22 @@ export function buildDashboardData(params: {
 
   // Build skill → cluster priority map so the Question-by-Question breakdown
   // shows the same P1/P2/P3 chip as the Skills Assessment Summary (same skill
-  // can't appear as P1 in one tab and P2 in another).
+  // can't appear as P1 in one tab and P2 in another). Also collect the
+  // canonical (original-cased) JD skill name for each lowercased key so the
+  // per-Q breakdown can normalize the evaluator's (often abbreviated) topic
+  // strings back to the JD wording the rest of the UI uses.
   const clusterPriorityBySkill: Record<string, Level> = {};
+  const clusterCanonicalNameBySkill: Record<string, string> = {};
   for (const c of [...mustHaveClusters, ...niceToHaveClusters]) {
     for (const s of c.skills) {
       const key = (s.name || '').toLowerCase().trim();
-      if (key) clusterPriorityBySkill[key] = c.priority;
+      if (key) {
+        clusterPriorityBySkill[key] = c.priority;
+        if (!clusterCanonicalNameBySkill[key]) clusterCanonicalNameBySkill[key] = s.name;
+      }
     }
   }
-  const perQuestionDetails = buildPerQuestionDetails(eval_, clusterPriorityBySkill);
+  const perQuestionDetails = buildPerQuestionDetails(eval_, clusterPriorityBySkill, clusterCanonicalNameBySkill);
 
   return {
     candidate: {
@@ -490,5 +1008,6 @@ export function buildDashboardData(params: {
     mhsThreshold: MHS_THRESHOLD,
     questionScores,
     perQuestionDetails,
+    plannedCounts,
   };
 }

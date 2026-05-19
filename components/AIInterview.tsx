@@ -1273,15 +1273,6 @@ export default function AIInterview() {
                                   <Eye className="w-4 h-4 flex-shrink-0 text-gray-400" />
                                   View Details
                                 </button>
-                                {config.status === 'published' && canShareAIInterviews && (
-                                  <button
-                                    onClick={() => handleCopyLink(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-                                  >
-                                    <Copy className="w-4 h-4 flex-shrink-0 text-gray-400" />
-                                    Copy Link
-                                  </button>
-                                )}
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}

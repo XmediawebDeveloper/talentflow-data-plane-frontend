@@ -1152,6 +1152,52 @@ export default function MyResumesPage() {
     }
   };
 
+  // Handle unarchive resumes - clears is_archived and restores into the user's root folder
+  // (we don't track where the resume lived before archiving, so root is the safest default;
+  // the recruiter can then use "Move to Folder" to relocate it).
+  const handleUnarchiveResumes = async (resumeIds: string[]) => {
+    try {
+      const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+      if (!rootFolder) {
+        toast.error('Root folder not found');
+        return;
+      }
+      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+
+      await Promise.all(resumeIds.map(async (id) => {
+        await resumeService.archive(id, false);
+        await resumeService.move(id, rootFolder.id);
+      }));
+
+      setResumes(prev => prev.map(r =>
+        resumeIds.includes(r.id)
+          ? { ...r, isArchived: false, archivedAt: undefined, folderId: rootFolder.id }
+          : r
+      ));
+
+      setFolders(prev => prev.map(f => {
+        if (f.id === rootFolder.id) {
+          return { ...f, count: f.count + resumeIds.length };
+        }
+        if (archivedFolder && f.id === archivedFolder.id) {
+          return { ...f, count: Math.max(0, f.count - resumeIds.length) };
+        }
+        return f;
+      }));
+
+      setSelectedResumes([]);
+      // Refetch the current folder view — the displayed list (`filteredResumes`)
+      // is the server-returned page for the selected folder, so the
+      // just-unarchived row won't disappear until we re-query. Without this,
+      // the row sits there until the user hits refresh.
+      isFetchingRef.current = false;
+      fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      toast.success(`${resumeIds.length} resume(s) unarchived and moved to Root`);
+    } catch (error) {
+      toast.error('Failed to unarchive resumes');
+    }
+  };
+
   // Handle bulk download of selected resumes
   const handleBulkDownload = async () => {
     if (selectedResumes.length === 0) return;
@@ -2350,20 +2396,32 @@ export default function MyResumesPage() {
 
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
-        {selectedResumes.length > 0 && (
+        {selectedResumes.length > 0 && (() => {
+          // Detect the Archived Resumes folder context — when active, the
+          // recruiter is looking at archived resumes, so swap Archive → Unarchive
+          // and hide Apply-to-Job / Assessment / AI Talent Match (those actions
+          // shouldn't apply to retired records).
+          const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+          const isArchivedContext =
+            !!archivedFolder &&
+            (selectedFolder === archivedFolder.id ||
+              selectedResumes.every(id => resumes.find(r => r.id === id)?.isArchived));
+          return (
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
-            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
+            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
             onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-            onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
-            onArchive={canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
-            onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
+            onAssessment={!isArchivedContext && hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
+            onArchive={!isArchivedContext && canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
+            onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
+            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
           />
-        )}
+          );
+        })()}
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-gray-200">
           <div className="flex-1 border-b sm:border-b-0 sm:border-r border-gray-200">

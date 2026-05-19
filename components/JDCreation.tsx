@@ -4296,7 +4296,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 1: Must-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Must-Have Skills <span className="text-red-500">*</span> ({extractedData.mustHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('mustHave')}
@@ -4359,7 +4359,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 2: Nice-to-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Nice-to-Have Skills</h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Nice-to-Have Skills ({extractedData.niceToHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('niceToHave')}
@@ -4418,7 +4418,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Must-Have Comments */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm sm:text-base font-semibold text-gray-900">Must-Have Comments</h3>
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900">Must-Have Comments ({extractedData.mustHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}

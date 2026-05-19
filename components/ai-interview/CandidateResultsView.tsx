@@ -1255,6 +1255,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   completed_at: liveSession.completed_at,
                   created_at: liveSession.created_at,
                 },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
               });
               // Compute avg response time from evaluations (seconds)
               const responseTimes = (eval_.evaluations || [])
@@ -1308,6 +1309,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   completed_at: liveSession.completed_at,
                   created_at: liveSession.created_at,
                 },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
               });
               return <CoverageV2 data={data} />;
             })()}
@@ -1486,9 +1488,40 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 //   3. text match against conversation_transcript follow-up flags
                 //      (fallback for re-evaluated sessions where question_history
                 //      lost the tagging).
+                // Dedupe synthetic skip duplicates. When a slot times out or
+                // is auto-skipped after a candidate stops responding, the
+                // backend records a question_history row that often inherits
+                // `current_question` (the last spoken question text), so the
+                // same Q text can appear 2-5 times in the UI with only the
+                // first being the real ask. Collapse later skip rows that
+                // share question text + round_type with an earlier row.
+                // Follow-ups are exempt — sub-interactions of one slot are
+                // expected to share their parent's main number.
+                const _isSkipResponse = (rt?: string): boolean => {
+                  const r = String(rt || '').toLowerCase();
+                  return r === 'skipped' || r === 'not_asked' || r === 'timeout'
+                    || r === 'low_coverage' || r === 'auto_skipped_offline'
+                    || r === 'auto_skipped_by_coverage';
+                };
+                const _seenKeys = new Set<string>();
+                const qaItems: any[] = [];
+                for (const _it of qaItemsRaw) {
+                  const _intent = String(_it.question_intent || '').toLowerCase();
+                  const _isFu = !!_it.is_follow_up
+                    || ['follow_up', 'probe', 'deep_dive'].includes(_intent);
+                  const _qText = String(_it.question || '').trim().toLowerCase();
+                  const _rt = String(_it.round_type || '').toLowerCase();
+                  const _key = `${_rt}::${_qText}`;
+                  if (!_isFu && _qText) {
+                    if (_isSkipResponse(_it.response_type) && _seenKeys.has(_key)) continue;
+                    _seenKeys.add(_key);
+                  }
+                  qaItems.push(_it);
+                }
+
                 type QaGroup = { main: any; followUps: any[] };
                 const groups: QaGroup[] = [];
-                for (const it of qaItemsRaw) {
+                for (const it of qaItems) {
                   const prev = groups.length > 0 ? groups[groups.length - 1] : null;
                   const _intent = (it.question_intent || '').toLowerCase();
                   const _qText = String(it.question || '');
@@ -1692,8 +1725,22 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     }
                   });
                 });
-                const getPrio = (skill?: string) => skill ? (skillPriority[skill.toLowerCase()] || 0) : 0;
-                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : p === 3 ? 5 : 3;
+                // Cluster config stores `priority` such that 3 = highest
+                // (P1), 2 = mid (P2), 1 = lowest (P3) — mirrors the backend
+                // _PRIO_MAP convention (see interview_evaluation.py:134).
+                // The Coverage panel inverts this via priorityNumToLevel in
+                // adapter.ts; this view used to render the raw number, which
+                // is why P1 skills showed up as "P3" chips with the wrong
+                // weight. Normalize at the boundary so all downstream code
+                // here works in "1 = highest, 3 = lowest" form.
+                const configToDisplayPrio = (p: number): number =>
+                  p >= 3 ? 1 : p === 2 ? 2 : p === 1 ? 3 : 0;
+                const getPrio = (skill?: string) =>
+                  skill ? configToDisplayPrio(skillPriority[skill.toLowerCase()] || 0) : 0;
+                // Spec: P1=10, P2=7, P3=4 (memory: timed eval spec). Unknown
+                // skills fall back to P3 weight rather than the previous 3,
+                // which wasn't a real priority level.
+                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : 4;
 
                 // ── Build evaluations lookup by question_number ──
                 // Used to surface per-skill rows + one_line_note for the AI Analysis Summary.
@@ -1782,21 +1829,30 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
                   const isNotAsked = item.response_type === 'not_asked';
 
-                  // Collect all skills for this question: primary topic + secondary_skills
+                  // Collect skills for this question. Source priority:
+                  //   1. evaluations[].topic — what the LLM evaluator actually
+                  //      scored on this question (coherent with the question
+                  //      text and the per-skill scores).
+                  //   2. secondary_skills from history (extra planner-tagged).
+                  //   3. item.topic — only as a last resort. The backend
+                  //      pre-fills this with the first uncovered skill BEFORE
+                  //      the LLM runs (transcript_evaluation_service.py:6003),
+                  //      so when the candidate skipped or the evaluator never
+                  //      tagged a topic, item.topic shows the next slot's
+                  //      planned skill rather than what the question asked.
                   type SkillRow = { skill: string; score: number; priority: number };
                   const skillsForQ: SkillRow[] = [];
                   const seen = new Set<string>();
                   const pushSkill = (skill?: string, score?: number) => {
                     if (!skill) return;
-                    const k = skill.toLowerCase();
-                    if (seen.has(k)) return;
+                    const k = skill.toLowerCase().trim();
+                    if (!k || seen.has(k)) return;
                     seen.add(k);
                     skillsForQ.push({ skill, score: Number(score) || 0, priority: getPrio(skill) });
                   };
-                  pushSkill(item.topic, item.score);
-                  (item.secondary_skills || []).forEach((s: any) => pushSkill(s.skill, s.score));
-                  // Also pull additional per-skill rows from evaluations if missing
                   (evalsByQ[item.question_number] || []).forEach((e: any) => pushSkill(e.topic, e.score));
+                  (item.secondary_skills || []).forEach((s: any) => pushSkill(s.skill, s.score));
+                  if (skillsForQ.length === 0) pushSkill(item.topic, item.score);
 
                   // Weighted final score using priority-derived weights
                   const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority || 3), 0);
@@ -1822,7 +1878,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
-                                Question {idx + 1}
+                                Question {item.question_number ?? idx + 1}
                               </span>
                               {duration != null && (
                                 <span className="inline-flex items-center gap-1 text-xs text-gray-500">
@@ -1967,7 +2023,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
-                                Question {idx + 1}
+                                Question {item.question_number ?? idx + 1}
                               </span>
                               {duration != null && (
                                 <span className="inline-flex items-center gap-1 text-xs text-gray-500">
@@ -1975,9 +2031,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                   {duration} seconds
                                 </span>
                               )}
-                              {item.topic && item.topic !== 'general' && (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-xs rounded-full">{item.topic}</span>
-                              )}
+                              {/* HR questions are behavioural / cultural / situational.
+                                  When the planner auto-skips an uncovered slot it stamps
+                                  the next uncovered TECHNICAL skill onto the synthetic
+                                  HR row, which then reads like a cloud / NLP question.
+                                  Allow only real HR sub-categories through; otherwise
+                                  collapse to a generic "HR" pill. */}
+                              {(() => {
+                                const HR_TOPICS = new Set(['behavioural', 'behavioral', 'cultural fit', 'situational']);
+                                const t = String(item.topic || '').trim();
+                                const label = HR_TOPICS.has(t.toLowerCase()) ? t : 'HR';
+                                return (
+                                  <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-xs rounded-full">{label}</span>
+                                );
+                              })()}
                               {isSkipped && (
                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
                                   {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
@@ -2742,6 +2809,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   completed_at: liveSession.completed_at,
                   created_at: liveSession.created_at,
                 },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
               });
               const aiConfidence = typeof eval_.ai_confidence === 'number'
                 ? eval_.ai_confidence
@@ -2798,6 +2866,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   completed_at: liveSession.completed_at,
                   created_at: liveSession.created_at,
                 },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
               });
               return <SkillsView data={data} />;
             })()}
@@ -2821,6 +2890,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   completed_at: liveSession.completed_at,
                   created_at: liveSession.created_at,
                 },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
               });
               return <QuestionsView data={data} />;
             })()}
