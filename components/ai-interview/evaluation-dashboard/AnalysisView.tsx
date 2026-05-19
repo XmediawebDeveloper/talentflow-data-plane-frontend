@@ -171,9 +171,13 @@ export function AnalysisView({ data }: { data: DashboardData }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      {isCovered && (
-                        <div className="text-xs text-emerald-700 bg-emerald-100 px-2 py-1 rounded font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>
-                          {Math.round(skill.score)}
+                      {isCovered && skill.level && (
+                        <div className={`text-xs px-2 py-1 rounded font-semibold ${
+                          skill.level === 'High' ? 'bg-emerald-100 text-emerald-700' :
+                          skill.level === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`} style={{ fontFamily: 'var(--font-mono)' }}>
+                          {skill.level}
                         </div>
                       )}
                       <span className={`text-xs uppercase tracking-wider font-semibold ${isCovered ? 'text-emerald-700' : 'text-gray-400'}`} style={{ fontFamily: 'var(--font-mono)' }}>

@@ -12,7 +12,13 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
   // Safe accessors with defaults
   const assessmentTitle = results.assessment_title || assessmentInfo?.assessment_title || 'Assessment';
   const completedAt = results.completed_at ? new Date(results.completed_at) : new Date();
-  const totalQuestions = results.question_evaluations?.length || assessmentInfo?.duration_minutes || 0;
+  // Exclude HR round from the headline question count — HR questions are
+  // behavioral and not scored the same way; recruiters and candidates expect
+  // the count to reflect only technical/coding questions.
+  const totalQuestions =
+    results.question_evaluations?.filter(q => q.round_type !== 'hr').length
+    || assessmentInfo?.duration_minutes
+    || 0;
   const durationMinutes = assessmentInfo?.duration_minutes || 30;
 
   // Format duration

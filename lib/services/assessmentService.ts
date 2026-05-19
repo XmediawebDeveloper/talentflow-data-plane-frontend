@@ -754,11 +754,49 @@ export const assessmentService = {
   /**
    * 2. Clone/duplicate an assessment
    */
-  async clone(assessmentId: string, newTitle?: string): Promise<AssessmentCloneResponse> {
+  async clone(
+    assessmentId: string,
+    options?: { newTitle?: string }
+  ): Promise<AssessmentCloneResponse> {
     try {
+      const payload: AssessmentCloneRequest = {};
+      if (options?.newTitle) payload.new_title = options.newTitle;
       const response = await api.post<AssessmentCloneResponse>(
         `/assessments/${assessmentId}/clone`,
-        newTitle ? { new_title: newTitle } : {}
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Count of pending/sent invitations that the revoke action would
+   * invalidate right now. Used by the confirmation modal.
+   */
+  async getRevokableInvitationsCount(assessmentId: string): Promise<number> {
+    try {
+      const response = await api.get<{ count: number }>(
+        `/assessments/${assessmentId}/invitations/revokable-count`
+      );
+      return response.data.count;
+    } catch (error) {
+      console.error('Failed to fetch revokable invitations count:', error);
+      return 0;
+    }
+  },
+
+  /**
+   * Revoke all PENDING/SENT invitations for an assessment. Candidates who
+   * already opened, started, or completed the link are untouched.
+   */
+  async revokePendingInvitations(
+    assessmentId: string
+  ): Promise<{ revoked_count: number; revoked_ids: string[] }> {
+    try {
+      const response = await api.post<{ revoked_count: number; revoked_ids: string[] }>(
+        `/assessments/${assessmentId}/invitations/revoke-pending`
       );
       return response.data;
     } catch (error) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard, Target, Eye } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
@@ -90,6 +90,27 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
   // Find root folder for default selection
   const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+
+  // Flatten the folder TREE (folder.children) into a single list so the
+  // dropdown can include sub-folders. Without this, only top-level folders
+  // show up — and the targetFolder ID for a sub-folder never matches an
+  // <option>, so the dropdown silently falls back to Root.
+  const allFolders = useMemo(() => {
+    const out: { folder: Folder; depth: number; path: string }[] = [];
+    const walk = (nodes: Folder[] | undefined, depth: number, parentPath: string) => {
+      if (!nodes) return;
+      for (const f of nodes) {
+        if (f.id === 'all') continue; // synthetic "All Resumes" filter
+        const path = parentPath ? `${parentPath} / ${f.name}` : f.name;
+        out.push({ folder: f, depth, path });
+        if (f.children && f.children.length > 0) {
+          walk(f.children, depth + 1, path);
+        }
+      }
+    };
+    walk(folders, 0, '');
+    return out;
+  }, [folders]);
 
   // Initialize with targetFolder, or root folder if available
   const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
@@ -577,9 +598,9 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   // Storage percentage calculation removed (no longer displayed in UI)
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col relative">
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto relative">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
           <div className="min-w-0">
             <h2 className="text-base sm:text-xl text-gray-900 dark:text-slate-50">Upload Resume</h2>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">
@@ -594,7 +615,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6">
           {/* Success State with Scoring Option */}
           {uploadSuccess ? (
             <div className="text-center py-6 sm:py-8">
@@ -919,16 +940,20 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   )}
                   {/* Only show "Choose folder" if no root folder exists */}
                   {!rootFolder && <option value="">Choose folder...</option>}
-                  {/* Then show other folders excluding 'all', root, and Archived Resumes */}
-                  {folders.filter(f =>
-                    f.id !== 'all' &&
-                    !(f.name.toLowerCase() === 'root' && !f.parentId) &&
-                    !(f.name === 'Archived Resumes' && !f.parentId)
-                  ).map(folder => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
+                  {/* Flattened tree — includes sub-folders shown with the
+                      breadcrumb path (e.g. "Arun / sub folder") and indented
+                      so the hierarchy is visually obvious. Excludes 'all',
+                      the Root folder (rendered above), and 'Archived Resumes'. */}
+                  {allFolders
+                    .filter(({ folder: f }) =>
+                      !(f.name.toLowerCase() === 'root' && !f.parentId) &&
+                      !(f.name === 'Archived Resumes' && !f.parentId),
+                    )
+                    .map(({ folder, depth, path }) => (
+                      <option key={folder.id} value={folder.id}>
+                        {`${'  '.repeat(depth)}${depth > 0 ? '↳ ' : ''}${path}`}
+                      </option>
+                    ))}
                 </select>
                 
                 <button
@@ -1017,7 +1042,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
         {/* Hide footer when showing success state */}
         {!uploadSuccess && (
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-black"

@@ -40,6 +40,12 @@ interface UseInterviewProctoringMonitorOptions {
   voiceDetectionSensitivity?: number;
   obstructionThreshold?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; severity: string; details: Record<string, any> }) => Promise<any>;
+  // Returns true when voice-detection must be suppressed because the audio
+  // currently in the candidate's mic is expected (Linda's TTS echo or the
+  // candidate's own answer). Without this, both phases are misclassified as
+  // "another voice detected" and the proctor floods the report with false
+  // violations.
+  shouldSuppressVoiceCheck?: () => boolean;
 }
 
 interface ProctoringState {
@@ -89,6 +95,15 @@ const VOICE_CHECK_INTERVAL = 3000;   // Check voice every 3 seconds
 const NOISE_THRESHOLD = 80;
 // Minimum gap between noise warning toasts — advisory only, don't spam candidate
 const NOISE_WARNING_COOLDOWN = 30000; // 30 seconds
+
+// UI-only event types — never sent to the backend, never counted as a
+// violation. voice_detected is a coarse 300-3000 Hz energy check that fires
+// on TV/fan/neighbour audio; the authoritative "another speaker" signal is
+// voice_identity_changed/voice_mismatch from InterviewVoiceVerification.
+const UI_ONLY_EVENT_TYPES: ReadonlySet<ProctoringEventType> = new Set<ProctoringEventType>(['voice_detected']);
+// Window during which a fresh speaker-identity event suppresses the
+// voice_detected hint — the identity layer already covered it.
+const IDENTITY_SUPPRESSION_MS = 5000;
 
 // ==================== WORKER CODE ====================
 
@@ -214,10 +229,13 @@ const getAudioWorkerCode = () => `
       if (detected) {
         consecutiveVoice++;
         consecutiveSilent = 0;
-        // Emit on every confirmed voice frame so continuous background sound
-        // (TV, music, ambient chatter) generates repeated violations rather
-        // than a single edge-triggered event.
-        if (consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
+        // Edge-triggered: only post on the silent->voice transition. The
+        // 300-3000 Hz band check is a coarse VAD (TV, fans, neighbours all
+        // pass it), so emitting per-frame produced dozens of false-positive
+        // voice_detected violations per session. Speaker identity is the
+        // authoritative "another voice" signal — voice_detected is now a
+        // UI-only hint, emitted at most once per voice burst.
+        if (consecutiveVoice >= VOICE_THRESHOLD_FRAMES && !isVoiceActive) {
           isVoiceActive = true;
           consecutiveNoisy = 0;
           consecutiveQuiet = 0;
@@ -283,6 +301,7 @@ export function useInterviewProctoringMonitor({
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
   reportEvent,
+  shouldSuppressVoiceCheck,
 }: UseInterviewProctoringMonitorOptions) {
   // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
@@ -302,6 +321,7 @@ export function useInterviewProctoringMonitor({
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
   const obstructionThresholdRef = useRef(obstructionThreshold);
   const isMonitoringRef = useRef(false);
+  const shouldSuppressVoiceCheckRef = useRef(shouldSuppressVoiceCheck);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { streamRef.current = stream; }, [stream]);
@@ -310,6 +330,7 @@ export function useInterviewProctoringMonitor({
   useEffect(() => { reportEventRef.current = reportEvent; }, [reportEvent]);
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
+  useEffect(() => { shouldSuppressVoiceCheckRef.current = shouldSuppressVoiceCheck; }, [shouldSuppressVoiceCheck]);
 
   // Worker refs
   const videoWorkerRef = useRef<Worker | null>(null);
@@ -365,12 +386,23 @@ export function useInterviewProctoringMonitor({
     const timestamp = new Date().toISOString();
     const cooldown = UI_COOLDOWN_PER_TYPE[eventType] || 5000;
 
+    // Suppress voice_detected if the smarter speaker-ID layer just fired —
+    // it already produced a real violation, no need for a duplicate hint.
+    if (eventType === 'voice_detected') {
+      const lastIdentity = Math.max(
+        lastBackendEnqueueTimeRef.current['voice_identity_changed'] || 0,
+        lastBackendEnqueueTimeRef.current['voice_mismatch'] || 0,
+      );
+      if (lastIdentity && now - lastIdentity < IDENTITY_SUPPRESSION_MS) return;
+    }
+
     // 1. Queue for backend, throttled to one event per cooldown window per type.
     //    Recovery events (e.g. fullscreen_exit_recovered) and rare events
     //    (camera_disabled, voice_mismatch) pass through fast since their
     //    natural firing rate is already low.
+    //    UI-only events skip this branch entirely.
     const lastEnqueued = lastBackendEnqueueTimeRef.current[eventType] || 0;
-    if (now - lastEnqueued >= cooldown) {
+    if (!UI_ONLY_EVENT_TYPES.has(eventType) && now - lastEnqueued >= cooldown) {
       lastBackendEnqueueTimeRef.current[eventType] = now;
       backendQueueRef.current.push({
         event_type: eventType,
@@ -569,6 +601,17 @@ export function useInterviewProctoringMonitor({
       // Send frequency data to worker at low frequency
       voiceIntervalRef.current = setInterval(() => {
         if (!isMonitoringRef.current || !analyserRef.current || !audioWorkerRef.current) return;
+
+        // Skip the check entirely while the audio in the mic is expected —
+        // Linda's TTS echo or the candidate's own answer. Otherwise the
+        // candidate's own speech is flagged as voice_detected (~60+ false
+        // violations per session observed in production).
+        // Worker state is reset so consecutive-frame counters don't carry
+        // over across the suppression window.
+        if (shouldSuppressVoiceCheckRef.current?.()) {
+          audioWorkerRef.current.postMessage({ type: 'RESET' });
+          return;
+        }
 
         analyserRef.current.getByteFrequencyData(dataArray);
         const threshold = 128 - (voiceSensitivityRef.current * 1.28);
@@ -1000,7 +1043,7 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     fullscreen_exit:          'minor',
     // Moderate (2 pts) — suspicious but not conclusive
     camera_obstructed:        'moderate',
-    voice_detected:           'moderate',
+    voice_detected:           'minor',
     multiple_voices:          'moderate',
     screenshot_attempt:       'moderate',
     screen_recording_attempt: 'moderate',

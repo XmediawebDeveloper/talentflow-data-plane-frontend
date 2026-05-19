@@ -127,24 +127,27 @@ export function ReportView({ data }: { data: DashboardData }) {
         </div>
       )}
 
-      {/* 3. Cluster-Level Summary */}
+      {/* 3. Cluster-Level Coverage Summary */}
       {allClusters.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-2xl font-bold mb-2">3. Cluster-Level Summary</h2>
-          <p className="text-sm text-gray-500 mb-6">Aggregated performance across skill clusters with priority weighting</p>
+          <h2 className="text-2xl font-bold mb-2">3. Cluster-Level Coverage Summary</h2>
+          <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across each cluster</p>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
                 <tr>
                   <th className="text-left p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
                   <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skills Included</th>
-                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
+                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Coverage %</th>
                   <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Weight</th>
                 </tr>
               </thead>
               <tbody>
                 {allClusters.map((c, idx) => {
                   const ps = getLevelStyle(c.priority);
+                  const totalSkills = c.skills.length;
+                  const coveredCount = c.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+                  const coveragePct = totalSkills > 0 ? Math.round((coveredCount / totalSkills) * 100) : 0;
                   return (
                     <tr key={idx} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/20">
                       <td className="p-4">
@@ -159,9 +162,9 @@ export function ReportView({ data }: { data: DashboardData }) {
                       <td className="p-4">
                         <div className="flex flex-col items-center">
                           <div className="px-4 py-2 rounded-lg text-xl font-semibold" style={{ background: ps.bg, color: ps.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ps.border}` }}>
-                            {Math.round(c.clusterScore)}
+                            {coveragePct}%
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">/ 10</div>
+                          <div className="text-xs text-gray-500 mt-1">{coveredCount}/{totalSkills} skills</div>
                         </div>
                       </td>
                       <td className="p-4 text-center">
@@ -176,10 +179,10 @@ export function ReportView({ data }: { data: DashboardData }) {
         </div>
       )}
 
-      {/* 4. Section Scores */}
+      {/* 4. Section Scores — HR excluded (review only, not scored) */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
         <h2 className="text-2xl font-bold mb-6">4. Section-Level Scores</h2>
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 gap-6">
           <div className="p-6 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-2 border-emerald-200">
             <div className="text-xs text-emerald-700 uppercase tracking-wider mb-3 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Must-Have (MHS)</div>
             <div className="text-4xl text-emerald-900 mb-2 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(data.scores.mustHave)}</div>
@@ -213,12 +216,6 @@ export function ReportView({ data }: { data: DashboardData }) {
               </div>
             )}
           </div>
-
-          <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border-2 border-blue-200">
-            <div className="text-xs text-blue-700 uppercase tracking-wider mb-3 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>HR Assessment</div>
-            <div className="text-4xl text-blue-900 mb-2 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(data.scores.hr)}</div>
-            <div className="text-xs text-blue-600">Average of HR responses</div>
-          </div>
         </div>
       </div>
 
@@ -226,7 +223,6 @@ export function ReportView({ data }: { data: DashboardData }) {
       <EvaluationBreakdown
         mustHaveScore={data.scores.mustHave}
         niceToHaveScore={data.scores.niceToHave}
-        hrScore={data.scores.hr}
         finalScore={data.scores.final}
         mustHaveClusters={data.mustHaveClusters}
         niceToHaveClusters={data.niceToHaveClusters}
@@ -241,12 +237,11 @@ export function ReportView({ data }: { data: DashboardData }) {
           <div>
             <div className="mb-4 p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
               <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Calculation Formula</div>
-              <code className="text-sm block" style={{ fontFamily: 'var(--font-mono)' }}>Final Score = [(MHS × 70%) + (NHS × 20%) + (HR × 10%)] × 10</code>
+              <code className="text-sm block" style={{ fontFamily: 'var(--font-mono)' }}>Final Score = [(MHS × 70%) + (NHS × 30%)] × 10  ·  HR excluded (review only)</code>
             </div>
             <div className="space-y-2 text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
               <div className="flex justify-between p-2 rounded bg-emerald-50 text-emerald-900"><span>MHS × 0.70</span><span>= {Math.round((data.scores.mustHave * 0.7))}</span></div>
-              <div className="flex justify-between p-2 rounded bg-amber-50 text-amber-900"><span>NHS × 0.20</span><span>= {Math.round((data.scores.niceToHave * 0.2))}</span></div>
-              <div className="flex justify-between p-2 rounded bg-blue-50 text-blue-900"><span>HR × 0.10</span><span>= {Math.round((data.scores.hr * 0.1))}</span></div>
+              <div className="flex justify-between p-2 rounded bg-amber-50 text-amber-900"><span>NHS × 0.30</span><span>= {Math.round((data.scores.niceToHave * 0.3))}</span></div>
               <div className="border-t-2 border-gray-300 pt-2 mt-2"></div>
               <div className="flex justify-between p-2 rounded bg-gray-100 dark:bg-gray-700 font-bold"><span>× 10</span><span>= {Math.round(data.scores.final)}</span></div>
             </div>

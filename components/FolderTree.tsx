@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
@@ -111,7 +111,9 @@ function DroppableFolderItem({
       <span className="text-xs text-gray-500">({count})</span>
       {folder.id !== 'all' && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
         <button
+          type="button"
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             onShowMenu(hasMenu ? null : folder.id);
           }}
@@ -163,6 +165,36 @@ export default function FolderTree({
   const [showFolderMenu, setShowFolderMenu] = useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+
+  // Wrappers for the inline new-folder / new-subfolder inputs and the
+  // floating folder-actions menu. The document click handler below uses
+  // these to detect clicks OUTSIDE these UI regions and close them.
+  const newFolderInputRef = useRef<HTMLDivElement | null>(null);
+  const subFolderInputRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isCreatingFolder && !creatingSubFolderFor && !showFolderMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const insideNewFolder = newFolderInputRef.current?.contains(target);
+      const insideSubFolder = subFolderInputRef.current?.contains(target);
+      const insideMenu = menuRef.current?.contains(target);
+      if (insideNewFolder || insideSubFolder || insideMenu) return;
+      if (isCreatingFolder || creatingSubFolderFor) {
+        setIsCreatingFolder(false);
+        setCreatingSubFolderFor(null);
+        setNewFolderName('');
+      }
+      if (showFolderMenu) {
+        setShowFolderMenu(null);
+      }
+    };
+    // Use `mousedown` so the close fires before any other onClick handlers —
+    // prevents the dropdown from re-opening when clicking the trigger again.
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isCreatingFolder, creatingSubFolderFor, showFolderMenu]);
 
   // Helper function to flatten folder tree for depth calculation
   const flattenFolders = useCallback((folderList: FolderType[]): FolderType[] => {
@@ -289,12 +321,15 @@ export default function FolderTree({
         )}
 
         {hasMenu && folder.id !== 'all' && (
-          <div 
+          <div
+            ref={menuRef}
             className="absolute right-2 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50"
             style={{ marginRight: `${8}px` }}
           >
             <button
+              type="button"
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 if (onUploadToFolder) {
                   onUploadToFolder(folder.id);
@@ -307,7 +342,9 @@ export default function FolderTree({
               Upload to Folder
             </button>
             <button
+              type="button"
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 if (!canCreateSubfolder) {
                   toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
@@ -333,7 +370,9 @@ export default function FolderTree({
             {/* Only show rename option if not root folder or Archived Resumes folder */}
             {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
               <button
+                type="button"
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   setRenameValue(folder.name);
                   setRenamingFolderId(folder.id);
@@ -350,7 +389,9 @@ export default function FolderTree({
               <>
                 <div className="border-t border-gray-200 my-1" />
                 <button
+                  type="button"
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     onDeleteFolder(folder.id);
                     setShowFolderMenu(null);
@@ -366,7 +407,7 @@ export default function FolderTree({
         )}
 
         {isCreatingSubFolder && (
-          <div className="mb-2 px-3" style={{ paddingLeft: `${28 + level * 16}px` }}>
+          <div className="mb-2 px-3" style={{ paddingLeft: `${28 + level * 16}px` }} ref={subFolderInputRef}>
             <input
               type="text"
               value={newFolderName}
@@ -384,12 +425,14 @@ export default function FolderTree({
             />
             <div className="flex gap-1.5 mt-1.5">
               <button
+                type="button"
                 onClick={() => handleCreateFolder(folder.id)}
                 className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Create
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setCreatingSubFolderFor(null);
                   setNewFolderName('');
@@ -419,6 +462,7 @@ export default function FolderTree({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-gray-900">Folders</h3>
         <button
+          type="button"
           onClick={() => setIsCreatingFolder(true)}
           className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
         >
@@ -428,7 +472,7 @@ export default function FolderTree({
       </div>
 
       {isCreatingFolder && (
-        <div className="mb-3">
+        <div className="mb-3" ref={newFolderInputRef}>
           <input
             type="text"
             value={newFolderName}
@@ -446,12 +490,14 @@ export default function FolderTree({
           />
           <div className="flex gap-2 mt-2">
             <button
+              type="button"
               onClick={() => handleCreateFolder()}
               className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Create
             </button>
             <button
+              type="button"
               onClick={() => {
                 setIsCreatingFolder(false);
                 setNewFolderName('');

@@ -81,6 +81,13 @@ export default function AIInterview() {
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
+  // Filter by who created the config (created_by_name) — 'all' shows everything
+  const [creatorFilter, setCreatorFilter] = useState<string>('all');
+  // Filter by created_at date range. 'custom' reveals the date-range inputs.
+  type DateFilterKey = 'all' | 'today' | 'yesterday' | 'last_week' | 'last_month' | 'custom';
+  const [dateFilter, setDateFilter] = useState<DateFilterKey>('all');
+  const [customDateFrom, setCustomDateFrom] = useState<string>(''); // YYYY-MM-DD
+  const [customDateTo, setCustomDateTo] = useState<string>('');     // YYYY-MM-DD
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>([]);
   const [stats, setStats] = useState<AIInterviewStatsResponse | null>(null);
@@ -521,7 +528,50 @@ export default function AIInterview() {
     return candidateFlowStatuses.includes(status) ? 'published' : status;
   };
 
-  // Filter configs by tab + mode
+  // List of unique creators across configs + archivedConfigs — drives the creator dropdown.
+  const creatorOptions = (() => {
+    const set = new Set<string>();
+    for (const c of [...configs, ...archivedConfigs]) {
+      const name = (c.created_by_name || '').trim();
+      if (name) set.add(name);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  })();
+
+  // Compute the [start, end) date window for the active date filter.
+  // Returns `null` when no date filter is active (or 'custom' has no valid input).
+  const dateWindow = (() => {
+    if (dateFilter === 'all') return null;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (dateFilter === 'today') {
+      const end = new Date(startOfToday); end.setDate(end.getDate() + 1);
+      return { from: startOfToday, to: end };
+    }
+    if (dateFilter === 'yesterday') {
+      const start = new Date(startOfToday); start.setDate(start.getDate() - 1);
+      return { from: start, to: startOfToday };
+    }
+    if (dateFilter === 'last_week') {
+      const start = new Date(startOfToday); start.setDate(start.getDate() - 7);
+      const end = new Date(startOfToday); end.setDate(end.getDate() + 1);
+      return { from: start, to: end };
+    }
+    if (dateFilter === 'last_month') {
+      const start = new Date(startOfToday); start.setDate(start.getDate() - 30);
+      const end = new Date(startOfToday); end.setDate(end.getDate() + 1);
+      return { from: start, to: end };
+    }
+    // custom: both ends required; treat 'to' as inclusive end-of-day
+    if (!customDateFrom || !customDateTo) return null;
+    const from = new Date(customDateFrom + 'T00:00:00');
+    const to = new Date(customDateTo + 'T00:00:00');
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+    to.setDate(to.getDate() + 1); // inclusive end-of-day → strict-less-than tomorrow
+    return { from, to };
+  })();
+
+  // Filter configs by tab + mode + creator + date + search
   const filteredConfigs = (() => {
     const base = activeTab === 'archived' ? archivedConfigs : configs.filter((config) => {
       if (activeTab === 'all') return true;
@@ -538,9 +588,20 @@ export default function AIInterview() {
       const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
       return modeFilter === 'timed' ? mode === 'fixed' : mode === 'flexible';
     });
+    const byCreator = creatorFilter === 'all'
+      ? byMode
+      : byMode.filter((c) => (c.created_by_name || '').trim() === creatorFilter);
+    const byDate = dateWindow
+      ? byCreator.filter((c) => {
+          if (!c.created_at) return false;
+          const t = new Date(c.created_at).getTime();
+          if (Number.isNaN(t)) return false;
+          return t >= dateWindow.from.getTime() && t < dateWindow.to.getTime();
+        })
+      : byCreator;
     const q = searchQuery.trim().toLowerCase();
     const bySearch = q
-      ? byMode.filter((c) => {
+      ? byDate.filter((c) => {
           const haystack = [
             c.jd_title,
             c.position,
@@ -614,7 +675,7 @@ export default function AIInterview() {
 
   useEffect(() => {
     setConfigListPage(1);
-  }, [activeTab, modeFilter, searchQuery, sortBy]);
+  }, [activeTab, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
 
   useEffect(() => {
     setProcessingPage(1);
@@ -884,7 +945,7 @@ export default function AIInterview() {
                 { key: 'published', label: 'Active', count: configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length },
                 { key: 'draft', label: 'Draft', count: configs.filter((c) => c.status === 'draft').length },
                 // { key: 'completed', label: 'Completed' },
-                // { key: 'archived', label: 'Archived' },
+                { key: 'archived', label: 'Archived', count: archivedConfigs.length },
                 // { key: 'processing', label: 'Processing' },
                 { key: 'audit', label: 'Activity Logs' },
                 { key: 'consent', label: 'Consent Logs' },
@@ -942,7 +1003,7 @@ export default function AIInterview() {
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-2 flex-1 lg:justify-end min-w-0">
+                <div className="flex items-center gap-2 flex-1 lg:justify-end min-w-0 flex-wrap lg:flex-nowrap">
                   <div className="relative flex-1 lg:max-w-xs min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
                     <input
@@ -962,8 +1023,42 @@ export default function AIInterview() {
                       </button>
                     )}
                   </div>
+                  {/* Creator filter */}
                   <div className="relative flex-shrink-0">
-                    <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-slate-500 pointer-events-none" />
+                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <select
+                      value={creatorFilter}
+                      onChange={(e) => setCreatorFilter(e.target.value)}
+                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 font-medium transition-colors max-w-[160px]"
+                      aria-label="Filter by creator"
+                    >
+                      <option value="all">All creators</option>
+                      {creatorOptions.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 rotate-90 pointer-events-none" />
+                  </div>
+                  {/* Date filter */}
+                  <div className="relative flex-shrink-0">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <select
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value as DateFilterKey)}
+                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 font-medium transition-colors"
+                      aria-label="Filter by date"
+                    >
+                      <option value="all">Any date</option>
+                      <option value="today">Today</option>
+                      <option value="yesterday">Yesterday</option>
+                      <option value="last_week">Last week</option>
+                      <option value="last_month">Last month</option>
+                      <option value="custom">Custom range…</option>
+                    </select>
+                    <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 rotate-90 pointer-events-none" />
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
@@ -978,6 +1073,37 @@ export default function AIInterview() {
                   </div>
                 </div>
               </div>
+              {/* Custom date range inputs — surface only when 'Custom range' is selected */}
+              {dateFilter === 'custom' && (
+                <div className="flex items-center gap-2 mb-4 sm:mb-5 flex-wrap">
+                  <span className="text-xs font-medium text-gray-500 ml-1">From</span>
+                  <input
+                    type="date"
+                    value={customDateFrom}
+                    onChange={(e) => setCustomDateFrom(e.target.value)}
+                    className="px-3 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700"
+                    aria-label="Custom range start date"
+                  />
+                  <span className="text-xs font-medium text-gray-500">To</span>
+                  <input
+                    type="date"
+                    value={customDateTo}
+                    onChange={(e) => setCustomDateTo(e.target.value)}
+                    min={customDateFrom || undefined}
+                    className="px-3 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700"
+                    aria-label="Custom range end date"
+                  />
+                  {(customDateFrom || customDateTo) && (
+                    <button
+                      onClick={() => { setCustomDateFrom(''); setCustomDateTo(''); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Clear dates
+                    </button>
+                  )}
+                </div>
+              )}
               {filteredConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
@@ -1136,19 +1262,8 @@ export default function AIInterview() {
                                 </span>
                               )}
                             </div>
-                            {config.jd_must_have_skills && config.jd_must_have_skills.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60">
-                                <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-slate-500 font-semibold mr-0.5">Skills</span>
-                                {config.jd_must_have_skills.slice(0, 4).map((skill: string) => (
-                                  <span key={skill} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue text-[11px] font-medium rounded-md ring-1 ring-brand-blue/20">
-                                    {skill}
-                                  </span>
-                                ))}
-                                {config.jd_must_have_skills.length > 4 && (
-                                  <span className="text-[11px] text-gray-400 dark:text-slate-500 font-medium">+{config.jd_must_have_skills.length - 4} more</span>
-                                )}
-                              </div>
-                            )}
+                            {/* Skills strip removed from the list card per product feedback (2026-05-13).
+                              Skills are still visible inside the AI Interview details view. */}
                           </div>
                         </div>
 
@@ -1218,15 +1333,6 @@ export default function AIInterview() {
                                   <Eye className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
                                   View Details
                                 </button>
-                                {config.status === 'published' && canShareAIInterviews && (
-                                  <button
-                                    onClick={() => handleCopyLink(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-                                  >
-                                    <Copy className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                                    Copy Link
-                                  </button>
-                                )}
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
@@ -1694,9 +1800,26 @@ export default function AIInterview() {
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
         const paginatedInvitations = invitations;
 
-        const getInvStatusBadge = (status: string) => {
+        const getInvStatusBadge = (inv: any) => {
+          const status = inv.status;
           switch (status) {
-            case 'completed': return <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
+            case 'completed': {
+              // (Auto) chip surfaces when the timeout monitor finalized the
+              // session because the candidate abandoned — closing_reason starts
+              // with 'time_limit' (set by ai_interview_timeout_monitor.py).
+              // Mirrors the assessment pattern in Assessments.tsx.
+              const reason: string = (inv.ai_evaluation?.closing_reason || '').toString().toLowerCase();
+              const autoCompleted = reason.startsWith('time_limit');
+              return (
+                <span
+                  className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs flex items-center gap-1"
+                  title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined}
+                >
+                  <CheckCircle className="w-3 h-3" /> Completed
+                  {autoCompleted && <span className="text-green-600/80">(Auto)</span>}
+                </span>
+              );
+            }
             case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
             case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
             case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
@@ -1804,7 +1927,7 @@ export default function AIInterview() {
                         {/* Status + Score + Timeline */}
                         <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-10 sm:pl-0">
                           {/* Status badge */}
-                          {getInvStatusBadge(inv.status)}
+                          {getInvStatusBadge(inv)}
                           {isInvExpired(inv) && (
                             <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1">
                               <Clock className="w-3 h-3" /> Expired

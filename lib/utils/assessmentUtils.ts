@@ -9,26 +9,37 @@ export interface ParsedAssessmentTitle {
 }
 
 /**
- * Parse assessment title to extract version number and clean title
- * Example: "Java Developer - Assessment - Version 3" -> { cleanTitle: "Java Developer - Assessment", version: 3 }
+ * Parse assessment title to extract version number and clean title.
+ *
+ * Also strips any trailing "(Copy)" — historically the clone endpoint
+ * appended this suffix; we no longer write it for new clones, but old
+ * rows in the DB still carry it and should display cleanly. The "(Copy)"
+ * suffix can appear before OR after the " - Version N" suffix depending
+ * on which version of the backend created the row, so we peel both ends.
+ *
+ * Examples:
+ *   "Java Developer - Assessment - Version 3"        → cleanTitle: "Java Developer - Assessment", version: 3
+ *   "Java Developer - Assessment - Version 1 (Copy)" → cleanTitle: "Java Developer - Assessment", version: 1
+ *   "Java Developer - Assessment (Copy)"             → cleanTitle: "Java Developer - Assessment", version: null
  */
 export function parseAssessmentTitle(title: string): ParsedAssessmentTitle {
-  // Match pattern: " - Version X" at the end
+  const copyPattern = /\s*\(Copy\)\s*$/i;
   const versionPattern = / - Version (\d+)$/;
-  const match = title.match(versionPattern);
 
-  if (match) {
-    return {
-      cleanTitle: title.replace(versionPattern, ''),
-      version: parseInt(match[1], 10),
-      hasVersion: true,
-    };
+  // Peel "(Copy)" → then version → then "(Copy)" again (handles either order).
+  let working = title.replace(copyPattern, '').trimEnd();
+  const versionMatch = working.match(versionPattern);
+  let version: number | null = null;
+  if (versionMatch) {
+    version = parseInt(versionMatch[1], 10);
+    working = working.replace(versionPattern, '').trimEnd();
   }
+  working = working.replace(copyPattern, '').trimEnd();
 
   return {
-    cleanTitle: title,
-    version: null,
-    hasVersion: false,
+    cleanTitle: working,
+    version,
+    hasVersion: version !== null,
   };
 }
 

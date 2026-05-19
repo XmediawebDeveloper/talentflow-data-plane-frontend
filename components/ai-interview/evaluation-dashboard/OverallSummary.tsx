@@ -5,10 +5,10 @@ interface OverallSummaryProps {
   finalScore: number;     // 0-100
   mustHaveScore: number;  // 0-10
   niceToHaveScore: number;
-  hrScore: number;
+  hrScore?: number;       // accepted but no longer rendered — HR is excluded from scoring
 }
 
-export function OverallSummary({ finalScore, mustHaveScore, niceToHaveScore, hrScore }: OverallSummaryProps) {
+export function OverallSummary({ finalScore, mustHaveScore, niceToHaveScore }: OverallSummaryProps) {
   const strong = mustHaveScore >= 7;
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -17,7 +17,7 @@ export function OverallSummary({ finalScore, mustHaveScore, niceToHaveScore, hrS
           <h2 className="text-3xl font-bold mb-2">Evaluation Summary</h2>
           <p className="text-gray-500 mb-8">Comprehensive assessment of candidate performance</p>
 
-          <div className="grid grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-2 gap-6 mb-8">
             <div className="p-5 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
               <div className="text-xs text-emerald-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>
                 Must-Have Skills
@@ -36,16 +36,6 @@ export function OverallSummary({ finalScore, mustHaveScore, niceToHaveScore, hrS
                 {Math.round(niceToHaveScore)}
               </div>
               <div className="text-xs text-amber-600 mt-1">out of 10.00</div>
-            </div>
-
-            <div className="p-5 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
-              <div className="text-xs text-blue-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>
-                HR Assessment
-              </div>
-              <div className="text-3xl text-blue-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>
-                {Math.round(hrScore)}
-              </div>
-              <div className="text-xs text-blue-600 mt-1">out of 10.00</div>
             </div>
           </div>
 

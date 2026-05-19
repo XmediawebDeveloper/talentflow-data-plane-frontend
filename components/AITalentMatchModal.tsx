@@ -203,9 +203,9 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 dark:border-slate-700/60 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 shrink-0">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-5 h-5 text-brand-blue" />
@@ -223,7 +223,7 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
           </button>
         </div>
 
-        <div className="p-4 sm:p-8 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-8">
           {/* Step 1: JD Embedding */}
           <div className="mb-4 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">

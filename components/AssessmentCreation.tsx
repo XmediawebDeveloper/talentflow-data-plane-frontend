@@ -2549,9 +2549,38 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         </div>
                       </div>
                       {selectedCodingLanguages.length > 0 && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          Selected: {selectedCodingLanguages.join(', ')}
-                        </p>
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-medium text-gray-700">
+                              Selected ({selectedCodingLanguages.length})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCodingLanguages([])}
+                              className="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 p-2 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg">
+                            {selectedCodingLanguages.map(lang => (
+                              <span
+                                key={`sel-${lang}`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-brand-blue ring-1 ring-brand-blue/30 rounded-full text-xs"
+                              >
+                                {lang}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleLanguageSelection(lang)}
+                                  className="text-brand-blue/60 hover:text-red-600 transition-colors"
+                                  aria-label={`Remove ${lang}`}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </>

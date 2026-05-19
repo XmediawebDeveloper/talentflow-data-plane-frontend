@@ -160,6 +160,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
   const [isExpiredLink, setIsExpiredLink] = useState(false);
+  // Distinct from isExpiredLink — set when the recruiter explicitly revoked
+  // the invitation. Drives a different icon + title on the error screen so
+  // the candidate knows to contact the recruiter rather than wait.
+  const [isRevokedLink, setIsRevokedLink] = useState(false);
   const [assessmentInfo, setAssessmentInfo] = useState<AssessmentInfo | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<CurrentQuestion | null>(null);
   const [assessmentData, setAssessmentData] = useState<StartAssessmentResponse | null>(null);
@@ -606,9 +610,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           setStepSafe('landing');
         }
       } else {
-        // Cannot start (expired, etc)
+        // Cannot start (expired, revoked, completed, etc). The revoked
+        // case must be checked BEFORE the generic "expir" string match
+        // because the revoke action also pushes expires_at to now() — so
+        // both signals fire and we want the more specific one to win.
         const msg = info.message || 'This assessment is not available';
-        if (msg.toLowerCase().includes('expir')) {
+        if (info.is_revoked) {
+          setIsRevokedLink(true);
+        } else if (msg.toLowerCase().includes('expir')) {
           setIsExpiredLink(true);
         }
         setError(msg);
@@ -1323,11 +1332,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return (
           <ErrorScreen
             message={error || 'An error occurred'}
-            variant={isExpiredLink ? 'expired' : 'error'}
-            onRetry={isExpiredLink ? undefined : () => {
+            variant={isRevokedLink ? 'revoked' : (isExpiredLink ? 'expired' : 'error')}
+            onRetry={(isExpiredLink || isRevokedLink) ? undefined : () => {
               isFlowActiveRef.current = false;
               isStartingRef.current = false;
               setIsExpiredLink(false);
+              setIsRevokedLink(false);
               setError(null);
               sessionTokenManager.setAssessmentToken(token);
               sessionStorage.removeItem(ASSESS_SESSION_KEY);
@@ -1569,7 +1579,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           {completingStuck && (
             <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
               <button
-                onClick={() => window.close()}
+                onClick={() => {
+                  // window.close() only works when the page was opened by
+                  // a script. For candidates arriving from an email link
+                  // it's silently blocked, so we fall back to instructing
+                  // the candidate to close manually.
+                  try { window.close(); } catch { /* ignore */ }
+                  setTimeout(() => {
+                    if (!window.closed) {
+                      const isMac = /mac|iphone|ipad|ipod/i.test(
+                        typeof navigator !== 'undefined' ? navigator.userAgent : ''
+                      );
+                      const sc = isMac ? '⌘ + W' : 'Ctrl + W';
+                      alert(
+                        `Your browser blocked auto-close. Please close this tab manually (${sc}). ` +
+                        `Your assessment has been submitted and your responses are saved.`
+                      );
+                    }
+                  }, 300);
+                }}
                 className="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl shadow-lg transition-colors flex items-center gap-2"
               >
                 Close Window

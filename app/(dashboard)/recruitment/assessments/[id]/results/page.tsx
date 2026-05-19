@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AssessmentResults from '@/components/AssessmentResults';
 import { assessmentService } from '@/lib/services';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -24,6 +25,7 @@ export default function AssessmentResultsPage() {
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
+  const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [jdTitle, setJdTitle] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +36,12 @@ export default function AssessmentResultsPage() {
       try {
         const response = await assessmentService.get(assessmentId);
         if (response) {
-          setAssessmentTitle(response.title);
+          // Strip any "Version N" suffix baked into the stored title — the
+          // live version is rendered separately as a badge so recruiters
+          // see the actual current version (v19) rather than the stale
+          // suffix that was frozen at creation time (v1).
+          setAssessmentTitle(stripVersionFromTitle(response.title));
+          setAssessmentVersion(response.version ?? null);
           setJdTitle(response.jd_title || '');
         } else {
           setError('Assessment not found');
@@ -131,6 +138,7 @@ export default function AssessmentResultsPage() {
         onBack={handleBack}
         assessmentId={assessmentId}
         assessmentTitle={assessmentTitle}
+        assessmentVersion={assessmentVersion}
         jdTitle={jdTitle}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}

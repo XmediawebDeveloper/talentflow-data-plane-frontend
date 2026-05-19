@@ -1,6 +1,6 @@
 'use client'
 
-import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck, Archive, Sparkles } from 'lucide-react';
+import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck, Archive, ArchiveRestore, Sparkles } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from './ui/enhanced-toast';
@@ -16,6 +16,9 @@ interface BulkActionsBarProps {
   onResumeScoring?: () => void;
   onAssessment?: () => void;
   onArchive?: () => void;
+  /** When provided, replaces the Archive button with an Unarchive button —
+   * used when the current folder context is "Archived Resumes". */
+  onUnarchive?: () => void;
   onAITalentMatch?: () => void;
 }
 
@@ -30,6 +33,7 @@ export default function BulkActionsBar({
   onResumeScoring,
   onAssessment,
   onArchive,
+  onUnarchive,
   onAITalentMatch,
 }: BulkActionsBarProps) {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
@@ -167,7 +171,16 @@ export default function BulkActionsBar({
             </button>
           )}
 
-          {onArchive && (
+          {onUnarchive ? (
+            <button
+              onClick={onUnarchive}
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 text-white bg-emerald-500/90 hover:bg-emerald-600 backdrop-blur-sm rounded-lg transition-all text-xs sm:text-sm font-medium shadow-sm border border-emerald-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              aria-label="Unarchive" title="Unarchive"
+            >
+              <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden md:inline">Unarchive</span>
+            </button>
+          ) : onArchive && (
             <button
               onClick={onArchive}
               className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 px-3 sm:px-4 text-white bg-amber-500/90 hover:bg-amber-600 backdrop-blur-sm rounded-lg transition-all text-xs sm:text-sm font-medium shadow-sm border border-amber-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"

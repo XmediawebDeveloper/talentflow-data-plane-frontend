@@ -26,6 +26,7 @@ import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
@@ -1803,6 +1804,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               {pickerAssessments.map(a => {
                 const isPicked = pickerSelectedIds.includes(a.id);
                 const sections = (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0);
+                const parsed = parseAssessmentTitle(a.title || '');
+                const displayVersion = typeof a.version === 'number' ? a.version : parsed.version;
+                const baseTitle = parsed.cleanTitle || a.short_id || 'Untitled assessment';
                 return (
                   <label
                     key={a.id}
@@ -1822,7 +1826,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
-                        {a.title || a.short_id || 'Untitled assessment'}
+                        {baseTitle}
+                        {displayVersion ? ` - Version ${displayVersion}` : ''}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                         {a.short_id && <span>{a.short_id}</span>}
@@ -1878,6 +1883,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               + (shareAssessments[0].coding_enabled ? 1 : 0),
             type: 'AI-Generated',
             short_id: shareAssessments[0].short_id,
+            version: shareAssessments[0].version,
             jd_short_id: job.id,
             jd_title: job.title,
             jd_version: shareAssessments[0].jd_version,
@@ -1891,6 +1897,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               + (a.coding_enabled ? 1 : 0),
             type: 'AI-Generated',
             short_id: a.short_id,
+            version: a.version,
             jd_short_id: job.id,
             jd_title: job.title,
             jd_version: a.jd_version,

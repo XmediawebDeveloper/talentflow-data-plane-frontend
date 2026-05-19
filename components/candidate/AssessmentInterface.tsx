@@ -555,35 +555,38 @@ export function AssessmentInterface({
     const handlePageHide = () => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       const url = `${apiUrl}/candidate/assessment/${token}/complete`;
-      let delivered = false;
+
+      // Fire BOTH transports in parallel so at least one lands. The
+      // previous `Content-Type: application/json` body triggered a CORS
+      // preflight that browsers usually cancel during unload, which is
+      // why the attempt stayed at status='in_progress' after Leave. We
+      // now send NO content-type header and NO body — the endpoint reads
+      // the token from the URL path and doesn't need a body. That makes
+      // both calls "simple" CORS requests (no preflight needed).
+
+      // 1) sendBeacon — most reliable for unload, queued by the browser
+      //    and delivered after the page is gone. No body, no headers.
       try {
-        // Primary path — fetch with keepalive. Returns synchronously; the
-        // browser delivers the request after the page is gone.
+        const ok = navigator.sendBeacon(url);
+        console.log(`[UNLOAD] sendBeacon('${url}') -> queued=${ok}`);
+      } catch (err) {
+        console.warn('[UNLOAD] sendBeacon threw:', err);
+      }
+
+      // 2) fetch with keepalive — backup path. Without any headers it
+      //    avoids CORS preflight. `keepalive: true` allows the request
+      //    to survive page unload.
+      try {
         if (typeof fetch === 'function') {
           fetch(url, {
             method: 'POST',
             keepalive: true,
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: '{}',
           }).catch(() => { /* unload — nothing to log */ });
-          delivered = true;
-          console.log('[UNLOAD] Sent /complete via fetch+keepalive — candidate closed tab');
+          console.log('[UNLOAD] fetch+keepalive dispatched to /complete');
         }
       } catch (err) {
-        console.warn('[UNLOAD] fetch+keepalive failed:', err);
-      }
-      // Fallback — bare sendBeacon with no body/content-type. This is a
-      // "simple" CORS request that doesn't need preflight, so the browser
-      // accepts it without delay. The endpoint reads the token from the
-      // URL path; no body needed.
-      if (!delivered) {
-        try {
-          navigator.sendBeacon(url);
-          console.log('[UNLOAD] Sent /complete via sendBeacon fallback');
-        } catch (err) {
-          console.warn('[UNLOAD] sendBeacon fallback failed:', err);
-        }
+        console.warn('[UNLOAD] fetch+keepalive threw:', err);
       }
     };
 

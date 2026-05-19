@@ -143,7 +143,7 @@ export default function Analytics() {
 
       {/* Secondary Metrics - Recruiter Pipeline */}
       <div className="grid grid-cols-3 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
               <Calendar className="w-5 h-5 text-gray-800 dark:text-slate-100" />

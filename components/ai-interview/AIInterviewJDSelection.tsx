@@ -8,6 +8,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function AIInterviewJDSelection() {
@@ -48,6 +49,8 @@ export default function AIInterviewJDSelection() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
+        {/* Step indicator */}
+        <AIInterviewStepIndicator currentStep={1} />
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"

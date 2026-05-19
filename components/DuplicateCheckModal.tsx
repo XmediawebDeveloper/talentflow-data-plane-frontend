@@ -78,7 +78,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
           {!showDuplicateWarning ? (
             /* Upload Section */
             <div>

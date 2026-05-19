@@ -14,6 +14,8 @@ import Cookies from 'js-cookie';
 import { decodeParam, decodePlanId } from '@/lib/utils/planEncoder';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { useTheme } from 'next-themes';
+// Auto-login support after paid signup payment — see post-payment redirect.
+import { setTokens, clearTokens } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -235,9 +237,20 @@ function CompletePaymentContent() {
         });
       } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
 
-      // Redirect to login
+      // Auto-login if backend issued tokens for the new tenant admin.
+      // This page typically already runs on the tenant subdomain, so we can
+      // persist tokens directly and redirect to /dashboard on the same origin.
+      // If tokens are missing, fall back to /login.
+      const hasTokens = Boolean(data?.access_token && data?.refresh_token);
       setTimeout(() => {
-        router.push('/login');
+        if (hasTokens) {
+          try { clearTokens(); } catch {}
+          setTokens(data.access_token, data.refresh_token);
+          // Hard redirect so providers re-init with the new tokens.
+          window.location.href = '/dashboard';
+        } else {
+          router.push('/login');
+        }
       }, 2000);
 
     } catch (err: any) {

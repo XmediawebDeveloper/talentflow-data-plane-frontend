@@ -171,8 +171,7 @@ export function generateEvaluationPDF(data: PDFData) {
 
   const scoreBoxes: { label: string; score: number; max: number; weight: string; color: RGB }[] = [
     { label: 'Must-Have Skills', score: data.scores.mustHave, max: 10, weight: '70%', color: [16, 185, 129] },
-    { label: 'Nice-to-Have Skills', score: data.scores.niceToHave, max: 10, weight: '20%', color: [245, 158, 11] },
-    { label: 'HR Assessment', score: data.scores.hr, max: 10, weight: '10%', color: [59, 130, 246] },
+    { label: 'Nice-to-Have Skills', score: data.scores.niceToHave, max: 10, weight: '30%', color: [245, 158, 11] },
   ];
 
   scoreBoxes.forEach((box, idx) => {
@@ -275,11 +274,11 @@ export function generateEvaluationPDF(data: PDFData) {
     head: [['Category', 'Score', 'Weight', 'Contribution', 'Status']],
     body: [
       ['Must-Have Skills', data.scores.mustHave.toFixed(2), '70%', (data.scores.mustHave * 0.7).toFixed(3), data.scores.mustHave >= 7.0 ? 'PASS' : 'FAIL'],
-      ['Nice-to-Have Skills', data.scores.niceToHave.toFixed(2), '20%', (data.scores.niceToHave * 0.2).toFixed(3), '—'],
-      ['HR Assessment', data.scores.hr.toFixed(2), '10%', (data.scores.hr * 0.1).toFixed(3), '—'],
+      ['Nice-to-Have Skills', data.scores.niceToHave.toFixed(2), '30%', (data.scores.niceToHave * 0.3).toFixed(3), '—'],
       ['', '', '', '', ''],
-      ['WEIGHTED SUM', '', '100%', (data.scores.mustHave * 0.7 + data.scores.niceToHave * 0.2 + data.scores.hr * 0.1).toFixed(3), ''],
+      ['WEIGHTED SUM', '', '100%', (data.scores.mustHave * 0.7 + data.scores.niceToHave * 0.3).toFixed(3), ''],
       ['FINAL SCORE (x10)', '', '', data.scores.final.toFixed(2), ''],
+      ['HR Assessment', '—', '0% (review only)', '—', '—'],
     ],
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_DARK, fontSize: 9, fontStyle: 'bold' },
@@ -317,8 +316,12 @@ export function generateEvaluationPDF(data: PDFData) {
   data.mustHaveClusters.forEach(cluster => {
     mustHaveData.push([
       { content: `${cluster.name} (${cluster.priority} Priority, ${cluster.weight}% weight)`, styles: { fontStyle: 'bold', fillColor: [220, 252, 231] } },
-      { content: cluster.clusterScore.toFixed(2), styles: { fontStyle: 'bold', fillColor: [220, 252, 231], halign: 'center' } },
-      { content: 'Cluster Avg', styles: { fillColor: [220, 252, 231] } },
+      { content: (() => {
+        const total = cluster.skills.length;
+        const covered = cluster.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+        return total > 0 ? `${Math.round((covered / total) * 100)}%` : '0%';
+      })(), styles: { fontStyle: 'bold', fillColor: [220, 252, 231], halign: 'center' } },
+      { content: 'Coverage', styles: { fillColor: [220, 252, 231] } },
       { content: '', styles: { fillColor: [220, 252, 231] } },
     ]);
     cluster.skills.forEach(skill => {
@@ -361,8 +364,12 @@ export function generateEvaluationPDF(data: PDFData) {
   data.niceToHaveClusters.forEach(cluster => {
     niceToHaveData.push([
       { content: `${cluster.name} (${cluster.priority} Priority, ${cluster.weight}% weight)`, styles: { fontStyle: 'bold', fillColor: [254, 243, 199] } },
-      { content: cluster.clusterScore.toFixed(2), styles: { fontStyle: 'bold', fillColor: [254, 243, 199], halign: 'center' } },
-      { content: 'Cluster Avg', styles: { fillColor: [254, 243, 199] } },
+      { content: (() => {
+        const total = cluster.skills.length;
+        const covered = cluster.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
+        return total > 0 ? `${Math.round((covered / total) * 100)}%` : '0%';
+      })(), styles: { fontStyle: 'bold', fillColor: [254, 243, 199], halign: 'center' } },
+      { content: 'Coverage', styles: { fillColor: [254, 243, 199] } },
       { content: '', styles: { fillColor: [254, 243, 199] } },
     ]);
     cluster.skills.forEach(skill => {

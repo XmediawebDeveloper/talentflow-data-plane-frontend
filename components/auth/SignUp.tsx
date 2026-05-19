@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
 import type { TermsAndConditions } from '@/lib/types/terms';
+// Auto-login support after paid signup payment — see handlePaymentSubmit.
+import { setTokens, clearTokens } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -695,15 +697,34 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         throw new Error(data.detail || 'Payment verification failed');
       }
 
-      // Payment successful - show success and redirect to org subdomain login
+      // Payment successful — auto-login the new tenant admin if the backend
+      // returned tokens (process-payment issues them via create_tokens_for_tenant_admin).
+      // Falls back to the login page when tokens are missing (older backend,
+      // token issuance failure, etc.) so the flow still completes manually.
       toast.success('Payment successful!', { description: 'Your plan is now active.' });
       setStep('success');
+
+      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
+      const hasTokens = Boolean(data?.access_token && data?.refresh_token);
+
       setTimeout(() => {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
-        if (createdSubdomain) {
-          window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
+        if (hasTokens) {
+          // Always cross-domain redirect when we have tokens so they land on
+          // the tenant subdomain. Pass tokens via URL fragment so the new
+          // subdomain origin can pick them up (localStorage is per-origin).
+          const target = createdSubdomain
+            ? `https://${createdSubdomain}.${baseDomain}/auth/handoff#access_token=${encodeURIComponent(data.access_token)}&refresh_token=${encodeURIComponent(data.refresh_token)}`
+            : `/auth/handoff#access_token=${encodeURIComponent(data.access_token)}&refresh_token=${encodeURIComponent(data.refresh_token)}`;
+          // Wipe any stale tokens on the current origin so we don't leave a
+          // mismatched token behind.
+          try { clearTokens(); } catch {}
+          window.location.href = target;
         } else {
-          router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+          if (createdSubdomain) {
+            window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
+          } else {
+            router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+          }
         }
       }, 2000);
 

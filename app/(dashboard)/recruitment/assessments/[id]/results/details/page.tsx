@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { assessmentService } from '@/lib/services';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -46,7 +47,12 @@ function DetailsContent() {
       try {
         const response = await assessmentService.get(assessmentId);
         if (response) {
-          setAssessmentTitle(response.title);
+          // Strip any "Version N" suffix baked into the stored title — the
+          // version is rendered separately from `response.version` (the live
+          // version). Without this, old assessments whose title still says
+          // "Version 1" show v1 in the header while the metadata grid
+          // correctly shows v19, which looks like a bug to recruiters.
+          setAssessmentTitle(stripVersionFromTitle(response.title));
           setAssessmentShortId(response.short_id || '');
           setJdTitle(response.jd_title || '');
           // Use jd_short_id (e.g. "JD-014") if available, else fall back to raw jd_id

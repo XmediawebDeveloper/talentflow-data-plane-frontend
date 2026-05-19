@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2,
+  Download, Loader2, Sparkles,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -18,7 +18,13 @@ import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
 import EvaluationReportTab from './tabs/EvaluationReportTab';
 import CoverageTab from './tabs/CoverageTab';
-import { OverviewSection } from './evaluation-dashboard/OverviewSection';
+// import { OverviewSection } from './evaluation-dashboard/OverviewSection'; // replaced by OverviewSectionV2 (Vite design)
+import { OverviewSectionV2 } from './evaluation-dashboard/OverviewSectionV2';
+import { EvaluationReportV2 } from './evaluation-dashboard/EvaluationReportV2';
+// EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
+// import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
+import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
+import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -31,7 +37,7 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations';
+type TabKey = 'overview' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -974,21 +980,23 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const pagedViolations = groupedViolations.slice((violationPage - 1) * ROWS_PER_PAGE, violationPage * ROWS_PER_PAGE);
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
-    { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
+    { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
       ? [
-          // 'evaluation' tab hidden per product requirement — its data is now shown
-          // via the Evaluation Dashboard tab's Analysis view.
-          { key: 'eval_report' as TabKey, label: 'Evaluation Report', icon: <FileText className="w-4 h-4" /> },
-          { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
+          { key: 'eval_report'        as TabKey, label: 'Evaluation Report',  icon: <FileText className="w-4 h-4" /> },
+          { key: 'skill_breakdown'    as TabKey, label: 'Skill Breakdown',    icon: <Brain    className="w-4 h-4" /> },
+          { key: 'question_analysis'  as TabKey, label: 'Question Analysis',  icon: <Target   className="w-4 h-4" /> },
         ]
       : []),
-    { key: 'coverage',       label: 'Coverage',         icon: <Activity className="w-4 h-4" />, live: isInProgress },
-    { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
-    { key: 'qa',             label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
-    { key: 'recording',      label: 'Recording',        icon: <Video className="w-4 h-4" /> },
-    { key: 'transcript',     label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
-    { key: 'violations',     label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
+    { key: 'coverage',         label: 'Cluster Coverage', icon: <Activity className="w-4 h-4" />, live: isInProgress },
+    // 'eval_dashboard' removed — its content (Skills/Questions/Formula) is now mounted as 3 individual tabs above.
+    // { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
+    // Sentiment tab removed per Vite design — Sentiment had no equivalent in the Vite source. Block below kept (commented) for revert.
+    // { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
+    { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
+    { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
+    { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
+    { key: 'violations',       label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1237,7 +1245,31 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   completed_at: liveSession.completed_at,
                   created_at: liveSession.created_at,
                 },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
               });
+              // Compute avg response time from evaluations (seconds)
+              const responseTimes = (eval_.evaluations || [])
+                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
+                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
+              const avgResponseSeconds = responseTimes.length > 0
+                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
+                : null;
+              // AI confidence: prefer backend-provided, fallback in component to scaled final
+              const aiConfidence = typeof eval_.ai_confidence === 'number'
+                ? eval_.ai_confidence
+                : typeof eval_.confidence === 'number'
+                  ? eval_.confidence
+                  : null;
+              return (
+                <OverviewSectionV2
+                  data={data}
+                  livenessVerified={!!interview.identity_verified}
+                  candidateImage={identityPhotoUrl}
+                  avgResponseSeconds={avgResponseSeconds}
+                  aiConfidence={aiConfidence}
+                />
+              );
+              /* Old Vite-pre design (kept for reference, can be restored):
               return (
                 <OverviewSection
                   data={data}
@@ -1245,9 +1277,33 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   candidateImage={identityPhotoUrl}
                 />
               );
+              */
             })()}
 
-            {/* Coverage Tab — unified Skill Coverage + Cluster Insights in one view */}
+            {/* Coverage Tab — Vite design (V2): per-cluster skill coverage cards */}
+            {!evaluationPending && activeTab === 'coverage' && (() => {
+              const placeholderMsg = getPlaceholderMessage('coverage');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+              });
+              return <CoverageV2 data={data} />;
+            })()}
+            {/* Old CoverageTab (with live WS skill coverage + cluster insights) — kept for reference:
             {!evaluationPending && activeTab === 'coverage' && (
               <CoverageTab
                 sessionId={liveSession.id}
@@ -1264,8 +1320,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
               />
             )}
+            */}
 
-            {/* Sentiment Tab */}
+            {/* Sentiment Tab — UNREACHABLE: 'sentiment' removed from tabs[] per Vite design.
+              Kept as dead code so the data plumbing (sentimentTimeline, sentimentSummary)
+              and chart layout can be restored if the tab is ever re-enabled. */}
             {!evaluationPending && activeTab === 'sentiment' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <div className="space-y-6">
@@ -1351,30 +1410,121 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 // Fall back to evaluations if history not present
                 const qaItemsRaw: any[] = eval_.question_history?.length > 0
                   ? eval_.question_history
-                  : evaluations.map((e: any, i: number) => ({
-                      question_number: i + 1,
-                      question: e.question,
-                      answer: e.response,
-                      topic: e.evaluation?.topic,
-                      round_type: null,
-                      response_type: 'answered',
-                      skip_source: null,
-                      timestamp: null,
-                    }));
+                  : (() => {
+                      // Follow-ups in `evaluations` don't share a question_number with
+                      // their parent the way question_history entries do. Assign numbers
+                      // so follow-ups inherit the most recent main question's number —
+                      // the downstream grouper then picks them up via the "same number
+                      // as previous" branch even if intent tagging is missing.
+                      let lastMainNum = 0;
+                      return evaluations.map((e: any, i: number) => {
+                        const intent = (e.question_intent || '').toLowerCase();
+                        const isFu = !!e.is_follow_up || ['follow_up', 'probe', 'deep_dive'].includes(intent);
+                        let qNum: number;
+                        if (isFu && lastMainNum > 0) {
+                          qNum = lastMainNum;
+                        } else {
+                          lastMainNum = i + 1;
+                          qNum = lastMainNum;
+                        }
+                        return {
+                          question_number: qNum,
+                          question: e.question,
+                          answer: e.response,
+                          topic: e.evaluation?.topic,
+                          round_type: null,
+                          response_type: 'answered',
+                          skip_source: null,
+                          timestamp: null,
+                          is_follow_up: e.is_follow_up,
+                          question_intent: e.question_intent,
+                        };
+                      });
+                    })();
+                // Some re-evaluated sessions store question_history with every
+                // entry flagged as a main question even when the conversation
+                // clearly contained follow-ups (intent="main_question",
+                // is_follow_up=false across the board). The conversation_transcript
+                // remains the source of truth for follow-up tagging on the
+                // assistant side — mirror the Transcript tab's lookup so the Q/A
+                // grouper can recover the structure.
+                const _convoTranscript: any[] = (liveSession.conversation_transcript
+                  || interview.conversation_transcript
+                  || []) as any[];
+                const _fuKeySet = new Set<string>();
+                const _ddKeySet = new Set<string>();
+                for (const m of _convoTranscript) {
+                  if (m?.role !== 'assistant' || !m?.content) continue;
+                  const key = String(m.content).trim().slice(0, 60);
+                  const intent = String(m.question_intent || '').toLowerCase();
+                  if (intent === 'deep_dive' || m.is_deep_dive) _ddKeySet.add(key);
+                  else if (m.is_follow_up || intent === 'follow_up' || intent === 'probe') _fuKeySet.add(key);
+                }
+                const _matchKey = (q: string, set: Set<string>): boolean => {
+                  if (!q || set.size === 0) return false;
+                  const key = q.trim().slice(0, 60);
+                  if (set.has(key)) return true;
+                  for (const k of set) {
+                    if (key.startsWith(k.slice(0, 40)) || k.startsWith(key.slice(0, 40))) return true;
+                  }
+                  return false;
+                };
+
                 // Group follow-ups with their parent main question. Follow-ups
-                // are rendered as F1, F2… nested inside the parent's Q box.
-                // Detect follow-ups by: (a) explicit is_follow_up flag, OR
-                // (b) same question_number as the previous entry (follow-ups
-                // share their parent's question_number in question_history).
+                // are rendered as F1, F2… (deep-dives as D1, D2…) nested inside
+                // the parent's Q box. Detection order:
+                //   1. explicit is_follow_up / question_intent on the entry
+                //   2. shared question_number with previous entry (live-mode)
+                //   3. text match against conversation_transcript follow-up flags
+                //      (fallback for re-evaluated sessions where question_history
+                //      lost the tagging).
+                // Dedupe synthetic skip duplicates. When a slot times out or
+                // is auto-skipped after a candidate stops responding, the
+                // backend records a question_history row that often inherits
+                // `current_question` (the last spoken question text), so the
+                // same Q text can appear 2-5 times in the UI with only the
+                // first being the real ask. Collapse later skip rows that
+                // share question text + round_type with an earlier row.
+                // Follow-ups are exempt — sub-interactions of one slot are
+                // expected to share their parent's main number.
+                const _isSkipResponse = (rt?: string): boolean => {
+                  const r = String(rt || '').toLowerCase();
+                  return r === 'skipped' || r === 'not_asked' || r === 'timeout'
+                    || r === 'low_coverage' || r === 'auto_skipped_offline'
+                    || r === 'auto_skipped_by_coverage';
+                };
+                const _seenKeys = new Set<string>();
+                const qaItems: any[] = [];
+                for (const _it of qaItemsRaw) {
+                  const _intent = String(_it.question_intent || '').toLowerCase();
+                  const _isFu = !!_it.is_follow_up
+                    || ['follow_up', 'probe', 'deep_dive'].includes(_intent);
+                  const _qText = String(_it.question || '').trim().toLowerCase();
+                  const _rt = String(_it.round_type || '').toLowerCase();
+                  const _key = `${_rt}::${_qText}`;
+                  if (!_isFu && _qText) {
+                    if (_isSkipResponse(_it.response_type) && _seenKeys.has(_key)) continue;
+                    _seenKeys.add(_key);
+                  }
+                  qaItems.push(_it);
+                }
+
                 type QaGroup = { main: any; followUps: any[] };
                 const groups: QaGroup[] = [];
-                for (const it of qaItemsRaw) {
+                for (const it of qaItems) {
                   const prev = groups.length > 0 ? groups[groups.length - 1] : null;
                   const _intent = (it.question_intent || '').toLowerCase();
+                  const _qText = String(it.question || '');
+                  const _txtIsDd = _matchKey(_qText, _ddKeySet);
+                  const _txtIsFu = _matchKey(_qText, _fuKeySet);
                   const isFu = !!it.is_follow_up
                     || ['follow_up', 'probe', 'deep_dive'].includes(_intent)
-                    || (prev != null && it.question_number != null && prev.main.question_number != null && String(it.question_number) === String(prev.main.question_number));
+                    || (prev != null && it.question_number != null && prev.main.question_number != null && String(it.question_number) === String(prev.main.question_number))
+                    || _txtIsDd
+                    || _txtIsFu;
                   if (isFu && prev) {
+                    if (_txtIsDd && !it.question_intent) it.question_intent = 'deep_dive';
+                    else if (_txtIsFu && !it.question_intent) it.question_intent = 'follow_up';
                     prev.followUps.push(it);
                   } else {
                     groups.push({ main: it, followUps: [] });
@@ -1529,7 +1679,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 };
 
                 const renderAnswer = (item: any, key: string) => {
-                  const isSkipped = item.response_type === 'skipped';
+                  const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
+                  const isNotAsked = item.response_type === 'not_asked';
                   const answerText = item.answer || '';
                   if (!answerText) return null;
                   const isExpanded = expandedQuestions.has(key);
@@ -1553,8 +1704,375 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   );
                 };
 
+                // ── Build skill → priority/cluster lookup from clusterConfig ──
+                const skillPriority: Record<string, number> = {};
+                const skillCluster: Record<string, string> = {};
+                [...clusterConfig.mth, ...clusterConfig.nth].forEach((c: any) => {
+                  (c.skills || []).forEach((s: string) => {
+                    if (s) {
+                      skillPriority[s.toLowerCase()] = c.priority;
+                      skillCluster[s.toLowerCase()] = c.name;
+                    }
+                  });
+                });
+                // Cluster config stores `priority` such that 3 = highest
+                // (P1), 2 = mid (P2), 1 = lowest (P3) — mirrors the backend
+                // _PRIO_MAP convention (see interview_evaluation.py:134).
+                // The Coverage panel inverts this via priorityNumToLevel in
+                // adapter.ts; this view used to render the raw number, which
+                // is why P1 skills showed up as "P3" chips with the wrong
+                // weight. Normalize at the boundary so all downstream code
+                // here works in "1 = highest, 3 = lowest" form.
+                const configToDisplayPrio = (p: number): number =>
+                  p >= 3 ? 1 : p === 2 ? 2 : p === 1 ? 3 : 0;
+                const getPrio = (skill?: string) =>
+                  skill ? configToDisplayPrio(skillPriority[skill.toLowerCase()] || 0) : 0;
+                // Spec: P1=10, P2=7, P3=4 (memory: timed eval spec). Unknown
+                // skills fall back to P3 weight rather than the previous 3,
+                // which wasn't a real priority level.
+                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : 4;
+
+                // ── Build evaluations lookup by question_number ──
+                // Used to surface per-skill rows + one_line_note for the AI Analysis Summary.
+                const evalsByQ: Record<number, any[]> = {};
+                (eval_.evaluations || []).forEach((e: any) => {
+                  const q = e.question_number ?? 0;
+                  (evalsByQ[q] = evalsByQ[q] || []).push(e);
+                });
+
+                // ── Group questions by section (mth / nth / hr) ──
+                type GroupT = typeof groups[number];
+                const mthGroups: GroupT[] = [];
+                const nthGroups: GroupT[] = [];
+                const hrGroups: GroupT[] = [];
+                groups.forEach((g, idx) => {
+                  let rt = (g.main.round_type || '').toLowerCase();
+                  if (!rt || rt === 'general') {
+                    for (let k = idx + 1; k < groups.length; k++) {
+                      const nxt = groups[k].main;
+                      if (nxt.round_type) { rt = String(nxt.round_type).toLowerCase(); break; }
+                    }
+                    if (!rt) rt = 'must_have_skills';
+                  }
+                  if (rt === 'hr') hrGroups.push(g);
+                  else if (rt === 'nice_to_have_skills') nthGroups.push(g);
+                  else mthGroups.push(g);
+                });
+
+                const renderFollowUps = (followUps: any[], parentKey: string) => {
+                  if (followUps.length === 0) return null;
+                  let _fuC = 0, _ddC = 0;
+                  return (
+                    <div className="ml-2 mt-3 space-y-3 pl-3 border-l-2 border-brand-cyan/30">
+                      {followUps.map((fu: any, fIdx: number) => {
+                        const fuSkipped = fu.response_type === 'skipped';
+                        const isDd = fu.question_intent === 'deep_dive';
+                        let badge: string, badgeCls: string;
+                        if (isDd) { _ddC += 1; badge = `D${_ddC}`; badgeCls = 'text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/20'; }
+                        else { _fuC += 1; badge = `F${_fuC}`; badgeCls = 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20'; }
+                        return (
+                          <div key={fIdx} className="flex items-start gap-2">
+                            <span className={`flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>{badge}</span>
+                            <div className="flex-1 min-w-0">
+                              {fuSkipped && (
+                                <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
+                                  Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
+                                </span>
+                              )}
+                              <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
+                              {renderAnswer(fu, `${parentKey}-f-${fIdx}`)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                };
+
+                const renderClarifications = (item: any, parentKey: string) => {
+                  if (!Array.isArray(item.clarifications) || item.clarifications.length === 0) return null;
+                  return (
+                    <div className="ml-2 mt-3 space-y-3 pl-3 border-l-2 border-brand-orange/30">
+                      {item.clarifications.map((cl: any, cIdx: number) => {
+                        const clKey = `${parentKey}-cl-${cIdx}`;
+                        return (
+                          <div key={clKey} className="flex items-start gap-2">
+                            <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
+                              CL{cl.clarification_number ?? cIdx + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
+                              {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                };
+
+                // ── Scored card (Must-Have / Nice-to-Have) ──
+                const renderScoredCard = (g: GroupT, idx: number, sectionKey: 'mth' | 'nth') => {
+                  const item = g.main;
+                  const cardKey = `${sectionKey}-${idx}-${item.question_number ?? idx}`;
+                  const isExpanded = expandedQuestions.has(cardKey);
+                  const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
+                  const isNotAsked = item.response_type === 'not_asked';
+
+                  // Collect skills for this question. Source priority:
+                  //   1. evaluations[].topic — what the LLM evaluator actually
+                  //      scored on this question (coherent with the question
+                  //      text and the per-skill scores).
+                  //   2. secondary_skills from history (extra planner-tagged).
+                  //   3. item.topic — only as a last resort. The backend
+                  //      pre-fills this with the first uncovered skill BEFORE
+                  //      the LLM runs (transcript_evaluation_service.py:6003),
+                  //      so when the candidate skipped or the evaluator never
+                  //      tagged a topic, item.topic shows the next slot's
+                  //      planned skill rather than what the question asked.
+                  type SkillRow = { skill: string; score: number; priority: number };
+                  const skillsForQ: SkillRow[] = [];
+                  const seen = new Set<string>();
+                  const pushSkill = (skill?: string, score?: number) => {
+                    if (!skill) return;
+                    const k = skill.toLowerCase().trim();
+                    if (!k || seen.has(k)) return;
+                    seen.add(k);
+                    skillsForQ.push({ skill, score: Number(score) || 0, priority: getPrio(skill) });
+                  };
+                  (evalsByQ[item.question_number] || []).forEach((e: any) => pushSkill(e.topic, e.score));
+                  (item.secondary_skills || []).forEach((s: any) => pushSkill(s.skill, s.score));
+                  if (skillsForQ.length === 0) pushSkill(item.topic, item.score);
+
+                  // Weighted final score using priority-derived weights
+                  const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority || 3), 0);
+                  const weightedSum = skillsForQ.reduce((acc, s) => acc + s.score * priorityWeight(s.priority || 3), 0);
+                  const finalScore = totalW > 0 ? weightedSum / totalW : (item.score ?? 0);
+
+                  // AI summary: take the rep evaluation's one_line_note
+                  const repEval = (evalsByQ[item.question_number] || []).reduce<any | null>(
+                    (best, e) => (best == null || (e.score || 0) > (best.score || 0) ? e : best), null
+                  );
+                  const aiSummary = repEval?.one_line_note || '';
+
+                  const duration = item.duration_seconds;
+                  const finalScoreColor = finalScore >= 8 ? 'text-green-600' : finalScore >= 6 ? 'text-blue-600' : finalScore >= 4 ? 'text-yellow-600' : 'text-orange-600';
+
+                  return (
+                    <div key={cardKey} className={`bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 ${isSkipped ? 'bg-slate-50/50' : ''}`}>
+                      <button
+                        onClick={() => toggleQuestion(cardKey)}
+                        className="w-full text-left p-4 hover:bg-gray-50/50 rounded-xl transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
+                                Question {item.question_number ?? idx + 1}
+                              </span>
+                              {duration != null && (
+                                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                  <Clock className="w-3 h-3" />
+                                  {duration} seconds
+                                </span>
+                              )}
+                              {isSkipped && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                  {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 leading-snug mb-2">{item.question}</p>
+                            {skillsForQ.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {skillsForQ.map((s, i) => (
+                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                                    {s.skill}
+                                    {s.priority > 0 && (
+                                      <span className="text-[10px] text-slate-500">(P{s.priority})</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-start gap-2 flex-shrink-0">
+                            {!isSkipped && (
+                              <div className="text-right">
+                                <div className={`text-2xl font-bold ${finalScoreColor}`}>{finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wider">Final Score</div>
+                              </div>
+                            )}
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 mt-1" /> : <ChevronDown className="w-5 h-5 text-gray-400 mt-1" />}
+                          </div>
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+                          {/* Candidate Answer */}
+                          <div className="pt-4">
+                            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Candidate Answer</div>
+                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                              {item.answer || '—'}
+                            </div>
+                          </div>
+
+                          {/* AI Analysis Summary */}
+                          {aiSummary && (
+                            <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg p-3">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+                                <span className="text-xs font-semibold text-brand-blue">AI Analysis Summary</span>
+                              </div>
+                              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                            </div>
+                          )}
+
+                          {/* Skill Scoring Breakdown */}
+                          {skillsForQ.length > 0 && !isSkipped && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
+                              <div className="space-y-2">
+                                {skillsForQ.map((s, i) => {
+                                  const w = priorityWeight(s.priority || 3);
+                                  const contribution = s.score * w;
+                                  const pct = Math.min(100, Math.max(0, (s.score / 10) * 100));
+                                  return (
+                                    <div key={i} className="bg-slate-50 rounded-lg p-3">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-sm font-medium text-gray-900">{s.skill}</span>
+                                          {s.priority > 0 && (
+                                            <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200">P{s.priority}</span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-4 text-xs">
+                                          <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}</span></div>
+                                          <div><span className="text-gray-500">Weight</span> <span className="font-semibold text-gray-900">{w}</span></div>
+                                          <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{contribution.toFixed(contribution % 1 === 0 ? 0 : 0)}</span></div>
+                                        </div>
+                                      </div>
+                                      <div className="h-1.5 bg-white rounded-full overflow-hidden ring-1 ring-slate-200">
+                                        <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Weighted Formula */}
+                          {skillsForQ.length > 0 && !isSkipped && totalW > 0 && (
+                            <div className="bg-brand-blue/5 ring-1 ring-dashed ring-brand-blue/30 rounded-lg p-3">
+                              <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
+                              <div className="font-mono text-xs text-gray-700 space-y-0.5">
+                                <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
+                                <div>= ({skillsForQ.map(s => `${s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}×${priorityWeight(s.priority || 3)}`).join(' + ')}) / {totalW} = {finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Clarifications + Follow-ups */}
+                          {renderClarifications(item, cardKey)}
+                          {renderFollowUps(g.followUps, cardKey)}
+
+                          {/* View Full Transcript */}
+                          <div className="flex justify-center pt-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setActiveTab('transcript'); }}
+                              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              View Full Transcript
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                // ── HR card (no scoring — answer only) ──
+                const renderHRCard = (g: GroupT, idx: number) => {
+                  const item = g.main;
+                  const cardKey = `hr-${idx}-${item.question_number ?? idx}`;
+                  const isExpanded = expandedQuestions.has(cardKey);
+                  const isSkipped = item.response_type === 'skipped' || item.response_type === 'not_asked';
+                  const isNotAsked = item.response_type === 'not_asked';
+                  const duration = item.duration_seconds;
+
+                  return (
+                    <div key={cardKey} className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                      <button
+                        onClick={() => toggleQuestion(cardKey)}
+                        className="w-full text-left p-4 hover:bg-gray-50/50 rounded-xl transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5">
+                                Question {item.question_number ?? idx + 1}
+                              </span>
+                              {duration != null && (
+                                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                  <Clock className="w-3 h-3" />
+                                  {duration} seconds
+                                </span>
+                              )}
+                              {/* HR questions are behavioural / cultural / situational.
+                                  When the planner auto-skips an uncovered slot it stamps
+                                  the next uncovered TECHNICAL skill onto the synthetic
+                                  HR row, which then reads like a cloud / NLP question.
+                                  Allow only real HR sub-categories through; otherwise
+                                  collapse to a generic "HR" pill. */}
+                              {(() => {
+                                const HR_TOPICS = new Set(['behavioural', 'behavioral', 'cultural fit', 'situational']);
+                                const t = String(item.topic || '').trim();
+                                const label = HR_TOPICS.has(t.toLowerCase()) ? t : 'HR';
+                                return (
+                                  <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-xs rounded-full">{label}</span>
+                                );
+                              })()}
+                              {isSkipped && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                  {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                          </div>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="px-4 pb-4 border-t border-gray-100 pt-4 space-y-3">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Candidate Answer</div>
+                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                              {item.answer || '—'}
+                            </div>
+                          </div>
+                          {renderClarifications(item, cardKey)}
+                          {renderFollowUps(g.followUps, cardKey)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                const SectionHeader = ({ title, badge, badgeCls }: { title: string; badge: string; badgeCls: string }) => (
+                  <div className="flex items-center gap-3 mb-3">
+                    <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${badgeCls}`}>{badge}</span>
+                  </div>
+                );
+
                 return (
-                  <div className="space-y-3">
+                  <div className="space-y-6">
                     {/* Export toolbar */}
                     <div className="flex justify-end relative">
                       <button
@@ -1579,133 +2097,45 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         </>
                       )}
                     </div>
-                    {groups.map(({ main: item, followUps }, idx: number) => {
-                      const isSkipped = item.response_type === 'skipped';
-                      // If the first question has no round_type/topic (backend occasionally
-                      // leaves Q1 un-tagged because the round only activates on Q2), inherit
-                      // from the next available group. Final fallback: must_have_skills.
-                      let effectiveRtype = (item.round_type || '').toLowerCase();
-                      let effectiveTopic = item.topic;
-                      if (!effectiveRtype || effectiveRtype === 'general') {
-                        for (let k = idx + 1; k < groups.length; k++) {
-                          const nxt = groups[k].main;
-                          if (nxt.round_type) { effectiveRtype = String(nxt.round_type).toLowerCase(); break; }
-                        }
-                        if (!effectiveRtype) effectiveRtype = 'must_have_skills';
-                      }
-                      if (!effectiveTopic || effectiveTopic === 'general') {
-                        for (let k = idx + 1; k < groups.length; k++) {
-                          const nxt = groups[k].main;
-                          if (nxt.topic && nxt.topic !== 'general') { effectiveTopic = nxt.topic; break; }
-                        }
-                      }
-                      const rtype = effectiveRtype;
-                      const isHR = rtype === 'hr';
-                      const isMustHave = rtype === 'must_have_skills';
-                      const isNiceToHave = rtype === 'nice_to_have_skills';
-                      // Same color scheme for the full round — not position-dependent.
-                      // Must Have → amber; Nice To Have → blue; HR → purple.
-                      const roundBadge = isHR
-                        ? { label: 'HR', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' }
-                        : isMustHave
-                        ? { label: 'Must Have Skills', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' }
-                        : isNiceToHave
-                        ? { label: 'Nice To Have Skills', cls: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20' }
-                        : item.round_type
-                        ? { label: item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), cls: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200' }
-                        : null;
 
-                      return (
-                        <div key={idx} className={`bg-white rounded-xl border ring-1 shadow-sm ${isSkipped ? 'border-gray-100 ring-black/[0.02] bg-slate-50/50 shadow-brand-blue/5' : 'border-gray-100 ring-black/[0.02] shadow-brand-blue/5'} p-4`}>
-                          <div className="flex items-start gap-3 mb-2">
-                            <span className="flex-shrink-0 text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded px-1.5 py-0.5 mt-0.5">
-                              Q{item.question_number ?? idx + 1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                                {roundBadge && (
-                                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${roundBadge.cls}`}>
-                                    {roundBadge.label}
-                                  </span>
-                                )}
-                                {effectiveTopic && effectiveTopic !== 'general' && (
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-xs rounded-full">{effectiveTopic}</span>
-                                )}
-                                {isSkipped && (
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
-                                    Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
-                              {renderAnswer(item, `q-${idx}`)}
-                            </div>
-                          </div>
-
-                          {Array.isArray(item.clarifications) && item.clarifications.length > 0 && (
-                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-brand-orange/30">
-                              {item.clarifications.map((cl: any, cIdx: number) => {
-                                const clKey = `q-${idx}-cl-${cIdx}`;
-                                return (
-                                  <div key={clKey}>
-                                    <div className="flex items-start gap-2">
-                                      <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
-                                        CL{cl.clarification_number ?? cIdx + 1}
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
-                                        {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {followUps.length > 0 && (() => {
-                            let _qaFuC = 0, _qaDdC = 0;
-                            return (
-                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-brand-cyan/30">
-                              {followUps.map((fu: any, fIdx: number) => {
-                                const fuSkipped = fu.response_type === 'skipped';
-                                const isDd = fu.question_intent === 'deep_dive';
-                                let badge: string;
-                                let badgeCls: string;
-                                if (isDd) {
-                                  _qaDdC += 1;
-                                  badge = `D${_qaDdC}`;
-                                  badgeCls = 'text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/20';
-                                } else {
-                                  _qaFuC += 1;
-                                  badge = `F${_qaFuC}`;
-                                  badgeCls = 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20';
-                                }
-                                return (
-                                  <div key={fIdx}>
-                                    <div className="flex items-start gap-2">
-                                      <span className={`flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>
-                                        {badge}
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        {fuSkipped && (
-                                          <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
-                                            Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
-                                          </span>
-                                        )}
-                                        <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
-                                        {renderAnswer(fu, `q-${idx}-f-${fIdx}`)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            );
-                          })()}
+                    {mthGroups.length > 0 && (
+                      <section>
+                        <SectionHeader
+                          title="Must-Have Section"
+                          badge="Scored for Pass/Fail"
+                          badgeCls="bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20"
+                        />
+                        <div className="space-y-3">
+                          {mthGroups.map((g, i) => renderScoredCard(g, i, 'mth'))}
                         </div>
-                      );
-                    })}
+                      </section>
+                    )}
+
+                    {nthGroups.length > 0 && (
+                      <section>
+                        <SectionHeader
+                          title="Nice-to-Have Section"
+                          badge="Informative Only"
+                          badgeCls="bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20"
+                        />
+                        <div className="space-y-3">
+                          {nthGroups.map((g, i) => renderScoredCard(g, i, 'nth'))}
+                        </div>
+                      </section>
+                    )}
+
+                    {hrGroups.length > 0 && (
+                      <section>
+                        <SectionHeader
+                          title="HR Section"
+                          badge="Not scored — review only"
+                          badgeCls="bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
+                        />
+                        <div className="space-y-3">
+                          {hrGroups.map((g, i) => renderHRCard(g, i))}
+                        </div>
+                      </section>
+                    )}
                   </div>
                 );
               })()
@@ -1763,7 +2193,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 // Build Q/F/D numbering using question_history intent data.
                 // Strategy: build an intent lookup from ALL question_history entries
                 // (keyed by question text prefix), then classify each assistant message.
-                type QType = 'followup' | 'deepdive' | 'main';
+                type QType = 'followup' | 'deepdive' | 'main' | 'closing';
                 const _chatQh = (eval_.question_history || []) as any[];
 
                 // Map: first-60-chars of question → intent ('follow_up'|'probe'|'deep_dive'|'explore')
@@ -1808,12 +2238,40 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 let currentQtype: QType = 'main';
                 let fuCounter = 0;
                 let ddCounter = 0;
+                let clCounter = 0;  // Clarifications under current main Q
+                // Detect clarifications by either explicit flag (backend) or
+                // the recognizable rephrase opener Linda uses.
+                const isClarificationMsg = (m: any): boolean => {
+                  if (m.is_clarification === true) return true;
+                  const t = (m.content || '').toLowerCase().trim();
+                  return (
+                    t.startsWith("let's stick to this question") ||
+                    t.startsWith("let me put it another way") ||
+                    t.startsWith("to put it differently") ||
+                    t.startsWith("let me rephrase")
+                  );
+                };
+                // Detect the closing / wrap-up message — should not get a Q label.
+                const isClosingMsg = (m: any): boolean => {
+                  if (m.is_closing === true || m.kind === 'closing') return true;
+                  const t = (m.content || '').toLowerCase();
+                  return (
+                    t.includes('thank you for completing the interview') ||
+                    t.includes('thank you for your time today') ||
+                    (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+                  );
+                };
                 for (const m of messages) {
                   if (m.role === 'assistant') {
                     const intent = _lookupIntent(m.content);
                     const isDd = intent === 'deep_dive';
                     const isFu = !isDd && (intent === 'follow_up' || intent === 'probe' || !!m.is_follow_up);
-                    if (isDd) {
+                    const isCl = !isDd && !isFu && isClarificationMsg(m);
+                    const isClosing = !isDd && !isFu && !isCl && isClosingMsg(m);
+                    if (isClosing) {
+                      currentLabel = 'End';
+                      currentQtype = 'closing';
+                    } else if (isDd) {
                       ddCounter += 1;
                       currentLabel = `D${ddCounter}`;
                       currentQtype = 'deepdive';
@@ -1821,12 +2279,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       fuCounter += 1;
                       currentLabel = `F${fuCounter}`;
                       currentQtype = 'followup';
+                    } else if (isCl) {
+                      clCounter += 1;
+                      currentLabel = `CL${clCounter}`;
+                      currentQtype = 'main'; // clarification stays inside its parent Q's group
                     } else {
                       mainCount += 1;
                       currentLabel = m.question_id || `Q${mainCount}`;
                       currentQtype = 'main';
                       fuCounter = 0;
                       ddCounter = 0;
+                      clCounter = 0;
                     }
                   }
                   labeled.push({ msg: m, label: currentLabel, isFollowUp: currentQtype !== 'main', qtype: currentQtype });
@@ -1985,7 +2448,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         return '';
                       };
 
-                      type SubType = 'followup' | 'deepdive';
+                      type SubType = 'followup' | 'deepdive' | 'clarification';
                       type FU = {
                         label: string;
                         question: string;
@@ -2009,12 +2472,54 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       let pendingAI: { label: string; text: string; isSub: boolean; subType: SubType } | null = null;
                       let _tblFuCtr = 0;
                       let _tblDdCtr = 0;
+                      let _tblClCtr = 0;
+                      const _tblIsClarif = (m: any): boolean => {
+                        if (m.is_clarification === true) return true;
+                        const t = (m.content || '').toLowerCase().trim();
+                        return (
+                          t.startsWith("let's stick to this question") ||
+                          t.startsWith("let me put it another way") ||
+                          t.startsWith("to put it differently") ||
+                          t.startsWith("let me rephrase")
+                        );
+                      };
+                      const _tblIsClosing = (m: any): boolean => {
+                        if (m.is_closing === true || m.kind === 'closing') return true;
+                        const t = (m.content || '').toLowerCase();
+                        return (
+                          t.includes('thank you for completing the interview') ||
+                          t.includes('thank you for your time today') ||
+                          (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+                        );
+                      };
 
                       for (const m of messages) {
                         if (m.role === 'assistant') {
                           const _tblMsgIntent = _tblLookup(m.content);
                           const isDd = _tblMsgIntent === 'deep_dive';
                           const isFu = !isDd && (_tblMsgIntent === 'follow_up' || _tblMsgIntent === 'probe' || !!m.is_follow_up);
+                          const isCl = !isDd && !isFu && _tblIsClarif(m);
+                          const isClosing = !isDd && !isFu && !isCl && _tblIsClosing(m);
+                          if (isClosing) {
+                            // Close out the previous Q group, then start a standalone
+                            // 'End' group so the closing message renders as its own
+                            // row in the table with type='End' (not a Q number).
+                            if (current) groups.push(current);
+                            current = {
+                              mainLabel: 'End',
+                              mainQuestion: m.content || '',
+                              mainRaw: '',
+                              mainCorrected: '',
+                              language: '',
+                              timestamp: m.timestamp || '',
+                              followUps: [],
+                            };
+                            pendingAI = { label: 'End', text: m.content || '', isSub: false, subType: 'followup' };
+                            _tblFuCtr = 0;
+                            _tblDdCtr = 0;
+                            _tblClCtr = 0;
+                            continue;
+                          }
                           if (isDd) {
                             _tblDdCtr += 1;
                             if (!current) {
@@ -2027,6 +2532,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               current = { mainLabel: 'Q?', mainQuestion: '', mainRaw: '', mainCorrected: '', language: '', timestamp: m.timestamp || '', followUps: [] };
                             }
                             pendingAI = { label: `F${_tblFuCtr}`, text: m.content || '', isSub: true, subType: 'followup' };
+                          } else if (isCl) {
+                            _tblClCtr += 1;
+                            if (!current) {
+                              current = { mainLabel: 'Q?', mainQuestion: '', mainRaw: '', mainCorrected: '', language: '', timestamp: m.timestamp || '', followUps: [] };
+                            }
+                            pendingAI = { label: `CL${_tblClCtr}`, text: m.content || '', isSub: true, subType: 'clarification' };
                           } else {
                             if (current) groups.push(current);
                             const lbl = m.question_id || `Q${groups.length + 1}`;
@@ -2042,6 +2553,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             pendingAI = { label: lbl, text: m.content || '', isSub: false, subType: 'followup' };
                             _tblFuCtr = 0;
                             _tblDdCtr = 0;
+                            _tblClCtr = 0;
                           }
                         } else if (m.role === 'user' && current) {
                           const raw = (m.raw_content || m.content || '') as string;
@@ -2076,7 +2588,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       };
                       // Flatten groups into sequential rows: one main row + one row per follow-up.
                       // Follow-ups keep the parent's Question ID (e.g. Q1) and are tagged Type="Follow-up".
-                      type RowType = 'Main' | 'Followup' | 'Deep Dive';
+                      type RowType = 'Main' | 'Followup' | 'Deep Dive' | 'Clarification' | 'End';
                       type FlatRow = {
                         sno: number;
                         questionId: string;
@@ -2094,7 +2606,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         flatRows.push({
                           sno,
                           questionId: g.mainLabel,
-                          type: 'Main',
+                          type: g.mainLabel === 'End' ? 'End' : 'Main',
                           question: g.mainQuestion,
                           raw: g.mainRaw,
                           corrected: g.mainCorrected,
@@ -2106,7 +2618,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           flatRows.push({
                             sno,
                             questionId: g.mainLabel,
-                            type: fu.subType === 'deepdive' ? 'Deep Dive' : 'Followup',
+                            type: fu.subType === 'deepdive' ? 'Deep Dive'
+                                : fu.subType === 'clarification' ? 'Clarification'
+                                : 'Followup',
                             question: fu.question,
                             raw: fu.raw,
                             corrected: fu.corrected,
@@ -2266,7 +2780,41 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               />
             )}
 
-            {/* Evaluation Report Tab — Final report with PDF/Excel/JSON downloads */}
+            {/* Evaluation Report Tab — Vite design (V2). Wired to live DashboardData. */}
+            {!evaluationPending && activeTab === 'eval_report' && (() => {
+              const placeholderMsg = getPlaceholderMessage('eval_report');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+              });
+              const aiConfidence = typeof eval_.ai_confidence === 'number'
+                ? eval_.ai_confidence
+                : typeof eval_.confidence === 'number'
+                  ? eval_.confidence
+                  : null;
+              return (
+                <EvaluationReportV2
+                  data={data}
+                  aiConfidence={aiConfidence}
+                  evaluationId={liveSession.display_id || null}
+                />
+              );
+            })()}
+            {/* Old EvaluationReportTab (with PDF/Excel/JSON exports) — kept for reference:
             {!evaluationPending && activeTab === 'eval_report' && (
               <EvaluationReportTab
                 sessionId={liveSession.id}
@@ -2287,8 +2835,68 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 }}
               />
             )}
+            */}
 
-            {/* Evaluation Dashboard Tab — Analysis / Timeline / Table views */}
+            {/* Skill Breakdown Tab — Vite SkillBreakdown.tsx as its own tab */}
+            {!evaluationPending && activeTab === 'skill_breakdown' && (() => {
+              const placeholderMsg = getPlaceholderMessage('skill_breakdown');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+              });
+              return <SkillsView data={data} />;
+            })()}
+
+            {/* Question Analysis Tab — Vite QuestionAnalysis.tsx as its own tab */}
+            {!evaluationPending && activeTab === 'question_analysis' && (() => {
+              const placeholderMsg = getPlaceholderMessage('question_analysis');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+              });
+              return <QuestionsView data={data} />;
+            })()}
+
+            {/* Example Scenarios Tab — Vite ExampleScenarios.tsx (scoring formula reference) */}
+            {!evaluationPending && activeTab === 'example_scenarios' && (
+              <FormulaView />
+            )}
+
+            {/* Old merged 'eval_dashboard' tab — kept for reference:
+            {!evaluationPending && activeTab === 'eval_dashboard' && (() => {
+              const data = buildDashboardData({ ... });
+              return <EvaluationDashboardV2 data={data} />;
+            })()}
+            */}
+            {/* Old EvaluationDashboardTab (Analysis / Timeline / Table) — kept for reference:
             {!evaluationPending && activeTab === 'eval_dashboard' && (
               <EvaluationDashboardTab
                 sessionId={liveSession.id}
@@ -2309,6 +2917,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 }}
               />
             )}
+            */}
 
             {/* Legacy evaluation block removed — replaced by EvaluationTab above.
               Original inline block handled: capability_score hero, section_scores,

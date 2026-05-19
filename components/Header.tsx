@@ -1068,7 +1068,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] flex flex-col">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
                 {/* User Profile Header */}
                 <div className="bg-brand-blue px-5 py-4 shrink-0">
                   <div className="flex items-center gap-4">

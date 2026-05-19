@@ -348,7 +348,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
               <h2 className="text-gray-900 dark:text-slate-50 mb-1">Upload Resumes</h2>
               <p className="text-sm text-gray-600 dark:text-slate-400">Add applicants to: <span className="text-gray-800 dark:text-slate-100">{jobTitle}</span></p>
@@ -362,7 +362,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto flex-1">
+          <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
             {/* Upload Area */}
             <div
               className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
@@ -604,8 +604,8 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950 shrink-0">
-            <div className="text-sm text-gray-600 dark:text-slate-400">
+          <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-600">
               {isCheckingQuota || isCheckingDuplicates ? (
                 <span className="text-gray-500 dark:text-slate-500 animate-pulse flex items-center gap-1">
                   <Loader2 className="w-4 h-4 animate-spin" />

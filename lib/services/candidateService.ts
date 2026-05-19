@@ -190,6 +190,7 @@ export interface AssessmentInfo {
   invitation_status: string;
   consent_accepted: boolean;
   expires_at: string | null;
+  is_revoked?: boolean;
   attempt_id: string | null;
   attempt_status: string | null;
   attempt_started_at: string | null;  // When attempt started - for timer resume on page refresh
