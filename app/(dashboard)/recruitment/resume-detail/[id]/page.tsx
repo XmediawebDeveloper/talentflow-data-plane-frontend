@@ -9,6 +9,7 @@ import { Resume as ApiResume } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 interface ResumeVersion {
   id: string;
@@ -226,17 +227,20 @@ export default function ResumeDetailPage() {
 
   return (
     <FeatureGate feature="resume_upload">
-    <main className="flex-1 bg-gray-50 min-h-screen flex flex-col">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Resume Database', href: '/recruitment/resume-database' },
+              { label: 'Resume Detail' },
+            ]}
+          />
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
-        <div className="w-full max-w-[1400px] mx-auto">
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-brand-blue mb-3 sm:mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
+      <div className="border-b border-gray-200 py-3 sm:py-4 mb-4">
+        <div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight truncate">{resume.name}</h1>
@@ -254,7 +258,7 @@ export default function ResumeDetailPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col lg:flex-row w-full max-w-[1400px] mx-auto">
+      <div className="flex-1 flex flex-col lg:flex-row">
         {/* Sidebar - desktop tabs / mobile horizontal scroll */}
         <div className="lg:w-60 lg:border-r border-b lg:border-b-0 border-gray-200 bg-gray-50 p-2 sm:p-3 lg:p-4">
           <div className="flex lg:flex-col gap-1 overflow-x-auto scrollbar-hide">
@@ -606,6 +610,8 @@ export default function ResumeDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      </div>
         </div>
       </div>
     </main>

@@ -233,8 +233,8 @@ function ExportModal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 bg-brand-blue rounded-t-2xl">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] flex flex-col">
+        <div className="flex items-center justify-between p-5 bg-brand-blue rounded-t-2xl shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
               <Download className="w-5 h-5 text-white" />
@@ -245,7 +245,7 @@ function ExportModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="p-5 space-y-3 flex-1 overflow-y-auto">
           <p className="text-sm text-gray-500">Choose export format:</p>
           <button
             onClick={() => onExport('csv')}
@@ -274,12 +274,21 @@ function ExportModal({
             </div>
           </button>
         </div>
-        {isExporting && (
-          <div className="px-5 pb-4 flex items-center gap-2 text-sm text-brand-blue">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Preparing export…
-          </div>
-        )}
+        <div className="px-5 py-4 border-t border-gray-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-between gap-3 shrink-0">
+          {isExporting ? (
+            <span className="flex items-center gap-2 text-sm text-brand-blue">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Preparing export…
+            </span>
+          ) : <span />}
+          <button
+            onClick={onClose}
+            disabled={isExporting}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all disabled:opacity-50"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1403,7 +1412,7 @@ export default function UsageHistory() {
 
   return (
     <div className="flex-1 bg-slate-50">
-      <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
       {/* ── Page Header ── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10">

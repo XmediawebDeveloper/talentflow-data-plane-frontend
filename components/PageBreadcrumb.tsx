@@ -29,7 +29,7 @@ export default function PageBreadcrumb({
   className?: string;
 }) {
   return (
-    <Breadcrumb className={className}>
+    <Breadcrumb className={`bg-slate-50 ring-1 ring-slate-200/80 rounded-lg px-3 py-2 ${className}`}>
       <BreadcrumbList>
         {items.map((crumb, idx) => {
           const isLast = idx === items.length - 1;
@@ -37,7 +37,9 @@ export default function PageBreadcrumb({
             <React.Fragment key={`${crumb.label}-${idx}`}>
               <BreadcrumbItem>
                 {isLast || !crumb.href ? (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  <BreadcrumbPage className="font-semibold text-brand-blue">
+                    {crumb.label}
+                  </BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink asChild>
                     <Link href={crumb.href}>{crumb.label}</Link>

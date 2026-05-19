@@ -12,6 +12,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -467,8 +468,16 @@ export default function JDListPage() {
   const canCreateJD = accessCheck?.can_create_jd !== false;
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'JD List' },
+            ]}
+          />
         {/* JD01 & JD03: Access Error Banner */}
         {accessError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
@@ -974,6 +983,7 @@ export default function JDListPage() {
           </div>
         )}
       </div>
+        </div>
 
       {/* FIX-003: JD Creation/Edit Sheet */}
       <Sheet open={showJDSheet} onOpenChange={(open) => {
@@ -1062,6 +1072,6 @@ export default function JDListPage() {
           isLoading={confirmLoading}
         />
       )}
-    </div>
+    </main>
   );
 }

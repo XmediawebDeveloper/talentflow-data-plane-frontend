@@ -13,6 +13,7 @@ import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -299,7 +300,17 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Preview mode ───────────── */
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50"><div className="w-full pb-28">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl pb-28">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: 'Preview' },
+            ]}
+          />
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8">
         {STEPS.map((label, i) => {
@@ -623,7 +634,7 @@ export default function AIInterviewPreview() {
       </div>
 
       {/* ── Sticky Footer ── */}
-      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
         <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -680,7 +691,8 @@ export default function AIInterviewPreview() {
         variant="info"
       />
 
-    </div>
-    </div>
+      </div>
+      </div>
+    </main>
   );
 }

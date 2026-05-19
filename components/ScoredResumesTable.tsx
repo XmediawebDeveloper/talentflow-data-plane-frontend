@@ -37,8 +37,12 @@ interface ScoredResume {
   scoredDate: string;
   scoredBy: string;
   experience?: string;
-  education?: string;
-  certifications?: string[];
+  // Education can arrive as a label ("Bachelor's"), a structured array from the
+  // candidate-detail endpoint, or be absent. The cell renderer below handles
+  // each shape; the union here keeps narrowing precise instead of collapsing.
+  education?: string | Array<{ degree?: string; institution?: string }>;
+  // Certifications: simple string list or structured objects with a name field.
+  certifications?: Array<string | { name?: string }>;
   // Version info
   version?: number;
   resumeVersion?: number;
@@ -713,10 +717,10 @@ export default function ScoredResumesTable({
 
       {/* Desktop Table View */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[1100px] table-auto">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4 w-12">
+              <th className="text-left py-3 px-4 w-12 align-middle">
                 <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
                   {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
                     <CheckSquare className="w-4 h-4 text-gray-800" />
@@ -726,12 +730,12 @@ export default function ScoredResumesTable({
                 </button>
               </th>
               {enabledColumns.map((col) => (
-                <th key={col.id} className="text-left py-3 px-4 text-sm text-gray-600">
+                <th key={col.id} className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm text-gray-600">Assessment</th>
-              <th className="text-left py-3 px-4 text-sm text-gray-600">Actions</th>
+              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Assessment</th>
+              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -743,7 +747,7 @@ export default function ScoredResumesTable({
                   index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}
               >
-                <td className="py-3 px-4">
+                <td className="py-3 px-4 align-middle">
                   <button
                     onClick={() => handleSelectResume(resume.id)}
                     className="p-1 hover:bg-gray-200 rounded"
@@ -759,7 +763,7 @@ export default function ScoredResumesTable({
                 {enabledColumns.map((col) => {
                   if (col.id === 'candidateName') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         {onViewCandidate ? (
                           <button
                             onClick={() => onViewCandidate(resume)}
@@ -775,7 +779,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'jobTitle') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
                       </td>
                     );
@@ -783,7 +787,7 @@ export default function ScoredResumesTable({
                   if (col.id === 'version') {
                     const ver = resume.version || resume.resumeVersion || 1;
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
                           v{ver}
                         </span>
@@ -792,7 +796,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'email') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <Mail className="w-3.5 h-3.5" />
                           {resume.email}
@@ -802,7 +806,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'phone') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <Phone className="w-3.5 h-3.5" />
                           {resume.phone}
@@ -812,7 +816,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'matchStatus') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
                           resume.matchStatus === 'Exact Match'
                             ? 'bg-green-100 text-green-700 border-green-300'
@@ -827,7 +831,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'scorePercentage') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <div className={`text-base ${
                             resume.scorePercentage >= 85
@@ -856,7 +860,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'experience') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="text-sm text-gray-600">{resume.experience || 'N/A'}</div>
                       </td>
                     );
@@ -868,14 +872,14 @@ export default function ScoredResumesTable({
                         ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
                         : 'N/A';
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle min-w-[180px]">
                         <div className="text-sm text-gray-600">{educationDisplay}</div>
                       </td>
                     );
                   }
                   if (col.id === 'certifications') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle min-w-[200px]">
                         <div className="text-sm text-gray-600">
                           {resume.certifications && resume.certifications.length > 0
                             ? resume.certifications.map(cert =>
@@ -888,7 +892,7 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'scoredDate') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <Calendar className="w-3.5 h-3.5" />
                           <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
@@ -898,14 +902,14 @@ export default function ScoredResumesTable({
                   }
                   if (col.id === 'scoredBy') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="text-sm text-gray-600">{resume.scoredBy}</div>
                       </td>
                     );
                   }
                   if (col.id === 'tenantName') {
                     return (
-                      <td key={col.id} className="py-3 px-4">
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
                         <div className="text-sm text-gray-600">{resume.tenantName || 'N/A'}</div>
                       </td>
                     );
@@ -914,7 +918,7 @@ export default function ScoredResumesTable({
                 })}
 
                 {/* Assessment Column */}
-                <td className="py-3 px-4">
+                <td className="py-3 px-4 align-middle whitespace-nowrap">
                   {/* Invite Button - For Exact Match & Partial Match */}
                   {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') ? (
                     availableUnits === 0 ? (
@@ -962,7 +966,7 @@ export default function ScoredResumesTable({
                 </td>
 
                 {/* Actions Column */}
-                <td className="py-3 px-4">
+                <td className="py-3 px-4 align-middle whitespace-nowrap">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1218,8 +1222,8 @@ export default function ScoredResumesTable({
       {/* Export Format Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Export Scored Resumes</h3>
                 <p className="text-sm text-gray-500 mt-1">
@@ -1237,7 +1241,7 @@ export default function ScoredResumesTable({
               </button>
             </div>
 
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto flex-1">
               <p className="text-sm text-gray-600 mb-4">Choose export format:</p>
 
               <div className="space-y-3">
@@ -1275,7 +1279,7 @@ export default function ScoredResumesTable({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
               <button
                 onClick={() => setShowExportModal(false)}
                 className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
@@ -1427,18 +1431,34 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
   if (assessments.length === 0) {
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-10 h-10 text-amber-600" />
-            </div>
-            <h3 className="text-gray-900 text-lg font-medium mb-2">No Assessment Found</h3>
-            <p className="text-gray-600 text-sm">
-              There is no published assessment for this job description yet.
-              Please create and publish an assessment first.
-            </p>
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+            <h3 className="text-gray-900 text-lg font-medium">No Assessment Found</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-1"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
           </div>
-          <div className="flex justify-center">
+
+          {/* Body */}
+          <div className="px-6 py-6 overflow-y-auto flex-1">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-10 h-10 text-amber-600" />
+              </div>
+              <p className="text-gray-600 text-sm">
+                There is no published assessment for this job description yet.
+                Please create and publish an assessment first.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-gray-200 flex justify-center shrink-0">
             <button
               onClick={onClose}
               className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
@@ -1455,7 +1475,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
               <Send className="w-5 h-5 text-white" />
@@ -1664,7 +1684,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between shrink-0">
           <div className="text-sm">
             {validCandidates.length > 0 ? (
               (() => {

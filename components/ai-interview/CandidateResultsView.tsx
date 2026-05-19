@@ -24,6 +24,7 @@ import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -1033,30 +1034,19 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const placeholderMsg = getPlaceholderMessage();
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50">
-      {/* Sticky brand header */}
-      <div className="sticky top-0 z-40 bg-brand-blue shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
-        <div className="px-6 sm:px-8 py-3 sm:py-4 flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 text-white transition-colors"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-white/15 backdrop-blur-sm ring-1 ring-white/25">
-            <User className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate">
-              Candidate Results
-            </h1>
-            <p className="text-xs text-white/70 truncate">Per-candidate AI interview report</p>
-          </div>
-        </div>
-      </div>
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: 'Candidate Results' },
+            ]}
+          />
 
-      <div className="p-6 sm:p-8">
+      <div>
         <div className="w-full">
           {/* Candidate header banner */}
           <div className="mb-6 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-5">
@@ -2738,6 +2728,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         </div>
         </div>
       </div>
-    </div>
+        </div>
+      </div>
+    </main>
   );
 }

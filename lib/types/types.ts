@@ -1,49 +1,10 @@
-export interface Resume {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  title: string;
-  skills: string[];
-  experience: string;
-  source: 'Manual' | 'TalentFlow';
-  uploadDate: string;
-  attachments: number;
-  uploadedBy: string;
-  folderId: string;
-  education?: string;
-  location?: string;
-  currentCompany?: string;
-  previousCompany?: string;
-  noticePeriod?: string;
-  lastUpdated?: string;
-  version?: number; // Current version number (v1, v2, etc.)
-  versions?: ResumeVersion[];
-  versionCount?: number; // Total number of versions
-  assignedTo?: string; // Team member ID
-  fileName?: string; // Original file name
-  fileType?: string; // File type (pdf, doc, docx)
-  fileSizeKb?: number; // File size in KB
-  isArchived?: boolean; // Whether resume is archived
-  archivedAt?: string; // When resume was archived
+// Resume / ResumeVersion are owned by the API layer — the service interface
+// is the single source of truth, matching backend snake_case payloads.
+// Re-exported here so existing import paths keep working.
+export type { Resume, ResumeVersion } from '@/lib/services/resumeService';
 
-  // Extended fields for detailed view
-  professionalSummary?: string;
-  technicalSkills?: string[];
-  softSkills?: string[];
-  educationDetails?: EducationDetail[];
-  experienceDetails?: ExperienceDetail[];
-  certifications?: CertificationDetail[];
-  languages?: LanguageDetail[];
-  projects?: string[];
-  awards?: string[];
-  publications?: string[];
-  references?: string[];
-
-  // Full extracted content from resume
-  extractedText?: string;
-}
-
+// Education / experience / certification / language detail shapes returned by
+// the candidate detail endpoint. Backend uses snake_case for keys.
 export interface EducationDetail {
   degree: string;
   school: string;
@@ -57,8 +18,8 @@ export interface ExperienceDetail {
   title: string;
   company: string;
   location?: string;
-  startDate?: string;
-  endDate?: string;
+  start_date?: string;
+  end_date?: string;
   duration?: string;
   description?: string;
   achievements?: string[];
@@ -68,22 +29,12 @@ export interface CertificationDetail {
   name: string;
   issuer?: string;
   date?: string;
-  credentialId?: string;
+  credential_id?: string;
 }
 
 export interface LanguageDetail {
   name: string;
   proficiency: string;
-}
-
-export interface ResumeVersion {
-  id: string;
-  name: string;
-  uploadDate: string;
-  size: string;
-  uploadedBy: string;
-  fileName?: string; // Original filename with extension
-  version?: number; // Version number
 }
 
 export interface Folder {

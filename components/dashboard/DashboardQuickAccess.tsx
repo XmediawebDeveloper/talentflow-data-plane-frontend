@@ -161,6 +161,17 @@ export default function DashboardQuickAccess() {
     return keys.some((k) => user.permissions[k as keyof Permission] === true);
   };
 
+  // These sections live in the header profile dropdown — hide them from the
+  // dashboard Quick Access tiles to avoid duplication.
+  const HIDDEN_SECTIONS = new Set([
+    'user-management-section',
+    'subscription',
+    'organization',
+    'settings',
+    'audits',
+    'support',
+  ]);
+
   const sections = useMemo(
     () =>
       filterMenuSections(buildMenuSections(isTenantAdmin), {
@@ -170,6 +181,7 @@ export default function DashboardQuickAccess() {
         hasPlanFeature,
         planFeaturesLoading,
       })
+        .filter((s) => !HIDDEN_SECTIONS.has(s.id))
         .map((s) => ({ ...s, items: s.items.filter((i) => i.id !== 'dashboard') }))
         .filter((s) => s.items.length > 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +220,7 @@ export default function DashboardQuickAccess() {
   return (
     <section
       aria-label="Quick access"
-      className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)]"
+      className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-16px_rgba(15,23,42,0.18)]"
     >
       {/* Header */}
       <header className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-4 md:px-8">

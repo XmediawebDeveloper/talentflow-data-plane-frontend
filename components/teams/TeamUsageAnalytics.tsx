@@ -89,31 +89,31 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
   const sorted = [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <tr>
-      <td colSpan={8} className="bg-gray-50 border-b border-gray-100 px-4 py-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+      <td colSpan={8} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
+        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-3">
           Consumption History — {sorted.length} {sorted.length === 1 ? 'entry' : 'entries'}
         </p>
         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
           {sorted.map(e => (
-            <div key={e.id} className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-start gap-3 text-sm">
+            <div key={e.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3 text-sm">
               <span className={`shrink-0 text-xs font-bold px-2 py-1 rounded-md ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
                 {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-800 truncate">
+                <p className="font-medium text-gray-800 dark:text-slate-100 truncate">
                   {e.unit_type === 'max_seats'
                     ? 'Seat License'
                     : (e.entity_name || UNIT_TYPE_NAMES[e.unit_type] || e.unit_type)}
                 </p>
                 {e.entity_type && e.unit_type !== 'max_seats' && (
-                  <p className="text-xs text-gray-400 mt-0.5">{e.entity_type.replace(/_/g, ' ')}</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{e.entity_type.replace(/_/g, ' ')}</p>
                 )}
                 {e.unit_type === 'max_seats' && (
-                  <p className="text-xs text-gray-400 mt-0.5">User seat allocated</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">User seat allocated</p>
                 )}
                 {e.overall_score != null && (
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Score: <span className="font-semibold text-gray-700">{e.overall_score}%</span>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+                    Score: <span className="font-semibold text-gray-700 dark:text-slate-300">{e.overall_score}%</span>
                   </p>
                 )}
                 {e.failure_reason && (
@@ -121,17 +121,17 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
                 )}
               </div>
               <div className="shrink-0 text-right">
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold text-gray-900 dark:text-slate-50">
                   {e.units_consumed > 0 ? `−${e.units_consumed}` : '0'} units
                 </p>
                 {e.balance_before != null && e.balance_after != null && (
-                  <p className="text-xs text-gray-400">{e.balance_before} → {e.balance_after}</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500">{e.balance_before} → {e.balance_after}</p>
                 )}
               </div>
               <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-600'}`}>
                 {e.status.replace(/_/g, ' ')}
               </span>
-              <span className="shrink-0 text-xs text-gray-400 whitespace-nowrap">
+              <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">
                 {formatIST(e.created_at)}
               </span>
             </div>
@@ -183,20 +183,20 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
     <>
       <tr
         onClick={toggle}
-        className="cursor-pointer hover:bg-indigo-50/40 transition-colors border-t border-gray-100 select-none"
+        className="cursor-pointer hover:bg-indigo-50/40 transition-colors border-t border-gray-100 dark:border-slate-700/60 select-none"
       >
         {/* Member */}
         <td className="px-4 py-3 whitespace-nowrap">
           <div className="flex items-center gap-2">
-            <div className="text-gray-300 shrink-0">
+            <div className="text-gray-300 dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 text-white flex items-center justify-center text-xs font-semibold shrink-0">
               {initials(member.user_name || member.user_email)}
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-900">{member.user_name || '—'}</p>
-              <p className="text-xs text-gray-400">{member.user_email}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
             </div>
           </div>
         </td>
@@ -208,7 +208,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
               ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
               {rs}
             </span>
-            <p className="text-xs text-gray-400">{getMCount(member, 'RS')} actions</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'RS')} actions</p>
           </div>
         </td>
 
@@ -219,7 +219,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
               ${as_ > 0 ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-gray-100 text-gray-400'}`}>
               {as_.toFixed(1)}
             </span>
-            <p className="text-xs text-gray-400">units consumed</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">units consumed</p>
           </div>
         </td>
 
@@ -230,7 +230,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
               ${aiu > 0 ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-gray-100 text-gray-400'}`}>
               {aiu}
             </span>
-            <p className="text-xs text-gray-400">{getMCount(member, 'AIU')} actions</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'AIU')} actions</p>
           </div>
         </td>
 
@@ -241,7 +241,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
               ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
               {ru}
             </span>
-            <p className="text-xs text-gray-400">{getMCount(member, 'RU')} actions</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'RU')} actions</p>
           </div>
         </td>
 
@@ -252,7 +252,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
               ${member.jds_created > 0 ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200' : 'bg-gray-100 text-gray-400'}`}>
               {member.jds_created}
             </span>
-            <p className="text-xs text-gray-400">created</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">created</p>
           </div>
         </td>
 
@@ -263,12 +263,12 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
               ${member.assessments_created > 0 ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-gray-100 text-gray-400'}`}>
               {member.assessments_created}
             </span>
-            <p className="text-xs text-gray-400">created</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">created</p>
           </div>
         </td>
 
         {/* Last active */}
-        <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
+        <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500 dark:text-slate-500">
           {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
         </td>
       </tr>
@@ -276,8 +276,8 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
       {/* Loading */}
       {expanded && loading && (
         <tr>
-          <td colSpan={8} className="px-6 py-4 bg-gray-50">
-            <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50">
+            <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
               Loading consumption history…
             </div>
@@ -293,7 +293,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
       {/* Empty */}
       {expanded && !loading && entries !== null && entries.length === 0 && (
         <tr>
-          <td colSpan={8} className="px-6 py-4 bg-gray-50 text-sm text-gray-400 italic border-b border-gray-100">
+          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
             No consumption entries for this member in the selected period.
           </td>
         </tr>
@@ -343,27 +343,27 @@ function TeamRow({
       {/* Team summary row — outer table 7 cols */}
       <tr
         onClick={onToggle}
-        className="cursor-pointer hover:bg-gray-50 transition-colors border-t border-gray-200 select-none"
+        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-200 dark:border-slate-700 select-none"
       >
         <td className="px-4 py-4 whitespace-nowrap">
           <div className="flex items-center gap-3">
-            <div className="text-gray-400">
+            <div className="text-gray-400 dark:text-slate-500">
               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </div>
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center shrink-0">
               <Users className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900 text-sm">{team.team_name || 'Unnamed Team'}</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{team.team_name || 'Unnamed Team'}</p>
               {(team.jds_created > 0 || team.assessments_created > 0) && (
                 <div className="flex items-center gap-3 mt-0.5">
                   {team.jds_created > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
                       <FileText className="w-3 h-3" />{team.jds_created} JDs
                     </span>
                   )}
                   {team.assessments_created > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
                       <ClipboardCheck className="w-3 h-3" />{team.assessments_created} Assessments
                     </span>
                   )}
@@ -376,11 +376,11 @@ function TeamRow({
           <td key={key} className="px-4 py-4 whitespace-nowrap">
             {val > 0
               ? <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{val}</span>
-              : <span className="text-gray-300 text-sm">—</span>}
+              : <span className="text-gray-300 dark:text-slate-500 text-sm">—</span>}
           </td>
         ))}
         <td className="px-4 py-4 whitespace-nowrap">
-          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
+          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
             {total > 0 ? total : '—'}
           </span>
         </td>
@@ -388,7 +388,7 @@ function TeamRow({
           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors
             ${expanded
               ? 'bg-gray-800 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700'
             }`}>
             {expanded ? (
               <><ChevronDown className="w-3 h-3" /> Collapse</>
@@ -402,10 +402,10 @@ function TeamRow({
       {/* Member expansion — full-width nested table with 10 columns */}
       {expanded && (
         <tr>
-          <td colSpan={7} className="p-0 border-t border-gray-100">
-            <div className="bg-gray-50">
+          <td colSpan={7} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
+            <div className="bg-gray-50 dark:bg-slate-800/50">
               {loadingMembers ? (
-                <div className="flex items-center gap-2 text-gray-400 text-sm px-6 py-4">
+                <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500 text-sm px-6 py-4">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading members…
                 </div>
@@ -413,59 +413,59 @@ function TeamRow({
                 <table className="w-full">
                   {/* Member table header — 9 cols */}
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <tr className="border-b border-gray-200 dark:border-slate-700">
+                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                         Member
                       </th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
-                          <span className="text-gray-500">Resume Scoring</span>
+                          <span className="text-gray-500 dark:text-slate-500">Resume Scoring</span>
                         </span>
                       </th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
-                          <span className="text-gray-500">Assessment</span>
+                          <span className="text-gray-500 dark:text-slate-500">Assessment</span>
                         </span>
                       </th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
-                          <span className="text-gray-500">AI Interview</span>
+                          <span className="text-gray-500 dark:text-slate-500">AI Interview</span>
                         </span>
                       </th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
-                          <span className="text-gray-500">Resume Upload</span>
+                          <span className="text-gray-500 dark:text-slate-500">Resume Upload</span>
                         </span>
                       </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <FileText className="w-3 h-3 text-indigo-400" />
                           JDs
                         </span>
                       </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <ClipboardCheck className="w-3 h-3 text-purple-400" />
                           Assessments
                         </span>
                       </th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                         Last Active
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-50">
+                  <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-50 dark:divide-slate-700/60">
                     {members.map(m => (
                       <MemberRow key={m.user_id} member={m} fromDate={fromDate} />
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <p className="px-6 py-4 text-sm text-gray-400 italic">
+                <p className="px-6 py-4 text-sm text-gray-400 dark:text-slate-500 italic">
                   No members with usage in this period.
                 </p>
               )}
@@ -483,13 +483,13 @@ function StatCard({ label, value, dot, loading }: {
   label: string; value: number; dot: string; loading: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center gap-4">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm px-5 py-4 flex items-center gap-4">
       <span className={`w-3 h-3 rounded-full shrink-0 ${dot}`} />
       <div>
-        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-xs text-gray-500 dark:text-slate-500">{label}</p>
         {loading
-          ? <div className="h-6 w-10 bg-gray-100 rounded animate-pulse mt-1" />
-          : <p className="text-xl font-bold text-gray-900">{value}</p>}
+          ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
+          : <p className="text-xl font-bold text-gray-900 dark:text-slate-50">{value}</p>}
       </div>
     </div>
   );
@@ -610,29 +610,29 @@ export default function TeamUsageAnalytics() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-gray-900">Team Usage</h2>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
             {isTenantAdmin ? 'All Teams' : 'Your Teams'}
           </span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-400" />
+            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
             <input
               type="date"
               value={fromDate}
               max={toDate}
               onChange={e => setFromDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
+              className="px-3 py-1.5 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
             />
-            <span className="text-sm text-gray-500">to</span>
+            <span className="text-sm text-gray-500 dark:text-slate-500">to</span>
             <input
               type="date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={e => setToDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
+              className="px-3 py-1.5 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
             />
           </div>
           {canExport && (
@@ -640,19 +640,19 @@ export default function TeamUsageAnalytics() {
               <button
                 onClick={() => teams.length > 0 && !loading && setShowExportMenu(v => !v)}
                 disabled={teams.length === 0 || loading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+                className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40"
               >
                 <Download className="w-4 h-4" />
                 Export
-                <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                <ChevronDown className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
                     onClick={() => { exportCSV(teams, fromDate, toDate); setShowExportMenu(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-2"
                   >
-                    <FileText className="w-4 h-4 text-gray-400" />
+                    <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     Team Level
                   </button>
                   <button
@@ -666,11 +666,11 @@ export default function TeamUsageAnalytics() {
                         setExportingUsers(false);
                       }
                     }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50"
                   >
                     {exportingUsers
-                      ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-                      : <Users className="w-4 h-4 text-gray-400" />}
+                      ? <Loader2 className="w-4 h-4 text-gray-400 dark:text-slate-500 animate-spin" />
+                      : <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />}
                     User Level (drill-down)
                   </button>
                 </div>
@@ -690,19 +690,19 @@ export default function TeamUsageAnalytics() {
       </div>
 
       {/* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, expand) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Team</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Team</th>
               {(['RS', 'AS', 'AIU', 'RU'] as const).map(k => (
                 <th key={k} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5 text-gray-500">
+                  <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500">
                     <span className={`w-2 h-2 rounded-full ${UNIT_DOT[k]}`} />{k}
                   </span>
                 </th>
               ))}
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Total</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -710,7 +710,7 @@ export default function TeamUsageAnalytics() {
             {loading ? (
               <tr>
                 <td colSpan={7} className="py-16">
-                  <div className="flex items-center justify-center gap-3 text-gray-500">
+                  <div className="flex items-center justify-center gap-3 text-gray-500 dark:text-slate-500">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span className="text-sm">Loading team usage…</span>
                   </div>
@@ -719,8 +719,8 @@ export default function TeamUsageAnalytics() {
             ) : teams.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-16 text-center">
-                  <BarChart3 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                  <p className="text-sm text-gray-400">No team usage data for the selected period.</p>
+                  <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
                 </td>
               </tr>
             ) : (
@@ -741,7 +741,7 @@ export default function TeamUsageAnalytics() {
         </table>
       </div>
 
-      <p className="text-xs text-gray-400 mt-3">
+      <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
         Click a team to see its members · Click a member to see their full consumption history
       </p>
     </div>

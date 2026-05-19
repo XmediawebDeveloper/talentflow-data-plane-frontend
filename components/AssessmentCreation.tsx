@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -1633,16 +1634,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // Step 1: Select JD
   if (step === 'select-jd') {
     return (
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
-        <div className="w-full">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-4 sm:mb-6 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Assessments
-          </button>
-
+      <div className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb className="mb-4 md:mb-8" items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Assessments', href: '/recruitment/assessments' },
+              { label: 'Create Assessment' },
+            ]} />
+            <div className="w-full">
           <div className="mb-6 sm:mb-8">
             <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-2 tracking-tight">{isEditMode ? 'Edit Assessment' : 'Create New Assessment'}</h1>
             <p className="text-sm sm:text-base text-gray-600">
@@ -1849,6 +1849,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               )}
             </div>
           </div>
+            </div>
+          </div>
         </div>
 
         {/* Full-screen JD Creation Modal */}
@@ -1900,7 +1902,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const hasValidHRSelection = !hrEnabled || selectedHRQuestions.length > 0;
 
     return (
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50 relative">
+      <div className="flex-1 overflow-x-hidden bg-slate-50 relative">
         {/* Auto-saving overlay */}
         {isAutoSaving && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1911,7 +1913,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
         )}
 
-        <div className="w-full">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb className="mb-4 md:mb-8" items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Assessments', href: '/recruitment/assessments' },
+              { label: 'Create Assessment' },
+            ]} />
+            <div className="w-full">
           <button
             onClick={() => handleAutoSaveDraft(() => setStep('select-jd'))}
             disabled={isAutoSaving}
@@ -2611,6 +2620,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         )}
 
         {renderAddHRQuizModal()}
+          </div>
+        </div>
       </div>
     );
   }
@@ -2630,8 +2641,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     return (
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
-        <div className="w-full">
+      <div className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb className="mb-4 md:mb-8" items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Assessments', href: '/recruitment/assessments' },
+              { label: 'Create Assessment' },
+            ]} />
+            <div className="w-full">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-3 mb-2">
               <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 flex-shrink-0" />
@@ -2819,6 +2837,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
 
           {renderAddHRQuizModal()}
+            </div>
+          </div>
         </div>
       </div>
     );

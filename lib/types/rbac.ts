@@ -10,7 +10,9 @@ export interface Permission {
   description?: string;
   module: string;
   action: string;
-  is_system: boolean;
+  // Some endpoints (e.g. role-detail) return permissions without the system
+  // flag; optional so those leaner shapes (RolePermission) remain assignable.
+  is_system?: boolean;
 }
 
 // Role types

@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Calendar, Plus, Copy, ChevronRight, ChevronLeft, X, Sparkles, ChevronDown, ArrowUpRight } from 'lucide-react';
+import { Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Calendar, Plus, Copy, ChevronRight, ChevronLeft, X, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -112,6 +112,15 @@ export default function UnitDisputesPage() {
   // Pagination state for the main disputes list
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Two-step view: 'cards' shows only the stat tiles; 'list' shows filters + table.
+  // Initial render is 'cards' so the user explicitly drills in by clicking a stat card.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+
+  const openListView = (filter: string) => {
+    setStatusFilter(filter);
+    setPageView('list');
+  };
 
   useEffect(() => {
     fetchDisputes();
@@ -276,7 +285,9 @@ export default function UnitDisputesPage() {
         d.reason.toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
+      const matchesStatus = statusFilter === 'all'
+        || d.status === statusFilter
+        || (statusFilter === 'resolved' && (d.status === 'APPROVED' || d.status === 'REJECTED'));
 
       let matchesDate = true;
       if (d.created_at) {
@@ -406,113 +417,125 @@ export default function UnitDisputesPage() {
 
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Unit Disputes' }]} />
 
-        {/* SaaS Hero Header */}
-        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Unit refund requests
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Shield className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Unit Consumption Disputes</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    File refund requests for units consumed in error and track the review status. Each request is reviewed within 2&ndash;3 business days.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {canExportDisputes && (
-                <button
-                  onClick={handleExportCSV}
-                  disabled={loading || filteredDisputes.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15 disabled:translate-y-0 disabled:opacity-60"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">Export CSV</span>
-                </button>
-              )}
-              <button
-                onClick={fetchDisputes}
-                disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15 disabled:translate-y-0 disabled:opacity-60"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </button>
-              {canFileDispute && (
-                <button
-                  onClick={openFileModal}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                >
-                  <Plus className="h-4 w-4" />
-                  File Dispute
-                  <ArrowUpRight className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Unit Consumption Disputes</h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+              File refund requests for units consumed in error and track the review status. Each request is reviewed within 2&ndash;3 business days.
+            </p>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center gap-2">
+            {canExportDisputes && (
+              <button
+                onClick={handleExportCSV}
+                disabled={loading || filteredDisputes.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/25 hover:text-brand-blue disabled:translate-y-0 disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            )}
+            <button
+              onClick={fetchDisputes}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/25 hover:text-brand-blue disabled:translate-y-0 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            {canFileDispute && (
+              <button
+                onClick={openFileModal}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                <Plus className="h-4 w-4" />
+                File Dispute
+              </button>
+            )}
+          </div>
+        </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards — clicking a card drills into the dispute list with the matching filter applied */}
         <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <button
+            type="button"
+            onClick={() => openListView('all')}
+            className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Total Disputes</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Total Disputes</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-blue">{stats.total}</p>
-                <p className="mt-1 text-xs text-gray-500">All time</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">All time</p>
               </div>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                 <Shield className="h-5 w-5 text-brand-blue" />
               </span>
             </div>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
+          </button>
+          <button
+            type="button"
+            onClick={() => openListView('PENDING_REVIEW')}
+            className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'PENDING_REVIEW' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Pending Review</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Pending Review</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.pending}</p>
-                <p className="mt-1 text-xs text-gray-500">Awaiting decision</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Awaiting decision</p>
               </div>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
                 <Clock className="h-5 w-5 text-brand-orange-deep" />
               </span>
             </div>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+          </button>
+          <button
+            type="button"
+            onClick={() => openListView('resolved')}
+            className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'resolved' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Resolved</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Resolved</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{stats.resolved}</p>
-                <p className="mt-1 text-xs text-gray-500">Approved or rejected</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Approved or rejected</p>
               </div>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                 <CheckCircle2 className="h-5 w-5 text-brand-teal" />
               </span>
             </div>
-          </div>
+          </button>
         </div>
 
+        {pageView === 'list' && (
+          <>
+            {/* Back to overview */}
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setPageView('cards')}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back to overview
+              </button>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                {statusFilter === 'PENDING_REVIEW' && 'Showing pending disputes'}
+                {statusFilter === 'resolved' && 'Showing resolved disputes'}
+                {statusFilter === 'all' && 'Showing all disputes'}
+              </span>
+            </div>
+
         {/* Filters */}
-        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5">
+        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
             </span>
-            <span className="text-sm font-semibold text-gray-900">Filters</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -524,43 +547,43 @@ export default function UnitDisputesPage() {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Search by ID, reason, description"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
             <div className="relative">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 pr-9 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               >
                 {STATUS_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
             </div>
             <div className="relative">
-              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
             <div className="relative">
-              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
           </div>
@@ -581,12 +604,12 @@ export default function UnitDisputesPage() {
 
         {/* Empty */}
         {!loading && !error && filteredDisputes.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Shield className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">No Unit Disputes</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No Unit Disputes</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
               {hasActiveFilters
                 ? 'No disputes match your filter criteria. Try adjusting your filters.'
                 : 'You have no unit consumption disputes. If you believe units were incorrectly consumed, you can file a dispute.'}
@@ -613,11 +636,11 @@ export default function UnitDisputesPage() {
 
         {/* Table */}
         {!loading && !error && filteredDisputes.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+          <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900">Disputes</h2>
-                <p className="text-xs text-gray-500">
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Disputes</h2>
+                <p className="text-xs text-gray-500 dark:text-slate-500">
                   Showing {filteredDisputes.length} dispute{filteredDisputes.length !== 1 ? 's' : ''}
                   {hasActiveFilters && ` (filtered from ${disputes.length})`}
                 </p>
@@ -625,35 +648,35 @@ export default function UnitDisputesPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px]">
-                <thead className="bg-gray-50/80">
+                <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[160px]">Dispute ID</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[90px]">Unit Type</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[90px]">Units</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[160px]">Reason</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[140px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[100px]">Actions</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Dispute ID</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[90px]">Unit Type</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[90px]">Units</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Reason</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px]">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[100px]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {paginatedDisputes.map((dispute) => (
                     <tr key={dispute.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
-                          <span className="truncate font-mono text-sm font-semibold text-gray-900" title={dispute.id}>
+                          <span className="truncate font-mono text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.id}>
                             {truncateId(dispute.id)}
                           </span>
                           <button
                             onClick={() => copyToClipboard(dispute.id)}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 dark:text-slate-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
                             aria-label="Copy full ID" title="Copy full ID"
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
+                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700 dark:text-slate-300">
                         {formatDate(dispute.created_at)}
                       </td>
                       <td className="px-4 py-4 text-center">
@@ -663,7 +686,7 @@ export default function UnitDisputesPage() {
                         <span className="text-sm font-semibold text-brand-blue">{dispute.units_to_refund}</span>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="block truncate text-sm text-gray-600" title={dispute.reason}>
+                        <span className="block truncate text-sm text-gray-600 dark:text-slate-400" title={dispute.reason}>
                           {getReasonLabel(dispute.reason)}
                         </span>
                       </td>
@@ -702,11 +725,13 @@ export default function UnitDisputesPage() {
             itemLabel="disputes"
           />
         )}
+          </>
+        )}
 
         {/* Detail Modal */}
         {selectedDispute && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
               <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
@@ -731,26 +756,26 @@ export default function UnitDisputesPage() {
               <div className="max-h-[calc(90vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
                 {/* Top info */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Created</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatDateTime(selectedDispute.created_at)}</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Created</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.created_at)}</p>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Unit Type</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Unit Type</p>
                     <div className="mt-1">{getUnitTypeBadge(selectedDispute.unit_type)}</div>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Status</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
                     <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedDispute.status)}`}>
                       {getStatusIcon(selectedDispute.status)}
                       {getStatusLabel(selectedDispute.status)}
                     </span>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Consumption Log ID</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Consumption Log ID</p>
                     <div className="mt-1 flex items-center gap-1.5">
-                      <p className="break-all font-mono text-sm font-semibold text-gray-900">{truncateId(selectedDispute.consumption_log_id)}</p>
-                      <button onClick={() => copyToClipboard(selectedDispute.consumption_log_id ?? '')} className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-brand-blue/[0.06] hover:text-brand-blue">
+                      <p className="break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{truncateId(selectedDispute.consumption_log_id)}</p>
+                      <button onClick={() => copyToClipboard(selectedDispute.consumption_log_id ?? '')} className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 dark:text-slate-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue">
                         <Copy className="h-3 w-3" />
                       </button>
                     </div>
@@ -758,18 +783,18 @@ export default function UnitDisputesPage() {
                 </div>
 
                 {/* Reason & Description */}
-                <div className="overflow-hidden rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
-                  <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Dispute Information</p>
+                <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Information</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600">Reason</span>
-                      <span className="text-right text-sm font-medium text-gray-900">{getReasonLabel(selectedDispute.reason)}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Reason</span>
+                      <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{getReasonLabel(selectedDispute.reason)}</span>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Description</span>
-                      <p className="mt-1 rounded-lg bg-slate-50 p-3 text-sm text-gray-900 ring-1 ring-gray-100">{selectedDispute.description}</p>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Description</span>
+                      <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-gray-900 dark:text-slate-50 ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.description}</p>
                     </div>
                   </div>
                 </div>
@@ -794,27 +819,27 @@ export default function UnitDisputesPage() {
 
                 {/* Resolution Info */}
                 {(selectedDispute.resolution_notes || selectedDispute.resolved_by_email || selectedDispute.resolved_at) && (
-                  <div className="overflow-hidden rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
-                    <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Resolution</p>
+                  <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                    <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Resolution</p>
                     </div>
                     <div className="space-y-3 p-4">
                       {selectedDispute.resolution_notes && (
                         <div>
-                          <span className="text-sm text-gray-600">Notes</span>
-                          <p className="mt-1 rounded-lg bg-slate-50 p-3 text-sm text-gray-900 ring-1 ring-gray-100">{selectedDispute.resolution_notes}</p>
+                          <span className="text-sm text-gray-600 dark:text-slate-400">Notes</span>
+                          <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-gray-900 dark:text-slate-50 ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.resolution_notes}</p>
                         </div>
                       )}
                       {selectedDispute.resolved_by_email && (
                         <div className="flex items-start justify-between gap-4">
-                          <span className="text-sm text-gray-600">Resolved By</span>
-                          <span className="break-all text-right text-sm font-medium text-gray-900">{selectedDispute.resolved_by_email}</span>
+                          <span className="text-sm text-gray-600 dark:text-slate-400">Resolved By</span>
+                          <span className="break-all text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.resolved_by_email}</span>
                         </div>
                       )}
                       {selectedDispute.resolved_at && (
                         <div className="flex items-start justify-between gap-4">
-                          <span className="text-sm text-gray-600">Resolved At</span>
-                          <span className="text-right text-sm font-medium text-gray-900">{formatDateTime(selectedDispute.resolved_at)}</span>
+                          <span className="text-sm text-gray-600 dark:text-slate-400">Resolved At</span>
+                          <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.resolved_at)}</span>
                         </div>
                       )}
                     </div>
@@ -822,15 +847,15 @@ export default function UnitDisputesPage() {
                 )}
 
                 {/* Requested By */}
-                <div className="rounded-xl border border-gray-100 bg-slate-50 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Requested By</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedDispute.requested_by_name} <span className="text-gray-500">({selectedDispute.requested_by_email})</span></p>
+                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Requested By</p>
+                  <p className="mt-1 text-sm text-gray-900 dark:text-slate-50">{selectedDispute.requested_by_name} <span className="text-gray-500 dark:text-slate-500">({selectedDispute.requested_by_email})</span></p>
                 </div>
 
                 <div className="flex pt-1">
                   <button
                     onClick={() => setSelectedDispute(null)}
-                    className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+                    className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
                   >
                     Close
                   </button>
@@ -843,7 +868,7 @@ export default function UnitDisputesPage() {
         {/* File Dispute Modal */}
         {showFileModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
               <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
@@ -872,19 +897,19 @@ export default function UnitDisputesPage() {
                 {/* Step 1: Select consumption log */}
                 {fileStep === 1 && (
                   <>
-                    <p className="mb-4 text-sm text-gray-600">Select the consumption record you want to dispute.</p>
+                    <p className="mb-4 text-sm text-gray-600 dark:text-slate-400">Select the consumption record you want to dispute.</p>
 
                     {loadingLogs && (
                       <div className="flex flex-col items-center justify-center py-10">
                         <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-                        <p className="mt-3 text-sm font-medium text-gray-600">Loading consumption history...</p>
+                        <p className="mt-3 text-sm font-medium text-gray-600 dark:text-slate-400">Loading consumption history...</p>
                       </div>
                     )}
 
                     {!loadingLogs && consumptionLogs.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
+                      <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-10 text-center">
                         <Shield className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-                        <p className="text-sm text-gray-500">No consumption records found.</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-500">No consumption records found.</p>
                       </div>
                     )}
 
@@ -902,50 +927,50 @@ export default function UnitDisputesPage() {
                               className={`group w-full rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 ${
                                 selectedLog?.id === log.id
                                   ? 'border-brand-blue/30 bg-brand-blue/[0.04] shadow-sm shadow-brand-blue/10'
-                                  : 'border-gray-200 bg-white hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
+                                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
                               }`}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   {getUnitTypeBadge(log.unit_type)}
-                                  <span className="text-sm font-semibold text-gray-900">
+                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">
                                     {log.units_consumed} unit{log.units_consumed !== 1 ? 's' : ''}
                                   </span>
                                 </div>
-                                <ChevronRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                                <ChevronRight className="h-4 w-4 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                               </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-slate-500">
                                 <span>{formatDateTime(log.created_at)}</span>
-                                {log.entity_name && <span className="text-gray-400">·</span>}
+                                {log.entity_name && <span className="text-gray-400 dark:text-slate-500">·</span>}
                                 {log.entity_name && <span>{log.entity_name}</span>}
-                                {log.user_name && <span className="text-gray-400">·</span>}
+                                {log.user_name && <span className="text-gray-400 dark:text-slate-500">·</span>}
                                 {log.user_name && <span>{log.user_name}</span>}
                               </div>
-                              <div className="mt-1 font-mono text-[11px] text-gray-400">{truncateId(log.id)}</div>
+                              <div className="mt-1 font-mono text-[11px] text-gray-400 dark:text-slate-500">{truncateId(log.id)}</div>
                             </button>
                           ))}
                         </div>
 
                         {/* Pagination */}
-                        <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-                          <p className="text-xs text-gray-500">
+                        <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700/60 pt-3">
+                          <p className="text-xs text-gray-500 dark:text-slate-500">
                             {logTotal} total record{logTotal !== 1 ? 's' : ''}
                           </p>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => fetchConsumptionLogs(logPage - 1)}
                               disabled={logPage === 0}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </button>
-                            <span className="text-xs font-medium text-gray-600">
+                            <span className="text-xs font-medium text-gray-600 dark:text-slate-400">
                               Page {logPage + 1} of {Math.max(1, Math.ceil(logTotal / LOG_PAGE_SIZE))}
                             </span>
                             <button
                               onClick={() => fetchConsumptionLogs(logPage + 1)}
                               disabled={(logPage + 1) * LOG_PAGE_SIZE >= logTotal}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ChevronRight className="h-4 w-4" />
                             </button>
@@ -972,47 +997,47 @@ export default function UnitDisputesPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {getUnitTypeBadge(selectedLog.unit_type)}
-                        <span className="text-sm font-semibold text-gray-900">{selectedLog.units_consumed} units</span>
-                        <span className="text-xs text-gray-400">·</span>
-                        <span className="text-xs text-gray-500">{formatDateTime(selectedLog.created_at)}</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedLog.units_consumed} units</span>
+                        <span className="text-xs text-gray-400 dark:text-slate-500">·</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-500">{formatDateTime(selectedLog.created_at)}</span>
                       </div>
                     </div>
 
                     <div className="space-y-5">
                       {/* Reason */}
                       <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-700">Reason <span className="text-brand-orange">*</span></span>
+                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Reason <span className="text-brand-orange">*</span></span>
                         <div className="relative">
                           <select
                             value={disputeReason}
                             onChange={(e) => setDisputeReason(e.target.value)}
-                            className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 pr-9 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                            className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                           >
                             <option value="">Select a reason</option>
                             {REASON_OPTIONS.map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                           </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                         </div>
                       </label>
 
                       {/* Description */}
                       <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-700">Description <span className="text-brand-orange">*</span></span>
+                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Description <span className="text-brand-orange">*</span></span>
                         <textarea
                           value={disputeDescription}
                           onChange={(e) => setDisputeDescription(e.target.value)}
                           placeholder="Describe the issue in detail (min 10 characters)"
                           rows={4}
-                          className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                          className="w-full resize-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                         />
-                        <p className="mt-1 text-xs text-gray-400">{disputeDescription.length}/1000 characters</p>
+                        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">{disputeDescription.length}/1000 characters</p>
                       </label>
 
                       {/* Units */}
                       <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-700">Units to Refund <span className="text-brand-orange">*</span></span>
+                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Units to Refund <span className="text-brand-orange">*</span></span>
                         <input
                           type="number"
                           value={disputeUnits}
@@ -1020,9 +1045,9 @@ export default function UnitDisputesPage() {
                           min={0.01}
                           max={selectedLog.units_consumed}
                           step={0.01}
-                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                          className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                         />
-                        <p className="mt-1 text-xs text-gray-400">Max: {selectedLog.units_consumed} units (total consumed)</p>
+                        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Max: {selectedLog.units_consumed} units (total consumed)</p>
                       </label>
                     </div>
 
@@ -1030,7 +1055,7 @@ export default function UnitDisputesPage() {
                     <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                       <button
                         onClick={() => setFileStep(1)}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+                        className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
                       >
                         Back
                       </button>

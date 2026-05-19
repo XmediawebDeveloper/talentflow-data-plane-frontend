@@ -32,6 +32,7 @@ function JobDetailsContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
   const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | null;
+  const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | null;
 
   // JD15: Get user role for disable/enable button visibility
   const { isTenantAdmin } = usePermissions();
@@ -76,7 +77,7 @@ function JobDetailsContent() {
       setRawJdData(data);
 
       // For Draft JDs, redirect to JD creation with the current stage
-      if (data.status === 'draft' || data.status === 'Draft') {
+      if (data.status === 'draft' || (data.status as string) === 'Draft') {
         const stage = data.creation_stage || 'create';
         router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}`);
         return;
@@ -280,21 +281,21 @@ function JobDetailsContent() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading job details...</span>
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
+        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading job details...</span>
       </div>
     );
   }
 
   if (!job) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">Job not found</p>
+          <p className="text-gray-600 dark:text-slate-400 mb-4">Job not found</p>
           <button
             onClick={handleBack}
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800"
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg dark:bg-slate-700 dark:hover:bg-slate-600"
           >
             Back to Jobs
           </button>
@@ -304,32 +305,48 @@ function JobDetailsContent() {
   }
 
   return (
-    <>
+    <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       {/* Disable Confirmation Modal */}
       {showDisableModal && (
-        <div className="fixed inset-0 bg-gray-900/10 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-4 sm:p-5 border-2 border-gray-300">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
-              Disable Job Description?
-            </h3>
-            <p className="text-sm text-gray-700 mb-3">
-              If you disable this JD, it will be removed from:
-            </p>
-            <ul className="list-disc list-inside text-sm text-gray-700 mb-4 space-y-1.5">
-              <li>Resume Scoring</li>
-              <li>Assessment Generation</li>
-              <li>AI Talent Match</li>
-            </ul>
-            <p className="text-xs text-gray-600 mb-4">
-              You can re-enable this JD later if needed.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col border border-gray-300 dark:border-slate-700">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-slate-700 shrink-0">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+                Disable Job Description?
+              </h3>
               <button
                 onClick={() => {
                   setShowDisableModal(false);
                   setJobToDisable(null);
                 }}
-                className="px-4 py-2 bg-gray-100 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5 text-gray-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">
+              <p className="text-sm text-gray-700 dark:text-slate-300 mb-3">
+                If you disable this JD, it will be removed from:
+              </p>
+              <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 mb-4 space-y-1.5">
+                <li>Resume Scoring</li>
+                <li>Assessment Generation</li>
+                <li>AI Talent Match</li>
+              </ul>
+              <p className="text-xs text-gray-600 dark:text-slate-400">
+                You can re-enable this JD later if needed.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
+              <button
+                onClick={() => {
+                  setShowDisableModal(false);
+                  setJobToDisable(null);
+                }}
+                className="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-sm text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors font-medium"
               >
                 Cancel
               </button>
@@ -348,6 +365,7 @@ function JobDetailsContent() {
         job={job}
         onBack={handleBack}
         initialTab={tabParam || undefined}
+        initialAction={actionParam || undefined}
         onEdit={handleEdit}
         onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
         onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
@@ -364,16 +382,16 @@ function JobDetailsContent() {
         currentIndex={allJDIds.indexOf(jobId ?? '')}
         totalCount={allJDIds.length}
       />
-    </>
+    </div>
   );
 }
 
 export default function JobDetailsRoute() {
   return (
     <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading...</span>
+      <div className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
+        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
       </div>
     }>
       <JobDetailsContent />

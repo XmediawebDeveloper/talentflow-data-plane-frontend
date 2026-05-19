@@ -43,6 +43,14 @@ export interface JDCreate {
   creation_method?: 'manual' | 'ai_generated';  // How the JD was created
   ai_prompt?: string;  // Original AI prompt used to generate JD
   locations?: JDLocation[];
+  // Mandatory-flag mirror of `JDExtractedParams`; persisted on the JD record so
+  // scoring/AI-match enforce the recruiter-chosen strictness.
+  experience_mandatory?: boolean;
+  education_mandatory?: boolean;
+  industry_mandatory?: boolean;
+  location_mandatory?: boolean;
+  experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
+  job_level?: string;
 }
 
 export interface JDResponse extends JDCreate {
@@ -61,6 +69,8 @@ export interface JDResponse extends JDCreate {
   created_at: string;
   updated_at: string;
   current_version?: number;  // Version number - if > 1, means republished
+  // Extracted seniority level from the JD body (matches JDExtractedParams.experience_level)
+  experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
 }
 
 export interface JDListResponse {
@@ -101,6 +111,16 @@ export interface JDExtractedParams {
   compensation_type?: 'yearly' | 'monthly' | 'hourly' | 'daily';
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
+  // "Mandatory" flags returned by the AI extraction endpoint indicating which
+  // requirements should be enforced strictly during scoring.
+  experience_mandatory?: boolean;
+  education_mandatory?: boolean;
+  industry_mandatory?: boolean;
+  location_mandatory?: boolean;
+  // Surfaced by extraction for legacy single-field display before the structured
+  // employment_type / remote_type forms were introduced.
+  job_type?: string;
+  work_mode?: string;
 }
 
 export interface JDGenerateResponse {

@@ -11,6 +11,7 @@ import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, Assessme
 import { toast } from 'sonner';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -691,8 +692,17 @@ export default function JDDetailsPage() {
   }
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
-      <div className="max-w-5xl mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Job Descriptions', href: '/recruitment/jd-list' },
+              { label: 'JD Details' },
+            ]}
+          />
         {/* Header */}
         <div className="mb-6">
           <button
@@ -1056,7 +1066,8 @@ export default function JDDetailsPage() {
         {activeTab === 'assessment-results' && jdId && (
           <AssessmentResultsTab jdId={jdId} />
         )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -333,11 +333,12 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
       >
         {/* Header */}
         <div
-          className="px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6"
+          className="px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6 shrink-0"
           style={{
             borderBottom: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`,
             background: isDark ? 'linear-gradient(135deg, #1F2937 0%, #1e2a3b 100%)' : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)',
             position: 'relative',
+            flexShrink: 0,
           }}
         >
           {/* Close Button */}
@@ -672,6 +673,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
 
         {/* Footer */}
         <div
+          className="shrink-0"
           style={{
             padding: '20px 32px',
             borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`,
@@ -679,6 +681,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}
         >
           <div style={{ fontSize: '13px', color: isDark ? '#9CA3AF' : '#6B7280', display: 'flex', alignItems: 'center', gap: '6px' }}>

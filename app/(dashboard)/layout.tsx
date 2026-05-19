@@ -144,7 +144,9 @@ export default function DashboardLayout({
 
   const hasRoutePermission = useCallback((permission: string) => {
     if (isTenantAdmin) return true;
-    const permissions = user?.permissions as Record<string, boolean | undefined> | undefined;
+    // Permission is a structured camelCase object — cast through `unknown` to a
+    // generic record because we look up keys by runtime string.
+    const permissions = user?.permissions as unknown as Record<string, boolean | undefined> | undefined;
     return !!permissions?.[permission];
   }, [isTenantAdmin, user]);
 
@@ -436,7 +438,7 @@ export default function DashboardLayout({
 
               <TermsReminderBanner />
               <PlanChangeReviewBanner />
-              <div className={`flex-1 overflow-y-auto flex flex-col ${pathname === '/dashboard' ? 'scrollbar-hide' : 'scrollbar-auto-hide scrollbar-auto-hide-area'}`}>
+              <div className="flex-1 overflow-y-auto flex flex-col">
                 {children}
               </div>
             </div>

@@ -26,27 +26,27 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
         return {
           icon: Copy,
           title: 'Duplicate Resume Detected',
-          bgColor: 'from-yellow-50 to-amber-50',
-          iconBg: 'bg-yellow-100',
-          iconColor: 'text-yellow-600',
-          borderColor: 'border-yellow-200',
+          bgColor: 'bg-brand-blue/5',
+          iconBg: 'bg-brand-blue/10',
+          iconColor: 'text-brand-blue',
+          borderColor: 'border-brand-blue/15',
           description: 'This resume was identified as a duplicate and was not uploaded.',
         };
       case 'versioned':
         return {
           icon: GitBranch,
           title: 'Resume Update Saved',
-          bgColor: 'from-purple-50 to-violet-50',
-          iconBg: 'bg-purple-100',
-          iconColor: 'text-purple-600',
-          borderColor: 'border-purple-200',
+          bgColor: 'bg-brand-blue/5',
+          iconBg: 'bg-brand-blue/10',
+          iconColor: 'text-brand-blue',
+          borderColor: 'border-brand-blue/15',
           description: 'This resume was saved as a new version of an existing candidate.',
         };
       case 'error':
         return {
           icon: AlertCircle,
           title: 'Upload Failed',
-          bgColor: 'from-red-50 to-rose-50',
+          bgColor: 'bg-red-50',
           iconBg: 'bg-red-100',
           iconColor: 'text-red-600',
           borderColor: 'border-red-200',
@@ -56,7 +56,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
         return {
           icon: CheckCircle,
           title: 'Upload Successful',
-          bgColor: 'from-green-50 to-emerald-50',
+          bgColor: 'bg-green-50',
           iconBg: 'bg-green-100',
           iconColor: 'text-green-600',
           borderColor: 'border-green-200',
@@ -66,10 +66,10 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
         return {
           icon: FileText,
           title: 'File Status',
-          bgColor: 'from-gray-50 to-slate-50',
-          iconBg: 'bg-gray-100',
-          iconColor: 'text-gray-600',
-          borderColor: 'border-gray-200',
+          bgColor: 'bg-brand-blue/5',
+          iconBg: 'bg-brand-blue/10',
+          iconColor: 'text-brand-blue',
+          borderColor: 'border-brand-blue/15',
           description: 'File information.',
         };
     }
@@ -86,59 +86,59 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-lg w-full animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
         {/* Header */}
-        <div className={`flex items-start justify-between p-4 sm:p-6 border-b ${config.borderColor} bg-gradient-to-r ${config.bgColor}`}>
+        <div className={`flex items-start justify-between p-4 sm:p-6 border-b ${config.borderColor} ${config.bgColor} shrink-0`}>
           <div className="flex items-start gap-2.5 sm:gap-4 min-w-0">
             <div className={`w-9 h-9 sm:w-12 sm:h-12 ${config.iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}>
               <StatusIcon className={`w-4.5 h-4.5 sm:w-6 sm:h-6 ${config.iconColor}`} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-semibold text-gray-900 mb-0.5 sm:mb-1">
+              <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">
                 {config.title}
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                 {config.description}
               </p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 sm:p-2 hover:bg-white/50 rounded-lg transition-colors flex-shrink-0" aria-label="Close">
-            <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* File Info */}
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
             <div className="flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-4">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 truncate">{item.fileName}</h3>
-                <p className="text-xs sm:text-sm text-gray-500">Uploaded file</p>
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{item.fileName}</h3>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">Uploaded file</p>
               </div>
             </div>
 
             {item.candidateName && (
-              <div className="flex items-center gap-2 text-xs sm:text-sm py-2 border-t border-gray-200">
-                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                <span className="text-gray-600">Candidate:</span>
-                <span className="font-medium text-gray-900 truncate">{item.candidateName}</span>
+              <div className="flex items-center gap-2 text-xs sm:text-sm py-2 border-t border-gray-200 dark:border-slate-700">
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                <span className="text-gray-600 dark:text-slate-400">Candidate:</span>
+                <span className="font-medium text-gray-900 dark:text-slate-50 truncate">{item.candidateName}</span>
               </div>
             )}
           </div>
 
           {/* Status-specific content */}
           {item.status === 'duplicate' && (
-            <div className="p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-xl mb-4 sm:mb-6">
+            <div className="p-3 sm:p-4 bg-brand-blue/5 border border-brand-blue/15 rounded-xl mb-4 sm:mb-6">
               <div className="flex items-start gap-2.5 sm:gap-3">
-                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
-                  <h4 className="text-sm sm:text-base font-medium text-yellow-900 mb-0.5 sm:mb-1">Duplicate Detected</h4>
-                  <p className="text-xs sm:text-sm text-yellow-800">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">Duplicate Detected</h4>
+                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                     {item.errorMessage || 'A resume with the same candidate email already exists in your database. The duplicate was automatically skipped to prevent redundant entries.'}
                   </p>
                 </div>
@@ -147,17 +147,17 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
           )}
 
           {item.status === 'versioned' && (
-            <div className="p-3 sm:p-4 bg-brand-cyan/5 ring-1 ring-brand-cyan/20 rounded-xl mb-4 sm:mb-6">
+            <div className="p-3 sm:p-4 bg-brand-blue/5 border border-brand-blue/15 rounded-xl mb-4 sm:mb-6">
               <div className="flex items-start gap-2.5 sm:gap-3">
-                <GitBranch className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan mt-0.5 flex-shrink-0" />
+                <GitBranch className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
-                  <h4 className="text-sm sm:text-base font-medium text-brand-cyan mb-0.5 sm:mb-1">New Version Created</h4>
-                  <p className="text-xs sm:text-sm text-gray-700">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">New Version Created</h4>
+                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                     This resume was recognized as an update for an existing candidate. A new version has been created to preserve the resume history.
                   </p>
                   {item.candidateName && (
-                    <p className="text-xs sm:text-sm text-gray-600 mt-1.5 sm:mt-2">
-                      Candidate: <span className="font-medium text-gray-900">{item.candidateName}</span>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1.5 sm:mt-2">
+                      Candidate: <span className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</span>
                     </p>
                   )}
                 </div>
@@ -200,10 +200,10 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             Close
           </button>

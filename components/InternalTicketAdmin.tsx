@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketCategory, InternalTicketPriority, InternalTicketStatus } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
 
@@ -278,7 +279,10 @@ export default function InternalTicketAdmin() {
   const totalTickets = stats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-slate-50 min-h-full">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Internal Tickets' }]} />
       {/* SaaS Hero Header */}
       <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
         <div className="mx-auto max-w-[1400px]">
@@ -317,9 +321,13 @@ export default function InternalTicketAdmin() {
         {/* Overview */}
         {view === 'overview' && (
           <div className="space-y-6">
-            {/* Stats Cards */}
+            {/* Stats Cards — clicking a card drills into the tickets list pre-filtered by that status */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 sm:gap-5">
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('open'); setView('tickets'); }}
+                className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Open</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
@@ -328,9 +336,13 @@ export default function InternalTicketAdmin() {
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{openTickets}</div>
                 <div className="text-xs text-gray-500">Awaiting action</div>
-              </div>
+              </button>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('in_progress'); setView('tickets'); }}
+                className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">In Progress</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-100">
@@ -339,9 +351,13 @@ export default function InternalTicketAdmin() {
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{inProgressTickets}</div>
                 <div className="text-xs text-gray-500">Being handled</div>
-              </div>
+              </button>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('resolved'); setView('tickets'); }}
+                className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Resolved</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
@@ -350,9 +366,13 @@ export default function InternalTicketAdmin() {
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{resolvedTickets}</div>
                 <div className="text-xs text-gray-500">Successfully resolved</div>
-              </div>
+              </button>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+              <button
+                type="button"
+                onClick={() => { setFilterAssignment('unassigned'); setFilterStatus('all'); setView('tickets'); }}
+                className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Unassigned</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15">
@@ -361,9 +381,13 @@ export default function InternalTicketAdmin() {
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{unassignedTickets}</div>
                 <div className="text-xs text-gray-500">Need assignment</div>
-              </div>
+              </button>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('all'); setFilterAssignment('all'); setView('tickets'); }}
+                className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Total</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-blue/10 text-brand-blue ring-1 ring-brand-cyan/15">
@@ -372,7 +396,7 @@ export default function InternalTicketAdmin() {
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{totalTickets}</div>
                 <div className="text-xs text-gray-500">All time</div>
-              </div>
+              </button>
             </div>
 
             {/* Category Breakdown */}
@@ -884,6 +908,8 @@ export default function InternalTicketAdmin() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+      </div>
+    </main>
   );
 }

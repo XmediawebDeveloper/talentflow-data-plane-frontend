@@ -9,6 +9,7 @@ import ResumePreviewModal from '@/components/ResumePreviewModal';
 import { handleUnauthorized } from '@/lib/services/api';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 function ScoredResumeDetailContent() {
   const router = useRouter();
@@ -155,18 +156,20 @@ function ScoredResumeDetailContent() {
   }
 
   return (
-    <main className="flex-1 bg-gray-50 overflow-y-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+              { label: 'Scored Resume Detail' },
+            ]}
+          />
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
-          <button
-            onClick={handleBack}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-brand-blue mb-3 sm:mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Job Details
-          </button>
-
+      <div className="border-b border-gray-200 py-3 sm:py-4 mb-4">
+        <div>
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0">
               <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center flex-shrink-0">
@@ -238,7 +241,7 @@ function ScoredResumeDetailContent() {
         </div>
 
         {/* Tabs */}
-        <div className="w-full max-w-[1400px] mx-auto flex border-t border-gray-200 overflow-x-auto scrollbar-hide">
+        <div className="flex border-t border-gray-200 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex-shrink-0 ${
@@ -269,7 +272,7 @@ function ScoredResumeDetailContent() {
       </div>
 
       {/* Content */}
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6">
+      <div className="py-4 sm:py-5">
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
             {/* Left Column - Candidate Info */}
@@ -494,6 +497,8 @@ function ScoredResumeDetailContent() {
           onClose={() => setShowResumePreview(false)}
         />
       )}
+        </div>
+      </div>
     </main>
   );
 }

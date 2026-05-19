@@ -128,7 +128,7 @@ export default function AITalentMatchRoute() {
       <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen p-4">
         <div className="text-center">
           <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin mx-auto mb-3" />
-          <p className="text-sm text-gray-600 font-medium">Loading jobs...</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400 font-medium">Loading jobs...</p>
         </div>
       </div>
     );
@@ -138,14 +138,14 @@ export default function AITalentMatchRoute() {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen p-4">
         <div className="text-center max-w-md">
-          <div className="w-12 h-12 bg-red-100 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
-            <span className="text-red-600 text-lg sm:text-xl">!</span>
+          <div className="w-12 h-12 bg-red-100 dark:bg-red-500/20 ring-1 ring-red-200 dark:ring-red-500/40 rounded-full flex items-center justify-center mx-auto mb-3">
+            <span className="text-red-600 dark:text-red-400 text-lg sm:text-xl">!</span>
           </div>
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">Failed to Load Jobs</h2>
-          <p className="text-sm text-gray-600 mb-4">{error}</p>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2 tracking-tight">Failed to Load Jobs</h2>
+          <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-sm rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-sm rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
           >
             Retry
           </button>

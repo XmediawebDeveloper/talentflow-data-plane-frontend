@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, Mail, BarChart } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -65,6 +66,9 @@ interface JobsListingProps {
   onViewJob: (job: Job) => void;
   onViewApplicants?: (job: Job) => void;
   onAIMatch?: (job: Job) => void;
+  onScoreResumes?: (job: Job) => void;
+  onInviteAssessment?: (job: Job) => void;
+  onAssessmentStatus?: (job: Job) => void;
   onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
   onEditJob?: (job: Job) => void;
   onPublishJob?: (job: Job) => void;
@@ -85,7 +89,7 @@ interface JobsListingProps {
   masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onInviteAssessment, onAssessmentStatus, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
@@ -133,6 +137,26 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // Quota modal state
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+
+  // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows the
+  // toolbar + filters + jobs list. Initial render is 'cards' unless the URL
+  // already carried a specific status (deep-link from a notification, etc.).
+  // We deliberately ignore the default 'all' so a fresh visit lands on cards.
+  const [pageView, setPageView] = useState<'cards' | 'list'>(
+    initialStatusFilter && initialStatusFilter !== 'all' ? 'list' : 'cards',
+  );
+  // When URL changes to include a specific status filter, jump to list view.
+  useEffect(() => {
+    if (initialStatusFilter && initialStatusFilter !== 'all') setPageView('list');
+  }, [initialStatusFilter]);
+
+  const openListView = (statusFilterValue: string) => {
+    setStatusFilter(statusFilterValue);
+    setPageView('list');
+  };
+
+  // Show/hide the Experience/Education/Industry quick-links group.
+  const [showConfig, setShowConfig] = useState(false);
 
   const filteredJobs = jobs.filter(job => {
     // Enhanced search - search across multiple fields
@@ -465,6 +489,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     published: jobs.filter(j => j.status === 'Published').length,
     draft: jobs.filter(j => j.status === 'Draft').length,
     closed: jobs.filter(j => j.status === 'Closed').length,
+    archived: jobs.filter(j => j.status === 'Archived').length,
     totalApplicants: jobs.reduce((sum, j) => sum + (j.applicants || 0), 0)
   };
 
@@ -548,9 +573,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
         {/* SaaS Header */}
         <div className="mb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
@@ -589,411 +614,325 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             </div>
           </div>
 
-          {/* Master-data quick links (moved here from the sidebar) */}
-          {masterDataLinks && masterDataLinks.length > 0 && (
-            <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
-              {masterDataLinks.map((link) => {
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.id}
-                    href={link.href}
-                    className="group flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 group-hover:text-brand-blue">{link.label}</span>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
-                  </Link>
-                );
-              })}
+          {/* SaaS Stats Cards — clicking a card drills into the jobs list with the matching filter applied */}
+          <StatsCardGrid>
+            <StatsCard tone="blue" icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')} />
+            <StatsCard tone="emerald" icon={CheckCircle2} label="Published" value={stats.published} sparkline={false} onClick={() => openListView('published')} />
+            <StatsCard tone="orange" icon={FileText} label="Drafts" value={stats.draft} sparkline={false} onClick={() => openListView('draft')} />
+            <StatsCard tone="cyan" icon={Archive} label="Archived" value={stats.archived} sparkline={false} onClick={() => openListView('archived')} />
+          </StatsCardGrid>
+
+
+        </div>
+
+        {pageView === 'list' && (
+        <>
+        {/* Back to cards button */}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <button
+            onClick={() => setPageView('cards')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to overview
+          </button>
+          <span className="text-xs text-gray-500 dark:text-slate-400">
+            {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
+          </span>
+        </div>
+
+        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
+        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+          {/* Row 1: Search + View toggle + More Filters */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search jobs..."
+                className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {/* View Toggle */}
+              <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                      : 'text-gray-600 hover:text-brand-blue'
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded transition-all ${
+                    viewMode === 'list'
+                      ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                      : 'text-gray-600 hover:text-brand-blue'
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+              {/* More Filters Button */}
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
+                  activeFiltersCount > 0 || showAdvancedFilters
+                    ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
+                    : 'bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span className="hidden sm:inline">More Filters</span>
+                <span className="sm:hidden">Filters</span>
+                {activeFiltersCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-brand-blue text-white rounded text-xs">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2: Status tabs + AI/Manual + Clear */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="text-sm text-gray-600">Show:</span>
+            {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status.toLowerCase())}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  statusFilter.toLowerCase() === status.toLowerCase()
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {status === 'all' ? 'All Jobs' : status}
+              </button>
+            ))}
+            <div className="flex items-center gap-2 sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
+              <div className="flex items-center bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
+                <button
+                  onClick={() => setCreationMethodFilter(creationMethodFilter === 'ai' ? null : 'ai')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                    creationMethodFilter === 'ai'
+                      ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
+                      : 'text-gray-600 hover:text-brand-blue'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">AI Generated</span>
+                  <span className="sm:hidden">AI</span>
+                </button>
+                <button
+                  onClick={() => setCreationMethodFilter(creationMethodFilter === 'manual' ? null : 'manual')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                    creationMethodFilter === 'manual'
+                      ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
+                      : 'text-gray-600 hover:text-brand-blue'
+                  }`}
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  Manual
+                </button>
+              </div>
+            </div>
+            {/* Config — Experience / Education / Industry quick links (pushed to the right end of the tab row). */}
+            {masterDataLinks && masterDataLinks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowConfig(!showConfig)}
+                aria-expanded={showConfig}
+                className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all border ${
+                  showConfig
+                    ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
+                    : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Config
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showConfig ? 'rotate-180' : ''}`} />
+              </button>
+            )}
+            {(searchQuery || activeFiltersCount > 0) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setCreationMethodFilter(null);
+                  setLocationFilter('all');
+                  setDepartmentFilter('all');
+                  setIndustryFilter('all');
+                  setExperienceFilter('all');
+                  setEmploymentTypeFilter('all');
+                  setApplicantsFilter('all');
+                  setDatePostedFromFilter('');
+                  setDatePostedToFilter('');
+                  setSalaryRangeFilter('all');
+                }}
+                className="ml-auto text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
+              >
+                <XCircle className="w-4 h-4" />
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Config Panel (collapsible) — Experience/Education/Industry quick links */}
+          {showConfig && masterDataLinks && masterDataLinks.length > 0 && (
+            <div className="mb-3 pt-3 border-t border-brand-blue/10">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                {masterDataLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <Link
+                      key={link.id}
+                      href={link.href}
+                      className="group flex items-center gap-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-200 group-hover:text-brand-blue">{link.label}</span>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-500 transition-colors group-hover:text-brand-blue" />
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          {/* SaaS Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
-            <div className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-blue-50/50 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(37,99,235,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-blue/25 hover:shadow-[0_16px_30px_-22px_rgba(37,99,235,0.45)]">
-              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(37,99,235,0.10),transparent_70%)]" aria-hidden />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-2.5">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-brand-blue ring-1 ring-blue-100 shadow-sm">
-                    <Briefcase className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Total Jobs</p>
-                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.total}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="relative mt-2.5 flex items-end justify-end">
-                <svg viewBox="0 0 88 34" className="h-7 w-20 text-brand-blue/85" aria-hidden="true">
-                  <path d="M4 27C12 26 15 20 22 20C29 20 31 23 38 18C45 13 49 17 56 14C63 11 66 4 84 4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <path d="M4 27C12 26 15 20 22 20C29 20 31 23 38 18C45 13 49 17 56 14C63 11 66 4 84 4V34H4Z" fill="url(#jobs-spark)" opacity="0.18" />
-                  <defs>
-                    <linearGradient id="jobs-spark" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="currentColor" />
-                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-            </div>
-
-            <div className="group relative overflow-hidden rounded-xl border border-emerald-200/80 bg-gradient-to-br from-white via-white to-emerald-50/60 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(22,163,74,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-[0_16px_30px_-22px_rgba(22,163,74,0.38)]">
-              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(34,197,94,0.12),transparent_70%)]" aria-hidden />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-2.5">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 shadow-sm">
-                    <CheckCircle2 className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Active</p>
-                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.published}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="relative mt-2.5 flex items-end justify-end">
-                <svg viewBox="0 0 88 34" className="h-7 w-20 text-emerald-500/85" aria-hidden="true">
-                  <path d="M4 25C11 25 14 16 21 16C30 16 32 22 40 22C50 22 50 10 58 10C67 10 71 17 84 5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <path d="M4 25C11 25 14 16 21 16C30 16 32 22 40 22C50 22 50 10 58 10C67 10 71 17 84 5V34H4Z" fill="url(#active-spark)" opacity="0.18" />
-                  <defs>
-                    <linearGradient id="active-spark" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="currentColor" />
-                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-            </div>
-
-            <div className="group relative overflow-hidden rounded-xl border border-orange-200/80 bg-gradient-to-br from-white via-white to-orange-50/60 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(249,115,22,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-[0_16px_30px_-22px_rgba(249,115,22,0.38)]">
-              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(249,115,22,0.12),transparent_70%)]" aria-hidden />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-2.5">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-50 text-brand-orange-deep ring-1 ring-orange-100 shadow-sm">
-                    <FileText className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Drafts</p>
-                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.draft}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="relative mt-2.5 flex items-end justify-end">
-                <svg viewBox="0 0 88 34" className="h-7 w-20 text-orange-500/85" aria-hidden="true">
-                  <path d="M4 27C14 27 15 18 24 18C31 18 30 22 38 22C46 22 47 12 55 12C64 12 67 4 84 4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <path d="M4 27C14 27 15 18 24 18C31 18 30 22 38 22C46 22 47 12 55 12C64 12 67 4 84 4V34H4Z" fill="url(#draft-spark)" opacity="0.18" />
-                  <defs>
-                    <linearGradient id="draft-spark" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="currentColor" />
-                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-            </div>
-
-            <div className="group relative overflow-hidden rounded-xl border border-cyan-200/80 bg-gradient-to-br from-white via-white to-cyan-50/60 px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_10px_26px_-22px_rgba(6,182,212,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-[0_16px_30px_-22px_rgba(6,182,212,0.38)]">
-              <div className="absolute inset-y-0 right-0 w-20 bg-[radial-gradient(circle_at_right,rgba(6,182,212,0.12),transparent_70%)]" aria-hidden />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-2.5">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-brand-cyan ring-1 ring-cyan-100 shadow-sm">
-                    <Users className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Applicants</p>
-                    <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950">{stats.totalApplicants}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="relative mt-2.5 flex items-end justify-end">
-                <svg viewBox="0 0 88 34" className="h-7 w-20 text-cyan-500/85" aria-hidden="true">
-                  <path d="M4 28C14 23 19 25 28 22C35 19 39 21 45 16C52 11 57 15 64 12C72 9 76 4 84 4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <path d="M4 28C14 23 19 25 28 22C35 19 39 21 45 16C52 11 57 15 64 12C72 9 76 4 84 4V34H4Z" fill="url(#applicants-spark)" opacity="0.18" />
-                  <defs>
-                    <linearGradient id="applicants-spark" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="currentColor" />
-                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* SaaS Search and Filters */}
-          <div className="bg-white rounded-xl p-4 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search jobs..."
-                  className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* View Toggle */}
-                <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded transition-all ${
-                      viewMode === 'grid'
-                        ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                        : 'text-gray-600 hover:text-brand-blue'
-                    }`}
-                  >
-                    <LayoutGrid className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded transition-all ${
-                      viewMode === 'list'
-                        ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                        : 'text-gray-600 hover:text-brand-blue'
-                    }`}
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* More Filters Button */}
-                <button
-                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  className={`px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
-                    activeFiltersCount > 0 || showAdvancedFilters
-                      ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
-                      : 'bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
-                  }`}
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span className="hidden sm:inline">More Filters</span>
-                  <span className="sm:hidden">Filters</span>
-                  {activeFiltersCount > 0 && (
-                    <span className="px-1.5 py-0.5 bg-brand-blue text-white rounded text-xs">
-                      {activeFiltersCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Status Filters */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-gray-600">Show:</span>
-              {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status.toLowerCase())}
-                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
-                    statusFilter.toLowerCase() === status.toLowerCase()
-                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                      : 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue'
-                  }`}
-                >
-                  {status === 'all' ? 'All Jobs' : status}
-                </button>
-              ))}
-
-              {/* Creation Method Toggle - AI vs Manual */}
-              <div className="flex items-center gap-2 sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
-                <div className="flex items-center bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
-                  <button
-                    onClick={() => setCreationMethodFilter(creationMethodFilter === 'ai' ? null : 'ai')}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                      creationMethodFilter === 'ai'
-                        ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
-                        : 'text-gray-600 hover:text-brand-blue'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">AI Generated</span>
-                    <span className="sm:hidden">AI</span>
-                  </button>
-                  <button
-                    onClick={() => setCreationMethodFilter(creationMethodFilter === 'manual' ? null : 'manual')}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                      creationMethodFilter === 'manual'
-                        ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
-                        : 'text-gray-600 hover:text-brand-blue'
-                    }`}
-                  >
-                    <Edit className="w-3.5 h-3.5" />
-                    Manual
-                  </button>
-                </div>
-              </div>
-
-              {/* Clear Filters */}
-              {(searchQuery || activeFiltersCount > 0) && (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setCreationMethodFilter(null);
-                    setLocationFilter('all');
-                    setDepartmentFilter('all');
-                    setIndustryFilter('all');
-                    setExperienceFilter('all');
-                    setEmploymentTypeFilter('all');
-                    setApplicantsFilter('all');
-                    setDatePostedFromFilter('');
-                    setDatePostedToFilter('');
-                    setSalaryRangeFilter('all');
-                  }}
-                  className="ml-auto text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
-                >
-                  <XCircle className="w-4 h-4" />
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* More Filters Panel */}
-            {showAdvancedFilters && (
-              <div className="mt-4 pt-4 border-t border-brand-blue/10">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {/* Location */}
-                  {uniqueLocations.length > 1 && (
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-1.5 font-medium">Location</label>
-                      <select
-                        value={locationFilter}
-                        onChange={(e) => setLocationFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                      >
-                        <option value="all">All Locations</option>
-                        {uniqueLocations.map(loc => (
-                          <option key={loc} value={loc}>{loc}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Department */}
-                  {uniqueDepartments.length > 0 && (
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-1.5 font-medium">Department</label>
-                      <select
-                        value={departmentFilter}
-                        onChange={(e) => setDepartmentFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                      >
-                        <option value="all">All Departments</option>
-                        {uniqueDepartments.map(dept => (
-                          <option key={dept} value={dept}>{dept}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Employment Type */}
-                  {uniqueEmploymentTypes.length > 0 && (
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
-                      <select
-                        value={employmentTypeFilter}
-                        onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                      >
-                        <option value="all">All Types</option>
-                        {uniqueEmploymentTypes.map(type => (
-                          <option key={type} value={type}>{formatEmploymentType(type)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Industry */}
-                  {uniqueIndustries.length > 0 && (
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-1.5 font-medium">Industry</label>
-                      <select
-                        value={industryFilter}
-                        onChange={(e) => setIndustryFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                      >
-                        <option value="all">All Industries</option>
-                        {uniqueIndustries.map(industry => (
-                          <option key={industry} value={industry}>{formatIndustryType(industry)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Experience */}
+          {/* More Filters Panel (collapsible) */}
+          {showAdvancedFilters && (
+            <div className="mb-3 pt-3 border-t border-brand-blue/10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {uniqueLocations.length > 1 && (
                   <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Experience</label>
+                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Location</label>
                     <select
-                      value={experienceFilter}
-                      onChange={(e) => setExperienceFilter(e.target.value)}
+                      value={locationFilter}
+                      onChange={(e) => setLocationFilter(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                     >
-                      <option value="all">All Levels</option>
-                      <option value="entry">Entry Level (0-2 years)</option>
-                      <option value="junior">Junior Level (2-4 years)</option>
-                      <option value="mid">Mid Level (5-7 years)</option>
-                      <option value="senior">Senior Level (8-10 years)</option>
-                      <option value="architect">Architect Level (10+ years)</option>
-                      <option value="management">Management Level (10+ years)</option>
+                      <option value="all">All Locations</option>
+                      {uniqueLocations.map(loc => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
                     </select>
                   </div>
-
-                  {/* Posted From Date */}
+                )}
+                {uniqueDepartments.length > 0 && (
                   <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
-                    <input
-                      type="date"
-                      value={datePostedFromFilter}
-                      onChange={(e) => setDatePostedFromFilter(e.target.value)}
+                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Department</label>
+                    <select
+                      value={departmentFilter}
+                      onChange={(e) => setDepartmentFilter(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                    />
+                    >
+                      <option value="all">All Departments</option>
+                      {uniqueDepartments.map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
                   </div>
-
-                  {/* Posted To Date */}
+                )}
+                {uniqueEmploymentTypes.length > 0 && (
                   <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted To</label>
-                    <input
-                      type="date"
-                      value={datePostedToFilter}
-                      onChange={(e) => setDatePostedToFilter(e.target.value)}
+                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
+                    <select
+                      value={employmentTypeFilter}
+                      onChange={(e) => setEmploymentTypeFilter(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                    />
+                    >
+                      <option value="all">All Types</option>
+                      {uniqueEmploymentTypes.map(type => (
+                        <option key={type} value={type}>{formatEmploymentType(type)}</option>
+                      ))}
+                    </select>
                   </div>
+                )}
+                {uniqueIndustries.length > 0 && (
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Industry</label>
+                    <select
+                      value={industryFilter}
+                      onChange={(e) => setIndustryFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                    >
+                      <option value="all">All Industries</option>
+                      {uniqueIndustries.map(industry => (
+                        <option key={industry} value={industry}>{formatIndustryType(industry)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Experience</label>
+                  <select
+                    value={experienceFilter}
+                    onChange={(e) => setExperienceFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                  >
+                    <option value="all">All Levels</option>
+                    <option value="entry">Entry Level (0-2 years)</option>
+                    <option value="junior">Junior Level (2-4 years)</option>
+                    <option value="mid">Mid Level (5-7 years)</option>
+                    <option value="senior">Senior Level (8-10 years)</option>
+                    <option value="architect">Architect Level (10+ years)</option>
+                    <option value="management">Management Level (10+ years)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
+                  <input
+                    type="date"
+                    value={datePostedFromFilter}
+                    onChange={(e) => setDatePostedFromFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted To</label>
+                  <input
+                    type="date"
+                    value={datePostedToFilter}
+                    onChange={(e) => setDatePostedToFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                  />
                 </div>
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
 
-        {/* Results Count */}
-        <div className="mb-4">
-          <p className="text-sm text-gray-600">
-            Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
-            {filteredJobs.length !== jobs.length && ` (filtered from ${jobs.length} total)`}
-          </p>
-        </div>
-
-        {/* Sort and Bulk Actions Bar */}
-        {sortedJobs.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-              {/* Left: Bulk Selection */}
-              <div className="flex items-center gap-3 sm:gap-4">
+          {/* Row 3: Select all + Bulk Actions + count + Sort */}
+          {sortedJobs.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 pt-3 border-t border-gray-200">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <button
                   onClick={handleSelectAll}
-                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
+                  className={`group inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-sm font-medium transition-all ${
+                    selectedJobs.size > 0
+                      ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                      : 'bg-white text-gray-700 border-gray-400 hover:border-brand-blue/40 hover:text-brand-blue'
+                  }`}
                 >
-                  {selectedJobs.size === sortedJobs.length && sortedJobs.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-brand-blue" />
-                  ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
-                  )}
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
+                    selectedJobs.size > 0 ? 'bg-white/20' : 'bg-gray-100 group-hover:bg-brand-blue/10'
+                  }`}>
+                    {selectedJobs.size === sortedJobs.length && sortedJobs.length > 0 ? (
+                      <CheckSquare className={`w-3.5 h-3.5 ${selectedJobs.size > 0 ? 'text-white' : 'text-brand-blue'}`} />
+                    ) : selectedJobs.size > 0 ? (
+                      <span className="h-2 w-2 rounded-full bg-white" />
+                    ) : (
+                      <Square className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-blue" />
+                    )}
+                  </span>
                   <span>
                     {selectedJobs.size > 0
                       ? `${selectedJobs.size} selected`
@@ -1006,7 +945,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <div className="relative">
                     <button
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-2 text-sm"
+                      className="h-9 px-3.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-full shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-1.5 text-sm font-medium"
                     >
                       <span>Bulk Actions</span>
                       <ChevronDown className="w-4 h-4" />
@@ -1064,42 +1003,49 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     )}
                   </div>
                 )}
+
+                <span className="text-sm text-gray-500">
+                  Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
+                  {filteredJobs.length !== jobs.length && ` (of ${jobs.length})`}
+                </span>
               </div>
 
-              {/* Right: Sort Controls */}
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Sort by:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => {
-                    const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'industry';
-                    console.log('Sort by changed to:', value);
-                    setSortBy(value);
-                  }}
-                  className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black cursor-pointer"
-                >
-                  <option value="date">Date Posted</option>
-                  <option value="applicants">Applicants</option>
-                  <option value="title">Job Title</option>
-                  <option value="status">Status</option>
-                  <option value="industry">Industry Type</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log('Sort order button clicked! Current order:', sortOrder, 'Switching to:', sortOrder === 'asc' ? 'desc' : 'asc');
-                    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-                  }}
-                  className="p-2 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-gray-700 cursor-pointer"
-                  title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
-                >
-                  <ArrowUpDown className={`w-4 h-4 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
-                </button>
+                <span className="text-sm font-medium text-gray-500">Sort by</span>
+                <div className="inline-flex items-center bg-gray-50 border border-gray-400 rounded-full p-0.5 hover:border-brand-blue/30 transition-colors">
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'industry';
+                        setSortBy(value);
+                      }}
+                      className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 cursor-pointer"
+                    >
+                      <option value="date">Date Posted</option>
+                      <option value="applicants">Applicants</option>
+                      <option value="title">Job Title</option>
+                      <option value="status">Status</option>
+                      <option value="industry">Industry Type</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                    }}
+                    className="ml-0.5 h-8 w-8 flex items-center justify-center rounded-full bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/10 hover:border-brand-blue/30 hover:text-brand-blue transition-colors cursor-pointer"
+                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                  >
+                    <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Jobs Grid/List */}
         {currentJobs.length > 0 ? (
@@ -1114,7 +1060,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-all duration-150 cursor-pointer ${activeDropdown === job.id ? 'z-[9999]' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -1280,7 +1226,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[100]">
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
@@ -1293,6 +1239,59 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 >
                                   <Users className="w-4 h-4" />
                                   View Applicants
+                                </button>
+                              )}
+                              {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
+                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAIMatch(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Brain className="w-4 h-4" />
+                                  AI Talent Match
+                                </button>
+                              )}
+                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onScoreResumes(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Target className="w-4 h-4" />
+                                  Score Resumes
+                                </button>
+                              )}
+                              {onInviteAssessment && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onInviteAssessment(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Mail className="w-4 h-4" />
+                                  Invite for Assessment
+                                </button>
+                              )}
+                              {onAssessmentStatus && job.status.toLowerCase() !== 'draft' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAssessmentStatus(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <BarChart className="w-4 h-4" />
+                                  Assessment Status
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1385,10 +1384,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-[9999]' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
-                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                    <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
                       {/* Individual Select + Job Icon */}
                       <div className="hidden md:flex items-center gap-2 flex-shrink-0">
                         <button
@@ -1432,8 +1431,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           )}
                         </div>
 
-                        {/* Primary Info Row */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 mb-2">
+                        {/* Primary Info Row 1 - Company / Role / Location / Employment */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 mb-1.5">
                           {job.department && (
                             <span className="flex items-center gap-1.5">
                               <Briefcase className="w-4 h-4 text-gray-400" />
@@ -1458,6 +1457,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                               <span className="capitalize">{(job as any).workMode}</span>
                             </span>
                           )}
+                        </div>
+
+                        {/* Primary Info Row 2 - Experience / Dates / Posted By / Applicants */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 mb-2">
                           {job.experience && (
                             <span className="flex items-center gap-1.5">
                               <TrendingUp className="w-4 h-4 text-gray-400" />
@@ -1508,15 +1511,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       </div>
 
                       {/* Actions */}
-                      <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
+                      <div className="flex flex-wrap gap-2 flex-shrink-0 items-start">
                         {/* Edit Button - icon only (hidden for Disabled JDs) */}
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="h-7 w-7 flex items-center justify-center bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-all"
                             aria-label="Edit" title="Edit"
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="w-3.5 h-3.5" />
                           </button>
                         )}
 
@@ -1524,10 +1527,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {job.status.toLowerCase() !== 'draft' && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="h-7 w-7 flex items-center justify-center bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-all"
                             aria-label="View" title="View"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
                         )}
 
@@ -1538,12 +1541,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-all"
                           >
-                            <MoreVertical className="w-4 h-4 text-gray-600" />
+                            <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999]">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
@@ -1556,6 +1559,59 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 >
                                   <Users className="w-4 h-4" />
                                   View Applicants
+                                </button>
+                              )}
+                              {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
+                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAIMatch(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Brain className="w-4 h-4" />
+                                  AI Talent Match
+                                </button>
+                              )}
+                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onScoreResumes(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Target className="w-4 h-4" />
+                                  Score Resumes
+                                </button>
+                              )}
+                              {onInviteAssessment && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onInviteAssessment(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Mail className="w-4 h-4" />
+                                  Invite for Assessment
+                                </button>
+                              )}
+                              {onAssessmentStatus && job.status.toLowerCase() !== 'draft' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAssessmentStatus(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <BarChart className="w-4 h-4" />
+                                  Assessment Status
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1698,7 +1754,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Pagination Controls */}
         {sortedJobs.length > 5 && (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mt-4">
+          <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
@@ -1707,7 +1763,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -1733,8 +1789,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   disabled={currentPage === 1}
                   className={`p-2 rounded-lg border transition-all ${
                     currentPage === 1
-                      ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                      : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                   aria-label="Previous page" title="Previous page"
                 >
@@ -1753,7 +1809,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                           : page === '...'
                           ? 'text-gray-400 cursor-default'
-                          : 'border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                          : 'border border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                       }`}
                     >
                       {page}
@@ -1767,8 +1823,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   disabled={currentPage === totalPages}
                   className={`p-2 rounded-lg border transition-all ${
                     currentPage === totalPages
-                      ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                      : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                   aria-label="Next page" title="Next page"
                 >
@@ -1777,6 +1833,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               </div>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
       </div>
@@ -1796,32 +1854,48 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-5 max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-red-100 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Briefcase className="w-5 h-5 text-red-600" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Insufficient Units</h3>
+              <button
+                onClick={() => setShowQuotaModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 overflow-y-auto flex-1">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-red-100 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Briefcase className="w-5 h-5 text-red-600" />
+                </div>
+                <p className="text-sm text-gray-600">
+                  You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
+                </p>
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">Insufficient Units</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                <button
-                  onClick={() => setShowQuotaModal(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-medium transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowQuotaModal(false);
-                    window.location.href = '/subscription/current-plan';
-                  }}
-                  className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 text-sm font-medium transition-all"
-                >
-                  Upgrade Plan
-                </button>
-              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2 justify-center shrink-0">
+              <button
+                onClick={() => setShowQuotaModal(false)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowQuotaModal(false);
+                  window.location.href = '/subscription/current-plan';
+                }}
+                className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 text-sm font-medium transition-all"
+              >
+                Upgrade Plan
+              </button>
             </div>
           </div>
         </div>

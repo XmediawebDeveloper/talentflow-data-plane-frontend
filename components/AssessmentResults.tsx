@@ -11,6 +11,7 @@ import {
   FinalAssessmentResult,
   getScoringBreakdown
 } from '@/lib/utils/assessmentScoring';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -111,6 +112,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
+  // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows search,
+  // filters, and the candidate table. Mirrors the Job Openings page pattern
+  // — a fresh visit lands on cards; clicking a stat card drills into the list
+  // with the matching status filter applied.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const openCandidateList = (filter: 'all' | 'Completed' | 'In Progress' | 'Pending') => {
+    setStatusFilter(filter);
+    setCurrentPage(1);
+    setPageView('list');
+  };
 
   // Assessment details (which rounds are enabled)
   const [assessmentDetails, setAssessmentDetails] = useState<AssessmentDetails | null>(null);
@@ -937,17 +948,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   return (
-    <div className="flex-1 bg-slate-50 overflow-y-auto">
+    <div className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb className="mb-4 md:mb-8" items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Assessments', href: '/recruitment/assessments' },
+            { label: 'Results' },
+          ]} />
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-3 sm:mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back
-          </button>
+      <div className="mb-4 sm:mb-6">
+        <div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
               <h1 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2 truncate tracking-tight">{assessmentTitle}</h1>
@@ -1022,10 +1033,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       </div>
 
       {/* Statistics Cards */}
-      <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+      <div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+          <button
+            type="button"
+            onClick={() => openCandidateList('all')}
+            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Total Candidates</div>
@@ -1035,9 +1050,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+          <button
+            type="button"
+            onClick={() => openCandidateList('Completed')}
+            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-green-300 hover:shadow-md hover:shadow-green-500/10 transition-all"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
@@ -1047,9 +1066,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+          <button
+            type="button"
+            onClick={() => openCandidateList('In Progress')}
+            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 transition-all"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
@@ -1059,9 +1082,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+          <button
+            type="button"
+            onClick={() => openCandidateList('Pending')}
+            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Pending</div>
@@ -1071,7 +1098,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
               </div>
             </div>
-          </div>
+          </button>
+        </div>
+
+        {pageView === 'list' && (
+        <>
+        {/* Back-to-overview button — mirrors the Job Openings drill-down. */}
+        <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
+          <button
+            onClick={() => setPageView('cards')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-brand-blue transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to overview
+          </button>
+          <span className="text-xs text-gray-500">
+            {totalItems} {totalItems === 1 ? 'candidate' : 'candidates'}
+          </span>
         </div>
 
         {/* AS-23: Search and Filter Bar */}
@@ -1405,45 +1448,36 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         )}
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {candidate.status !== 'Pending' && (
-                            <button
-                              onClick={() => {
-                                try {
-                                  sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
-                                    paginatedCandidates
-                                      .filter(c => c.status !== 'Pending')
-                                      .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
-                                  ));
-                                } catch { /* ignore quota errors */ }
-                                router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
-                              }}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                              title="View Details"
-                              aria-label={`View details for ${candidate.name || 'candidate'}`}
-                            >
-                              <Eye className="w-3.5 h-3.5 shrink-0" />
-                            </button>
-                          )}
-                          {canDownloadPDF && canDownloadResultPdf(candidate) ? (
-                            <button
-                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                              disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Download PDF Report"
-                              aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
-                            >
-                              {downloadingPDF === candidate.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <Download className="w-3 h-3" />
-                              )}
-                            </button>
-                          ) : null}
-                          {/* Delete removed — destructive per-row delete
-                              broke the audit trail (AS27) and there's no
-                              recruiter workflow that requires it. Compliance
-                              erasure should go through the candidates table
-                              right-to-be-forgotten flow instead. */}
+                          <button
+                            onClick={() => {
+                              try {
+                                sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
+                                  paginatedCandidates
+                                    .filter(c => c.status !== 'Pending')
+                                    .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
+                                ));
+                              } catch { /* ignore quota errors */ }
+                              router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
+                            }}
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            title="View Details"
+                            aria-label={`View details for ${candidate.name || 'candidate'}`}
+                          >
+                            <Eye className="w-3.5 h-3.5 shrink-0" />
+                          </button>
+                          <button
+                            onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+                            disabled={downloadingPDF === candidate.id}
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Download PDF Report"
+                            aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
+                          >
+                            {downloadingPDF === candidate.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Download className="w-3 h-3" />
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1600,8 +1634,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         />
                       </td>
                       {isColumnEnabled('cid') && (
-                        <td className="px-4 py-4">
-                          <span className="inline-flex max-w-full break-all text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
                         </td>
@@ -1733,7 +1767,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       <td className="px-2 sm:px-4 py-4">
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
-                          {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => {
                               try {
@@ -1751,25 +1784,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           >
                             <Eye className="w-3.5 h-3.5 shrink-0" />
                           </button>
-                          )}
-                          {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
-                          {canDownloadPDF && canDownloadResultPdf(candidate) ? (
-                            <button
-                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                              disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Download PDF Report"
-                              aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
-                            >
-                              {downloadingPDF === candidate.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
-                              ) : (
-                                <Download className="w-3 h-3 flex-shrink-0" />
-                              )}
-                            </button>
-                          ) : null}
-                          {/* Delete removed — see comment in mobile card
-                              variant above. */}
+                          <button
+                            onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+                            disabled={downloadingPDF === candidate.id}
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Download PDF Report"
+                            aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
+                          >
+                            {downloadingPDF === candidate.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                            ) : (
+                              <Download className="w-3 h-3 flex-shrink-0" />
+                            )}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1862,6 +1889,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div ref={stickyScrollbarInnerRef} className="h-4" />
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
 
@@ -2067,6 +2096,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -29,7 +29,10 @@ interface ScoredResumeDetail {
   scoredDate: string;
   scoredBy: string;
   detailedScores: DetailedScores;
-  certifications?: string[];
+  // Certifications may arrive as plain strings or as structured objects with a
+  // name field (from the candidate-detail endpoint). The scorecard only reads
+  // them for display so a permissive union is sufficient.
+  certifications?: Array<string | { name?: string; date?: string; issuer?: string; credential_id?: string }>;
   education?: string;
   location?: string;
   title?: string;

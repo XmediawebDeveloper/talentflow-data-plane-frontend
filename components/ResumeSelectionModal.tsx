@@ -686,7 +686,7 @@ export default function ResumeSelectionModal({
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm group ${
               isSelected
                 ? 'bg-brand-blue/10 text-brand-blue font-medium ring-1 ring-brand-blue/20'
-                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                : 'text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue'
             }`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
@@ -700,7 +700,7 @@ export default function ResumeSelectionModal({
                   e.stopPropagation();
                   toggleFolderSelection(folder.id);
                 }}
-                className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200"
+                className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
                 title={
                   selectionState === 'all'
                     ? `Deselect all ${count} resumes in this folder`
@@ -712,7 +712,7 @@ export default function ResumeSelectionModal({
                 ) : selectionState === 'partial' ? (
                   <MinusSquare className="w-4 h-4 text-blue-600" />
                 ) : (
-                  <Square className="w-4 h-4 text-gray-400" />
+                  <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                 )}
               </span>
             )}
@@ -748,7 +748,7 @@ export default function ResumeSelectionModal({
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               isSelected
                 ? 'bg-brand-blue/15 text-brand-blue'
-                : 'bg-gray-200 text-gray-600'
+                : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
             }`}>
               {count}
             </span>
@@ -764,18 +764,18 @@ export default function ResumeSelectionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100">
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue ring-1 ring-white/10 shadow-md shadow-brand-blue/25 rounded-xl flex items-center justify-center flex-shrink-0">
               <Target className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 mb-1">Select Resumes to Score</h2>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">
-                Job: <span className="font-medium text-gray-900">{jobTitle}</span>
+              <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Select Resumes to Score</h2>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
+                Job: <span className="font-medium text-gray-900 dark:text-slate-50">{jobTitle}</span>
               </p>
             </div>
           </div>
@@ -784,19 +784,19 @@ export default function ResumeSelectionModal({
             className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors flex-shrink-0"
             aria-label="Close modal"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-100 px-4 sm:px-6 pt-3 sm:pt-4">
+        <div className="border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 pt-3 sm:pt-4">
           <div className="flex gap-1 sm:gap-2">
             <button
               onClick={() => handleTabChange('my-resumes')}
               className={`px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${
                 activeTab === 'my-resumes'
                   ? 'bg-brand-blue/5 text-brand-blue border-b-2 border-brand-blue'
-                  : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
               }`}
             >
               <div className="flex items-center gap-1.5 sm:gap-2">
@@ -805,7 +805,7 @@ export default function ResumeSelectionModal({
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   activeTab === 'my-resumes'
                     ? 'bg-brand-blue text-white'
-                    : 'bg-gray-200 text-gray-600'
+                    : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   {allMyResumes.length}
                 </span>
@@ -818,7 +818,7 @@ export default function ResumeSelectionModal({
                 className={`px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${
                   activeTab === 'database'
                     ? 'bg-brand-blue/5 text-brand-blue border-b-2 border-brand-blue'
-                    : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
                 }`}
               >
                 <div className="flex items-center gap-1.5 sm:gap-2">
@@ -827,7 +827,7 @@ export default function ResumeSelectionModal({
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
                     activeTab === 'database'
                       ? 'bg-brand-blue text-white'
-                      : 'bg-gray-200 text-gray-600'
+                      : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                   }`}>
                     {allDatabaseResumes.length}
                   </span>
@@ -868,14 +868,14 @@ export default function ResumeSelectionModal({
 
         {/* Mobile/Tablet Folder Selector (Only for My Resumes) */}
         {activeTab === 'my-resumes' && (
-          <div className="lg:hidden border-b border-gray-100 bg-brand-blue/[0.03] px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 overflow-x-auto">
+          <div className="lg:hidden border-b border-gray-100 dark:border-slate-700/60 bg-brand-blue/[0.03] px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 overflow-x-auto">
             <div className="flex items-center gap-2 min-w-max">
               <button
                 onClick={() => setSelectedFolder('all')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                   selectedFolder === 'all'
                     ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                    : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                 }`}
               >
                 <FolderOpen className="w-3.5 h-3.5" />
@@ -883,7 +883,7 @@ export default function ResumeSelectionModal({
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                   selectedFolder === 'all'
                     ? 'bg-white/20 text-white'
-                    : 'bg-gray-200 text-gray-600'
+                    : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   {allMyResumes.length}
                 </span>
@@ -898,7 +898,7 @@ export default function ResumeSelectionModal({
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                       isSelected
                         ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
                     <Folder className="w-3.5 h-3.5" />
@@ -906,7 +906,7 @@ export default function ResumeSelectionModal({
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                       isSelected
                         ? 'bg-white/20 text-white'
-                        : 'bg-gray-200 text-gray-600'
+                        : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                     }`}>
                       {count}
                     </span>
@@ -921,9 +921,9 @@ export default function ResumeSelectionModal({
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Folder Tree (Only for My Resumes - Desktop) */}
           {activeTab === 'my-resumes' && (
-            <div className="hidden lg:block w-64 border-r border-gray-100 bg-brand-blue/[0.03] overflow-y-auto flex-shrink-0">
+            <div className="hidden lg:block w-64 border-r border-gray-100 dark:border-slate-700/60 bg-brand-blue/[0.03] overflow-y-auto flex-shrink-0">
               <div className="p-4">
-                <h3 className="text-xs font-medium text-gray-500 uppercase mb-3 px-3">Folders</h3>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-3 px-3">Folders</h3>
 
                 {/* All Resumes */}
                 {(() => {
@@ -934,8 +934,8 @@ export default function ResumeSelectionModal({
                       onClick={() => setSelectedFolder('all')}
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm mb-2 ${
                         selectedFolder === 'all'
-                          ? 'bg-gray-100 text-gray-900 font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50 font-medium'
+                          : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                       }`}
                     >
                       {/* Master checkbox: select/deselect every non-archived resume */}
@@ -946,7 +946,7 @@ export default function ResumeSelectionModal({
                           e.stopPropagation();
                           toggleFolderSelection('all');
                         }}
-                        className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200"
+                        className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
                         title={
                           allState === 'all'
                             ? 'Deselect all resumes'
@@ -958,7 +958,7 @@ export default function ResumeSelectionModal({
                         ) : allState === 'partial' ? (
                           <MinusSquare className="w-4 h-4 text-blue-600" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         )}
                       </span>
                       <FolderOpen className="w-4 h-4" />
@@ -970,8 +970,8 @@ export default function ResumeSelectionModal({
                       )}
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         selectedFolder === 'all'
-                          ? 'bg-gray-200 text-gray-900'
-                          : 'bg-gray-200 text-gray-600'
+                          ? 'bg-gray-200 dark:bg-slate-800 text-gray-900 dark:text-slate-50'
+                          : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                       }`}>
                         {allMyResumes.length}
                       </span>
@@ -990,16 +990,16 @@ export default function ResumeSelectionModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-blue/[0.03] border-b border-gray-100">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-brand-blue/[0.03] border-b border-gray-100 dark:border-slate-700/60">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, title, or skills..."
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm"
                   />
                 </div>
 
@@ -1043,7 +1043,7 @@ export default function ResumeSelectionModal({
                     return (
                       <button
                         onClick={handleSelectAll}
-                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-200 bg-white rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium text-gray-700 flex items-center justify-center gap-2 whitespace-nowrap"
+                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium text-gray-700 dark:text-slate-300 flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         {allVisibleSelected ? (
                           <>
@@ -1067,7 +1067,7 @@ export default function ResumeSelectionModal({
                       </button>
                     );
                   })()}
-                  <div className="text-sm text-gray-700 bg-white px-3 sm:px-4 py-2.5 rounded-lg border border-gray-200 font-medium whitespace-nowrap">
+                  <div className="text-sm text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 font-medium whitespace-nowrap">
                     <span className="font-semibold text-brand-blue">{selectedResumes.length}</span> selected
                   </div>
                 </div>
@@ -1079,7 +1079,7 @@ export default function ResumeSelectionModal({
               {filteredResumes.length > 0 ? (
                 <div className="space-y-2">
                   {/* Table Header - Hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg ring-1 ring-gray-100 text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg ring-1 ring-gray-100 dark:ring-slate-700/60 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">
                     <div className="col-span-1 flex items-center justify-center">
                       {(() => {
                         const visibleIds = filteredResumes.filter(r => !r.isArchived).map(r => r.id);
@@ -1096,7 +1096,7 @@ export default function ResumeSelectionModal({
                             ) : someVisibleSelected ? (
                               <MinusSquare className="w-4 h-4 text-blue-600" />
                             ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
+                              <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             )}
                           </button>
                         );
@@ -1132,7 +1132,7 @@ export default function ResumeSelectionModal({
                             ? 'border-amber-100 bg-amber-50 opacity-60 cursor-not-allowed'
                             : isSelected
                               ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
-                              : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] hover:shadow-sm cursor-pointer'
+                              : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] hover:shadow-sm cursor-pointer'
                         }`}
                       >
                         {/* Desktop layout */}
@@ -1154,42 +1154,42 @@ export default function ResumeSelectionModal({
                               {isSelected ? (
                                 <CheckSquare className="w-5 h-5 text-brand-blue" />
                               ) : (
-                                <Square className="w-5 h-5 text-gray-400" />
+                                <Square className="w-5 h-5 text-gray-400 dark:text-slate-500" />
                               )}
                             </button>
                           </div>
 
                           {/* Name */}
                           <div className="col-span-3">
-                            <div className="font-semibold text-gray-900">{resume.name}</div>
+                            <div className="font-semibold text-gray-900 dark:text-slate-50">{resume.name}</div>
                             {isArchived && (
                               <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5">
                                 Archived
                               </span>
                             )}
                             {!isArchived && resume.source && (
-                              <div className="text-xs text-gray-600 mt-0.5">{resume.source}</div>
+                              <div className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">{resume.source}</div>
                             )}
                           </div>
 
                           {/* Title */}
                           <div className="col-span-2">
                             <div className="flex items-start gap-1.5">
-                              <Briefcase className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-gray-700">{resume.title || 'N/A'}</span>
+                              <Briefcase className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-sm text-gray-700 dark:text-slate-300">{resume.title || 'N/A'}</span>
                             </div>
                           </div>
 
                           {/* Contact */}
                           <div className="col-span-2">
                             <div className="flex items-start gap-1.5 mb-1">
-                              <Mail className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-xs text-gray-700 truncate">{resume.email}</span>
+                              <Mail className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-xs text-gray-700 dark:text-slate-300 truncate">{resume.email}</span>
                             </div>
                             {resume.phone && (
                               <div className="flex items-start gap-1.5">
-                                <Phone className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
-                                <span className="text-xs text-gray-700">{resume.phone}</span>
+                                <Phone className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                                <span className="text-xs text-gray-700 dark:text-slate-300">{resume.phone}</span>
                               </div>
                             )}
                           </div>
@@ -1197,8 +1197,8 @@ export default function ResumeSelectionModal({
                           {/* Experience */}
                           <div className="col-span-2">
                             <div className="flex items-start gap-1.5">
-                              <Award className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-gray-700">{resume.experience || 'N/A'}</span>
+                              <Award className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-sm text-gray-700 dark:text-slate-300">{resume.experience || 'N/A'}</span>
                             </div>
                           </div>
 
@@ -1209,19 +1209,19 @@ export default function ResumeSelectionModal({
                                 {resume.skills.slice(0, 2).map((skill, idx) => (
                                   <span
                                     key={idx}
-                                    className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+                                    className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
                                   >
                                     {skill}
                                   </span>
                                 ))}
                                 {resume.skills.length > 2 && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                  <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded text-xs">
                                     +{resume.skills.length - 2}
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs text-gray-500">No skills listed</span>
+                              <span className="text-xs text-gray-500 dark:text-slate-500">No skills listed</span>
                             )}
                           </div>
                         </div>
@@ -1240,18 +1240,18 @@ export default function ResumeSelectionModal({
                                 handleToggleResume(resume.id);
                               }}
                               disabled={isArchived}
-                              className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50 flex-shrink-0 mt-0.5"
+                              className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded disabled:cursor-not-allowed disabled:opacity-50 flex-shrink-0 mt-0.5"
                             >
                               {isSelected ? (
                                 <CheckSquare className="w-5 h-5 text-brand-blue" />
                               ) : (
-                                <Square className="w-5 h-5 text-gray-400" />
+                                <Square className="w-5 h-5 text-gray-400 dark:text-slate-500" />
                               )}
                             </button>
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-gray-900 text-sm">{resume.name}</div>
+                              <div className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{resume.name}</div>
                               {isArchived && (
                                 <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-1">
                                   Archived
@@ -1259,18 +1259,18 @@ export default function ResumeSelectionModal({
                               )}
                               {!isArchived && resume.title && (
                                 <div className="flex items-center gap-1.5 mt-1">
-                                  <Briefcase className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                  <span className="text-xs text-gray-700">{resume.title}</span>
+                                  <Briefcase className="w-3 h-3 text-gray-500 dark:text-slate-500 flex-shrink-0" />
+                                  <span className="text-xs text-gray-700 dark:text-slate-300">{resume.title}</span>
                                 </div>
                               )}
                               <div className="flex items-center gap-1.5 mt-1">
-                                <Mail className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                <span className="text-xs text-gray-700 truncate">{resume.email}</span>
+                                <Mail className="w-3 h-3 text-gray-500 dark:text-slate-500 flex-shrink-0" />
+                                <span className="text-xs text-gray-700 dark:text-slate-300 truncate">{resume.email}</span>
                               </div>
                               {resume.experience && (
                                 <div className="flex items-center gap-1.5 mt-1">
-                                  <Award className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                  <span className="text-xs text-gray-700">{resume.experience}</span>
+                                  <Award className="w-3 h-3 text-gray-500 dark:text-slate-500 flex-shrink-0" />
+                                  <span className="text-xs text-gray-700 dark:text-slate-300">{resume.experience}</span>
                                 </div>
                               )}
                               {resume.skills && resume.skills.length > 0 && (
@@ -1278,13 +1278,13 @@ export default function ResumeSelectionModal({
                                   {resume.skills.slice(0, 3).map((skill, idx) => (
                                     <span
                                       key={idx}
-                                      className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+                                      className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
                                     >
                                       {skill}
                                     </span>
                                   ))}
                                   {resume.skills.length > 3 && (
-                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                    <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded text-xs">
                                       +{resume.skills.length - 3}
                                     </span>
                                   )}
@@ -1299,9 +1299,9 @@ export default function ResumeSelectionModal({
                 </div>
               ) : (
                 <div className="text-center py-8 sm:py-12">
-                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300" />
-                  <h3 className="text-gray-900 font-semibold mb-2">No Resumes Found</h3>
-                  <p className="text-xs sm:text-sm text-gray-600">
+                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
+                  <h3 className="text-gray-900 dark:text-slate-50 font-semibold mb-2">No Resumes Found</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                     {searchTerm
                       ? 'Try adjusting your search terms'
                       : activeTab === 'my-resumes'
@@ -1317,7 +1317,7 @@ export default function ResumeSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-brand-blue/[0.03]">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-brand-blue/[0.03] shrink-0">
           {/* Quota Warning */}
           {availableUnits !== null && availableUnits !== undefined && selectedResumes.length > 0 && selectedResumes.length > availableUnits && (
             <div className="mb-3 p-3 bg-brand-orange/5 ring-1 ring-brand-orange/20 rounded-lg flex items-start gap-2">

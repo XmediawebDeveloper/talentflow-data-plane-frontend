@@ -220,7 +220,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         <div key={folder.id}>
           <button
             onClick={() => setSelectedFolder(folder.id)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm ${isSelected ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 hover:bg-slate-100'}`}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm ${isSelected ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-slate-100'}`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
             {hasChildren ? (
@@ -230,7 +230,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             ) : <div className="w-5" />}
             {isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
             <span className="flex-1 text-left truncate">{folder.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-gray-600">{count}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{count}</span>
           </button>
           {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
         </div>
@@ -473,13 +473,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <div className="w-16 h-16 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-10 h-10 text-brand-blue" />
           </div>
-          <h3 className="text-gray-900 tracking-tight mb-2">Assessment Shared Successfully!</h3>
-          <p className="text-gray-600 text-sm">
+          <h3 className="text-gray-900 dark:text-slate-50 tracking-tight mb-2">Assessment Shared Successfully!</h3>
+          <p className="text-gray-600 dark:text-slate-400 text-sm">
             Email invitations have been sent to {sentCount} candidate{sentCount > 1 ? 's' : ''}
           </p>
         </div>
@@ -490,21 +490,21 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Duplicate invitation error popup
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full p-6 sm:p-8 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full p-6 sm:p-8 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-brand-orange-deep" />
             </div>
-            <h3 className="text-gray-900 text-lg font-medium tracking-tight mb-2">Invitation Already Sent</h3>
-            <p className="text-gray-600 text-sm">
-              An invitation has already been sent to <span className="font-medium text-gray-800">{duplicateEmail}</span> for this assessment.
+            <h3 className="text-gray-900 dark:text-slate-50 text-lg font-medium tracking-tight mb-2">Invitation Already Sent</h3>
+            <p className="text-gray-600 dark:text-slate-400 text-sm">
+              An invitation has already been sent to <span className="font-medium text-gray-800 dark:text-slate-100">{duplicateEmail}</span> for this assessment.
             </p>
           </div>
 
-          <div className="bg-slate-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-700 mb-2">You can:</p>
-            <ul className="text-sm text-gray-600 space-y-1">
+          <div className="bg-slate-50 dark:bg-slate-950 rounded-lg p-4 mb-6">
+            <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
+            <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1">
               <li>• Try a <span className="font-medium">different email address</span></li>
               <li>• Send invitation for a <span className="font-medium">different assessment</span></li>
               <li>• Check the candidate&apos;s existing invitation status</li>
@@ -527,7 +527,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 setDuplicateEmail('');
                 onClose();
               }}
-              className="flex-1 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
             >
               Close
             </button>
@@ -538,25 +538,25 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-gray-900 tracking-tight">Share Assessment via Email</h2>
+              <h2 className="text-gray-900 dark:text-slate-50 tracking-tight">Share Assessment via Email</h2>
               <div className="flex items-center gap-2">
-                <p className="text-gray-600 text-sm">{assessmentTitleForEmail}</p>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">{assessmentTitleForEmail}</p>
                 <VersionBadge version={assessment.jd_version} size="sm" variant="success" />
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors"
+            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors"
            aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -565,7 +565,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-6">
           {/* Assessment Info Banner */}
-          <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
             <div className="flex items-start gap-2.5 sm:gap-4">
               <div className="w-9 h-9 sm:w-12 sm:h-12 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
                 <FileText className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
@@ -577,7 +577,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       {assessment.short_id}
                     </span>
                   )}
-                  <span className="text-gray-900">{assessmentTitleForEmail}</span>
+                  <span className="text-gray-900 dark:text-slate-50">{assessmentTitleForEmail}</span>
                   <VersionBadge version={assessment.jd_version} size="sm" variant="secondary" />
                   {allAssessments.length > 1 && (
                     <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
@@ -585,7 +585,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-4 text-[10px] sm:text-sm text-gray-600">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-4 text-[10px] sm:text-sm text-gray-600 dark:text-slate-400">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                     {assessment.duration}
@@ -616,31 +616,31 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   })()}
                 </div>
                 {assessment.jd_short_id && (
-                  <div className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                  <div className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mt-1">
                     <span className="font-medium">Linked: </span>
-                    <span className="text-gray-800">{assessment.jd_short_id}</span>
+                    <span className="text-gray-800 dark:text-slate-100">{assessment.jd_short_id}</span>
                     {assessment.jd_title && (
                       <span className="ml-1 truncate">- {assessment.jd_title}</span>
                     )}
                     {assessment.jd_version && (
-                      <span className="ml-1 text-gray-500">v{assessment.jd_version}</span>
+                      <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
                     )}
                   </div>
                 )}
                 {allAssessments.length > 1 && (
-                  <div className="mt-2 pt-2 border-t border-gray-200">
-                    <p className="text-[10px] sm:text-xs text-gray-600 font-medium mb-1">
+                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+                    <p className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 font-medium mb-1">
                       Invitations for {allAssessments.length} assessments:
                     </p>
                     <div className="space-y-1">
                       {allAssessments.map((a, idx) => (
-                        <div key={idx} className="text-[10px] sm:text-xs px-2 py-1 bg-white border border-gray-100 ring-1 ring-black/[0.02] text-gray-700 rounded">
+                        <div key={idx} className="text-[10px] sm:text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] text-gray-700 dark:text-slate-300 rounded">
                           <div className="flex items-center gap-1 flex-wrap">
                             {a.short_id && <span className="font-semibold">{a.short_id}</span>}
                             <span className="truncate">{stripVersionFromTitle(a.title)}</span>
                           </div>
                           {a.jd_short_id && (
-                            <div className="text-gray-500 mt-0.5">
+                            <div className="text-gray-500 dark:text-slate-500 mt-0.5">
                               Linked: {a.jd_short_id}
                               {a.jd_title && ` - ${a.jd_title}`}
                               {a.jd_version && ` v${a.jd_version}`}
@@ -663,7 +663,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
             if (quotaStatsLoading) {
               return (
-                <div className="mb-4 px-4 py-3 bg-slate-50 border border-gray-100 rounded-lg flex items-center gap-2 text-sm text-gray-500">
+                <div className="mb-4 px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 rounded-lg flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
                   <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
                   Checking assessment quota...
                 </div>
@@ -761,14 +761,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           <div className="mb-4 sm:mb-6">
             {/* Mode Switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
-              <label className="text-xs sm:text-base text-gray-900 font-medium">Select Candidates</label>
+              <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
               <div className="flex gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors ${
                     inputMode === 'manual'
                       ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
+                      : 'bg-slate-100 text-gray-700 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
                   <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -780,7 +780,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors ${
                     inputMode === 'database'
                       ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
+                      : 'bg-slate-100 text-gray-700 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
                   <Database className="w-4 h-4" />
@@ -793,7 +793,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {inputMode === 'manual' && (
               <>
                 <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <p className="text-xs sm:text-sm text-gray-600">Enter candidate details</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Enter candidate details</p>
                   <button
                     onClick={addCandidate}
                     className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
@@ -807,8 +807,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   {candidates.map((candidate, index) => (
                     <div key={candidate.id} className={`flex items-start sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-4 border rounded-lg ${
                       candidate.source === 'database'
-                        ? 'bg-slate-50 border-gray-200'
-                        : 'bg-slate-50 border-gray-100'
+                        ? 'bg-slate-50 dark:bg-slate-950 border-gray-200 dark:border-slate-700'
+                        : 'bg-slate-50 dark:bg-slate-950 border-gray-100 dark:border-slate-700/60'
                     }`}>
                       {candidate.source === 'database' && (
                         <div className="flex-shrink-0">
@@ -819,20 +819,20 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       )}
                       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                         <div>
-                          <label className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1 block">Full Name</label>
+                          <label className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Full Name</label>
                           <input
                             type="text"
                             value={candidate.name}
                             onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                             placeholder="e.g., John Doe"
                             readOnly={candidate.source === 'database'}
-                            className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-400 ${
-                              candidate.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''
+                            className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-400 ${
+                              candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
                             }`}
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1 block">Email Address</label>
+                          <label className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Email Address</label>
                           <input
                             type="email"
                             value={candidate.email}
@@ -841,10 +841,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             readOnly={candidate.source === 'database'}
                             className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 text-black placeholder-gray-400 ${
                               candidate.source === 'database'
-                                ? 'bg-gray-100 cursor-not-allowed border-gray-200'
+                                ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                 : candidate.email.trim() && !isValidEmail(candidate.email)
                                   ? 'border-red-500 focus:ring-red-500'
-                                  : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                                  : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-brand-blue'
                             }`}
                           />
                           {candidate.email.trim() && !isValidEmail(candidate.email) && (
@@ -868,21 +868,21 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
             {/* Database Selection Mode */}
             {inputMode === 'database' && (
-              <div className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg overflow-hidden">
+              <div className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-100 bg-slate-50">
+                <div className="flex border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
                   {hasMyResumesAccess && (
                     <button
                       onClick={() => setDbTab('my-resumes')}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                         dbTab === 'my-resumes'
-                          ? 'border-brand-blue text-brand-blue bg-white'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                          ? 'border-brand-blue text-brand-blue bg-white dark:bg-slate-900'
+                          : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700'
                       }`}
                     >
                       <FolderOpen className="w-4 h-4" />
                       My Resumes
-                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-slate-200 text-gray-700">{myResumesData.length}</span>
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-slate-200 text-gray-700 dark:text-slate-300">{myResumesData.length}</span>
                     </button>
                   )}
                   {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
@@ -890,13 +890,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       onClick={() => setDbTab('internal-db')}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                         dbTab === 'internal-db'
-                          ? 'border-brand-blue text-brand-blue bg-white'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                          ? 'border-brand-blue text-brand-blue bg-white dark:bg-slate-900'
+                          : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700'
                       }`}
                     >
                       <Database className="w-4 h-4" />
                       Internal Database
-                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-slate-200 text-gray-700">{internalDbData.length}</span>
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-slate-200 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
                     </button>
                   )}
                 </div>
@@ -905,15 +905,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 <div className="flex" style={{ minHeight: '320px', maxHeight: '400px' }}>
                   {/* Folder Sidebar (My Resumes only) */}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
-                    <div className="w-48 border-r border-gray-100 bg-slate-50 overflow-y-auto flex-shrink-0 p-3">
-                      <p className="text-xs font-medium text-gray-500 uppercase mb-2 px-1">Folders</p>
+                    <div className="w-48 border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0 p-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-2 px-1">Folders</p>
                       <button
                         onClick={() => setSelectedFolder('all')}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 hover:bg-slate-100'}`}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-slate-100'}`}
                       >
                         <FolderOpen className="w-4 h-4" />
                         <span className="flex-1 text-left">All Resumes</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-gray-600">{myResumesData.length}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{myResumesData.length}</span>
                       </button>
                       <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
                     </div>
@@ -922,13 +922,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   {/* Resume List */}
                   <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Search + Select All */}
-                    <div className="flex items-center gap-2 p-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                       <button
                         onClick={() => {
@@ -938,11 +938,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             setSelectedResumes(filteredResumes.map(r => r.id));
                           }
                         }}
-                        className="px-3 py-2 text-sm border border-gray-200 bg-white rounded-lg hover:bg-slate-100 whitespace-nowrap text-gray-700"
+                        className="px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg hover:bg-slate-100 whitespace-nowrap text-gray-700 dark:text-slate-300"
                       >
                         {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? 'Deselect All' : 'Select All'}
                       </button>
-                      <span className="text-sm text-gray-500 whitespace-nowrap">{selectedResumes.length} selected</span>
+                      <span className="text-sm text-gray-500 dark:text-slate-500 whitespace-nowrap">{selectedResumes.length} selected</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -951,7 +951,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                           <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                         </div>
                       ) : filteredResumes.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-slate-500">
                           <Database className="w-8 h-8 mb-2" />
                           <p className="text-sm">{searchQuery ? 'No resumes match your search' : 'No resumes found'}</p>
                         </div>
@@ -960,29 +960,29 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                           key={resume.id}
                           onClick={() => toggleResumeSelection(resume.id)}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue ring-1 ring-brand-blue/20' : 'bg-white border-gray-100 ring-1 ring-black/[0.02] hover:border-brand-blue/30'
+                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue ring-1 ring-brand-blue/20' : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:border-brand-blue/30'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue border-brand-blue' : 'border-gray-300'
+                            selectedResumes.includes(resume.id) ? 'bg-brand-blue border-brand-blue' : 'border-gray-300 dark:border-slate-700'
                           }`}>
                             {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-medium text-gray-900 truncate">{resume.name}</span>
-                              <span className="text-xs text-gray-400 flex-shrink-0">{resume.experience}</span>
+                              <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.name}</span>
+                              <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">{resume.experience}</span>
                             </div>
-                            <div className="text-xs text-gray-500 truncate">{resume.email}</div>
-                            <div className="text-xs text-gray-400 truncate">{resume.position}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{resume.email}</div>
+                            <div className="text-xs text-gray-400 dark:text-slate-500 truncate">{resume.position}</div>
                           </div>
                         </div>
                       ))}
                     </div>
 
                     {/* Action footer */}
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 bg-slate-50">
-                      <span className="text-xs text-gray-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
+                      <span className="text-xs text-gray-500 dark:text-slate-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
                       <button
                         onClick={handleAddFromDatabase}
                         disabled={selectedResumes.length === 0}
@@ -1001,17 +1001,17 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           {/* Custom Message */}
           <div className="mb-4 sm:mb-6">
             <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-              <label className="text-xs sm:text-base text-gray-900 font-medium">Email Message</label>
-              <span className="text-[10px] sm:text-xs text-emerald-600 font-medium">✓ Live preview</span>
+              <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
+              <span className="text-[10px] sm:text-xs text-brand-blue font-medium">✓ Live preview</span>
             </div>
             <textarea
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
               rows={6}
-              className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono text-black placeholder-gray-400"
+              className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono text-black placeholder-gray-400"
               placeholder="Edit the message content here..."
             />
-            <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
+            <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
               Use <code className="bg-slate-100 px-1 rounded">[Candidate Name]</code> as a placeholder.
             </p>
           </div>
@@ -1019,11 +1019,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           {/* Settings */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div>
-              <label className="text-xs sm:text-base text-gray-900 mb-1.5 sm:mb-2 block font-medium">Link Expiry</label>
+              <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 mb-1.5 sm:mb-2 block font-medium">Link Expiry</label>
               <select
                 value={expiryDays}
                 onChange={(e) => setExpiryDays(Number(e.target.value))}
-                className="w-full px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+                className="w-full px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
               >
                 <option value={1}>1 day</option>
                 <option value={3}>3 days</option>
@@ -1039,75 +1039,75 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   type="checkbox"
                   checked={sendCopy}
                   onChange={(e) => setSendCopy(e.target.checked)}
-                  className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                  className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40"
                 />
-                <span className="text-xs sm:text-sm text-gray-700">Send me a copy</span>
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Send me a copy</span>
               </label>
             </div>
           </div>
 
           {/* Email Preview - Exact match of actual email */}
-          <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-emerald-300 rounded-lg p-3 sm:p-6">
+          <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-brand-blue/30 rounded-lg p-3 sm:p-6">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
-                <h3 className="text-xs sm:text-base text-gray-900 font-semibold">Email Preview</h3>
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                <h3 className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-semibold">Email Preview</h3>
               </div>
-              <span className="text-[10px] sm:text-xs text-emerald-700 bg-emerald-50 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">
+              <span className="text-[10px] sm:text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">
                 Exact format
               </span>
             </div>
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-3 sm:mb-4 bg-white rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-emerald-200">
+            <p className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-3 sm:mb-4 bg-white dark:bg-slate-900 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-brand-blue/20">
               This is how the email will appear to candidates.
             </p>
 
             {/* Actual Email Template Preview */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              {/* Green Header */}
-              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 sm:px-8 py-4 sm:py-8 text-center">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-md overflow-hidden">
+              {/* Brand Header */}
+              <div className="bg-gradient-to-r from-brand-blue to-brand-cyan px-4 sm:px-8 py-4 sm:py-8 text-center">
                 <h1 className="text-white text-base sm:text-2xl font-bold mb-1 sm:mb-2">Assessment Invitation</h1>
-                <p className="text-emerald-100 text-[10px] sm:text-sm">TalentFlow</p>
+                <p className="text-white/80 text-[10px] sm:text-sm">TalentFlow</p>
               </div>
 
               {/* Email Body */}
               <div className="p-4 sm:p-8">
                 {/* Greeting and Message */}
-                <div className="mb-4 sm:mb-6 text-gray-700 text-xs sm:text-base leading-relaxed whitespace-pre-line">
+                <div className="mb-4 sm:mb-6 text-gray-700 dark:text-slate-300 text-xs sm:text-base leading-relaxed whitespace-pre-line">
                   {customMessage.replace('[Candidate Name]', candidates[0].name || '[Candidate Name]')}
                 </div>
 
                 {/* Assessment Title Box */}
-                <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 border-2 border-emerald-500 rounded-xl p-3 sm:p-5 text-center mb-4 sm:mb-6">
-                  <div className="text-sm sm:text-xl font-bold text-emerald-900">
+                <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/10 border-2 border-brand-blue/40 rounded-xl p-3 sm:p-5 text-center mb-4 sm:mb-6">
+                  <div className="text-sm sm:text-xl font-bold text-brand-blue">
                     {assessmentTitleForEmail}
                   </div>
                 </div>
 
                 {/* CTA Button */}
                 <div className="text-center mb-4 sm:mb-6">
-                  <div className="inline-block bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 sm:px-8 py-2 sm:py-3 rounded-lg text-xs sm:text-base font-semibold">
+                  <div className="inline-block bg-gradient-to-r from-brand-blue to-brand-cyan text-white px-5 sm:px-8 py-2 sm:py-3 rounded-lg text-xs sm:text-base font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                     Start Assessment
                   </div>
                 </div>
 
                 {/* Expiry Info */}
-                <p className="text-center text-gray-600 text-[10px] sm:text-sm mb-4 sm:mb-6">
+                <p className="text-center text-gray-600 dark:text-slate-400 text-[10px] sm:text-sm mb-4 sm:mb-6">
                   Expires: <strong>{expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'No expiry'}</strong>
                 </p>
               </div>
 
               {/* Footer */}
-              <div className="bg-gray-50 px-4 sm:px-8 py-3 sm:py-6 text-center border-t border-gray-200">
-                <p className="text-gray-500 text-[10px] sm:text-xs mb-1 sm:mb-2">© 2026 TalentFlow. All rights reserved.</p>
-                <p className="text-gray-400 text-[10px] sm:text-xs">If you did not expect this email, please ignore it.</p>
+              <div className="bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-8 py-3 sm:py-6 text-center border-t border-gray-200 dark:border-slate-700">
+                <p className="text-gray-500 dark:text-slate-500 text-[10px] sm:text-xs mb-1 sm:mb-2">© 2026 TalentFlow. All rights reserved.</p>
+                <p className="text-gray-400 dark:text-slate-500 text-[10px] sm:text-xs">If you did not expect this email, please ignore it.</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
+          <div className="text-sm text-gray-600 dark:text-slate-400">
             {(() => {
               const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
               const needed = validCount * allAssessments.length;
@@ -1127,7 +1127,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={onClose}
-              className="px-3 sm:px-5 py-1.5 sm:py-2 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-slate-100 transition-colors text-xs sm:text-sm"
+              className="px-3 sm:px-5 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs sm:text-sm"
             >
               Cancel
             </button>

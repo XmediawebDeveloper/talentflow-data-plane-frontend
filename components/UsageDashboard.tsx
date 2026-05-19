@@ -3,7 +3,9 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Sparkles, ShoppingCart, RefreshCw, ChevronRight, BarChart3, Package, CreditCard, Info } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import QuotaDisplay from './QuotaDisplay';
+// QuotaDisplay was an earlier inline widget that has since been folded into the
+// Quota Overview cards rendered below. The import is intentionally not
+// reinstated because the component is no longer in the tree.
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
@@ -369,8 +371,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         if (q.status === 'NOT_PROVISIONED' && !isExpiredPlan) continue;
         if (q.status === 'NOT_PROVISIONED' && isExpiredPlan && (q.subscription?.used || 0) === 0) continue;
 
-        const sub = q.subscription || {};
-        const addon = q.addon || {};
+        const sub: { limit?: number | string; used?: number } = q.subscription || {};
+        const addon: {
+          total_purchased?: number;
+          total_consumed?: number;
+          status?: string;
+          expires_on?: string | null;
+          days_until_expiry?: number;
+        } = q.addon || {};
 
         // For expired plans: use original plan credits as the limit if the API returns 0/null
         const creditLimit = isExpiredPlan ? (expiredPlanCredits?.[quotaType] ?? null) : null;
@@ -571,16 +579,16 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="mx-auto mb-6 flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal shadow-lg shadow-brand-blue/25 ring-4 ring-brand-blue/10">
             <BarChart3 className="h-10 w-10 text-white" />
           </div>
           <div className="mb-2 flex items-center justify-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-brand-blue" />
-            <span className="text-lg font-semibold text-gray-900">Loading Usage Data</span>
+            <span className="text-lg font-semibold text-gray-900 dark:text-slate-50">Loading Usage Data</span>
           </div>
-          <p className="text-sm text-gray-500">Fetching your quota information...</p>
+          <p className="text-sm text-gray-500 dark:text-slate-500">Fetching your quota information...</p>
         </div>
       </div>
     );
@@ -760,71 +768,18 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   };
 
   return (
-    <div className="flex-1 bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] p-4 md:p-6 bg-white rounded-2xl my-4 md:my-5">
+    <div className="flex-1 bg-white dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />
 
-        {/* SaaS Hero Header */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Real-time tracking
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <BarChart3 className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Usage &amp; Quotas</h1>
-                  <p className="mt-1 max-w-2xl text-xs sm:text-sm text-white/80">
-                    Monitor consumption across Resume Storage, Scoring, Assessments &amp; AI Interviews. Top up addons or upgrade your plan when you're approaching limits.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => refetchQuota()}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
-                aria-label="Refresh data" title="Refresh data"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
-              {canUpgradePlan && (
-                <button
-                  onClick={handleUpgradeClick}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                >
-                  <TrendingUp className="h-4 w-4" />
-                  Upgrade Plan
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              )}
-              {onBack && (
-                <button
-                  onClick={onBack}
-                  className="inline-flex items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
-                >
-                  Back
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
+        <div className="space-y-6">
         {/* Subscription Summary Card */}
         {subscriptionSummary && (
-          <div className="mb-6 sm:mb-8 bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
             {/* Card Header with gradient */}
-            <div className="border-b border-gray-100 bg-gray-50 px-4 sm:px-6 py-3 sm:py-4">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
                 <CreditCard className="h-4 w-4 text-brand-blue" />
                 <span className="font-medium">Current Subscription</span>
               </div>
@@ -838,14 +793,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   </div>
                   <div>
                     <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
                         {subscriptionSummary.plan?.name || 'No Plan'}
                       </h2>
                       {subscriptionSummary.is_trial && (
                         (() => {
                           const remaining = calculateRemainingTime(subscriptionSummary.subscription?.current_period_end);
                           return (
-                            <span className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-200 rounded-full animate-pulse">
+                            <span className="px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-slate-300 bg-gray-200 dark:bg-slate-800 rounded-full animate-pulse">
                               TRIAL {!remaining.isExpired ? `• ${remaining.displayText}` : '• Expired'}
                             </span>
                           );
@@ -855,16 +810,16 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <div className="flex items-center gap-3 mb-3">
                       <span className={`px-3 py-1 text-xs font-bold rounded-full inline-flex items-center gap-1.5 ${
                         subscriptionSummary.status === 'active'
-                          ? 'text-gray-700 bg-gray-200'
+                          ? 'text-gray-700 dark:text-slate-300 bg-gray-200 dark:bg-slate-800'
                           : subscriptionSummary.status === 'trialing'
-                          ? 'text-gray-600 bg-gray-100'
-                          : 'text-gray-600 bg-gray-100'
+                          ? 'text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800'
+                          : 'text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800'
                       }`}>
                         <span className={`w-2 h-2 rounded-full ${subscriptionSummary.status === 'active' ? 'bg-gray-600' : 'bg-gray-400'}`}></span>
                         {subscriptionSummary.status?.toUpperCase() || 'UNKNOWN'}
                       </span>
                       {subscriptionSummary.isolation_type && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-full">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-full">
                           <Package className="w-3 h-3" />
                           {subscriptionSummary.isolation_type === 'DEDICATED' ? 'Dedicated Server' :
                            subscriptionSummary.isolation_type === 'DATABASE' ? 'Dedicated Database' :
@@ -874,12 +829,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       )}
                     </div>
                     {subscriptionSummary.plan?.description && (
-                      <p className="text-sm text-gray-500">{subscriptionSummary.plan.description}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-500">{subscriptionSummary.plan.description}</p>
                     )}
                   </div>
                 </div>
 
-                <div className="text-left sm:text-right bg-gray-50 rounded-xl p-3 sm:p-4 sm:min-w-[200px] w-full sm:w-auto">
+                <div className="text-left sm:text-right bg-gray-50 dark:bg-slate-800/50 rounded-xl p-3 sm:p-4 sm:min-w-[200px] w-full sm:w-auto">
                   {subscriptionSummary.is_trial ? (
                     /* Free Trial - show expiry with proper time calculation */
                     (() => {
@@ -887,15 +842,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       return (
                         <>
                           {!remaining.isExpired ? (
-                            <div className="text-2xl font-bold text-gray-800">
+                            <div className="text-2xl font-bold text-gray-800 dark:text-slate-100">
                               {remaining.displayText}
                             </div>
                           ) : (
-                            <div className="text-xl font-bold text-gray-700">
+                            <div className="text-xl font-bold text-gray-700 dark:text-slate-300">
                               Trial Expired
                             </div>
                           )}
-                          <p className="text-xs text-gray-500 mt-2">
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">
                             Upgrade to continue using all features
                           </p>
                         </>
@@ -907,14 +862,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       const remaining = calculateRemainingTime(subscriptionSummary.subscription?.current_period_end);
                       return (
                         <>
-                          <div className="text-3xl font-bold text-gray-900">
+                          <div className="text-3xl font-bold text-gray-900 dark:text-slate-50">
                             ₹{(subscriptionSummary.subscription.price ?? subscriptionSummary.plan?.price ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            <span className="text-sm font-normal text-gray-500">
+                            <span className="text-sm font-normal text-gray-500 dark:text-slate-500">
                               /{subscriptionSummary.subscription.billing_interval === 'monthly' ? 'month' : subscriptionSummary.subscription.billing_interval === 'yearly' ? 'year' : (subscriptionSummary.subscription.billing_interval || 'mo')}
                             </span>
                           </div>
                           {!remaining.isExpired && (
-                            <p className="text-xs text-gray-500 mt-2 flex items-center sm:justify-end gap-1">
+                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-2 flex items-center sm:justify-end gap-1">
                               <Calendar className="w-3 h-3" />
                               Renews in {remaining.displayText}
                             </p>
@@ -934,13 +889,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
               {/* Plan Features */}
               {subscriptionSummary.plan?.features && Object.keys(subscriptionSummary.plan.features).length > 0 && (
-                <div className="mt-6 pt-6 border-t border-gray-100">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Plan Features</h4>
+                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-slate-700/60">
+                  <h4 className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-3">Plan Features</h4>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(subscriptionSummary.plan.features).map(([key, value]) => (
                       <span
                         key={key}
-                        className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                       >
                         {key.replace(/_/g, ' ')}: {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
                       </span>
@@ -954,36 +909,39 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
         {/* Quota Summary Cards */}
         {quotaSummary && (
-          <div className="mb-8">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
             {/* Section Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+            <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-4 h-4 text-brand-blue" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Quota Overview</h2>
+                    <p className="text-xs text-gray-500 dark:text-slate-500">Monitor your resource consumption</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Quota Overview</h2>
-                  <p className="text-xs sm:text-sm text-gray-500">Monitor your resource consumption</p>
-                </div>
+                {quotaSummary.billing_period && (
+                  <div className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-slate-500 bg-white dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700 px-2.5 py-1 rounded-full self-start sm:self-auto">
+                    <Calendar className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{formatISTDate(quotaSummary.billing_period.start)} – {formatISTDate(quotaSummary.billing_period.end)}</span>
+                  </div>
+                )}
               </div>
-              {quotaSummary.billing_period && (
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 bg-gray-50 px-3 sm:px-4 py-2 rounded-lg border border-gray-200 self-start sm:self-auto">
-                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{formatISTDate(quotaSummary.billing_period.start)} - {formatISTDate(quotaSummary.billing_period.end)}</span>
-                </div>
-              )}
             </div>
 
+            <div className="p-4 sm:p-6">
             {/* Low Quota Warning — hide for expired/inactive plans */}
             {quotaSummary.has_low_quotas && !['expired', 'inactive', 'suspended'].includes(subscriptionSummary?.status?.toLowerCase() || '') && (
-              <div className="mb-4 rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.06] p-3 ring-1 ring-brand-orange/10 sm:mb-6 sm:p-5">
-                <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange-deep ring-1 ring-brand-orange/15 sm:h-12 sm:w-12">
-                    <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6" />
+              <div className="mb-3 rounded-xl border border-brand-orange/20 bg-brand-orange/[0.06] p-3 ring-1 ring-brand-orange/10">
+                <div className="flex items-start gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 text-brand-orange-deep ring-1 ring-brand-orange/15">
+                    <AlertTriangle className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-brand-orange-deep sm:text-lg">Quota Running Low!</h3>
-                    <p className="mt-1 text-sm text-gray-600">Some quotas are below 20%. Purchase add-on units to continue using these features without interruption.</p>
+                    <h3 className="text-sm font-semibold text-brand-orange-deep">Quota Running Low</h3>
+                    <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400">Some quotas are below 20%. Purchase add-on units to continue without interruption.</p>
                     {/* Show each low quota with its own Add Credits button */}
                     <div className="flex flex-wrap gap-2 mt-4">
                       {quotaSummary.quotas
@@ -1036,27 +994,27 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               }}
                               disabled={!canPurchaseAddons}
                               title={!canPurchaseAddons ? 'You do not have permission to purchase add-ons' : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
-                              className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
+                              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 ring-1 ${
                                 !canPurchaseAddons
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
                                   : isAddonPurchaseBlocked
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
                                   : quota.is_exceeded_critical
-                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                    ? 'bg-red-600 text-white ring-red-700 hover:bg-red-700'
                                     : quota.is_exceeded
-                                      ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                      ? 'bg-brand-orange text-white ring-brand-orange-deep hover:bg-brand-orange-deep'
                                       : quota.is_exhausted
-                                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                                      : 'bg-gray-700 text-white hover:bg-gray-600'
+                                      ? 'bg-brand-blue text-white ring-white/10 shadow-sm shadow-brand-blue/25'
+                                      : 'bg-white text-gray-700 ring-gray-300 hover:bg-brand-blue/5 hover:text-brand-blue hover:ring-brand-blue/30'
                               }`}
                             >
-                              <Plus className="w-4 h-4" />
+                              <Plus className="w-3 h-3" />
                               {canPurchaseAddons ? `Add ${quota.name}` : `${quota.name} Read Only`}
                               {quota.is_exceeded && canPurchaseAddons && !isAddonPurchaseBlocked && (
-                                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
+                                <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
                               )}
                               {quota.is_exhausted && canPurchaseAddons && !isAddonPurchaseBlocked && (
-                                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Exhausted</span>
+                                <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">Exhausted</span>
                               )}
                             </button>
                           );
@@ -1068,7 +1026,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             )}
 
             {/* Quota Cards Grid - Dynamic */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-3">
               {quotaSummary.quotas?.filter((quota: QuotaInfo) => {
                 if (quota.quota_type === 'storage_gb') return false;
                 // Gate quota cards by plan feature — but always show for expired/inactive plans (historical usage view)
@@ -1085,159 +1043,112 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
                 // Icon mapping for quota types
                 const quotaIcons: Record<string, React.ReactNode> = {
-                  'RU': <Package className="w-5 h-5" />,
-                  'RS': <BarChart3 className="w-5 h-5" />,
-                  'AS': <CheckCircle2 className="w-5 h-5" />,
-                  'AIU': <Sparkles className="w-5 h-5" />,
-                  'max_seats': <Zap className="w-5 h-5" />,
+                  'RU': <Package className="w-4 h-4" />,
+                  'RS': <BarChart3 className="w-4 h-4" />,
+                  'AS': <CheckCircle2 className="w-4 h-4" />,
+                  'AIU': <Sparkles className="w-4 h-4" />,
+                  'max_seats': <Zap className="w-4 h-4" />,
                 };
+
+                // Status pill — exactly one wins per card
+                const statusPill = isUnlimited
+                  ? { label: '∞ Unlimited', cls: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700' }
+                  : quota.is_exceeded_critical
+                  ? { label: 'Exceeded', cls: 'bg-red-50 text-red-600 ring-red-200' }
+                  : quota.is_exceeded
+                  ? { label: 'Exceeded', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' }
+                  : quota.is_exhausted
+                  ? { label: 'Exhausted', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' }
+                  : quota.is_low
+                  ? { label: 'Low', cls: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700' }
+                  : null;
 
                 return (
                   <div
                     key={quota.quota_type}
-                    className={`bg-white border-2 rounded-2xl p-5 transition-all hover:shadow-lg hover:-translate-y-1 group ${
+                    className={`flex flex-col rounded-xl border bg-white dark:bg-slate-900 p-3 shadow-sm transition-all hover:shadow-md ${
                       quota.is_exceeded_critical
-                        ? 'border-red-300 shadow-md bg-red-50/30'
-                        : quota.is_exceeded
-                          ? 'border-amber-300 shadow-md bg-amber-50/20'
-                          : quota.is_exhausted
-                            ? 'border-gray-400 shadow-md'
-                            : quota.is_low
-                              ? 'border-gray-300 shadow-sm'
-                              : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-red-200 hover:border-red-300'
+                        : quota.is_exceeded || quota.is_exhausted
+                          ? 'border-brand-orange/30 hover:border-brand-orange/40'
+                          : 'border-gray-200 dark:border-slate-700/60 hover:border-brand-blue/30'
                     }`}
                   >
-                    {/* Card Header */}
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2.5 mb-2">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
-                          quota.is_exceeded_critical
-                            ? 'bg-red-500 text-white'
-                            : quota.is_exceeded
-                              ? 'bg-amber-500 text-white'
-                              : quota.is_exhausted
-                                ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                                : quota.is_low
-                                  ? 'bg-gray-200 text-gray-700'
-                                  : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
-                        }`}>
-                          {quotaIcons[quota.quota_type] || <Zap className="w-5 h-5" />}
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700 truncate">{quota.name}</span>
+                    {/* Header: icon + name + status chip */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
+                        quota.is_exceeded_critical
+                          ? 'bg-red-50 text-red-600 ring-red-200'
+                          : quota.is_exceeded || quota.is_exhausted
+                            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                            : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15'
+                      }`}>
+                        {quotaIcons[quota.quota_type] || <Zap className="w-4 h-4" />}
                       </div>
-                      {isUnlimited && (
-                        <span className="inline-block text-[10px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
-                          ∞ UNLIMITED
-                        </span>
-                      )}
-                      {!isUnlimited && quota.is_exceeded_critical && (
-                        <span className="inline-block text-[10px] font-bold text-white bg-red-500 px-2 py-0.5 rounded-full animate-pulse">
-                          EXCEEDED
-                        </span>
-                      )}
-                      {!isUnlimited && quota.is_exceeded && !quota.is_exceeded_critical && (
-                        <span className="inline-block text-[10px] font-bold text-white bg-amber-500 px-2 py-0.5 rounded-full animate-pulse">
-                          EXCEEDED
-                        </span>
-                      )}
-                      {!isUnlimited && quota.is_exhausted && (
-                        <span className="inline-block text-[10px] font-bold text-white bg-brand-orange px-2 py-0.5 rounded-full animate-pulse">
-                          EXHAUSTED
-                        </span>
-                      )}
-                      {!isUnlimited && quota.is_low && (
-                        <span className="inline-block text-[10px] font-bold text-gray-700 bg-gray-200 px-2 py-0.5 rounded-full">
-                          LOW
+                      <span className="text-xs font-semibold text-gray-700 dark:text-slate-300 truncate flex-1 min-w-0" title={quota.name}>{quota.name}</span>
+                      {statusPill && (
+                        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ring-1 whitespace-nowrap ${statusPill.cls}`}>
+                          {statusPill.label}
                         </span>
                       )}
                     </div>
 
-                    {/* Usage Numbers */}
-                    <div className="mb-4">
-                      <div className="flex items-baseline gap-1">
-                        <span className={`text-2xl sm:text-4xl font-bold tracking-tight ${
-                          quota.is_exceeded_critical ? 'text-red-600' : quota.is_exceeded ? 'text-amber-600' : 'text-gray-900'
+                    {/* Usage numbers + % left chip */}
+                    <div className="flex items-baseline justify-between gap-2 mb-2">
+                      <div className="flex items-baseline gap-1 min-w-0">
+                        <span className={`text-lg sm:text-xl font-semibold tabular-nums tracking-tight ${
+                          quota.is_exceeded_critical ? 'text-red-600' : quota.is_exceeded ? 'text-brand-orange-deep' : 'text-gray-900 dark:text-slate-50'
                         }`}>
                           {isUnlimited ? '∞' : formatNum(quota.used)}
                         </span>
-                        <span className="text-sm sm:text-lg text-gray-400 font-medium">
+                        <span className="text-xs text-gray-400 dark:text-slate-500 font-medium tabular-nums">
                           / {isUnlimited ? '∞' : formatNum(quota.limit)}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">units used</p>
+                      {!isUnlimited && !quota.is_exceeded && (
+                        <span className="text-[10px] font-semibold text-gray-600 dark:text-slate-400 tabular-nums">
+                          {quota.limit <= 0 ? '0%' : `${Math.max(0, 100 - quota.percentage_used).toFixed(0)}%`} left
+                        </span>
+                      )}
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="mb-3 h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                    {/* Progress bar */}
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800 mb-2">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           isUnlimited
                             ? 'bg-brand-cyan'
                             : quota.is_exceeded_critical
-                              ? 'bg-gradient-to-r from-red-400 to-red-600'
-                              : quota.is_exceeded
-                                ? 'bg-gradient-to-r from-amber-400 to-amber-500'
-                                : quota.is_exhausted
+                              ? 'bg-red-500'
+                              : quota.is_exceeded || quota.is_exhausted
+                                ? 'bg-brand-orange'
+                                : quota.is_low
                                   ? 'bg-brand-orange'
-                                  : quota.is_low
-                                    ? 'bg-gradient-to-r from-amber-400 to-brand-orange'
-                                    : 'bg-brand-blue'
+                                  : 'bg-brand-blue'
                         }`}
                         style={{ width: isUnlimited ? '100%' : `${Math.min(quota.percentage_used, 100)}%` }}
                       />
                     </div>
 
-                    {/* Footer Stats */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className={`font-medium ${
-                        quota.is_exceeded_critical ? 'text-red-600'
-                          : quota.is_exceeded ? 'text-amber-600'
-                          : quota.is_exhausted ? 'text-gray-800'
-                          : 'text-gray-600'
-                      }`}>
-                        {isUnlimited
-                          ? 'Unlimited usage'
-                          : quota.is_exceeded
-                            ? `${formatNum(quota.remaining)} remaining`
-                            : `${formatNum(quota.remaining)} remaining`}
-                      </span>
-                      {!isUnlimited && !quota.is_exceeded && (
-                        <span className={`font-semibold px-2 py-0.5 rounded-full ${
-                          quota.is_exhausted
-                            ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                            : quota.is_low
-                              ? 'bg-gray-200 text-gray-700'
-                              : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {quota.limit <= 0
-                            ? '0% left'
-                            : `${Math.max(0, 100 - quota.percentage_used).toFixed(0)}% left`}
-                        </span>
-                      )}
-                    </div>
+                    {/* Remaining footer */}
+                    <p className={`text-[11px] font-medium mb-2 ${
+                      quota.is_exceeded_critical ? 'text-red-600' : quota.is_exceeded ? 'text-brand-orange-deep' : 'text-gray-500 dark:text-slate-500'
+                    }`}>
+                      {isUnlimited ? 'Unlimited usage' : `${formatNum(quota.remaining)} remaining`}
+                    </p>
 
-                    {/* Plan vs Addon Breakdown */}
+                    {/* Plan vs Add-on breakdown — single condensed row */}
                     {!isUnlimited && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-                        {/* Plan row */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1.5 text-gray-500">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${quota.is_exceeded ? 'bg-red-400' : 'bg-gray-400'}`} />
-                            Plan
-                          </span>
-                          <span className="font-semibold text-gray-700">{formatNum(quota.subscription_limit)}</span>
+                      <div className="mt-auto pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500 dark:text-slate-500">Plan</span>
+                          <span className="font-semibold text-gray-700 dark:text-slate-300 tabular-nums">{formatNum(quota.subscription_limit)}</span>
                         </div>
-                        {/* Add-on row */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1.5 text-gray-500">
-                            <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
-                            Add-on
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500 dark:text-slate-500">Add-on</span>
+                          <span className={`font-semibold tabular-nums ${quota.addon_purchased > 0 ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 dark:text-slate-500'}`}>
+                            {quota.addon_purchased > 0 ? formatNum(quota.addon_purchased) : '—'}
                           </span>
-                          {quota.addon_purchased > 0 ? (
-                            <span className="font-semibold text-gray-700">{formatNum(quota.addon_purchased)}</span>
-                          ) : (
-                            <span className="text-gray-400 italic">None purchased</span>
-                          )}
                         </div>
                       </div>
                     )}
@@ -1245,28 +1156,27 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 );
               })}
             </div>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Add-ons Section */}
-      {canPurchaseAddons && (
-      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
-        <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
+        {/* Add-ons Section */}
+        {canPurchaseAddons && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden" data-section="addons">
           {/* Section Header */}
-          <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6 sm:py-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/15 flex-shrink-0">
-                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center shadow-sm shadow-brand-blue/20 flex-shrink-0 ring-1 ring-white/10">
+                  <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Add-on Units</h2>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Purchase additional units to extend your quota limits</p>
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Add-on Units</h2>
+                  <p className="text-xs text-gray-500 dark:text-slate-500">Purchase additional units to extend your quota limits</p>
                 </div>
               </div>
-              <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full flex-shrink-0">
-                <Info className="w-3.5 h-3.5" />
+              <div className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-slate-500 bg-white dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700 px-2.5 py-1 rounded-full flex-shrink-0">
+                <Info className="w-3 h-3" />
                 <span>Valid until plan expiry</span>
               </div>
             </div>
@@ -1313,25 +1223,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           <div className="p-3 sm:p-4 md:p-6">
             {addonsLoading && (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
-                  <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
+                  <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin" />
                 </div>
-                <p className="text-gray-500 font-medium">Loading add-ons...</p>
+                <p className="text-gray-500 dark:text-slate-500 font-medium">Loading add-ons...</p>
               </div>
             )}
 
             {!addonsLoading && addons.length === 0 && (
               <div className="text-center py-12">
-                <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center">
                   <Sparkles className="w-10 h-10 text-gray-300" />
                 </div>
-                <p className="text-gray-500 font-medium">No add-ons available at the moment.</p>
-                <p className="text-sm text-gray-400 mt-1">Check back later for new offerings</p>
+                <p className="text-gray-500 dark:text-slate-500 font-medium">No add-ons available at the moment.</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">Check back later for new offerings</p>
               </div>
             )}
 
             {!addonsLoading && addons.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {/* Reorder addons: Extra Max Jobs before Extra Max Seats, filter by plan features */}
                 {[...addons]
                   .filter((addon) => {
@@ -1359,64 +1269,61 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   // Icon mapping for addon types
                   const getAddonIcon = (name: string) => {
                     const lowerName = name.toLowerCase();
-                    if (lowerName.includes('resume') && lowerName.includes('upload')) return <Package className="w-6 h-6" />;
-                    if (lowerName.includes('resume') && lowerName.includes('scor')) return <BarChart3 className="w-6 h-6" />;
-                    if (lowerName.includes('assessment')) return <CheckCircle2 className="w-6 h-6" />;
-                    if (lowerName.includes('ai') || lowerName.includes('interview')) return <Sparkles className="w-6 h-6" />;
-                    if (lowerName.includes('seat')) return <Zap className="w-6 h-6" />;
-                    return <Zap className="w-6 h-6" />;
+                    if (lowerName.includes('resume') && lowerName.includes('upload')) return <Package className="w-4 h-4" />;
+                    if (lowerName.includes('resume') && lowerName.includes('scor')) return <BarChart3 className="w-4 h-4" />;
+                    if (lowerName.includes('assessment')) return <CheckCircle2 className="w-4 h-4" />;
+                    if (lowerName.includes('ai') || lowerName.includes('interview')) return <Sparkles className="w-4 h-4" />;
+                    if (lowerName.includes('seat')) return <Zap className="w-4 h-4" />;
+                    return <Zap className="w-4 h-4" />;
                   };
 
                   return (
                     <div
                       key={addon.id}
-                      className="group rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-1 hover:border-brand-blue/20 hover:shadow-lg hover:shadow-brand-blue/10 sm:p-5"
+                      className="group flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm transition-all hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 sm:gap-4">
-                          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gray-100 rounded-xl flex items-center justify-center text-gray-600 group-hover:bg-gray-200 transition-colors flex-shrink-0">
-                            {getAddonIcon(displayName)}
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-gray-900 text-base sm:text-lg">
-                              {displayName}
-                            </h3>
-                            <div className="flex items-center gap-3 mt-2">
-                              <div className="flex items-center gap-1.5 bg-gray-100 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg">
-                                <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
-                                <span className="text-base sm:text-lg font-bold text-gray-900">{addon.credit_amount || addon.min_quantity || 0}</span>
-                                <span className="text-xs text-gray-500">units</span>
-                              </div>
-                            </div>
-                          </div>
+                      {/* Header: icon + name */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center text-brand-blue flex-shrink-0">
+                          {getAddonIcon(displayName)}
                         </div>
+                        <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm truncate flex-1 min-w-0" title={displayName}>
+                          {displayName}
+                        </h3>
+                      </div>
 
-                        <div className="text-left sm:text-right">
-                          <div className="text-xl sm:text-2xl font-bold text-gray-900">
+                      {/* Units + Price row */}
+                      <div className="flex items-baseline justify-between gap-2 mb-3">
+                        <div className="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400">
+                          <Zap className="w-3 h-3 text-brand-blue" />
+                          <span className="font-semibold text-gray-900 dark:text-slate-50 tabular-nums">{addon.credit_amount || addon.min_quantity || 0}</span>
+                          <span>units</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-base font-bold text-gray-900 dark:text-slate-50 tabular-nums">
                             ₹{(addon.price || addon.unit_price || 0).toLocaleString()}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">one-time purchase</p>
+                          </span>
+                          <span className="text-[10px] text-gray-400 dark:text-slate-500 ml-1">one-time</span>
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <button
-                          onClick={() => handleBuyAddon(addon)}
-                          disabled={isAddonPurchaseBlocked}
-                          title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
-                          className={`w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                            isAddonPurchaseBlocked
-                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                              : 'bg-brand-blue text-white shadow-lg shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand-blue/30'
-                          }`}
-                        >
-                          <ShoppingCart className="w-5 h-5" />
-                          {isAddonPurchaseBlocked
-                            ? (subscriptionSummary?.status?.toLowerCase() === 'expired' ? 'Renew Plan to Purchase' : 'Upgrade Plan to Purchase')
-                            : 'Purchase Now'}
-                          {!isAddonPurchaseBlocked && <ChevronRight className="w-4 h-4" />}
-                        </button>
-                      </div>
+                      {/* Purchase button */}
+                      <button
+                        onClick={() => handleBuyAddon(addon)}
+                        disabled={isAddonPurchaseBlocked}
+                        title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
+                        className={`mt-auto w-full px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                          isAddonPurchaseBlocked
+                            ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                            : 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
+                        }`}
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        {isAddonPurchaseBlocked
+                          ? (subscriptionSummary?.status?.toLowerCase() === 'expired' ? 'Renew Plan' : 'Upgrade Plan')
+                          : 'Purchase Now'}
+                        {!isAddonPurchaseBlocked && <ChevronRight className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
                   );
                 })}
@@ -1426,36 +1333,38 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
           {/* Footer Info */}
           {!addonsLoading && addons.length > 0 && (
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100">
-              <div className="flex items-center justify-center gap-4 sm:gap-6 text-xs text-gray-500">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-100 dark:border-slate-700/60">
+              <div className="flex items-center justify-center gap-4 sm:gap-6 text-xs text-gray-500 dark:text-slate-500">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-gray-400" />
+                  <CheckCircle2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                   Instant activation
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-gray-400" />
+                  <CheckCircle2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                   Secure payment
                 </span>
               </div>
             </div>
           )}
         </div>
+        )}
+        </div>
       </div>
-      )}
+      </div>
 
       {/* Record Usage Modal */}
       {showRecordModal && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                     <Plus className="w-5 h-5 text-green-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Record Usage</h2>
-                    <p className="text-sm text-gray-600">Track quota consumption</p>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Record Usage</h2>
+                    <p className="text-sm text-gray-600 dark:text-slate-400">Track quota consumption</p>
                   </div>
                 </div>
                 <button
@@ -1464,14 +1373,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setRecordError(null);
                     setRecordSuccess(null);
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                  aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
                 </button>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 flex-1 overflow-y-auto">
               {/* Success Message */}
               {recordSuccess && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
@@ -1490,13 +1399,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
               {/* Quota Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Quota Type *
                 </label>
                 <select
                   value={recordForm.quota_type}
                   onChange={(e) => setRecordForm({ ...recordForm, quota_type: e.target.value as RecordUsageRequest['quota_type'] })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                 >
                   <option value="RU">Resume Storage (RU)</option>
                   <option value="RS">Resume Scoring (RS)</option>
@@ -1508,7 +1417,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Amount (units)
                 </label>
                 <input
@@ -1516,13 +1425,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   min="1"
                   value={recordForm.amount || 1}
                   onChange={(e) => setRecordForm({ ...recordForm, amount: parseInt(e.target.value) || 1 })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                 />
               </div>
 
               {/* Operation Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Operation Type (optional)
                 </label>
                 <input
@@ -1530,13 +1439,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   value={recordForm.operation_type || ''}
                   onChange={(e) => setRecordForm({ ...recordForm, operation_type: e.target.value })}
                   placeholder="e.g., resume_upload, bulk_score"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                 />
               </div>
 
               {/* Resource ID */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Resource ID (optional)
                 </label>
                 <input
@@ -1544,20 +1453,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   value={recordForm.resource_id || ''}
                   onChange={(e) => setRecordForm({ ...recordForm, resource_id: e.target.value })}
                   placeholder="e.g., resume-abc123"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                 />
               </div>
 
               {/* API Info */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <p className="text-xs text-gray-900">
+              <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl p-4">
+                <p className="text-xs text-gray-900 dark:text-slate-50">
                   <strong>API:</strong> POST /api/v1/usage/record<br />
                   <strong>Auth:</strong> Bearer token (JWT)
                 </p>
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+            <div className="p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 rounded-b-2xl shrink-0">
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1565,7 +1474,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setRecordError(null);
                     setRecordSuccess(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1595,7 +1504,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       {/* Addon Purchase Modal */}
       {showAddonModal && selectedAddon && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
             {/* Modal Header */}
             <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal flex-shrink-0 overflow-hidden">
@@ -1664,23 +1573,23 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 )}
 
                 {/* Addon Details Card */}
-                <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] p-4 ring-1 ring-black/[0.02] sm:p-5">
+                <div className="relative overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-gray-200/40 rounded-full -translate-y-8 translate-x-8" />
                   <div className="relative flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-200 flex-shrink-0">
-                        <Zap className="w-6 h-6 sm:w-7 sm:h-7 text-gray-700" />
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center shadow-sm border border-gray-200 dark:border-slate-700 flex-shrink-0">
+                        <Zap className="w-6 h-6 sm:w-7 sm:h-7 text-gray-700 dark:text-slate-300" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight truncate">
+                        <h3 className="font-bold text-gray-900 dark:text-slate-50 text-base sm:text-lg leading-tight truncate">
                           {(selectedAddon.name || selectedAddon.addon_name || 'Credit Pack').replace(/\s*-?\s*Pro$/i, '').trim()}
                         </h3>
-                        <p className="text-xs text-gray-500 mt-0.5">{selectedAddon.credit_amount || 0} units per pack</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{selectedAddon.credit_amount || 0} units per pack</p>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-gray-500">Per pack</p>
-                      <p className="text-lg font-bold text-gray-900">₹{selectedAddon.price || selectedAddon.unit_price || 0}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500">Per pack</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-slate-50">₹{selectedAddon.price || selectedAddon.unit_price || 0}</p>
                     </div>
                   </div>
                 </div>
@@ -1688,14 +1597,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 {/* Quantity Selector */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-semibold text-gray-700">Select Quantity</label>
-                    <span className="text-xs text-gray-400">Max 100 packs</span>
+                    <label className="text-sm font-semibold text-gray-700 dark:text-slate-300">Select Quantity</label>
+                    <span className="text-xs text-gray-400 dark:text-slate-500">Max 100 packs</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-gray-100 rounded-2xl border border-gray-200 p-1 gap-1">
+                    <div className="flex items-center bg-gray-100 dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-1 gap-1">
                       <button
                         onClick={() => setAddonQuantity(Math.max(1, addonQuantity - 1))}
-                        className="w-10 h-10 sm:w-11 sm:h-11 bg-white rounded-xl flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all font-bold text-lg text-gray-700 shadow-sm border border-gray-200"
+                        className="w-10 h-10 sm:w-11 sm:h-11 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center hover:bg-gray-50 dark:hover:bg-slate-800 active:scale-95 transition-all font-bold text-lg text-gray-700 dark:text-slate-300 shadow-sm border border-gray-200 dark:border-slate-700"
                       >
                         −
                       </button>
@@ -1705,11 +1614,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         max={100}
                         value={addonQuantity}
                         onChange={(e) => setAddonQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-14 sm:w-16 text-center bg-transparent border-none outline-none font-bold text-xl sm:text-2xl text-gray-900"
+                        className="w-14 sm:w-16 text-center bg-transparent border-none outline-none font-bold text-xl sm:text-2xl text-gray-900 dark:text-slate-50"
                       />
                       <button
                         onClick={() => setAddonQuantity(Math.min(100, addonQuantity + 1))}
-                        className="w-10 h-10 sm:w-11 sm:h-11 bg-white rounded-xl flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all font-bold text-lg text-gray-700 shadow-sm border border-gray-200"
+                        className="w-10 h-10 sm:w-11 sm:h-11 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center hover:bg-gray-50 dark:hover:bg-slate-800 active:scale-95 transition-all font-bold text-lg text-gray-700 dark:text-slate-300 shadow-sm border border-gray-200 dark:border-slate-700"
                       >
                         +
                       </button>
@@ -1726,40 +1635,40 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 </div>
 
                 {/* Order Summary */}
-                <div className="border border-gray-200 rounded-2xl overflow-hidden">
-                  <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                    <h4 className="font-semibold text-gray-700 text-sm">Order Summary</h4>
-                    <span className="text-xs text-gray-400">{addonQuantity} pack{addonQuantity > 1 ? 's' : ''}</span>
+                <div className="border border-gray-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                  <div className="px-5 py-3 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-700 dark:text-slate-300 text-sm">Order Summary</h4>
+                    <span className="text-xs text-gray-400 dark:text-slate-500">{addonQuantity} pack{addonQuantity > 1 ? 's' : ''}</span>
                   </div>
                   <div className="p-4 sm:p-5 space-y-3">
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Pack size</span>
-                      <span className="font-medium text-gray-800">{selectedAddon.credit_amount || 0} units</span>
+                      <span className="text-gray-500 dark:text-slate-500">Pack size</span>
+                      <span className="font-medium text-gray-800 dark:text-slate-100">{selectedAddon.credit_amount || 0} units</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Quantity</span>
-                      <span className="font-medium text-gray-800">×{addonQuantity}</span>
+                      <span className="text-gray-500 dark:text-slate-500">Quantity</span>
+                      <span className="font-medium text-gray-800 dark:text-slate-100">×{addonQuantity}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Subtotal</span>
-                      <span className="font-medium text-gray-800">
+                      <span className="text-gray-500 dark:text-slate-500">Subtotal</span>
+                      <span className="font-medium text-gray-800 dark:text-slate-100">
                         ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">GST (18%)</span>
-                      <span className="font-medium text-gray-800">
+                      <span className="text-gray-500 dark:text-slate-500">GST (18%)</span>
+                      <span className="font-medium text-gray-800 dark:text-slate-100">
                         ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity * 0.18).toFixed(2)}
                       </span>
                     </div>
                     {/* Total row */}
-                    <div className="mt-1 pt-3 border-t border-gray-200 flex justify-between items-center">
+                    <div className="mt-1 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
                       <div>
-                        <p className="font-semibold text-gray-900 text-sm">Total Amount</p>
-                        <p className="text-xs text-gray-400">Incl. all taxes</p>
+                        <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">Total Amount</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500">Incl. all taxes</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                        <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-50">
                           ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity * 1.18).toFixed(2)}
                         </p>
                       </div>
@@ -1771,7 +1680,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 sm:p-5 border-t border-gray-100 bg-white flex-shrink-0">
+            <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1780,7 +1689,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setAddonPurchaseSuccess(null);
                     setPaymentCaptured(false);
                   }}
-                  className="px-5 py-3 border border-gray-200 rounded-2xl text-gray-600 font-semibold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all"
+                  className="px-5 py-3 border border-gray-200 dark:border-slate-700 rounded-2xl text-gray-600 dark:text-slate-400 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 transition-all"
                 >
                   {paymentCaptured && addonPurchaseError ? 'Close' : 'Cancel'}
                 </button>
@@ -1806,7 +1715,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   )}
                 </button>
               </div>
-              <p className="text-center text-[11px] text-gray-400 mt-3 flex items-center justify-center gap-1">
+              <p className="text-center text-[11px] text-gray-400 dark:text-slate-500 mt-3 flex items-center justify-center gap-1">
                 <span>🔒</span>
                 <span>Secured by Razorpay · 256-bit SSL encryption</span>
               </p>

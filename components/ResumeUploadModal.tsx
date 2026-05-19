@@ -320,7 +320,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
       case 'error':
         return <AlertTriangle className="w-5 h-5 text-red-500" />;
       default:
-        return <FileText className="w-5 h-5 text-gray-400" />;
+        return <FileText className="w-5 h-5 text-gray-400 dark:text-slate-500" />;
     }
   };
 
@@ -345,41 +345,41 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
 
   return (
     <>
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
             <div>
-              <h2 className="text-gray-900 mb-1">Upload Resumes</h2>
-              <p className="text-sm text-gray-600">Add applicants to: <span className="text-gray-800">{jobTitle}</span></p>
+              <h2 className="text-gray-900 dark:text-slate-50 mb-1">Upload Resumes</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Add applicants to: <span className="text-gray-800 dark:text-slate-100">{jobTitle}</span></p>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
              aria-label="Close">
-              <X className="w-5 h-5 text-gray-500" />
+              <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          <div className="p-6 overflow-y-auto flex-1">
             {/* Upload Area */}
             <div
               className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
                 dragActive
-                  ? 'border-gray-700 bg-gray-50'
-                  : 'border-gray-300 hover:border-gray-400'
+                  ? 'border-gray-700 bg-gray-50 dark:bg-slate-800/50'
+                  : 'border-gray-300 dark:border-slate-700 hover:border-gray-400'
               }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
             >
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Upload className="w-8 h-8 text-gray-800" />
+              <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Upload className="w-8 h-8 text-gray-800 dark:text-slate-100" />
               </div>
-              <h3 className="text-gray-900 mb-2">Drop resumes here</h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <h3 className="text-gray-900 dark:text-slate-50 mb-2">Drop resumes here</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                 or click to browse from your computer
               </p>
               <input
@@ -397,7 +397,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                 <Upload className="w-5 h-5" />
                 Browse Files
               </label>
-              <p className="text-xs text-gray-500 mt-4">
+              <p className="text-xs text-gray-500 dark:text-slate-500 mt-4">
                 Supported formats: PDF, DOC, DOCX, RTF, TXT (Max 3MB per file)
               </p>
             </div>
@@ -416,7 +416,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             {filesWithStatus.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm text-gray-700">
+                  <h4 className="text-sm text-gray-700 dark:text-slate-300">
                     Selected Files ({filesWithStatus.length})
                   </h4>
                   {isCheckingDuplicates && (
@@ -439,7 +439,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                             ? 'bg-amber-50 border-amber-200'
                             : fileWithStatus.status === 'valid'
                             ? 'bg-green-50 border-green-200'
-                            : 'bg-gray-50 border-gray-200'
+                            : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
                         }`}
                       >
                         <div className={`p-2 rounded-lg ${
@@ -451,16 +451,16 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                             ? 'bg-amber-100'
                             : fileWithStatus.status === 'valid'
                             ? 'bg-green-100'
-                            : 'bg-gray-100'
+                            : 'bg-gray-100 dark:bg-slate-800'
                         }`}>
-                          <FileText className="w-5 h-5 text-gray-800" />
+                          <FileText className="w-5 h-5 text-gray-800 dark:text-slate-100" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900 truncate">{fileWithStatus.file.name}</p>
+                          <p className="text-sm text-gray-900 dark:text-slate-50 truncate">{fileWithStatus.file.name}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-xs text-gray-500">{formatFileSize(fileWithStatus.file.size)}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">{formatFileSize(fileWithStatus.file.size)}</p>
                             {fileWithStatus.existingResume && (
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-500 dark:text-slate-500">
                                 • Matches: {fileWithStatus.existingResume.candidate_name}
                               </p>
                             )}
@@ -470,9 +470,9 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                         {getStatusIcon(fileWithStatus.status)}
                         <button
                           onClick={() => removeFile(index)}
-                          className="p-1.5 hover:bg-gray-200 rounded-md transition-colors flex-shrink-0"
+                          className="p-1.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-md transition-colors flex-shrink-0"
                          aria-label="Close">
-                          <X className="w-4 h-4 text-gray-500" />
+                          <X className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                         </button>
                       </div>
                       {/* Show error message below file */}
@@ -570,12 +570,12 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             )}
 
             {/* Info Box */}
-            <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="mt-6 p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="flex gap-3">
-                <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-gray-800 dark:text-slate-100 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h5 className="text-sm text-gray-800 mb-1">What happens next?</h5>
-                  <p className="text-xs text-gray-900">
+                  <h5 className="text-sm text-gray-800 dark:text-slate-100 mb-1">What happens next?</h5>
+                  <p className="text-xs text-gray-900 dark:text-slate-50">
                     Resumes will be automatically parsed and scored against the job requirements.
                     You'll see the scoring results after submission.
                   </p>
@@ -604,10 +604,10 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-            <div className="text-sm text-gray-600">
+          <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950 shrink-0">
+            <div className="text-sm text-gray-600 dark:text-slate-400">
               {isCheckingQuota || isCheckingDuplicates ? (
-                <span className="text-gray-500 animate-pulse flex items-center gap-1">
+                <span className="text-gray-500 dark:text-slate-500 animate-pulse flex items-center gap-1">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {isCheckingDuplicates ? 'Checking for duplicates...' : 'Checking quota...'}
                 </span>
@@ -634,13 +634,13 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                   </span>
                 )
               ) : (
-                <span className="text-gray-500">No files selected</span>
+                <span className="text-gray-500 dark:text-slate-500">No files selected</span>
               )}
             </div>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>

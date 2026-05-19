@@ -156,21 +156,21 @@ export default function UnitAdjustmentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
               Adjust Unit Pool
             </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">
               {tenantName}
               {tenantStatus && (
                 <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
                   tenantStatus === 'ACTIVE' ? 'bg-green-100 text-green-700' :
                   tenantStatus === 'SUSPENDED' ? 'bg-red-100 text-red-700' :
-                  'bg-gray-100 text-gray-600'
+                  'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   {tenantStatus}
                 </span>
@@ -181,14 +181,14 @@ export default function UnitAdjustmentModal({
             <button
               onClick={() => setShowHistory(!showHistory)}
               className={`p-2 rounded-lg transition-colors ${
-                showHistory ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                showHistory ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
               }`}
             >
               <History className="w-5 h-5" />
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
              aria-label="Close">
               <X className="w-5 h-5" />
             </button>
@@ -199,14 +199,14 @@ export default function UnitAdjustmentModal({
         <div className="flex-1 overflow-y-auto p-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400 dark:text-slate-500" />
             </div>
           ) : showHistory ? (
             /* History View */
             <div>
-              <h3 className="font-medium text-gray-900 mb-4">Adjustment History</h3>
+              <h3 className="font-medium text-gray-900 dark:text-slate-50 mb-4">Adjustment History</h3>
               {history.length === 0 ? (
-                <p className="text-center py-8 text-gray-500">No adjustments recorded</p>
+                <p className="text-center py-8 text-gray-500 dark:text-slate-500">No adjustments recorded</p>
               ) : (
                 <div className="space-y-3">
                   {history.map(entry => {
@@ -214,7 +214,7 @@ export default function UnitAdjustmentModal({
                     const isPositive = entry.units_amount > 0;
 
                     return (
-                      <div key={entry.id} className="p-3 bg-gray-50 rounded-lg">
+                      <div key={entry.id} className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`p-1.5 rounded ${
@@ -233,24 +233,24 @@ export default function UnitAdjustmentModal({
                                 }`}>
                                   {isPositive ? '+' : ''}{entry.units_amount} {entry.unit_type}
                                 </span>
-                                <span className="text-xs bg-gray-200 px-1.5 py-0.5 rounded text-gray-600">
+                                <span className="text-xs bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-slate-400">
                                   {entry.action_type}
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-600 mt-0.5">
+                              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
                                 {entry.reason}
                               </p>
                               {entry.notes && (
-                                <p className="text-xs text-gray-400 mt-1">
+                                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
                                   Note: {entry.notes}
                                 </p>
                               )}
                             </div>
                           </div>
-                          <div className="text-right text-xs text-gray-400">
+                          <div className="text-right text-xs text-gray-400 dark:text-slate-500">
                             <p>{entry.actor_email || entry.actor_type}</p>
                             <p>{formatIST(entry.created_at)}</p>
-                            <p className="mt-1 text-gray-500">
+                            <p className="mt-1 text-gray-500 dark:text-slate-500">
                               {entry.balance_before} → {entry.balance_after}
                             </p>
                           </div>
@@ -266,7 +266,7 @@ export default function UnitAdjustmentModal({
             <>
               {/* Current Balances */}
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Current Balances</h3>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">Current Balances</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {(['RS', 'AS', 'AIU'] as UnitType[]).map(type => {
                     const pool = pools?.[type];
@@ -279,20 +279,20 @@ export default function UnitAdjustmentModal({
                         onClick={() => setSelectedType(type)}
                         className={`p-3 rounded-lg border transition-colors text-left ${
                           isSelected
-                            ? 'border-gray-900 bg-gray-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-gray-900 bg-gray-50 dark:bg-slate-800/50'
+                            : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <Icon className={`w-4 h-4 ${isSelected ? 'text-gray-900' : 'text-gray-400'}`} />
-                          <span className="text-sm font-medium text-gray-700">
+                          <Icon className={`w-4 h-4 ${isSelected ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
                             {getUnitTypeName(type)}
                           </span>
                         </div>
-                        <p className="text-2xl font-bold text-gray-900 mt-2">
+                        <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 mt-2">
                           {pool?.available_units.toLocaleString() || 0}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-slate-500">
                           of {pool?.total_allocated.toLocaleString() || 0} allocated
                         </p>
                       </button>
@@ -303,7 +303,7 @@ export default function UnitAdjustmentModal({
 
               {/* Adjustment Mode */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Adjustment Type
                 </label>
                 <div className="flex gap-2">
@@ -312,7 +312,7 @@ export default function UnitAdjustmentModal({
                     className={`flex-1 py-2 px-4 rounded-lg border font-medium transition-colors ${
                       mode === 'add'
                         ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-300'
                     }`}
                   >
                     <Plus className="w-4 h-4 inline mr-1" />
@@ -323,7 +323,7 @@ export default function UnitAdjustmentModal({
                     className={`flex-1 py-2 px-4 rounded-lg border font-medium transition-colors ${
                       mode === 'deduct'
                         ? 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-300'
                     }`}
                   >
                     <Minus className="w-4 h-4 inline mr-1" />
@@ -334,7 +334,7 @@ export default function UnitAdjustmentModal({
                     className={`flex-1 py-2 px-4 rounded-lg border font-medium transition-colors ${
                       mode === 'set'
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-300'
                     }`}
                   >
                     Set Exact
@@ -344,7 +344,7 @@ export default function UnitAdjustmentModal({
 
               {/* Amount */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   {mode === 'set' ? 'New Balance' : 'Amount'}
                 </label>
                 <input
@@ -352,14 +352,14 @@ export default function UnitAdjustmentModal({
                   min={0}
                   value={amount}
                   onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
                   placeholder="Enter amount"
                 />
                 {amount > 0 && (
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">
                     New balance will be:{' '}
                     <span className={`font-medium ${
-                      projectedBalance < 0 ? 'text-red-600' : 'text-gray-900'
+                      projectedBalance < 0 ? 'text-red-600' : 'text-gray-900 dark:text-slate-50'
                     }`}>
                       {projectedBalance}
                     </span>
@@ -374,14 +374,14 @@ export default function UnitAdjustmentModal({
 
               {/* Reason (Required) */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Reason <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
                   placeholder="e.g., Customer request, Plan upgrade, Billing adjustment"
                   maxLength={100}
                 />
@@ -389,13 +389,13 @@ export default function UnitAdjustmentModal({
 
               {/* Notes (Optional) */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Additional Notes
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
                   rows={2}
                   placeholder="Optional additional details..."
                   maxLength={500}
@@ -405,13 +405,13 @@ export default function UnitAdjustmentModal({
               {/* Reference (Optional) */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                     Reference Type
                   </label>
                   <select
                     value={referenceType}
                     onChange={(e) => setReferenceType(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
                   >
                     <option value="">None</option>
                     <option value="ticket">Support Ticket</option>
@@ -421,14 +421,14 @@ export default function UnitAdjustmentModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                     Reference ID
                   </label>
                   <input
                     type="text"
                     value={referenceId}
                     onChange={(e) => setReferenceId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
                     placeholder="Optional"
                   />
                 </div>
@@ -449,10 +449,10 @@ export default function UnitAdjustmentModal({
 
         {/* Footer */}
         {!showHistory && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-end gap-3 shrink-0">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
+              className="px-4 py-2 text-gray-700 dark:text-slate-300 hover:text-gray-900 font-medium"
             >
               Cancel
             </button>

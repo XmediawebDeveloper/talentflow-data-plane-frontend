@@ -24,9 +24,23 @@ export interface ScoringResponse {
   id: string;
   jd_id: string;
   jd_title: string;
+  // Denormalized JD metadata included in the scoring response so the resume
+  // list and details views can render without an extra JD fetch per row.
+  jd_status?: string;
+  jd_job_id?: string;
+  jd_creation_method?: 'manual' | 'ai_generated' | string;
+  jd_current_version?: number;
+  jd_department?: string;
+  jd_industry_type?: string;
+  jd_employment_type?: string;
+  jd_remote_type?: string;
+  jd_location?: string;
+  jd_published_at?: string;
+  jd_created_by_name?: string;
   resume_id: string;
   candidate_name?: string;
   candidate_email?: string;
+  email?: string;                          // Alias for candidate_email used by some endpoints
   phone?: string;
   // Additional resume details
   current_title?: string;
@@ -53,6 +67,17 @@ export interface ScoringResponse {
   ai_summary?: string;
   strengths: string[];
   gaps: string[];
+  // Skill gap analysis fields
+  matched_skills?: string[];
+  missing_skills?: string[];
+  // Async / failed-scoring state
+  status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+  error_message?: string;
+  error_reason?: string;
+  // Source of the scoring (manual upload, AI match, bulk, etc.)
+  source?: string;
+  // Assessment version this score corresponds to
+  version?: number;
   score_breakdown?: ScoringBreakdownItem[];
   criteria_scores?: Record<string, { score: number; eligible: boolean; reasoning: string }>;
   unit_consumed: boolean;

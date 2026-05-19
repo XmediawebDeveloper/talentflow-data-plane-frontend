@@ -19,10 +19,12 @@ import {
   XCircle,
   Clock,
   User,
+  ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   unitPoolService,
   UnitType,
@@ -52,6 +54,14 @@ export default function MyConsumptionHistory() {
   const [selectedType, setSelectedType] = useState<UnitType | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [dateRange, setDateRange] = useState<number>(30); // days
+
+  // Drill-in: cards-first overview. Clicking a card opens the filtered table.
+  // Total card → all types; RS / AS / AIU cards → filter the table by that type.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const openListView = (type: UnitType | 'all') => {
+    setSelectedType(type);
+    setPageView('list');
+  };
 
   useEffect(() => {
     loadHistory();
@@ -143,6 +153,7 @@ export default function MyConsumptionHistory() {
 
   return (
     <div className="space-y-6">
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Usage History' }]} />
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between">
@@ -164,28 +175,53 @@ export default function MyConsumptionHistory() {
           </button>
         </div>
 
-        {/* Summary Stats */}
+        {/* Summary Stats — clicking a card drills into the consumption table filtered by that type */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-gray-50 rounded-lg">
+          <button
+            type="button"
+            onClick={() => openListView('all')}
+            className={`text-left w-full p-4 bg-gray-50 rounded-lg hover:shadow-md transition-all ${pageView === 'list' && selectedType === 'all' ? 'ring-2 ring-brand-blue' : ''}`}
+          >
             <p className="text-sm text-gray-600">Total Consumed</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{summary.total.toFixed(1)}</p>
             <p className="text-xs text-gray-500 mt-1">Last {dateRange} days</p>
-          </div>
+          </button>
           {(['RS', 'AS', 'AIU'] as UnitType[]).map(type => {
             const Icon = UNIT_TYPE_ICONS[type];
             const colors = UNIT_TYPE_COLORS[type];
             return (
-              <div key={type} className={`p-4 ${colors.bg} rounded-lg`}>
+              <button
+                key={type}
+                type="button"
+                onClick={() => openListView(type)}
+                className={`text-left w-full p-4 ${colors.bg} rounded-lg hover:shadow-md transition-all ${pageView === 'list' && selectedType === type ? 'ring-2 ring-brand-blue' : ''}`}
+              >
                 <div className="flex items-center gap-2">
                   <Icon className={`w-4 h-4 ${colors.text}`} />
                   <p className={`text-sm font-medium ${colors.text}`}>{getUnitTypeName(type)}</p>
                 </div>
                 <p className={`text-2xl font-bold ${colors.text} mt-1`}>{summary.byType[type].toFixed(1)}</p>
                 <p className="text-xs text-gray-600 mt-1">{type} units</p>
-              </div>
+              </button>
             );
           })}
         </div>
+      </div>
+
+      {pageView === 'list' && (
+      <>
+      {/* Back to overview */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={() => { setPageView('cards'); setSelectedType('all'); setSelectedStatus('all'); }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-brand-blue transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to overview
+        </button>
+        <span className="text-xs text-gray-500">
+          {filteredHistory.length} {filteredHistory.length === 1 ? 'entry' : 'entries'}
+        </span>
       </div>
 
       {/* Filters */}
@@ -304,6 +340,8 @@ export default function MyConsumptionHistory() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Info Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

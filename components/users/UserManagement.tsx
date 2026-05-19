@@ -34,6 +34,7 @@ import {
   Info,
   History,
   MessageCircle,
+  ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -483,6 +484,16 @@ export default function UserManagement() {
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  // Drill-in pattern: cards-first overview, switch to list+search when a stat
+  // card is clicked. `statusFilter` carries the card that was clicked so the
+  // list is pre-filtered.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const openListView = (filter: 'all' | 'active' | 'inactive') => {
+    setStatusFilter(filter);
+    setPageView('list');
+    setCurrentPage(1);
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -1069,10 +1080,16 @@ export default function UserManagement() {
     }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = users.filter(user => {
+    const matchesSearch =
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && user.is_active) ||
+      (statusFilter === 'inactive' && !user.is_active);
+    return matchesSearch && matchesStatus;
+  });
 
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
@@ -1836,9 +1853,9 @@ export default function UserManagement() {
   ].filter(link => link.visible);
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
 
       {/* Header */}
@@ -1849,15 +1866,15 @@ export default function UserManagement() {
               <UserCog className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">User Management</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Invite teammates, assign roles and fine-tune permissions</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">User Management</h1>
+              <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">Invite teammates, assign roles and fine-tune permissions</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* RBAC07: Dependency Matrix button */}
             <button
               onClick={() => setIsDependencyMatrixOpen(true)}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm transition-all text-sm font-medium"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm transition-all text-sm font-medium"
               aria-label="View Feature Dependencies" title="View Feature Dependencies"
             >
               <Link2 className="w-4 h-4" />
@@ -1910,44 +1927,34 @@ export default function UserManagement() {
               <Link
                 key={link.id}
                 href={link.href}
-                className="group flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md"
+                className="group flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 group-hover:text-brand-blue">{link.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-100 group-hover:text-brand-blue">{link.label}</span>
               </Link>
             );
           })}
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="mb-4 sm:mb-6">
-        <div className="relative max-w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search users by name or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue placeholder-gray-400 shadow-sm transition-all text-sm"
-          />
-        </div>
-      </div>
-
-      {/* Stats Cards */}
+      {/* Stats Cards — clickable; clicking drills into the users list filtered by status */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
         {/* Total Users card with quota breakdown */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all">
+        <button
+          type="button"
+          onClick={() => openListView('all')}
+          className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`}
+        >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs sm:text-sm font-medium text-gray-500">Total Users</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Total Users</p>
               <div className="flex items-baseline gap-1 mt-1">
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50">
                   {limits?.current_users ?? users.length}
                 </p>
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-gray-400 dark:text-slate-500">
                   / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
                 </span>
               </div>
@@ -1959,7 +1966,7 @@ export default function UserManagement() {
           {/* Progress bar */}
           {limits && limits.max_users > 0 && (
             <div className="mt-3">
-              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     isAtLimit
@@ -1974,11 +1981,11 @@ export default function UserManagement() {
               {/* Plan Limit / Add-ons breakdown */}
               <div className="mt-2 space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-gray-500">
+                  <span className="flex items-center gap-1 text-gray-500 dark:text-slate-500">
                     <span className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />
                     Plan Limit
                   </span>
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-gray-700 dark:text-slate-300">
                     {(() => {
                       const sl = quotaData?.quotas?.max_seats?.subscription?.limit;
                       return sl === 'unlimited' || sl === -1 ? '∞' : (sl ?? limits.max_users);
@@ -1986,26 +1993,30 @@ export default function UserManagement() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-gray-500">
+                  <span className="flex items-center gap-1 text-gray-500 dark:text-slate-500">
                     <span className="w-1.5 h-1.5 rounded-full bg-brand-cyan flex-shrink-0" />
                     Add-ons
                   </span>
                   {(quotaData?.quotas?.max_seats?.addon?.total_purchased ?? 0) > 0 ? (
-                    <span className="font-semibold text-gray-700">
+                    <span className="font-semibold text-gray-700 dark:text-slate-300">
                       {quotaData?.quotas?.max_seats?.addon?.total_purchased}
                     </span>
                   ) : (
-                    <span className="text-gray-400 italic text-[10px]">None purchased</span>
+                    <span className="text-gray-400 dark:text-slate-500 italic text-[10px]">None purchased</span>
                   )}
                 </div>
               </div>
             </div>
           )}
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all">
+        </button>
+        <button
+          type="button"
+          onClick={() => openListView('active')}
+          className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all ${pageView === 'list' && statusFilter === 'active' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`}
+        >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs sm:text-sm font-medium text-gray-500">Active Users</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Active Users</p>
               <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600 mt-1">
                 {users.filter(u => u.is_active).length}
               </p>
@@ -2014,11 +2025,15 @@ export default function UserManagement() {
               <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all">
+        </button>
+        <button
+          type="button"
+          onClick={() => openListView('inactive')}
+          className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all ${pageView === 'list' && statusFilter === 'inactive' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`}
+        >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs sm:text-sm font-medium text-gray-500">Inactive Users</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Inactive Users</p>
               <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-500 mt-1">
                 {users.filter(u => !u.is_active).length}
               </p>
@@ -2027,46 +2042,76 @@ export default function UserManagement() {
               <UserX className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
+        </button>
+      </div>
+
+      {pageView === 'list' && (
+      <>
+      {/* Back to overview */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <button
+          onClick={() => { setPageView('cards'); setSearchQuery(''); }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to overview
+        </button>
+        <span className="text-xs text-gray-500 dark:text-slate-400">
+          {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+        </span>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-4 sm:mb-6">
+        <div className="relative max-w-full sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search users by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue placeholder-gray-400 shadow-sm transition-all text-sm"
+          />
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-x-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8 sm:py-12 bg-slate-50">
+          <div className="flex items-center justify-center py-8 sm:py-12 bg-slate-50 dark:bg-slate-950">
             <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
           </div>
         ) : (
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-200">
+            <thead className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-800 border-b border-gray-200 dark:border-slate-700">
               <tr>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
                   User ID
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">
                   Permissions
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                   Created At
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                   Last Login
                 </th>
-                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
@@ -2075,7 +2120,7 @@ export default function UserManagement() {
                         {user.user_display_id}
                       </span>
                     ) : (
-                      <span className="text-[10px] sm:text-xs text-gray-400">—</span>
+                      <span className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500">—</span>
                     )}
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
@@ -2092,8 +2137,8 @@ export default function UserManagement() {
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{user.name || user.email || 'Unknown'}</div>
-                        <div className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 truncate">
+                        <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{user.name || user.email || 'Unknown'}</div>
+                        <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate">
                           <Mail className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">{user.email}</span>
                         </div>
@@ -2144,7 +2189,7 @@ export default function UserManagement() {
                             }`}
                           />
                         </button>
-                        <span className={`text-xs font-semibold ${user.is_active ? 'text-green-700' : 'text-gray-500'}`}>
+                        <span className={`text-xs font-semibold ${user.is_active ? 'text-green-700' : 'text-gray-500 dark:text-slate-500'}`}>
                           {user.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </div>
@@ -2159,13 +2204,13 @@ export default function UserManagement() {
                     )}
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
                       <Calendar className="w-4 h-4 text-brand-cyan" />
                       {formatIST(user.created_at)}
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
                       <Calendar className="w-4 h-4 text-brand-cyan" />
                       {formatIST(user.last_login)}
                     </div>
@@ -2176,7 +2221,7 @@ export default function UserManagement() {
                       {/* {user.role.toLowerCase() !== 'tenant_admin' && (
                         <button
                           onClick={() => setFeaturePermissionUser(user)}
-                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-gray-500 dark:text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           aria-label="Feature Permissions" title="Feature Permissions"
                         >
                           <Settings2 className="w-4 h-4" />
@@ -2190,8 +2235,8 @@ export default function UserManagement() {
                           disabled={!user.is_active}
                           className={`p-2 rounded-lg transition-all ${
                             user.is_active
-                              ? 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
-                              : 'text-gray-300 cursor-not-allowed'
+                              ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
+                              : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
                           }`}
                           title={user.is_active ? 'Edit User' : 'Cannot edit inactive user'}
                         >
@@ -2211,8 +2256,8 @@ export default function UserManagement() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">
               <UserCog className="w-7 h-7 text-brand-blue" />
             </div>
-            <p className="text-base font-semibold text-gray-900">No users found</p>
-            <p className="text-sm text-gray-500 mt-1">Try adjusting your search, or invite a new teammate to get started.</p>
+            <p className="text-base font-semibold text-gray-900 dark:text-slate-50">No users found</p>
+            <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">Try adjusting your search, or invite a new teammate to get started.</p>
           </div>
         )}
       </div>
@@ -2228,13 +2273,15 @@ export default function UserManagement() {
           itemLabel="users"
         />
       )}
+      </>
+      )}
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             {/* Header strip */}
-            <div className="bg-brand-blue px-5 sm:px-6 py-4 flex items-center justify-between gap-3">
+            <div className="bg-brand-blue px-5 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Plus className="w-5 h-5 text-white" />
@@ -2252,9 +2299,9 @@ export default function UserManagement() {
               </button>
             </div>
 
-            <div className="space-y-4 p-5 sm:p-6 overflow-y-auto">
+            <div className="space-y-4 p-5 sm:p-6 overflow-y-auto flex-1">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -2262,11 +2309,11 @@ export default function UserManagement() {
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                   placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Email <span className="text-red-500">*</span>
                 </label>
 
@@ -2279,12 +2326,12 @@ export default function UserManagement() {
                     checkEmailAvailability(value);
                   }}
                   placeholder="user@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                 />
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     <span>Validating email...</span>
                   </div>
@@ -2309,7 +2356,7 @@ export default function UserManagement() {
                 <span className="text-xs sm:text-sm">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Role <span className="text-red-500">*</span>
                 </label>
                 {/* Role Selection Grid */}
@@ -2326,12 +2373,12 @@ export default function UserManagement() {
                         className={`relative p-2.5 sm:p-3 rounded-lg border text-left transition-all ${
                           isSelected
                             ? 'border-brand-blue bg-brand-blue/5 ring-2 ring-brand-blue/30 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-sm'
+                            : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-sm'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className={`font-semibold truncate text-sm ${isSelected ? 'text-brand-blue' : 'text-gray-800'}`}>
+                            <span className={`font-semibold truncate text-sm ${isSelected ? 'text-brand-blue' : 'text-gray-800 dark:text-slate-100'}`}>
                               {role.name}
                             </span>
                             {isSystemRole && (
@@ -2347,7 +2394,7 @@ export default function UserManagement() {
                           )}
                         </div>
                         {role.description && (
-                          <p className="text-xs text-gray-500 mt-1 line-clamp-1">{role.description}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 line-clamp-1">{role.description}</p>
                         )}
                         <button
                           type="button"
@@ -2362,7 +2409,7 @@ export default function UserManagement() {
                   })}
                 </div>
                 {availableRoles.length === 0 && (
-                  <div className="text-center py-6 px-4 text-gray-500 text-sm border border-dashed border-gray-300 rounded-lg bg-slate-50">
+                  <div className="text-center py-6 px-4 text-gray-500 dark:text-slate-500 text-sm border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                     No roles available. Create roles in Role Management first.
                   </div>
                 )}
@@ -2372,20 +2419,20 @@ export default function UserManagement() {
               {false && selectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
                       Role Permissions
                     </label>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-slate-500">
                       {selectedPermissionCodes.size} permissions assigned
                     </span>
                   </div>
                   {isLoadingPermissions ? (
-                    <div className="flex items-center justify-center py-3 border border-gray-200 rounded-lg bg-gray-50">
-                      <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                      <span className="ml-2 text-sm text-gray-500">Loading...</span>
+                    <div className="flex items-center justify-center py-3 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-800/50">
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-500 dark:text-slate-500" />
+                      <span className="ml-2 text-sm text-gray-500 dark:text-slate-500">Loading...</span>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-3 bg-gray-50 dark:bg-slate-800/50">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
                         // Hide categories for features not in the tenant's plan
                         if (!isCategoryVisible(category.id)) return null;
@@ -2425,7 +2472,7 @@ export default function UserManagement() {
                               <Check className="w-3 h-3 text-green-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-sm font-medium text-gray-900 dark:text-slate-50">
                                 {category.name}
                                 {category.isMenuToggle && (
                                   <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
@@ -2433,7 +2480,7 @@ export default function UserManagement() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-500 mt-0.5">
+                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
                                 {selectedActions.join(' • ')}
                               </div>
                             </div>
@@ -2443,7 +2490,7 @@ export default function UserManagement() {
 
                       {/* Show message if no custom permissions found */}
                       {selectedPermissionCodes.size === 0 && (
-                        <div className="text-center py-4 text-gray-500 text-sm">
+                        <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm">
                           No permissions assigned to this role yet.
                           <br />
                           <span className="text-xs">Configure permissions in Role Management.</span>
@@ -2455,10 +2502,10 @@ export default function UserManagement() {
               )}
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-gray-100 bg-slate-50/50">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
               <button
                 onClick={resetCreateModal}
-                className="px-4 py-2 sm:py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:border-gray-300 hover:bg-gray-50 text-sm font-medium transition-all"
+                className="px-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 text-sm font-medium transition-all"
                 disabled={isSaving}
               >
                 Cancel
@@ -2479,9 +2526,9 @@ export default function UserManagement() {
       {/* Edit User Modal - Redesigned */}
       {editingUser && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             {/* Header */}
-            <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3">
+            <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Pencil className="w-4 h-4 text-white" />
@@ -2504,29 +2551,29 @@ export default function UserManagement() {
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name</label>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Name</label>
                   <input
                     type="text"
                     value={editingUser.name}
                     onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email</label>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email</label>
                   <input
                     type="email"
                     value={editingUser.email}
                     onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                     placeholder="user@example.com"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                   />
                 </div>
               </div>
 
               {/* Role Selection - Compact Pills */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Role</label>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-2">Role</label>
                 <div className="flex flex-wrap gap-2">
                   {availableRoles.map(role => {
                     const isSelected = editSelectedRoleId === role.id;
@@ -2541,7 +2588,7 @@ export default function UserManagement() {
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ring-1 ${
                           isSelected
                             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-white/10'
-                            : 'bg-white text-gray-700 ring-gray-200 hover:bg-brand-blue/5 hover:text-brand-blue hover:ring-brand-blue/30'
+                            : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:ring-brand-blue/30'
                         }`}
                       >
                         {role.name}
@@ -2556,7 +2603,7 @@ export default function UserManagement() {
               {editSelectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-brand-blue" />
                       Permissions
                     </label>
@@ -2566,9 +2613,9 @@ export default function UserManagement() {
                   </div>
 
                   {isLoadingPermissions ? (
-                    <div className="flex items-center justify-center py-8 bg-slate-50 rounded-lg">
+                    <div className="flex items-center justify-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                       <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-500">Loading permissions...</span>
+                      <span className="ml-2 text-sm text-gray-500 dark:text-slate-500">Loading permissions...</span>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -2701,13 +2748,13 @@ export default function UserManagement() {
                         const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                         return (
-                          <div key={category.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                          <div key={category.id} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                             {/* Module Header */}
                             <div
                               className={`px-3 sm:px-4 py-2.5 border-b flex items-center justify-between select-none transition-colors ${
                                 isCategoryActive
                                   ? 'bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border-brand-blue/15'
-                                  : 'bg-slate-50 border-gray-200'
+                                  : 'bg-slate-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
                               }`}
                               onClick={category.viewCode ? toggleCategory : undefined}
                               style={category.viewCode ? { cursor: 'pointer' } : undefined}
@@ -2718,7 +2765,7 @@ export default function UserManagement() {
                                     <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
                                   </div>
                                 )}
-                                <h4 className={`font-semibold capitalize text-xs sm:text-sm ${isCategoryActive ? 'text-brand-blue' : 'text-gray-500'}`}>
+                                <h4 className={`font-semibold capitalize text-xs sm:text-sm ${isCategoryActive ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'}`}>
                                   {category.name} ({allCodes.length})
                                 </h4>
                                 {category.isMenuToggle && isCategoryActive && (
@@ -2727,7 +2774,7 @@ export default function UserManagement() {
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] font-medium text-gray-500">{selectedCount} selected</span>
+                              <span className="text-[10px] font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
                             </div>
 
                             {/* Permission Cards Grid */}
@@ -2740,13 +2787,13 @@ export default function UserManagement() {
                                   <div
                                     key={category.viewCode}
                                     onClick={() => toggleCode(category.viewCode!)}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 border-gray-100 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
                                   >
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
                                       <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900">View {category.name}</div>
+                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {category.name}</div>
                                     </div>
                                   </div>
                                 );
@@ -2759,13 +2806,13 @@ export default function UserManagement() {
                                   <div
                                     key={action.code}
                                     onClick={() => toggleCode(action.code)}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 border-gray-100 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
                                   >
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
                                       <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900">{action.label}</div>
+                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
                                     </div>
                                   </div>
                                 );
@@ -2817,21 +2864,21 @@ export default function UserManagement() {
                               const subSelectedCount = subAllCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                               return (
-                                <div key={sub.name} className="border-t border-gray-100">
+                                <div key={sub.name} className="border-t border-gray-100 dark:border-slate-700/60">
                                   {/* Sub-category header */}
                                   <div
-                                    className={`px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors ${isSubActive ? 'bg-brand-cyan/5' : 'bg-slate-50'}`}
+                                    className={`px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors ${isSubActive ? 'bg-brand-cyan/5' : 'bg-slate-50 dark:bg-slate-800/50'}`}
                                     onClick={toggleSub}
                                   >
                                     <div className="flex items-center gap-2">
                                       <div className={`w-6 h-[14px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isSubActive ? 'bg-gradient-to-r from-brand-cyan to-brand-blue ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
                                         <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
                                       </div>
-                                      <span className={`text-xs font-semibold ${isSubActive ? 'text-brand-cyan' : 'text-gray-500'}`}>
+                                      <span className={`text-xs font-semibold ${isSubActive ? 'text-brand-cyan' : 'text-gray-500 dark:text-slate-500'}`}>
                                         {sub.name} ({subAllCodes.length})
                                       </span>
                                     </div>
-                                    <span className="text-[10px] font-medium text-gray-500">{subSelectedCount} selected</span>
+                                    <span className="text-[10px] font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
                                   </div>
                                   {/* Sub-category cards */}
                                   <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
@@ -2853,13 +2900,13 @@ export default function UserManagement() {
                                               setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.add(sub.viewCode!); if (category.viewCode) next.add(category.viewCode); return next; });
                                             }
                                           }}
-                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 border-gray-100 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
+                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
                                         >
                                           <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
                                             <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-900">View {sub.name}</div>
+                                            <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {sub.name}</div>
                                           </div>
                                         </div>
                                       );
@@ -2914,13 +2961,13 @@ export default function UserManagement() {
                                               }
                                             }
                                           }}
-                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 border-gray-100 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
+                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
                                         >
                                           <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
                                             <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-900">{action.label}</div>
+                                            <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
                                           </div>
                                         </div>
                                       );
@@ -2939,7 +2986,7 @@ export default function UserManagement() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-slate-50/50">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
               <span className="text-[10px] sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
                 {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
                  ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
@@ -2952,7 +2999,7 @@ export default function UserManagement() {
               <div className="flex gap-2">
                 <button
                   onClick={resetEditModal}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-lg transition-all"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-all"
                   disabled={isSaving}
                 >
                   Cancel
@@ -3007,9 +3054,9 @@ export default function UserManagement() {
       {/* View Role Permissions Popup */}
       {viewingRolePopup && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             {/* Header */}
-            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Eye className="w-5 h-5 text-white" />
@@ -3028,23 +3075,23 @@ export default function UserManagement() {
             </div>
 
             {/* Body */}
-            <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-slate-50/30">
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+            <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-slate-50/30 dark:bg-slate-800/30">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
-                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
                   <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
-                  <div className="font-bold text-gray-900 text-xs sm:text-base">{viewingRolePopup.user_count}</div>
+                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopup.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                  <div className="font-bold text-gray-900 text-xs sm:text-base">{viewingRolePopupPermissions.length}</div>
+                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupPermissions.length}</div>
                 </div>
               </div>
 
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-brand-blue" />
                 Allocated Permissions ({viewingRolePopupPermissions.length})
               </h3>
@@ -3058,7 +3105,7 @@ export default function UserManagement() {
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-3">
                     <Shield className="w-7 h-7 text-brand-blue" />
                   </div>
-                  <p className="text-gray-700 font-semibold text-sm">No permissions allocated</p>
+                  <p className="text-gray-700 dark:text-slate-300 font-semibold text-sm">No permissions allocated</p>
                 </div>
               ) : (
                 <div className="space-y-4 sm:space-y-6">
@@ -3070,7 +3117,7 @@ export default function UserManagement() {
                       return acc;
                     }, {} as Record<string, Permission[]>)
                   ).map(([module, perms]) => (
-                    <div key={module} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                    <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                       <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 px-3 sm:px-4 py-2.5 border-b border-brand-blue/15">
                         <h4 className="font-semibold text-brand-blue capitalize text-xs sm:text-sm">
                           {module.replace(/_/g, ' ')} ({perms.length})
@@ -3080,7 +3127,7 @@ export default function UserManagement() {
                         {perms.map((perm) => (
                           <div
                             key={perm.id}
-                            className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg border border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all"
+                            className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all"
                           >
                             <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
                               perm.action === 'read'   ? 'bg-blue-100 text-blue-600' :
@@ -3092,7 +3139,7 @@ export default function UserManagement() {
                               <span className="text-[10px] sm:text-xs font-bold uppercase">{perm.action[0]}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-xs sm:text-sm text-gray-900">{perm.name}</div>
+                              <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
                             </div>
                           </div>
                         ))}
@@ -3104,8 +3151,8 @@ export default function UserManagement() {
             </div>
 
             {/* Footer */}
-            <div className="bg-slate-50/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200">
-              <div className="text-sm text-gray-500">
+            <div className="bg-slate-50/50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
+              <div className="text-sm text-gray-500 dark:text-slate-500">
                 {viewingRolePopup.is_system && (
                   <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-[10px] sm:text-xs font-semibold">
                     <Lock className="w-3 h-3" />

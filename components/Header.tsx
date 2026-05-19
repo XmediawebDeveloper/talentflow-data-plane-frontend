@@ -1068,9 +1068,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] flex flex-col">
                 {/* User Profile Header */}
-                <div className="bg-brand-blue px-5 py-4">
+                <div className="bg-brand-blue px-5 py-4 shrink-0">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-full bg-white/15 text-white flex items-center justify-center text-lg font-semibold">
                       {(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
@@ -1088,7 +1088,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
                 {/* Organization Info */}
                 {tenant && (
-                  <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+                  <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 shrink-0">
                     <div className="flex items-center gap-2 text-sm">
                       <Building2 className="w-4 h-4 text-gray-500" />
                       <span className="text-gray-600">Organization:</span>
@@ -1098,7 +1098,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 )}
 
                 {/* Quick Stats */}
-                <div className="px-5 py-3 border-b border-gray-100">
+                <div className="px-5 py-3 border-b border-gray-100 shrink-0">
                   <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Permissions</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
@@ -1128,8 +1128,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </div>
                 </div>
 
-                {/* Menu Items */}
-                <div className="py-2">
+                {/* Menu Items — shows ~3, rest accessible via scroll */}
+                <div className="py-2 max-h-[200px] overflow-y-auto">
                   <button
                     onClick={() => {
                       if (subscriptionExpired) return;
@@ -1147,6 +1147,61 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-xs text-gray-500">Update your personal information</p>
                     </div>
                   </button>
+                  {(user.is_tenant_admin || user.permissions?.can_manage_users) && (
+                    <button
+                      onClick={() => {
+                        if (subscriptionExpired) return;
+                        setShowUserMenu(false);
+                        router.push('/organization/user-management');
+                      }}
+                      disabled={subscriptionExpired}
+                      className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
+                    >
+                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                        <Users className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Users</p>
+                        <p className="text-xs text-gray-500">Manage users & roles</p>
+                      </div>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (subscriptionExpired) return;
+                      setShowUserMenu(false);
+                      router.push('/subscription/current-plan');
+                    }}
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
+                  >
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                      <CreditCard className="w-4 h-4 text-brand-blue" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Current Plan</p>
+                      <p className="text-xs text-gray-500">Billing & subscription</p>
+                    </div>
+                  </button>
+                  {(user.is_tenant_admin || user.permissions?.can_manage_settings) && (
+                    <button
+                      onClick={() => {
+                        if (subscriptionExpired) return;
+                        setShowUserMenu(false);
+                        router.push('/organization/company-profile');
+                      }}
+                      disabled={subscriptionExpired}
+                      className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
+                    >
+                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                        <Building2 className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Company Profile</p>
+                        <p className="text-xs text-gray-500">Organization details</p>
+                      </div>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       if (subscriptionExpired) return;
@@ -1181,6 +1236,25 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-xs text-gray-500">View your recent activity</p>
                     </div>
                   </button>
+                  {user.is_tenant_admin && (
+                    <button
+                      onClick={() => {
+                        if (subscriptionExpired) return;
+                        setShowUserMenu(false);
+                        router.push('/audits/trail');
+                      }}
+                      disabled={subscriptionExpired}
+                      className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
+                    >
+                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                        <FileText className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Audit Trail</p>
+                        <p className="text-xs text-gray-500">Detailed system audit logs</p>
+                      </div>
+                    </button>
+                  )}
                   {hasQuotaPermission && (
                     <button
                       onClick={() => {
@@ -1198,10 +1272,25 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       </div>
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      router.push('/support-tickets');
+                    }}
+                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-brand-blue/5 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                      <HelpCircle className="w-4 h-4 text-brand-blue" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Support Tickets</p>
+                      <p className="text-xs text-gray-500">Help & support requests</p>
+                    </div>
+                  </button>
                 </div>
 
                 {/* Sign Out */}
-                <div className="border-t border-gray-200 p-3 bg-gray-50">
+                <div className="border-t border-gray-200 p-3 bg-gray-50 shrink-0">
                   <button
                     onClick={() => {
                       setShowUserMenu(false);

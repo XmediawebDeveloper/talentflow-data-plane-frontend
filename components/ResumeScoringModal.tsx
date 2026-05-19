@@ -96,24 +96,24 @@ export default function ResumeScoringModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden animate-scale-in flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden animate-scale-in flex flex-col">
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 flex items-center justify-between bg-slate-50 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
               <Target className="w-5 h-5 text-brand-blue" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Resume Scoring</h2>
-              <p className="text-sm text-gray-600">Score resumes against job requirements</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Resume Scoring</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Score resumes against job requirements</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
            aria-label="Close">
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
@@ -125,7 +125,7 @@ export default function ResumeScoringModal({
               <div className="w-8 h-8 rounded-full bg-brand-blue text-white flex items-center justify-center text-sm font-medium">
                 1
               </div>
-              <h3 className="text-gray-900">Select Job Description</h3>
+              <h3 className="text-gray-900 dark:text-slate-50">Select Job Description</h3>
             </div>
 
             <div className="ml-11 space-y-2 max-h-64 overflow-y-auto">
@@ -140,7 +140,7 @@ export default function ResumeScoringModal({
                   className={`w-full text-left p-4 rounded-xl border transition-all ${
                     selectedJob === job.id
                       ? 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/15'
-                      : 'border-gray-100 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 ring-1 ring-black/[0.02]'
+                      : 'border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -152,14 +152,14 @@ export default function ResumeScoringModal({
                       }`} />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-gray-900 mb-1">{job.title}</h4>
-                      <div className="flex items-center gap-4 text-xs text-gray-600">
+                      <h4 className="text-gray-900 dark:text-slate-50 mb-1">{job.title}</h4>
+                      <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-slate-400">
                         <span className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                          <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-slate-500 rounded-full"></span>
                           {job.location}
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                          <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-slate-500 rounded-full"></span>
                           {job.type || job.employmentType || 'Full-time'}
                         </span>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan rounded">
@@ -175,8 +175,8 @@ export default function ResumeScoringModal({
               ))}
 
               {jobs.filter(job => job.status === 'Published' || job.status === 'Active').length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                <div className="text-center py-8 text-gray-500 dark:text-slate-500">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
                   <p className="text-sm">No active jobs available for scoring.</p>
                   <p className="text-xs mt-1">Please create or activate a job first.</p>
                 </div>
@@ -189,11 +189,11 @@ export default function ResumeScoringModal({
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  resumeSource ? 'bg-brand-blue text-white' : 'bg-gray-200 text-gray-600'
+                  resumeSource ? 'bg-brand-blue text-white' : 'bg-gray-200 text-gray-600 dark:text-slate-400'
                 }`}>
                   2
                 </div>
-                <h3 className="text-gray-900">Choose Resume</h3>
+                <h3 className="text-gray-900 dark:text-slate-50">Choose Resume</h3>
               </div>
 
               {!resumeSource ? (
@@ -205,17 +205,17 @@ export default function ResumeScoringModal({
                       setResumeSource('my-resumes');
                       setSelectedResumes([]);
                     }}
-                    className="p-6 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all text-left group shadow-sm shadow-brand-blue/5"
+                    className="p-6 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all text-left group shadow-sm shadow-brand-blue/5"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 group-hover:bg-brand-blue flex items-center justify-center transition-colors">
                         <FolderOpen className="w-6 h-6 text-brand-blue group-hover:text-white transition-colors" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-gray-900 mb-1">
+                        <h4 className="text-gray-900 dark:text-slate-50 mb-1">
                           My Resumes
                         </h4>
-                        <p className="text-sm text-gray-600 mb-2">
+                        <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
                           Resumes from your personal collection
                         </p>
                         <div className="text-xs text-brand-blue font-medium">
@@ -231,17 +231,17 @@ export default function ResumeScoringModal({
                       setResumeSource('database');
                       setSelectedResumes([]);
                     }}
-                    className="p-6 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all text-left group shadow-sm shadow-brand-blue/5"
+                    className="p-6 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all text-left group shadow-sm shadow-brand-blue/5"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 group-hover:bg-brand-blue flex items-center justify-center transition-colors">
                         <Database className="w-6 h-6 text-brand-blue group-hover:text-white transition-colors" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-gray-900 mb-1">
+                        <h4 className="text-gray-900 dark:text-slate-50 mb-1">
                           Resume Database
                         </h4>
-                        <p className="text-sm text-gray-600 mb-2">
+                        <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
                           All resumes in internal database
                         </p>
                         <div className="text-xs text-brand-blue font-medium">
@@ -289,8 +289,8 @@ export default function ResumeScoringModal({
 
                   {/* Select All / Deselect All */}
                   {availableResumes.length > 0 && (
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                      <div className="text-sm text-gray-600">
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-slate-700/60">
+                      <div className="text-sm text-gray-600 dark:text-slate-400">
                         {selectedResumes.length} of {availableResumes.length} resume{availableResumes.length !== 1 ? 's' : ''} selected
                       </div>
                       <button
@@ -312,23 +312,23 @@ export default function ResumeScoringModal({
                             ? resumeSource === 'my-resumes'
                               ? 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/15'
                               : 'border-brand-blue/30 bg-brand-blue/5 ring-1 ring-brand-blue/15'
-                            : 'border-gray-100 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5 ring-1 ring-black/[0.02]'
+                            : 'border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={selectedResumes.includes(resume.id)}
                           onChange={() => handleResumeToggle(resume.id)}
-                          className="w-5 h-5 accent-brand-blue rounded border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue"
+                          className="w-5 h-5 accent-brand-blue rounded border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                         <FileText className={`w-5 h-5 ${
                           selectedResumes.includes(resume.id)
                             ? resumeSource === 'my-resumes' ? 'text-brand-blue' : 'text-brand-blue'
-                            : 'text-gray-400'
+                            : 'text-gray-400 dark:text-slate-500'
                         }`} />
                         <div className="flex-1">
-                          <div className="text-sm text-gray-900">{resume.name}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-sm text-gray-900 dark:text-slate-50">{resume.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-500">
                             {resume.email} • {resume.experience}
                           </div>
                         </div>
@@ -336,8 +336,8 @@ export default function ResumeScoringModal({
                     ))}
 
                     {availableResumes.length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                      <div className="text-center py-8 text-gray-500 dark:text-slate-500">
+                        <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
                         <p className="text-sm">No resumes found in {resumeSource === 'my-resumes' ? 'My Resumes' : 'Resume Database'}.</p>
                       </div>
                     )}
@@ -353,8 +353,8 @@ export default function ResumeScoringModal({
               <div className="flex items-start gap-3">
                 <TrendingUp className="w-5 h-5 text-brand-blue mt-0.5" />
                 <div>
-                  <h4 className="text-sm text-gray-900 mb-2">AI-Powered Resume Scoring</h4>
-                  <ul className="text-xs text-gray-700 space-y-1">
+                  <h4 className="text-sm text-gray-900 dark:text-slate-50 mb-2">AI-Powered Resume Scoring</h4>
+                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li className="flex items-start gap-2">
                       <CheckCircle className="w-3 h-3 text-brand-cyan mt-0.5 flex-shrink-0" />
                       <span>Analyzes skills match percentage</span>
@@ -375,10 +375,10 @@ export default function ResumeScoringModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex items-center justify-between flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex items-center justify-between flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium"
+            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium"
           >
             Cancel
           </button>

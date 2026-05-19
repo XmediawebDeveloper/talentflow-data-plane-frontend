@@ -87,8 +87,8 @@ export default function LegalCompliancePage() {
 
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="w-full space-y-6 p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Legal & Compliance' }]} />
 
       {/* SaaS Hero Header */}
@@ -112,21 +112,21 @@ export default function LegalCompliancePage() {
       </section>
 
       {/* Content */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-        <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <FileText className="h-5 w-5 text-brand-blue" />
           </span>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Acceptance History</h2>
-            <p className="text-xs text-gray-500">Record of all legal document acceptances for your organization.</p>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Acceptance History</h2>
+            <p className="text-xs text-gray-500 dark:text-slate-500">Record of all legal document acceptances for your organization.</p>
           </div>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-            <span className="ml-2 font-medium text-gray-600">Loading history...</span>
+            <span className="ml-2 font-medium text-gray-600 dark:text-slate-400">Loading history...</span>
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-16 text-red-500">
@@ -134,7 +134,7 @@ export default function LegalCompliancePage() {
             <span>{error}</span>
           </div>
         ) : history.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-slate-500">
             <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <ScrollText className="w-6 h-6 text-brand-blue" />
             </span>
@@ -144,7 +144,7 @@ export default function LegalCompliancePage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
+                <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                   <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Version</th>
                   <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Title</th>
                   <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted By</th>
@@ -153,20 +153,20 @@ export default function LegalCompliancePage() {
                   <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Document</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {paginatedHistory.map((record) => (
                   <tr key={record.id} className="hover:bg-brand-cyan/[0.04] transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-slate-50">
                       <span className="inline-flex items-center rounded-full bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{record.terms_title || '—'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{record.terms_title || '—'}</td>
                     <td className="px-6 py-4">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{record.accepted_by || record.accepted_by_name}</p>
-                        <p className="text-xs text-gray-500">{record.accepted_by_email}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{record.accepted_by || record.accepted_by_name}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500">{record.accepted_by_email}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
                       {formatIST(record.accepted_at)}
                     </td>
                     <td className="px-6 py-4">
@@ -185,7 +185,7 @@ export default function LegalCompliancePage() {
                           View
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-400">—</span>
+                        <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </td>
                   </tr>
@@ -211,7 +211,7 @@ export default function LegalCompliancePage() {
       {/* Document View Modal — same style as TermsAcceptanceModal */}
       {(docLoading || viewingDoc || docError) && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] dark:ring-white/[0.02] w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
             <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5 flex items-center justify-between shrink-0">
               <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-2xl" />
@@ -238,7 +238,7 @@ export default function LegalCompliancePage() {
               {docLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-                  <span className="ml-2 font-medium text-gray-600">Loading document...</span>
+                  <span className="ml-2 font-medium text-gray-600 dark:text-slate-400">Loading document...</span>
                 </div>
               ) : docError ? (
                 <div className="flex items-center justify-center py-16 text-red-500">
@@ -252,7 +252,7 @@ export default function LegalCompliancePage() {
 
             {/* Footer */}
             {viewingDoc && (
-              <div className="border-t border-gray-100 bg-white/50 px-6 py-3 flex items-center justify-between text-xs text-gray-500 shrink-0">
+              <div className="border-t border-gray-100 dark:border-slate-700/60 bg-white/50 dark:bg-slate-900/50 px-6 py-3 flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 shrink-0">
                 <span>Version: <span className="font-semibold text-brand-blue">{viewingDoc.version}</span></span>
                 <span>Effective: {formatIST(viewingDoc.effective_date)}</span>
               </div>

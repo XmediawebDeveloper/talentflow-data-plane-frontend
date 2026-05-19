@@ -718,8 +718,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
   return (
     <div className="flex-1 bg-slate-50 overflow-x-hidden overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="w-full bg-white rounded-2xl my-4 md:my-5">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <div className="px-4 md:px-8 pt-4 md:pt-6">
         <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
       </div>
@@ -824,43 +824,59 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         {/* Overview */}
         {activeTab === 'external' && view === 'overview' && (
           <div className="space-y-4 sm:space-y-6">
-            {/* Stats Cards */}
+            {/* Stats Cards — clicking a card drills into the tickets list pre-filtered by that status */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('open'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{openTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">Awaiting response</div>
-              </div>
+              </button>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('in_progress'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{inProgressTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">Being worked on</div>
-              </div>
+              </button>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('resolved'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{resolvedTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">Successfully solved</div>
-              </div>
+              </button>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('all'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{totalTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">All time</div>
-              </div>
+              </button>
             </div>
 
             {/* Quick Actions */}

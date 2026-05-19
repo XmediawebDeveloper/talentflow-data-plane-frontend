@@ -93,8 +93,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               <Building2 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Tenants</h1>
-              <p className="text-sm text-gray-600">Manage your organization tenants</p>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-50">Tenants</h1>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Manage your organization tenants</p>
             </div>
           </div>
           <button
@@ -110,34 +110,34 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
       {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search tenants..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
           />
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Tenants</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">{tenants.length}</p>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Total Tenants</p>
+              <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">{tenants.length}</p>
             </div>
-            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-gray-800" />
+            <div className="w-12 h-12 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-gray-800 dark:text-slate-100" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Active Tenants</p>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Active Tenants</p>
               <p className="text-3xl font-semibold text-green-600 mt-1">
                 {tenants.filter(t => t.isActive).length}
               </p>
@@ -147,51 +147,51 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Users</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">
+              <p className="text-sm text-gray-600 dark:text-slate-400">Total Users</p>
+              <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">
                 {tenants.reduce((acc, t) => acc + t.userCount, 0)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-gray-800" />
+            <div className="w-12 h-12 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-gray-800 dark:text-slate-100" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Tenants Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                 Tenant
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                 Plan
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                 Users
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                 Created
               </th>
-              <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 dark:divide-slate-700/60">
             {filteredTenants.map((tenant) => (
               <tr
                 key={tenant.id}
-                className="hover:bg-gray-50 cursor-pointer"
+                className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
                 onClick={() => onSelectTenant && onSelectTenant(tenant as unknown as Tenant)}
               >
                 <td className="px-6 py-4">
@@ -202,8 +202,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                       </span>
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
-                      <div className="text-xs text-gray-500">{tenant.email}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{tenant.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-slate-500">{tenant.email}</div>
                     </div>
                   </div>
                 </td>
@@ -220,8 +220,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-900">{tenant.userCount}</span>
+                    <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <span className="text-sm text-gray-900 dark:text-slate-50">{tenant.userCount}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -240,7 +240,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   </button>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
                     <Calendar className="w-4 h-4" />
                     {tenant.createdAt}
                   </div>
@@ -252,7 +252,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                         e.stopPropagation();
                         setEditingTenant(tenant);
                       }}
-                      className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                      className="p-2 text-gray-500 dark:text-slate-500 hover:text-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -261,7 +261,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                         e.stopPropagation();
                         handleDeleteTenant(tenant.id);
                       }}
-                      className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-2 text-gray-500 dark:text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -275,7 +275,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
         {filteredTenants.length === 0 && (
           <div className="text-center py-12">
             <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No tenants found</p>
+            <p className="text-gray-500 dark:text-slate-500">No tenants found</p>
           </div>
         )}
       </div>
@@ -283,20 +283,20 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
       {/* Create Tenant Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Create New Tenant</h2>
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Create New Tenant</h2>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+                className="p-2 text-gray-500 dark:text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
                aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Tenant Name
                 </label>
                 <input
@@ -304,11 +304,11 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   value={newTenant.name}
                   onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
                   placeholder="Enter tenant name"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Email
                 </label>
                 <input
@@ -316,15 +316,15 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   value={newTenant.email}
                   onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
                   placeholder="admin@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex justify-end gap-3 px-5 sm:px-6 py-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>

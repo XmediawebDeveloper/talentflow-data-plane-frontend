@@ -48,7 +48,7 @@ function DetailsContent() {
 
   if (!sessionId) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
         <div className="flex flex-col items-center justify-center h-64 space-y-3">
           <div className="text-red-500 text-base">No session selected</div>
           <button onClick={handleBack} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
@@ -61,7 +61,7 @@ function DetailsContent() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
         <div className="flex items-center justify-center h-64 bg-slate-50">
           <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>
@@ -71,7 +71,7 @@ function DetailsContent() {
 
   if (error || !session) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
         <div className="flex flex-col items-center justify-center h-64 space-y-3">
           <div className="text-red-500 text-base">{error || 'Session not found'}</div>
           <button onClick={handleBack} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
@@ -83,7 +83,7 @@ function DetailsContent() {
   }
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+    <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
       <CandidateResultsView interview={session} onBack={handleBack} />
     </div>
   );
@@ -92,7 +92,7 @@ function DetailsContent() {
 export default function AIInterviewResultDetailsPage() {
   return (
     <Suspense fallback={
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
         <div className="flex items-center justify-center h-64 bg-slate-50">
           <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>

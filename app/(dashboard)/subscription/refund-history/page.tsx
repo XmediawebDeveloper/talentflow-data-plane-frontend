@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Calendar, Sparkles, X, ChevronDown } from 'lucide-react';
+import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Calendar, Sparkles, X, ChevronDown, ChevronLeft } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
@@ -92,6 +92,15 @@ export default function RefundHistoryPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Two-step view: 'cards' shows only the stat tiles; 'list' shows filters + table.
+  // Initial render is 'cards' so the user explicitly drills in by clicking a stat card.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+
+  const openListView = (filter: string) => {
+    setStatusFilter(filter);
+    setPageView('list');
+  };
 
   useEffect(() => {
     fetchRefundData();
@@ -287,105 +296,111 @@ export default function RefundHistoryPage() {
 
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Refund History' }]} />
 
-        {/* SaaS Hero Header */}
-        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Refunds &amp; reversals
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <RotateCcw className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Refund History</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    Review every refund issued against your subscription and addons, download receipts, and track processing status.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {canExportRefundHistory && (
-                <button
-                  onClick={handleExportCSV}
-                  disabled={loading || filteredRefunds.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15 disabled:translate-y-0 disabled:opacity-60"
-                >
-                  <Download className="h-4 w-4" />
-                  Export CSV
-                </button>
-              )}
-              <button
-                onClick={fetchRefundData}
-                disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          </div>
-        </section>
+        {/* Header — actions */}
+        <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
+          {canExportRefundHistory && (
+            <button
+              onClick={handleExportCSV}
+              disabled={loading || filteredRefunds.length === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
+          )}
+          <button
+            onClick={fetchRefundData}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-70"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards — clicking a card drills into the refund list with the matching filter applied */}
         {stats && (
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+            <button
+              type="button"
+              onClick={() => openListView('all')}
+              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Total Refunded</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Total Refunded</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{formatAmount(stats.total_amount)}</p>
-                  <p className="mt-1 text-xs text-gray-500">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
                 </div>
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                   <RotateCcw className="h-5 w-5 text-brand-teal" />
                 </span>
               </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            </button>
+            <button
+              type="button"
+              onClick={() => openListView('completed')}
+              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'completed' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Completed</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">{stats.completed_count}</p>
-                  <p className="mt-1 text-xs text-gray-500">Processed successfully</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Completed</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{stats.completed_count}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Processed successfully</p>
                 </div>
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                   <CheckCircle2 className="h-5 w-5 text-brand-blue" />
                 </span>
               </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
+            </button>
+            <button
+              type="button"
+              onClick={() => openListView('pending')}
+              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'pending' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Pending</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Pending</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.pending_count}</p>
-                  <p className="mt-1 text-xs text-gray-500">Being processed</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Being processed</p>
                 </div>
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Clock className="h-5 w-5 text-brand-orange-deep" />
                 </span>
               </div>
-            </div>
+            </button>
           </div>
         )}
 
+        {pageView === 'list' && (
+          <>
+            {/* Back to overview */}
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setPageView('cards')}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back to overview
+              </button>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                {statusFilter === 'completed' && 'Showing completed refunds'}
+                {statusFilter === 'pending' && 'Showing pending refunds'}
+                {statusFilter === 'all' && 'Showing all refunds'}
+              </span>
+            </div>
+
         {/* Filters Section */}
-        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5">
+        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
             </span>
-            <span className="text-sm font-semibold text-gray-900">Filters</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -398,13 +413,13 @@ export default function RefundHistoryPage() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             {/* Search */}
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Search refunds"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
 
@@ -413,35 +428,35 @@ export default function RefundHistoryPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 pr-9 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               >
                 {STATUS_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
             </div>
 
             {/* Start Date */}
             <div className="relative">
-              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 placeholder="From date"
               />
             </div>
 
             {/* End Date */}
             <div className="relative">
-              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 placeholder="To date"
               />
             </div>
@@ -463,12 +478,12 @@ export default function RefundHistoryPage() {
 
         {/* Empty State */}
         {!loading && !error && filteredRefunds.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
               <RotateCcw className="h-7 w-7 text-brand-teal" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">No Refunds</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No Refunds</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
               {hasActiveFilters
                 ? 'No refunds match your filter criteria. Try adjusting your filters.'
                 : 'You have no refund transactions. Refunds will appear here when you cancel a subscription or request a refund.'}
@@ -486,11 +501,11 @@ export default function RefundHistoryPage() {
 
         {/* Refunds Table */}
         {!loading && !error && filteredRefunds.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+          <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900">Refunds</h2>
-                <p className="text-xs text-gray-500">
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Refunds</h2>
+                <p className="text-xs text-gray-500 dark:text-slate-500">
                   Showing {filteredRefunds.length} refund{filteredRefunds.length !== 1 ? 's' : ''}
                   {hasActiveFilters && ` (filtered from ${refunds.length})`}
                 </p>
@@ -498,18 +513,18 @@ export default function RefundHistoryPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px]">
-                <thead className="bg-gray-50/80">
+                <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[160px]">Refund #</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[150px]">Original Invoice</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[180px]">Reason</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Amount</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[110px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 w-[140px]">Actions</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Refund #</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[150px]">Original Invoice</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {paginatedRefunds.map((refund) => (
                     <tr key={refund.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                       <td className="px-4 py-4">
@@ -517,21 +532,21 @@ export default function RefundHistoryPage() {
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15">
                             <RotateCcw className="h-4 w-4 text-brand-teal" />
                           </span>
-                          <span className="truncate text-sm font-semibold text-gray-900" title={refund.invoice_number || ''}>
+                          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={refund.invoice_number || ''}>
                             {refund.invoice_number || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
+                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700 dark:text-slate-300">
                         {formatISTDate(refund.issue_date)}
                       </td>
                       <td className="px-4 py-4">
-                        <div className="truncate font-mono text-sm text-gray-900" title={refund.metadata?.original_invoice_number || ''}>
+                        <div className="truncate font-mono text-sm text-gray-900 dark:text-slate-50" title={refund.metadata?.original_invoice_number || ''}>
                           {refund.metadata?.original_invoice_number || '-'}
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="truncate text-sm text-gray-600" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
+                        <div className="truncate text-sm text-gray-600 dark:text-slate-400" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
                           {refund.metadata?.reason || refund.line_items?.[0]?.description || '-'}
                         </div>
                       </td>
@@ -559,7 +574,7 @@ export default function RefundHistoryPage() {
                           <button
                             onClick={() => handleDownloadRefund(refund)}
                             disabled={downloadingId === refund.id}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:translate-y-0 disabled:opacity-50"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:translate-y-0 disabled:opacity-50"
                             aria-label="Download Receipt" title="Download Receipt"
                           >
                             {downloadingId === refund.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -585,11 +600,13 @@ export default function RefundHistoryPage() {
             itemLabel="refunds"
           />
         )}
+          </>
+        )}
 
         {/* Refund Detail Modal */}
         {selectedRefund && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
               <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
@@ -613,62 +630,62 @@ export default function RefundHistoryPage() {
               </div>
               <div className="max-h-[calc(90vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Issue Date</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedRefund.issue_date)}</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.issue_date)}</p>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Original Invoice</p>
-                    <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
+                    <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Status</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
                     <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedRefund.status)}`}>
                       {getStatusIcon(selectedRefund.status)}
                       {selectedRefund.status}
                     </span>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Refund Method</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900">{selectedRefund.metadata?.refund_method || '-'}</p>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Refund Method</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.refund_method || '-'}</p>
                   </div>
                   {selectedRefund.payment_method && (
-                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Payment Method</p>
-                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900">{selectedRefund.payment_method}</p>
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
+                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedRefund.payment_method}</p>
                     </div>
                   )}
                   {selectedRefund.paid_at && (
-                    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-gray-100">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Paid At</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900">{formatISTDate(selectedRefund.paid_at)}</p>
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.paid_at)}</p>
                     </div>
                   )}
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
-                  <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Refund Details</p>
+                <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Refund Details</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600">Description</span>
-                      <span className="text-right text-sm font-medium text-gray-900">{selectedRefund.line_items?.[0]?.description || '-'}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Description</span>
+                      <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.line_items?.[0]?.description || '-'}</span>
                     </div>
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600">Reason</span>
-                      <span className="text-right text-sm font-medium text-gray-900">{selectedRefund.metadata?.reason || '-'}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Reason</span>
+                      <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.reason || '-'}</span>
                     </div>
                     {selectedRefund.metadata?.refund_percentage && (
                       <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-gray-600">Refund Percentage</span>
-                        <span className="text-sm font-medium text-gray-900">{selectedRefund.metadata.refund_percentage}%</span>
+                        <span className="text-sm text-gray-600 dark:text-slate-400">Refund Percentage</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.metadata.refund_percentage}%</span>
                       </div>
                     )}
                     {selectedRefund.metadata?.processed_by && (
                       <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-gray-600">Processed By</span>
-                        <span className="text-sm font-medium text-gray-900">{selectedRefund.metadata.processed_by}</span>
+                        <span className="text-sm text-gray-600 dark:text-slate-400">Processed By</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.metadata.processed_by}</span>
                       </div>
                     )}
                   </div>
@@ -685,16 +702,16 @@ export default function RefundHistoryPage() {
                 </div>
 
                 {selectedRefund.metadata?.notes && (
-                  <div className="rounded-xl border border-gray-100 bg-slate-50 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Notes</p>
-                    <p className="mt-1 text-sm text-gray-800">{selectedRefund.metadata.notes}</p>
+                  <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Notes</p>
+                    <p className="mt-1 text-sm text-gray-800 dark:text-slate-100">{selectedRefund.metadata.notes}</p>
                   </div>
                 )}
 
                 {selectedRefund.metadata?.razorpay_refund_id && (
                   <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Refund ID</p>
-                    <p className="mt-1 break-all font-mono text-sm text-gray-900">{selectedRefund.metadata.razorpay_refund_id}</p>
+                    <p className="mt-1 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedRefund.metadata.razorpay_refund_id}</p>
                   </div>
                 )}
 
@@ -712,7 +729,7 @@ export default function RefundHistoryPage() {
                   </button>
                   <button
                     onClick={() => setSelectedRefund(null)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+                    className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
                   >
                     Close
                   </button>

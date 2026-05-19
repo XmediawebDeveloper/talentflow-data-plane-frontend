@@ -196,11 +196,11 @@ export default function RoleManagement() {
       const permCount = (changes.permissions as number[])?.length || 0;
       return (
         <div className="space-y-1">
-          <div className="text-sm text-gray-700">
-            <span className="font-medium text-gray-900">Role:</span> {roleName}
+          <div className="text-sm text-gray-700 dark:text-slate-300">
+            <span className="font-medium text-gray-900 dark:text-slate-50">Role:</span> {roleName}
           </div>
           {permCount > 0 && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 dark:text-slate-500">
               {permCount} permission{permCount !== 1 ? 's' : ''} assigned
             </div>
           )}
@@ -213,11 +213,11 @@ export default function RoleManagement() {
       const roleCode = changes.role_code as string;
       return (
         <div className="space-y-1">
-          <div className="text-sm text-gray-700">
-            <span className="font-medium text-gray-900">Deleted:</span> {roleName}
+          <div className="text-sm text-gray-700 dark:text-slate-300">
+            <span className="font-medium text-gray-900 dark:text-slate-50">Deleted:</span> {roleName}
           </div>
           {roleCode && (
-            <div className="text-xs text-gray-500">Code: {roleCode}</div>
+            <div className="text-xs text-gray-500 dark:text-slate-500">Code: {roleCode}</div>
           )}
         </div>
       );
@@ -226,7 +226,7 @@ export default function RoleManagement() {
     if (action === 'role_update' || action === 'role_updated') {
       const changesData = changes.changes as Record<string, { from: unknown; to: unknown }> | undefined;
       if (!changesData) {
-        return <span className="text-sm text-gray-500">Settings updated</span>;
+        return <span className="text-sm text-gray-500 dark:text-slate-500">Settings updated</span>;
       }
 
       return (
@@ -236,18 +236,18 @@ export default function RoleManagement() {
               const fromCount = Array.isArray(change.from) ? change.from.length : 0;
               const toCount = Array.isArray(change.to) ? change.to.length : 0;
               return (
-                <div key={field} className="text-xs text-gray-600">
-                  <span className="font-medium text-gray-900">Permissions:</span> {fromCount} to {toCount}
+                <div key={field} className="text-xs text-gray-600 dark:text-slate-400">
+                  <span className="font-medium text-gray-900 dark:text-slate-50">Permissions:</span> {fromCount} to {toCount}
                 </div>
               );
             }
 
             return (
-              <div key={field} className="text-xs text-gray-600">
-                <span className="font-medium capitalize text-gray-900">{field.replace(/_/g, ' ')}:</span>{' '}
-                <span className="text-gray-400">{String(change.from || '-')}</span>
-                <span className="mx-1 text-gray-400">to</span>
-                <span className="text-gray-700">{String(change.to || '-')}</span>
+              <div key={field} className="text-xs text-gray-600 dark:text-slate-400">
+                <span className="font-medium capitalize text-gray-900 dark:text-slate-50">{field.replace(/_/g, ' ')}:</span>{' '}
+                <span className="text-gray-400 dark:text-slate-500">{String(change.from || '-')}</span>
+                <span className="mx-1 text-gray-400 dark:text-slate-500">to</span>
+                <span className="text-gray-700 dark:text-slate-300">{String(change.to || '-')}</span>
               </div>
             );
           })}
@@ -261,13 +261,13 @@ export default function RoleManagement() {
       return (
         <div className="space-y-1">
           {oldRoles && oldRoles.length > 0 && (
-            <div className="text-xs text-gray-500">
-              <span className="font-medium text-gray-900">From:</span> {oldRoles.join(', ') || 'None'}
+            <div className="text-xs text-gray-500 dark:text-slate-500">
+              <span className="font-medium text-gray-900 dark:text-slate-50">From:</span> {oldRoles.join(', ') || 'None'}
             </div>
           )}
           {newRoles && (
-            <div className="text-xs text-gray-700">
-              <span className="font-medium text-gray-900">To:</span> {newRoles.join(', ') || 'None'}
+            <div className="text-xs text-gray-700 dark:text-slate-300">
+              <span className="font-medium text-gray-900 dark:text-slate-50">To:</span> {newRoles.join(', ') || 'None'}
             </div>
           )}
         </div>
@@ -275,7 +275,7 @@ export default function RoleManagement() {
     }
 
     return (
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-gray-500 dark:text-slate-500">
         {Object.keys(changes).length} field{Object.keys(changes).length !== 1 ? 's' : ''} modified
       </span>
     );
@@ -291,9 +291,9 @@ export default function RoleManagement() {
   }, {} as Record<string, Permission[]>);
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -342,14 +342,14 @@ export default function RoleManagement() {
           </div>
         </section>
 
-        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="grid gap-2 sm:grid-cols-2">
             <button
               onClick={() => setActiveTab('roles')}
               className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
                 activeTab === 'roles'
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                  : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
               <Shield className="h-4 w-4" />
@@ -360,7 +360,7 @@ export default function RoleManagement() {
               className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
                 activeTab === 'audit'
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                  : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
               <History className="h-4 w-4" />
@@ -371,22 +371,22 @@ export default function RoleManagement() {
 
         {activeTab === 'roles' && (
           <>
-            <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5">
+            <section className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full lg:max-w-md">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                   <input
                     aria-label="Search roles"
                     type="text"
                     placeholder="Search by role name or code"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                  <span className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1.5 ring-1 ring-gray-200">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-slate-500">
+                  <span className="inline-flex items-center rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                     {filteredRoles.length} visible roles
                   </span>
                   <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-3 py-1.5 text-brand-blue ring-1 ring-brand-cyan/20">
@@ -400,44 +400,44 @@ export default function RoleManagement() {
             </section>
 
             <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm text-gray-500">Total Roles</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{roles.length}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">Total Roles</p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{roles.length}</p>
                   </div>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                     <Shield className="h-5 w-5 text-brand-blue" />
                   </span>
                 </div>
               </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02]">
+              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm text-gray-500">System Roles</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{systemRolesCount}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">System Roles</p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{systemRolesCount}</p>
                   </div>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
                     <Lock className="h-5 w-5 text-brand-cyan" />
                   </span>
                 </div>
               </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm text-gray-500">Assigned Users</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{assignedUsersCount}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">Assigned Users</p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{assignedUsersCount}</p>
                   </div>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                     <Users className="h-5 w-5 text-brand-teal" />
                   </span>
                 </div>
               </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
+              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm text-gray-500">Permissions Catalog</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{managedPermissionsCount}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">Permissions Catalog</p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{managedPermissionsCount}</p>
                   </div>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                     <Sparkles className="h-5 w-5 text-brand-orange-deep" />
@@ -446,11 +446,11 @@ export default function RoleManagement() {
               </div>
             </section>
 
-            <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-              <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+            <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Roles Directory</h2>
-                  <p className="text-sm text-gray-500">Review access levels, inheritance, and role usage across the organization.</p>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Roles Directory</h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-500">Review access levels, inheritance, and role usage across the organization.</p>
                 </div>
               </div>
 
@@ -463,25 +463,25 @@ export default function RoleManagement() {
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Shield className="h-6 w-6 text-brand-blue" />
                   </div>
-                  <h3 className="text-base font-semibold text-gray-900">No roles found</h3>
-                  <p className="mt-1 text-sm text-gray-500">Try a different search query or create a new role.</p>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No roles found</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or create a new role.</p>
                 </div>
               ) : (
                 <>
                   <div className="hidden xl:block overflow-x-auto">
                     <table className="w-full min-w-[980px]">
-                      <thead className="bg-gray-50/80">
+                      <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                         <tr className="text-left">
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Role</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Type</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Inheritance</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Permissions</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Users</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Priority</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 text-right">Actions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Inheritance</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Users</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Priority</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {filteredRoles.map((role) => (
                           <tr key={role.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                             <td className="px-6 py-5">
@@ -491,25 +491,25 @@ export default function RoleManagement() {
                                 </span>
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-semibold text-gray-900">{role.name}</p>
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
                                     {role.is_default && (
                                       <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-[11px] font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                                         Default
                                       </span>
                                     )}
                                   </div>
-                                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400">{role.code}</p>
-                                  <p className="mt-2 max-w-md text-sm text-gray-500">{role.description || 'No description provided.'}</p>
+                                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
+                                  <p className="mt-2 max-w-md text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-5">
-                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${role.is_system ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
+                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
                                 {role.is_system ? 'System role' : 'Custom role'}
                               </span>
                             </td>
-                            <td className="px-6 py-5 text-sm text-gray-600">
-                              {role.parent_role_name ? role.parent_role_name : <span className="text-gray-400">Independent</span>}
+                            <td className="px-6 py-5 text-sm text-gray-600 dark:text-slate-400">
+                              {role.parent_role_name ? role.parent_role_name : <span className="text-gray-400 dark:text-slate-500">Independent</span>}
                             </td>
                             <td className="px-6 py-5">
                               <span className="inline-flex items-center rounded-full bg-brand-blue/[0.06] px-3 py-1 text-sm font-medium text-brand-blue ring-1 ring-brand-blue/10">
@@ -517,13 +517,13 @@ export default function RoleManagement() {
                               </span>
                             </td>
                             <td className="px-6 py-5">
-                              <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 ring-1 ring-gray-200">
-                                <Users className="h-4 w-4 text-gray-400" />
-                                <span className="text-sm font-medium text-gray-700">{role.user_count}</span>
+                              <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
+                                <Users className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{role.user_count}</span>
                               </div>
                             </td>
                             <td className="px-6 py-5">
-                              <span className="text-sm font-semibold text-gray-900">{role.priority}</span>
+                              <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.priority}</span>
                             </td>
                             <td className="px-6 py-5">
                               <div className="flex items-center justify-end gap-2">
@@ -538,14 +538,14 @@ export default function RoleManagement() {
                                 {!protectedRoleCodes.includes(role.code) ? (
                                   <button
                                     onClick={() => handleEditRole(role)}
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                                     title={`Edit ${role.name}`}
                                     aria-label={`Edit ${role.name}`}
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-300" title="Protected role">
+                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300" title="Protected role">
                                     <Lock className="h-4 w-4" />
                                   </span>
                                 )}
@@ -559,7 +559,7 @@ export default function RoleManagement() {
                                     <Ban className="h-4 w-4" />
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-300" title="System roles cannot be deleted">
+                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300" title="System roles cannot be deleted">
                                     <Lock className="h-4 w-4" />
                                   </span>
                                 )}
@@ -575,7 +575,7 @@ export default function RoleManagement() {
                     {filteredRoles.map((role) => (
                       <article
                         key={role.id}
-                        className="rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-brand-blue/[0.02] p-4 shadow-sm transition-all hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/5"
+                        className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-brand-blue/[0.02] dark:from-slate-900 dark:to-slate-900 p-4 shadow-sm transition-all hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-3">
@@ -584,13 +584,13 @@ export default function RoleManagement() {
                             </span>
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="text-sm font-semibold text-gray-900">{role.name}</h3>
-                                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${role.is_system ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</h3>
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
                                   {role.is_system ? 'System' : 'Custom'}
                                 </span>
                               </div>
-                              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400">{role.code}</p>
-                              <p className="mt-2 text-sm text-gray-500">{role.description || 'No description provided.'}</p>
+                              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
+                              <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                             </div>
                           </div>
                           {role.is_default && (
@@ -601,21 +601,21 @@ export default function RoleManagement() {
                         </div>
 
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                            <div className="text-xs text-gray-500">Permissions</div>
-                            <div className="mt-1 font-semibold text-gray-900">{role.permission_count}</div>
+                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                            <div className="text-xs text-gray-500 dark:text-slate-500">Permissions</div>
+                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.permission_count}</div>
                           </div>
-                          <div className="rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                            <div className="text-xs text-gray-500">Users</div>
-                            <div className="mt-1 font-semibold text-gray-900">{role.user_count}</div>
+                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                            <div className="text-xs text-gray-500 dark:text-slate-500">Users</div>
+                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.user_count}</div>
                           </div>
-                          <div className="rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                            <div className="text-xs text-gray-500">Priority</div>
-                            <div className="mt-1 font-semibold text-gray-900">{role.priority}</div>
+                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                            <div className="text-xs text-gray-500 dark:text-slate-500">Priority</div>
+                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.priority}</div>
                           </div>
-                          <div className="rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                            <div className="text-xs text-gray-500">Inherits</div>
-                            <div className="mt-1 font-semibold text-gray-900">{role.parent_role_name || 'Independent'}</div>
+                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                            <div className="text-xs text-gray-500 dark:text-slate-500">Inherits</div>
+                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.parent_role_name || 'Independent'}</div>
                           </div>
                         </div>
 
@@ -630,7 +630,7 @@ export default function RoleManagement() {
                           {!protectedRoleCodes.includes(role.code) && (
                             <button
                               onClick={() => handleEditRole(role)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                             >
                               <Pencil className="h-4 w-4" />
                               Edit
@@ -656,13 +656,13 @@ export default function RoleManagement() {
         )}
 
         {activeTab === 'audit' && (
-          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+          <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Access Activity Log</h2>
-                <p className="text-sm text-gray-500">Track role lifecycle changes and permission updates for audit readiness.</p>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Access Activity Log</h2>
+                <p className="text-sm text-gray-500 dark:text-slate-500">Track role lifecycle changes and permission updates for audit readiness.</p>
               </div>
-              <span className="hidden rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 ring-1 ring-gray-200 sm:inline-flex">
+              <span className="hidden rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 text-xs text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700 sm:inline-flex">
                 {auditLogs.length} events
               </span>
             </div>
@@ -672,23 +672,23 @@ export default function RoleManagement() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
                   <History className="h-6 w-6 text-brand-cyan" />
                 </div>
-                <h3 className="text-base font-semibold text-gray-900">No audit logs found</h3>
-                <p className="mt-1 text-sm text-gray-500">Recent role changes will appear here once activity is recorded.</p>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No audit logs found</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Recent role changes will appear here once activity is recorded.</p>
               </div>
             ) : (
               <>
                 <div className="hidden lg:block overflow-x-auto">
                   <table className="w-full min-w-[980px]">
-                    <thead className="bg-gray-50/80">
+                    <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                       <tr className="text-left">
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Action</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Entity</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Performed By</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Date</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Changes</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Action</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Entity</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Performed By</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Date</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Changes</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                       {auditLogs.map((log) => (
                         <tr key={log.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                           <td className="px-6 py-5">
@@ -697,13 +697,13 @@ export default function RoleManagement() {
                             </span>
                           </td>
                           <td className="px-6 py-5">
-                            <div className="text-sm font-semibold text-gray-900">{log.entity_name || log.entity_id}</div>
-                            <div className="mt-1 text-xs uppercase tracking-[0.14em] text-gray-400">{log.entity_type}</div>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{log.entity_name || log.entity_id}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500">{log.entity_type}</div>
                           </td>
-                          <td className="px-6 py-5 text-sm text-gray-600">
+                          <td className="px-6 py-5 text-sm text-gray-600 dark:text-slate-400">
                             {log.performed_by_name || log.performed_by}
                           </td>
-                          <td className="px-6 py-5 text-sm text-gray-600">
+                          <td className="px-6 py-5 text-sm text-gray-600 dark:text-slate-400">
                             {formatIST(log.performed_at)}
                           </td>
                           <td className="px-6 py-5">
@@ -719,20 +719,20 @@ export default function RoleManagement() {
                   {auditLogs.map((log) => (
                     <article
                       key={log.id}
-                      className="rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-brand-blue/[0.02] p-4 shadow-sm"
+                      className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-brand-blue/[0.02] dark:from-slate-900 dark:to-slate-900 p-4 shadow-sm"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getActionBadgeClass(log.action)}`}>
                           {getAuditActionLabel(log.action)}
                         </span>
-                        <span className="text-xs text-gray-400">{formatIST(log.performed_at)}</span>
+                        <span className="text-xs text-gray-400 dark:text-slate-500">{formatIST(log.performed_at)}</span>
                       </div>
                       <div className="mt-4">
-                        <h3 className="text-sm font-semibold text-gray-900">{log.entity_name || log.entity_id}</h3>
-                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-gray-400">{log.entity_type}</p>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{log.entity_name || log.entity_id}</h3>
+                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{log.entity_type}</p>
                       </div>
-                      <p className="mt-4 text-sm text-gray-600">By {log.performed_by_name || log.performed_by}</p>
-                      <div className="mt-4 rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+                      <p className="mt-4 text-sm text-gray-600 dark:text-slate-400">By {log.performed_by_name || log.performed_by}</p>
+                      <div className="mt-4 rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                         {formatAuditChanges(log.action, log.changes)}
                       </div>
                     </article>
@@ -747,8 +747,8 @@ export default function RoleManagement() {
 
       {viewingRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-            <div className="relative overflow-hidden bg-brand-blue px-5 py-5 text-white sm:px-6">
+          <div className="max-h-[90vh] w-full max-w-5xl rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5 flex flex-col">
+            <div className="relative overflow-hidden bg-brand-blue px-5 py-5 text-white sm:px-6 shrink-0 rounded-t-3xl">
               <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
               <div className="relative flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
@@ -778,52 +778,52 @@ export default function RoleManagement() {
               </div>
             </div>
 
-            <div className="max-h-[calc(90vh-104px)] overflow-y-auto p-4 sm:p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Role Code</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900">{viewingRole.code}</div>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Role Code</div>
+                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.code}</div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Assigned Users</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900">{viewingRole.user_count}</div>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Assigned Users</div>
+                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.user_count}</div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Permissions</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900">{viewingRolePermissions.length}</div>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Permissions</div>
+                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRolePermissions.length}</div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-black/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Inheritance</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900">{viewingRole.parent_role_name || 'Independent'}</div>
+                <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Inheritance</div>
+                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.parent_role_name || 'Independent'}</div>
                 </div>
               </div>
 
               {viewingRolePermissions.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-16 text-center">
+                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-6 py-16 text-center">
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Shield className="h-6 w-6 text-brand-blue" />
                   </div>
-                  <h3 className="text-base font-semibold text-gray-900">No permissions allocated</h3>
-                  <p className="mt-1 text-sm text-gray-500">This role does not currently expose any explicit permissions.</p>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No permissions allocated</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">This role does not currently expose any explicit permissions.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {Object.entries(groupedPermissions).map(([moduleName, modulePermissions]) => (
                     <section
                       key={moduleName}
-                      className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
+                      className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]"
                     >
-                      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 sm:px-5">
+                      <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
                         <div>
-                          <h3 className="text-sm font-semibold capitalize text-gray-900">{moduleName.replace(/_/g, ' ')}</h3>
-                          <p className="text-xs text-gray-500">{modulePermissions.length} permission{modulePermissions.length !== 1 ? 's' : ''}</p>
+                          <h3 className="text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{moduleName.replace(/_/g, ' ')}</h3>
+                          <p className="text-xs text-gray-500 dark:text-slate-500">{modulePermissions.length} permission{modulePermissions.length !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
                       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                         {modulePermissions.map((permission) => (
                           <div
                             key={permission.id}
-                            className="rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4 transition-colors hover:border-brand-blue/15"
+                            className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 p-4 transition-colors hover:border-brand-blue/15"
                           >
                             <div className="flex items-start gap-3">
                               <span
@@ -836,14 +836,14 @@ export default function RoleManagement() {
                                     ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15'
                                     : permission.action === 'delete'
                                     ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15'
-                                    : 'bg-gray-100 text-gray-600 ring-gray-200'
+                                    : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700'
                                 }`}
                               >
                                 <span className="text-xs font-semibold uppercase">{permission.action?.[0] || 'P'}</span>
                               </span>
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900">{permission.name}</p>
-                                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-gray-400">{permission.code}</p>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{permission.name}</p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500">{permission.code}</p>
                               </div>
                             </div>
                           </div>
@@ -853,6 +853,17 @@ export default function RoleManagement() {
                   ))}
                 </div>
               )}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-5 py-4 sm:px-6 shrink-0 rounded-b-3xl">
+              <button
+                onClick={() => {
+                  setViewingRole(null);
+                  setViewingRolePermissions([]);
+                }}
+                className="rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

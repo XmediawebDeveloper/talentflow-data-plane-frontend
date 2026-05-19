@@ -30,7 +30,7 @@ export interface TeamFormData {
 }
 
 const fieldClassName =
-  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
+  'w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
 
 export default function TeamFormModal({
   isOpen,
@@ -75,7 +75,7 @@ export default function TeamFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
         <div className="sticky top-0 z-10 overflow-hidden border-b border-white/10 bg-brand-blue px-6 py-5 text-white">
           <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
           <div className="relative flex items-start justify-between gap-4">
@@ -110,7 +110,7 @@ export default function TeamFormModal({
         <div className="space-y-6 p-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <label htmlFor="team-name" className="mb-2 block text-sm font-medium text-gray-700">
+              <label htmlFor="team-name" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                 Team Name <span className="text-brand-orange">*</span>
               </label>
               <input
@@ -122,20 +122,20 @@ export default function TeamFormModal({
                 maxLength={255}
                 className={fieldClassName}
               />
-              <p className="mt-2 text-xs text-gray-500">{teamName.length}/255 characters</p>
+              <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{teamName.length}/255 characters</p>
             </div>
 
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 ring-1 ring-black/[0.02]">
-              <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Selected Members</div>
-              <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{selectedMemberIds.length}</div>
-              <p className="mt-1 text-sm text-gray-500">
+            <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              <div className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Selected Members</div>
+              <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{selectedMemberIds.length}</div>
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">
                 {teamLeadId ? 'Team lead assigned' : 'No lead assigned yet'}
               </p>
             </div>
           </div>
 
           <div>
-            <label htmlFor="team-description" className="mb-2 block text-sm font-medium text-gray-700">
+            <label htmlFor="team-description" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
               Description
             </label>
             <textarea
@@ -147,7 +147,7 @@ export default function TeamFormModal({
               rows={4}
               className={`${fieldClassName} resize-y`}
             />
-            <p className="mt-2 text-xs text-gray-500">{description.length}/1000 characters</p>
+            <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{description.length}/1000 characters</p>
           </div>
 
           <MemberSelector
@@ -160,12 +160,12 @@ export default function TeamFormModal({
           />
         </div>
 
-        <div className="sticky bottom-0 space-y-3 border-t border-gray-100 bg-white/95 px-6 py-4 backdrop-blur-sm">
+        <div className="sticky bottom-0 space-y-3 border-t border-gray-100 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900 px-6 py-4 backdrop-blur-sm">
           <div className="flex gap-3">
             <button
               onClick={onClose}
               disabled={isSubmitting || isDeleting}
-              className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>

@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -64,7 +65,7 @@ function QuickActionButton({
         className={`
           w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all text-left flex items-center gap-2.5
           ${disabled
-            ? 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200'
+            ? 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed border border-gray-200 dark:border-slate-700'
             : className || 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
           }
         `}
@@ -105,6 +106,7 @@ interface JobDetailViewProps {
   job: ExtendedJob;
   onBack: () => void;
   initialTab?: 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match';
+  initialAction?: 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status';
   onEdit?: (job: Job) => void;
   resumes?: any[]; // All resumes for selection
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
@@ -125,7 +127,7 @@ interface JobDetailViewProps {
   totalCount?: number;
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
@@ -281,6 +283,30 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+
+  // Trigger a Quick Action automatically when a caller deep-links into the
+  // JD page with ?action=... (e.g. the job-openings three-dot menu).
+  useEffect(() => {
+    if (!initialAction || !job?.id) return;
+    if (initialAction === 'ai-talent-match') {
+      if (permissions.canRunAiMatch && aiTalentMatchAvailable && features.ai_talent_match && job.status !== 'Disabled') {
+        setShowAIMatchPanel(true);
+      }
+    } else if (initialAction === 'score-resumes') {
+      if (permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled') {
+        setShowSelectSourceModal(true);
+      }
+    } else if (initialAction === 'invite-assessment') {
+      if (permissions.canCreateAssessments && hasPlanFeature('assessment') && features.assessment && job.status !== 'Disabled') {
+        handleOpenShareAssessment();
+      }
+    } else if (initialAction === 'assessment-status') {
+      if (permissions.canViewAssessments && hasPlanFeature('assessment') && features.assessment) {
+        setShowTrackInvitesModal(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAction, job?.id]);
 
 
   // Fetch JD History when modal opens
@@ -635,13 +661,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       case 'Draft':
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       case 'Closed':
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
       case 'Disabled':  // JD15: Disabled status styling
         return 'bg-red-100 text-red-700 border-red-200';
       case 'Archived':
         return 'bg-purple-100 text-purple-700 border-purple-200';
       default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
   };
 
@@ -956,45 +982,49 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   }
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       {/* Header */}
       <div className="mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Jobs
-          </button>
-          {totalCount != null && totalCount > 0 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
-                disabled={!prevId}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </button>
-              <span className="text-xs text-gray-400 whitespace-nowrap">
-                {(currentIndex ?? 0) + 1} / {totalCount}
-              </span>
-              <button
-                onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
-                disabled={!nextId}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+        {/* Breadcrumb */}
+        <div className="mb-3">
+          <PageBreadcrumb
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+              { label: job.title || 'Job Details' },
+            ]}
+          />
         </div>
 
+        {/* Previous / Next navigation - sits below the breadcrumb */}
+        {totalCount != null && totalCount > 0 && (
+          <div className="flex items-center justify-end gap-2 mb-3">
+            <button
+              onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
+              disabled={!prevId}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+            <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap px-2">
+              {(currentIndex ?? 0) + 1} of {totalCount}
+            </span>
+            <button
+              onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
+              disabled={!nextId}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Job Details Card */}
-        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               {/* Row 1: JD ID + Job Title + Status */}
@@ -1004,14 +1034,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="font-normal text-gray-900 text-base sm:text-lg truncate">{job.title}</h1>
+                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">{job.title}</h1>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
               </div>
 
               {/* Row 2: Location + Education + Employment Type + Work Mode + Posted Date + Posted By + Version */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
                 {/* Location */}
                 {job.location && (
                   <>
@@ -1025,7 +1055,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                 {/* Experience Level */}
                 {job.experience_level && (
-                  <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                  <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
                     {(() => {
                       const label =
                         job.experience_level === 'entry' || job.experience_level === 'entry_level' ? 'Entry Level' :
@@ -1045,7 +1075,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Education */}
                 {job.education && (
                   <>
-                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
                       {job.education === 'bachelors' ? "Bachelor's Degree" :
                        job.education === 'masters' ? "Master's Degree" :
                        job.education === 'doctorate' ? 'Doctorate / PhD' :
@@ -1059,7 +1089,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Employment Type */}
                 {job.employmentType && (
                   <>
-                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
                       {job.employmentType === 'full_time' ? 'Full Time' :
                        job.employmentType === 'part_time' ? 'Part Time' :
                        job.employmentType === 'contract' ? 'Contract' :
@@ -1073,7 +1103,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Work Mode */}
                 {job.workMode && (
                   <>
-                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
                       {job.workMode === 'onsite' ? 'On-site' :
                        job.workMode === 'remote' ? 'Remote' :
                        job.workMode === 'hybrid' ? 'Hybrid' :
@@ -1242,14 +1272,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       </div>
 
       {/* Tab Navigation */}
-      <div className="mb-5 bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center border-b border-gray-200 overflow-x-auto">
+      <div className="mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2.5 text-sm transition-colors relative whitespace-nowrap ${
               activeTab === 'overview'
                 ? 'text-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
             }`}
           >
             Overview
@@ -1263,14 +1293,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'scored-resumes'
                   ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               Scored Resumes
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'scored-resumes'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-600'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
                 {scoredResumesStats.total}
               </span>
@@ -1285,14 +1315,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'assessment-results'
                   ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               Assessment Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'assessment-results'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-600'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
                 {assessmentResults.length}
               </span>
@@ -1307,14 +1337,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'ai-talent-match'
                   ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               AI Talent Match Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'ai-talent-match'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-600'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
                 {aiMatchCandidates.length}
               </span>
@@ -1328,11 +1358,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       {/* Overview Tab Content */}
       {activeTab === 'overview' && (
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left Column - Job Details */}
-        <div className="lg:col-span-8 space-y-4">
+        <div className="lg:col-span-8 space-y-5">
           {/* Complete Job Description */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             {/* JD Header - COMMENTED OUT
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-8 py-6">
               <div className="flex items-start justify-between mb-2">
@@ -1381,11 +1411,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Job Description - Actual Content */}
                 {job.description ? (
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900 mb-3">
+                    <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">
                       Job Description
                     </h2>
-                    <div className="h-px bg-gray-200 mb-3"></div>
-                    <div className="markdown-content prose prose-sm max-w-none text-gray-700">
+                    <div className="h-px bg-gray-200 dark:bg-slate-700 mb-3"></div>
+                    <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
                           match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
@@ -1396,7 +1426,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     </div>
                   </div>
                 ) : (
-                  <div className="text-gray-500 italic text-center py-8">
+                  <div className="text-gray-500 dark:text-slate-500 italic text-center py-8">
                     No job description provided
                   </div>
                 )}
@@ -1440,9 +1470,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
           <div className={`grid ${hasPlanFeature('assessment') ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
             {/* Internal Recruiter Notes */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Internal Recruiter Notes</h3>
-              <div className="text-sm text-gray-600 space-y-2">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
+              <div className="text-sm text-gray-600 dark:text-slate-400 space-y-2">
                 {job.internalRecruiterComments && job.internalRecruiterComments.length > 0 ? (
                   <ul className="list-disc list-inside space-y-1">
                     {job.internalRecruiterComments.map((note, index) => (
@@ -1450,20 +1480,20 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-gray-500 italic">No internal notes added</p>
+                  <p className="text-gray-500 dark:text-slate-500 italic">No internal notes added</p>
                 )}
               </div>
             </div>
 
             {/* Assessment Guidance - only if plan includes assessment */}
             {hasPlanFeature('assessment') && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <h3 className="text-sm font-medium text-gray-900 mb-3">Assessment Guidance</h3>
-                <div className="text-sm text-gray-600">
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
+                <div className="text-sm text-gray-600 dark:text-slate-400">
                   {job.assessmentGuidance ? (
                     <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
                   ) : (
-                    <p className="text-gray-500 italic">No assessment guidance provided</p>
+                    <p className="text-gray-500 dark:text-slate-500 italic">No assessment guidance provided</p>
                   )}
                 </div>
               </div>
@@ -1472,10 +1502,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         </div>
 
         {/* Right Column - Actions & Activity */}
-        <div className="lg:col-span-4 space-y-4">
+        <div className="lg:col-span-4 space-y-5">
           {/* Quick Actions */}
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Quick Actions</h3>
             <div className="space-y-2">
               {/* 1. View JD History */}
               {permissions.canReadJD && (
@@ -1546,42 +1576,42 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </div>
 
           {/* Applicant Statistics */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Applicant Statistics</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Applicant Statistics</h3>
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Total Scored Resumes</span>
-                  <span className="font-medium text-gray-900">{scoredResumesStats.total}</span>
+                  <span className="text-gray-600 dark:text-slate-400">Total Scored Resumes</span>
+                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.total}</span>
                 </div>
-                <div className="bg-gray-200 rounded-full h-2">
+                <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Exact Match</span>
-                  <span className="font-medium text-gray-900">{scoredResumesStats.exactMatch}</span>
+                  <span className="text-gray-600 dark:text-slate-400">Exact Match</span>
+                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.exactMatch}</span>
                 </div>
-                <div className="bg-gray-200 rounded-full h-2">
+                <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Partial Match</span>
-                  <span className="font-medium text-gray-900">{scoredResumesStats.partialMatch}</span>
+                  <span className="text-gray-600 dark:text-slate-400">Partial Match</span>
+                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch}</span>
                 </div>
-                <div className="bg-gray-200 rounded-full h-2">
+                <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">No Match</span>
-                  <span className="font-medium text-gray-900">{scoredResumesStats.noMatch}</span>
+                  <span className="text-gray-600 dark:text-slate-400">No Match</span>
+                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.noMatch}</span>
                 </div>
-                <div className="bg-gray-200 rounded-full h-2">
+                <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
@@ -1589,15 +1619,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </div>
 
           {/* Recent Activity */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Recent Activity</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Recent Activity</h3>
             <div className="space-y-3">
               {scoredResumesStats.total > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
-                    <div className="text-sm text-gray-900">{scoredResumesStats.total} resume(s) scored</div>
-                    <div className="text-xs text-gray-500">Resume scoring completed</div>
+                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.total} resume(s) scored</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">Resume scoring completed</div>
                   </div>
                 </div>
               )}
@@ -1605,8 +1635,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
-                    <div className="text-sm text-gray-900">{scoredResumesStats.exactMatch} exact match(es) found</div>
-                    <div className="text-xs text-gray-500">High-quality candidates identified</div>
+                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.exactMatch} exact match(es) found</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">High-quality candidates identified</div>
                   </div>
                 </div>
               )}
@@ -1614,8 +1644,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
-                    <div className="text-sm text-gray-900">{scoredResumesStats.partialMatch} partial match(es) found</div>
-                    <div className="text-xs text-gray-500">Candidates with potential identified</div>
+                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch} partial match(es) found</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">Candidates with potential identified</div>
                   </div>
                 </div>
               )}
@@ -1623,8 +1653,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
-                    <div className="text-sm text-gray-900">JD updated to version {job.currentVersion}.0</div>
-                    <div className="text-xs text-gray-500">Job description republished</div>
+                    <div className="text-sm text-gray-900 dark:text-slate-50">JD updated to version {job.currentVersion}.0</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">Job description republished</div>
                   </div>
                 </div>
               )}
@@ -1632,13 +1662,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
-                    <div className="text-sm text-gray-900">Job published by {job.postedBy || 'System'}</div>
-                    <div className="text-xs text-gray-500">{formatISTDateTime(job.postedDate)}</div>
+                    <div className="text-sm text-gray-900 dark:text-slate-50">Job published by {job.postedBy || 'System'}</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">{formatISTDateTime(job.postedDate)}</div>
                   </div>
                 </div>
               )}
               {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
-                <div className="text-sm text-gray-500 italic">No recent activity</div>
+                <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>
               )}
             </div>
           </div>
@@ -1652,15 +1682,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {activeTab === 'scored-resumes' && (
         <div className="mt-0">
           {loadingScoredResumes ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 sm:p-10 flex items-center justify-center">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 flex items-center justify-center">
               <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
-              <span className="ml-3 text-gray-600 text-sm">Loading scored resumes...</span>
+              <span className="ml-3 text-gray-600 dark:text-slate-400 text-sm">Loading scored resumes...</span>
             </div>
           ) : scoredResumes.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 sm:p-10 text-center">
-              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-base sm:text-lg">No scored resumes yet</p>
-              <p className="text-gray-400 text-sm mt-2">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+              <Users className="w-12 h-12 text-gray-300 dark:text-slate-500 mx-auto mb-3" />
+              <p className="text-gray-500 dark:text-slate-500 text-base sm:text-lg">No scored resumes yet</p>
+              <p className="text-gray-400 dark:text-slate-500 text-sm mt-2">
                 Upload and score resumes against this job description to see them here
               </p>
             </div>
@@ -1751,20 +1781,20 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           User selects which one(s) before the Share modal opens. */}
       {showAssessmentPicker && pickerAssessments.length > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Choose an assessment</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Choose an assessment</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
                   This job has {pickerAssessments.length} published assessments. Select which one(s) to invite candidates to.
                 </p>
               </div>
               <button
                 onClick={() => setShowAssessmentPicker(false)}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
                 aria-label="Close"
               >
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-500 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -1777,7 +1807,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <label
                     key={a.id}
                     className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border mb-2 transition-colors ${
-                      isPicked ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+                      isPicked ? 'border-blue-500 bg-blue-50 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <input
@@ -1791,10 +1821,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       className="mt-1"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                         {a.title || a.short_id || 'Untitled assessment'}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      <div className="text-xs text-gray-500 dark:text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                         {a.short_id && <span>{a.short_id}</span>}
                         <span>{a.duration_minutes || 30} min</span>
                         <span>{sections} section{sections !== 1 ? 's' : ''}</span>
@@ -1805,14 +1835,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 );
               })}
             </div>
-            <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3">
-              <span className="text-xs text-gray-600">
+            <div className="p-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-gray-600 dark:text-slate-400">
                 {pickerSelectedIds.length} of {pickerAssessments.length} selected
               </span>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowAssessmentPicker(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -1894,9 +1924,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {/* JD History Modal */}
       {showJDHistory && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-4xl w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="bg-gray-800 px-4 py-3 flex items-center justify-between">
+            <div className="bg-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 {selectedHistoryVersion ? (
                   <button
@@ -1929,28 +1959,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
 
             {/* Content */}
-            <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(90vh-140px)] sm:max-h-[calc(85vh-140px)]">
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1">
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
-                  <span className="ml-3 text-gray-600">Loading history...</span>
+                  <Loader2 className="h-8 w-8 text-gray-600 dark:text-slate-400 animate-spin" />
+                  <span className="ml-3 text-gray-600 dark:text-slate-400">Loading history...</span>
                 </div>
               ) : selectedHistoryVersion ? (
                 /* Version Detail View */
                 <div>
                   {/* Version Info Bar with Download Button */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                       <span className="px-2.5 py-1 bg-gray-900 text-white rounded-lg text-xs font-semibold">
                         v{selectedHistoryVersion.version.version_number}.0
                       </span>
-                      <div className="text-xs text-gray-600">
+                      <div className="text-xs text-gray-600 dark:text-slate-400">
                         <span className="flex items-center gap-1">
                           <UserIcon className="w-3.5 h-3.5" />
                           {selectedHistoryVersion.performedBy}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-500">{selectedHistoryVersion.timestamp}</span>
+                      <span className="text-xs text-gray-500 dark:text-slate-500">{selectedHistoryVersion.timestamp}</span>
                       {selectedHistoryVersion.version.version_number > 1 && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                           New content highlighted in blue
@@ -2030,11 +2060,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
 
                   {/* Job Title + Description - same layout as Overview tab */}
-                  <div className="p-4 sm:p-5 bg-white rounded-lg border border-gray-200">
-                    <h2 className="text-sm font-semibold text-gray-900 mb-3">
+                  <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700">
+                    <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">
                       {selectedHistoryVersion.version.title}
                     </h2>
-                    <div className="h-px bg-gray-200 mb-3"></div>
+                    <div className="h-px bg-gray-200 dark:bg-slate-700 mb-3"></div>
 
                   {(() => {
                       const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
@@ -2046,7 +2076,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       // For v1 or no changes, just render normally
                       if (isV1 || !prevDesc) {
                         return (
-                          <div className="markdown-content prose prose-sm max-w-none text-gray-700">
+                          <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
                             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{currentDesc}</ReactMarkdown>
                           </div>
                         );
@@ -2105,7 +2135,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       };
 
                       return (
-                        <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed markdown-content">
+                        <div className="prose prose-sm max-w-none text-gray-700 dark:text-slate-300 leading-relaxed markdown-content">
                           <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={diffComponents}>{currentDesc}</ReactMarkdown>
                         </div>
                       );
@@ -2114,19 +2144,19 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </div>
               ) : jdHistory.length === 0 ? (
                 <div className="text-center py-10">
-                  <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-base">No version history available</p>
-                  <p className="text-gray-400 text-sm mt-2">
+                  <History className="w-12 h-12 text-gray-300 dark:text-slate-500 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-slate-500 text-base">No version history available</p>
+                  <p className="text-gray-400 dark:text-slate-500 text-sm mt-2">
                     Versions are created when you publish the job description
                   </p>
                 </div>
               ) : (
                 <>
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-slate-400">
                   Complete timeline of all published versions
                 </p>
-                <span className="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full font-medium">
+                <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-3 py-1 rounded-full font-medium">
                   {jdHistory.length} Version{jdHistory.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -2134,7 +2164,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               {/* Timeline */}
               <div className="relative">
                 {/* Vertical Line */}
-                <div className="absolute left-[18px] sm:left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                <div className="absolute left-[18px] sm:left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-700"></div>
 
                 {/* Timeline Items */}
                 <div className="space-y-6">
@@ -2153,8 +2183,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                     // Color mapping - All grey theme
                     const colorClasses = 'bg-gray-600 border-gray-700';
-                    const bgColorClasses = 'bg-gray-50 border-gray-200 hover:border-gray-400 cursor-pointer';
-                    const textColorClasses = 'text-gray-900';
+                    const bgColorClasses = 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700 hover:border-gray-400 dark:hover:border-slate-600 cursor-pointer';
+                    const textColorClasses = 'text-gray-900 dark:text-slate-50';
 
                     return (
                       <div key={item.id} className="relative flex gap-3 sm:gap-4">
@@ -2181,34 +2211,34 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                                 <h3 className={`font-semibold ${textColorClasses} text-sm sm:text-base mb-1`}>
                                   {item.action}
                                 </h3>
-                                <p className="text-sm text-gray-700 mb-2">
+                                <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">
                                   {item.description}
                                 </p>
                               </div>
-                              <span className="text-xs bg-gray-200 text-gray-800 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
+                              <span className="text-xs bg-gray-200 dark:bg-slate-800 text-gray-800 dark:text-slate-100 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
                                 {item.date}
                               </span>
                             </div>
 
                             {/* Performed By Info */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-gray-200">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <div className="h-7 w-7 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
                                   <UserIcon className="w-3.5 h-3.5 text-white" />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-xs font-medium text-gray-900 truncate">{item.performedBy}</p>
-                                  <p className="text-xs text-gray-600">{item.performedByRole}</p>
+                                  <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate">{item.performedBy}</p>
+                                  <p className="text-xs text-gray-600 dark:text-slate-400">{item.performedByRole}</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 text-xs text-gray-500 pl-9 sm:pl-0">
+                              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 pl-9 sm:pl-0">
                                 <Clock className="w-3 h-3" />
                                 <span className="truncate">{item.timestamp}</span>
                               </div>
                             </div>
 
                             {/* Click hint */}
-                            <div className="mt-3 pt-2 border-t border-gray-200 flex items-center justify-center gap-2 text-gray-500">
+                            <div className="mt-3 pt-2 border-t border-gray-200 dark:border-slate-700 flex items-center justify-center gap-2 text-gray-500 dark:text-slate-500">
                               <Eye className="w-3.5 h-3.5" />
                               <span className="text-xs">Click to view full JD</span>
                             </div>
@@ -2224,8 +2254,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
 
             {/* Footer */}
-            <div className="bg-gray-50 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 border-t border-gray-200">
-              <p className="text-xs text-gray-600">
+            <div className="bg-gray-50 dark:bg-slate-800/50 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 border-t border-gray-200 dark:border-slate-700 shrink-0">
+              <p className="text-xs text-gray-600 dark:text-slate-400">
                 {selectedHistoryVersion ? `Viewing version ${selectedHistoryVersion.version.version_number}.0` : 'Showing complete history from creation to present'}
               </p>
               <button
@@ -2271,6 +2301,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jdTitle={job.title}
         />
       )}
+      </div>
       </div>
     </main>
   );
@@ -2366,8 +2397,8 @@ function AIMatchTabContent({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
-          <p className="text-gray-500 text-sm">Loading AI match results...</p>
+          <Loader2 className="h-8 w-8 text-gray-600 dark:text-slate-400 animate-spin" />
+          <p className="text-gray-500 dark:text-slate-500 text-sm">Loading AI match results...</p>
         </div>
       </div>
     );
@@ -2376,9 +2407,9 @@ function AIMatchTabContent({
   if (candidates.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Brain className="w-12 h-12 text-gray-300 mb-3" />
-        <h3 className="text-base font-medium text-gray-700 mb-2">No AI Talent Match Results</h3>
-        <p className="text-sm text-gray-500 max-w-sm">
+        <Brain className="w-12 h-12 text-gray-300 dark:text-slate-500 mb-3" />
+        <h3 className="text-base font-medium text-gray-700 dark:text-slate-300 mb-2">No AI Talent Match Results</h3>
+        <p className="text-sm text-gray-500 dark:text-slate-500 max-w-sm">
           Run an AI Talent Match session to find the best candidates for this role.
         </p>
         {canRunAiMatch && (
@@ -2397,30 +2428,30 @@ function AIMatchTabContent({
   return (
     <div className="space-y-4">
       {/* Search & Filters */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-3">
         {/* Row 1: Search + Match filter + count + action buttons */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search candidates..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
             />
           </div>
           <select
             value={filterThreshold}
             onChange={(e) => setFilterThreshold(Number(e.target.value))}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-xs sm:text-sm text-black"
+            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-xs sm:text-sm text-black dark:text-slate-50"
           >
             <option value={0}>All Matches</option>
             <option value={50}>50%+ Match</option>
             <option value={70}>70%+ Match</option>
             <option value={85}>85%+ Match</option>
           </select>
-          <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+          <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 px-3 py-2 rounded-lg font-medium border border-gray-200 dark:border-slate-700">
             {filteredCandidates.length} candidates
           </div>
           {selectedIds.size > 0 && (
@@ -2450,33 +2481,33 @@ function AIMatchTabContent({
             value={filterPhone}
             onChange={(e) => setFilterPhone(e.target.value)}
             placeholder="Filter by phone..."
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
           />
           <input
             type="text"
             value={filterLocation}
             onChange={(e) => setFilterLocation(e.target.value)}
             placeholder="Filter by location..."
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
           />
           <input
             type="number"
             value={filterExperienceMin}
             onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="Min exp"
-            className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="w-full sm:w-28 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
           />
           <input
             type="number"
             value={filterExperienceMax}
             onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="Max exp"
-            className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black placeholder:text-gray-400"
+            className="w-full sm:w-28 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
           />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-xs sm:text-sm text-black"
+            className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-xs sm:text-sm text-black dark:text-slate-50"
           >
             <option value="rank">Sort by Rating</option>
             <option value="name">Sort by Name</option>
@@ -2487,10 +2518,10 @@ function AIMatchTabContent({
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
               <tr>
                 <th className="px-4 py-3 w-10">
                   <input
@@ -2500,23 +2531,23 @@ function AIMatchTabContent({
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Match Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Skills</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded By</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attachments</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scored Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Match Rating</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Location</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Skills</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Experience</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Uploaded By</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Uploaded Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Attachments</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Scored Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-gray-500 text-sm">
+                  <td colSpan={12} className="px-4 py-12 text-center text-gray-500 dark:text-slate-500 text-sm">
                     No candidates match the current filters.
                   </td>
                 </tr>
@@ -2530,7 +2561,7 @@ function AIMatchTabContent({
                   return (
                     <tr
                       key={candidate.resumeId}
-                      className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50' : ''}`}
+                      className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}
                       onClick={() => {
                         if (onViewCandidate) {
                           try {
@@ -2553,26 +2584,26 @@ function AIMatchTabContent({
                         <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
                           (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
                           (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
-                          (candidate.rank || 0) >= 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' :
-                          'bg-gray-50 text-gray-400 border border-gray-200'
+                          (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
+                          'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
                         }`}>
                           {candidate.rank || '-'}
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 font-medium flex-shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
                             {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{candidate.name}</p>
-                            {candidate.title && <p className="text-xs text-gray-500">{candidate.title}</p>}
+                            <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name}</p>
+                            {candidate.title && <p className="text-xs text-gray-500 dark:text-slate-500">{candidate.title}</p>}
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.email || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.phone || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.location || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.email || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.phone || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.location || '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
                           {candidate.skills.slice(0, 4).map((skill, i) => (
@@ -2583,11 +2614,11 @@ function AIMatchTabContent({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.experience || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{uploadDate}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.experience || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{uploadDate}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium">
+                        <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium">
                           <Paperclip className="w-3.5 h-3.5" />
                           {candidate.attachmentCount ?? 1}
                         </button>
@@ -2599,7 +2630,7 @@ function AIMatchTabContent({
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>

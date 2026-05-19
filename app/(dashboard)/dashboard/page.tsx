@@ -142,9 +142,9 @@ function activityAppearance(action: string): { icon: LucideIcon; accent: string 
     return { icon: Sparkles, accent: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15' };
   }
   if (action.includes('login') || action.includes('logout')) {
-    return { icon: UserCircle2, accent: 'bg-slate-100 text-slate-500 ring-slate-200' };
+    return { icon: UserCircle2, accent: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 ring-slate-200 dark:ring-slate-700' };
   }
-  return { icon: Layers3, accent: 'bg-slate-100 text-slate-500 ring-slate-200' };
+  return { icon: Layers3, accent: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 ring-slate-200 dark:ring-slate-700' };
 }
 
 function normalizeUnits(units: SubscriptionUnits | null | undefined): Array<{
@@ -170,7 +170,7 @@ function normalizeUnits(units: SubscriptionUnits | null | undefined): Array<{
 
 function quotaStatus(percent: number): { label: string; tone: string } {
   if (percent >= 90) return { label: 'Critical', tone: 'bg-brand-orange/10 text-brand-orange ring-brand-orange/20' };
-  if (percent >= 75) return { label: 'Watch', tone: 'bg-slate-100 text-slate-700 ring-slate-200' };
+  if (percent >= 75) return { label: 'Watch', tone: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700' };
   return { label: 'Healthy', tone: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15' };
 }
 
@@ -191,13 +191,13 @@ function SectionShell({
 }) {
   return (
     <section
-      className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)] sm:p-6 ${className ?? ''}`}
+      className={`overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)] sm:p-6 ${className ?? ''}`}
     >
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
-          <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
-          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{eyebrow}</p>
+          <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50">{title}</h2>
+          {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">{description}</p>}
         </div>
         {action}
       </div>
@@ -319,8 +319,8 @@ function FunnelDonut({ segments, centerLabel, centerValue }: FunnelDonutProps) {
         })}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <p className="text-lg font-semibold tracking-tight text-slate-900 tabular-nums">{centerValue}</p>
-        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">{centerLabel}</p>
+        <p className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">{centerValue}</p>
+        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{centerLabel}</p>
       </div>
     </div>
   );
@@ -345,7 +345,7 @@ function KpiCard({ label, value, note, icon: Icon, accent, bar, loading, trendVa
   return (
     <Wrapper
       {...wrapperProps}
-      className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_-12px_rgba(15,23,42,0.15)]"
+      className="group relative overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_-12px_rgba(15,23,42,0.15)]"
     >
       <span className={`absolute inset-x-0 top-0 h-0.5 ${bar} opacity-80`} />
       <div className="flex items-start justify-between gap-2">
@@ -353,16 +353,16 @@ function KpiCard({ label, value, note, icon: Icon, accent, bar, loading, trendVa
           <Icon className="h-4 w-4" />
         </div>
         {trendValue && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-400 ring-1 ring-slate-200 dark:ring-slate-700">
             {trendValue}
           </span>
         )}
       </div>
-      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className="mt-0.5 text-xl font-semibold leading-tight tracking-tight text-slate-900 tabular-nums">
-        {loading ? <span className="inline-block h-6 w-14 animate-pulse rounded bg-slate-100" /> : formatCompactNumber(value)}
+      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-0.5 text-xl font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">
+        {loading ? <span className="inline-block h-6 w-14 animate-pulse rounded bg-slate-100 dark:bg-slate-800" /> : formatCompactNumber(value)}
       </p>
-      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">{note}</p>
+      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500 dark:text-slate-500">{note}</p>
     </Wrapper>
   );
 }
@@ -614,10 +614,11 @@ export default function DashboardPage() {
   ].filter((item) => item.visible);
 
   return (
-    <div className="relative flex-1 overflow-x-hidden bg-slate-50">
-      {/* clean neutral background — no gradient */}
+    <div className="relative flex-1 overflow-hidden">
+      {/* parent layout bg removed — inner card provides the surface */}
 
-      <div className="relative mx-auto w-full max-w-[1400px] space-y-4 px-4 py-4 md:space-y-6 md:px-8 md:py-5">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full my-4 md:my-5 space-y-4 md:space-y-6">
         {/* Optional error banner — only if /dashboard failed entirely */}
         {error && (
           <div className="rounded-2xl border border-brand-orange/20 bg-brand-orange/10 px-4 py-3 text-sm text-brand-orange">
@@ -627,7 +628,7 @@ export default function DashboardPage() {
 
         <div className="space-y-4 md:space-y-6">
         {/* ── PROFILE BANNER ── useAuth only ──────────────────────────── */}
-        <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.18)] md:px-8 md:py-6">
+        <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.18)] md:px-8 md:py-6">
           {/* Identity row: avatar + name+text (left) · CTAs (center) · illustration (right) */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-4">
@@ -642,11 +643,11 @@ export default function DashboardPage() {
               </div>
 
               <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-500">
                   {timeOfDayGreeting()},
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">
+                  <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-[28px]">
                     {displayName}
                   </h1>
                   {isTenantAdmin && (
@@ -656,7 +657,7 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1.5 text-sm text-slate-500">
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-500">
                   Streamline your hiring and build the perfect team.
                 </p>
               </div>
@@ -666,7 +667,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-2 md:mr-32 lg:mr-40">
               <Link
                 href="/settings/general-settings"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:text-brand-blue"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:text-brand-blue"
               >
                 View profile
               </Link>
@@ -679,7 +680,7 @@ export default function DashboardPage() {
                     className={
                       item.primary
                         ? 'inline-flex items-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:opacity-90'
-                        : 'inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        : 'inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:text-brand-blue'
                     }
                   >
                     <ItemIcon className="h-4 w-4" />
@@ -1022,16 +1023,16 @@ export default function DashboardPage() {
           >
             <div className="grid gap-4 sm:grid-cols-3">
               {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-900">Assessment avg score</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Assessment avg score</p>
                     <Star className="h-4 w-4 text-brand-orange" />
                   </div>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900 tabular-nums">
+                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50 tabular-nums">
                     {Math.round(stats.assessment_average_score)}
-                    <span className="ml-1 text-sm font-medium text-slate-400">/ 100</span>
+                    <span className="ml-1 text-sm font-medium text-slate-400 dark:text-slate-500">/ 100</span>
                   </p>
-                  <div className="mt-3 h-2 rounded-full bg-white ring-1 ring-slate-200">
+                  <div className="mt-3 h-2 rounded-full bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700">
                     <div
                       className="h-2 rounded-full bg-brand-orange"
                       style={{ width: `${Math.min(100, Math.round(stats.assessment_average_score))}%` }}
@@ -1041,16 +1042,16 @@ export default function DashboardPage() {
               )}
 
               {interviewAvgScore !== null && interviewAvgScore !== undefined && (
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-900">Interview avg score</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Interview avg score</p>
                     <Gauge className="h-4 w-4 text-brand-cyan" />
                   </div>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900 tabular-nums">
+                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50 tabular-nums">
                     {Math.round(interviewAvgScore)}
-                    <span className="ml-1 text-sm font-medium text-slate-400">/ 100</span>
+                    <span className="ml-1 text-sm font-medium text-slate-400 dark:text-slate-500">/ 100</span>
                   </p>
-                  <div className="mt-3 h-2 rounded-full bg-white ring-1 ring-slate-200">
+                  <div className="mt-3 h-2 rounded-full bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700">
                     <div
                       className="h-2 rounded-full bg-brand-cyan"
                       style={{ width: `${Math.min(100, Math.round(interviewAvgScore))}%` }}
@@ -1060,27 +1061,27 @@ export default function DashboardPage() {
               )}
 
               {candidatesInvited > 0 && (
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-900">Interview engagement</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Interview engagement</p>
                     <Users className="h-4 w-4 text-brand-cyan" />
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Invited</p>
-                      <p className="mt-0.5 text-lg font-semibold text-slate-900 tabular-nums">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Invited</p>
+                      <p className="mt-0.5 text-lg font-semibold text-slate-900 dark:text-slate-50 tabular-nums">
                         {formatCompactNumber(candidatesInvited)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Live</p>
-                      <p className="mt-0.5 text-lg font-semibold text-slate-900 tabular-nums">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Live</p>
+                      <p className="mt-0.5 text-lg font-semibold text-slate-900 dark:text-slate-50 tabular-nums">
                         {formatCompactNumber(interviewInProgress)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Done</p>
-                      <p className="mt-0.5 text-lg font-semibold text-slate-900 tabular-nums">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Done</p>
+                      <p className="mt-0.5 text-lg font-semibold text-slate-900 dark:text-slate-50 tabular-nums">
                         {formatCompactNumber(interviewCompleted)}
                       </p>
                     </div>
@@ -1230,20 +1231,21 @@ export default function DashboardPage() {
           >
             <div className="space-y-2">
               {jdActivity.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3">
+                <div key={item.id} className="flex items-start gap-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
                   <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                     <Briefcase className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900">{item.action_display}</p>
-                    <p className="truncate text-xs text-slate-500">{item.jd_title || 'Job description update'}</p>
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-50">{item.action_display}</p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-500">{item.jd_title || 'Job description update'}</p>
                   </div>
-                  <span className="whitespace-nowrap text-[11px] text-slate-400">{item.time_ago}</span>
+                  <span className="whitespace-nowrap text-[11px] text-slate-400 dark:text-slate-500">{item.time_ago}</span>
                 </div>
               ))}
             </div>
           </SectionShell>
         )}
+      </div>
       </div>
     </div>
   );
