@@ -1149,7 +1149,8 @@ export default function AIInterviewClusters() {
   }, [mthClusters, nthClusters, isFixed, timedAllocation, nthEnabled]);
 
   /* ── AI Generate ── */
-  const handleGenerateClusters = async () => {
+  const handleGenerateClusters = async (opts: { forceExpand?: boolean } = {}) => {
+    const { forceExpand = false } = opts;
     setGenerating(true);
     try {
       // Sort skills by importance weight so AI prioritizes them in clustering
@@ -1227,10 +1228,20 @@ export default function AIInterviewClusters() {
         // (1 skill per question). LLM decides actual count from JD; we no
         // longer use a hardcoded 2Q floor target — that was forcing a fixed
         // math relationship the spec rejects.
-        const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ;
+        // forceExpand=true (initial autogen on entry from Configure) bypasses
+        // the gate so the expansion API runs even when the closure state still
+        // shows old skill counts. Without this, recruiters arriving at the
+        // Clusters page with e.g. 2 NTH skills can hit the page-load race and
+        // see the cluster generated without sub-skill expansion — they would
+        // then have to click "Regenerate with AI" manually to expand.
+        const mthShort = forceExpand
+          ? (mthSkillNames.length > 0 && mthQ > 0)
+          : (mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ);
         // NTH expands whenever there is 1+ NTH skill (regardless of nthQ).
         // MTH keeps the stricter "skills < questions" rule.
-        const nthShort = nthSkillNames.length >= 1 && nthQ > 0;
+        const nthShort = forceExpand
+          ? (nthSkillNames.length >= 1 && nthEnabled)
+          : (nthSkillNames.length >= 1 && nthQ > 0);
         const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 3;
         const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 3;
 
@@ -1269,14 +1280,22 @@ export default function AIInterviewClusters() {
 
         if (mthShort || nthShort || mthRecover || nthRecover) {
           console.log('[CLUSTER-DEBUG] → Taking EXPAND path (applyRefine=true, allowMerge=false)');
+          // Target = Q × 2 — matches backend CLUSTER_CAPACITY_FLOOR_FACTOR (2)
+          // so the resulting skill pool lands inside the "within" capacity
+          // band (floor=2Q, ceiling=3Q) rather than "below" (which would
+          // trigger another expansion round or leave the distributor with
+          // too few primaries to fill every Q without duplicates).
+          // Floor enforced at backend `expand-skills` (line ~1330 in
+          // ai_interview.py) tops up via deterministic placeholders if the
+          // LLM under-delivers, so this target is a hard guarantee — not
+          // a soft hint.
+          const mthTarget = Math.max(mthQ * 2, mthExpandInput.length + 1);
+          const nthTarget = Math.max(nthQ * 2, nthExpandInput.length + 1);
           const [mthExpandRes, nthExpandRes] = await Promise.all([
             (mthShort || mthRecover)
               ? aiInterviewService.expandSkills({
                   mainSkills: mthExpandInput,
-                  // No fixed target — pass Q as the absolute floor (1 skill/Q
-                  // minimum). Backend prompt tells LLM to extract however many
-                  // JD-relevant skills make sense; we never push a numeric goal.
-                  targetSkillCount: mthQ,
+                  targetSkillCount: mthTarget,
                   bucket: 'MTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
@@ -1285,11 +1304,7 @@ export default function AIInterviewClusters() {
             (nthShort || nthRecover)
               ? aiInterviewService.expandSkills({
                   mainSkills: nthExpandInput,
-                  // Force expansion: target must exceed len(main) or the backend
-                  // short-circuits at ai_interview.py:1220 (`len >= target`).
-                  // nthQ remains the LLM's floor hint when it's higher than the
-                  // input count.
-                  targetSkillCount: Math.max(nthQ, nthExpandInput.length + 1),
+                  targetSkillCount: nthTarget,
                   bucket: 'NTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
@@ -1678,7 +1693,10 @@ export default function AIInterviewClusters() {
     autogenFiredRef.current = true;
     // Strip the autogen flag so a refresh after generation doesn't loop.
     router.replace(`/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${id}`);
-    void handleGenerateClusters();
+    // forceExpand on the auto-trigger so /expand-skills always runs on first
+    // entry from Configure — recruiter shouldn't need to click "Regenerate"
+    // to see sub-skill expansion when arriving with e.g. 2 NTH skills.
+    void handleGenerateClusters({ forceExpand: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, config, id, mthSkills.length, nthSkills.length]);
 
@@ -1844,14 +1862,25 @@ export default function AIInterviewClusters() {
   };
 
   const handleContinue = () => {
-    // Flexible mode: block progression when cluster structure is invalid
+    // Every cluster must contain at least one skill — empty clusters break
+    // question distribution regardless of interview mode (timed or flexible)
+    // and regardless of section (MTH or NTH-when-enabled).
+    const emptyMth = mthClusters.filter(c => !Array.isArray(c.skills) || c.skills.length === 0);
+    const emptyNth = nthEnabled
+      ? nthClusters.filter(c => !Array.isArray(c.skills) || c.skills.length === 0)
+      : [];
+    const emptyTotal = emptyMth.length + emptyNth.length;
+    if (emptyTotal > 0) {
+      const sections: string[] = [];
+      if (emptyMth.length > 0) sections.push(`${emptyMth.length} Must-To-Have`);
+      if (emptyNth.length > 0) sections.push(`${emptyNth.length} Nice-To-Have`);
+      toast.error(
+        `${sections.join(' and ')} cluster${emptyTotal > 1 ? 's have' : ' has'} no skills. Each cluster must contain at least one skill.`,
+      );
+      return;
+    }
+    // Flexible mode: also block when skills are unassigned to any cluster.
     if (isFlexible && hasIssues) {
-      if (emptyClusters.length > 0) {
-        toast.error(
-          `${emptyClusters.length} cluster${emptyClusters.length > 1 ? 's have' : ' has'} no skills. Each cluster must contain at least one skill.`,
-        );
-        return;
-      }
       const unassignedCount = unassignedMth.length + unassignedNth.length;
       if (unassignedCount > 0) {
         toast.error(
@@ -2063,13 +2092,12 @@ export default function AIInterviewClusters() {
                             ? (qCount * skillCounts[i]) / totalSkills
                             : 0,
                         );
-                        // Initial: round down, min 1 if cluster has skills and budget allows
-                        const allocations = rawAlloc.map((r, i) => {
-                          const floor = Math.floor(r);
-                          // Cap at skill count — never allocate more Qs than there are
-                          // unique skills in that cluster.
-                          return Math.min(skillCounts[i], floor);
-                        });
+                        // Initial: round down. The previous cap of min(skillCounts[i], floor)
+                        // silently dropped Qs when skills < qCount — recruiter asked for 5,
+                        // got 2-3. Per spec we now honor the requested Q count even when
+                        // skills are scarce: STEP 2 cycles primaries round-robin instead
+                        // of leaving slots unfilled.
+                        const allocations = rawAlloc.map(r => Math.floor(r));
                         // If qCount < cluster_count, give the TOP `qCount` priority clusters 1 each.
                         if (qCount < sorted.length) {
                           for (let i = 0; i < allocations.length; i++) {
@@ -2097,13 +2125,25 @@ export default function AIInterviewClusters() {
                           allocations[trimIdx] -= 1;
                           diff += 1;
                         }
-                        // Under-allocated → distribute to clusters by fractional remainder,
-                        // skipping clusters already at their skill-count cap.
+                        // Under-allocated → distribute by fractional remainder. No longer
+                        // skip clusters at skill-count cap; cycling primaries in STEP 2
+                        // covers the duplication safely. Prefer clusters with HIGHER
+                        // priority (and richer skill pools) so duplicates land where the
+                        // recruiter expects depth coverage.
                         while (diff > 0) {
                           const fracs = rawAlloc
-                            .map((r, i) => ({ frac: r - Math.floor(r), i }))
-                            .filter(({ i }) => allocations[i] < skillCounts[i])
-                            .sort((a, b) => b.frac - a.frac);
+                            .map((r, i) => ({
+                              frac: r - Math.floor(r),
+                              priority: sorted[i].priority ?? 1,
+                              skillCount: skillCounts[i],
+                              i,
+                            }))
+                            .filter(({ skillCount }) => skillCount > 0)
+                            .sort((a, b) =>
+                              b.frac - a.frac
+                              || b.priority - a.priority
+                              || b.skillCount - a.skillCount,
+                            );
                           if (fracs.length === 0) break;
                           allocations[fracs[0].i] += 1;
                           diff -= 1;
@@ -2120,23 +2160,60 @@ export default function AIInterviewClusters() {
                           const skills = (cluster.skills ?? []).filter(
                             s => typeof s === 'string' && s.trim()
                           );
-                          if (alloc === 0) {
+                          if (alloc === 0 || skills.length === 0) {
                             // Orphan cluster — all its skills go to be placed as secondaries elsewhere.
                             for (const s of skills) orphanSkills.push({ skill: s, cluster });
                             continue;
                           }
-                          const primaries = skills.slice(0, alloc);
-                          const leftover = skills.slice(alloc); // become secondaries within this cluster
-                          // Distribute leftover evenly across primaries — NO cap.
-                          // Every skill must appear somewhere; the panel shows all of them.
+                          // When alloc > skills.length the recruiter asked for more
+                          // questions than this cluster has unique skills. Cycle
+                          // primaries round-robin so every requested slot fires —
+                          // the same skill may appear as primary on multiple Qs
+                          // (different angles / scenarios at interview time).
+                          // When alloc <= skills.length the slice keeps the original
+                          // "each primary appears once, leftover become secondaries"
+                          // behavior.
+                          const primaries: string[] = [];
+                          if (alloc <= skills.length) {
+                            primaries.push(...skills.slice(0, alloc));
+                          } else {
+                            for (let p = 0; p < alloc; p++) primaries.push(skills[p % skills.length]);
+                          }
+                          const leftover = alloc <= skills.length ? skills.slice(alloc) : [];
+                          // Distribute leftover evenly across primaries (only meaningful
+                          // when alloc <= skills.length; otherwise leftover is empty
+                          // and secondaries are picked per-Q as same-cluster siblings).
                           for (let i = 0; i < primaries.length; i++) {
                             qNum += 1;
                             const start = Math.floor((i * leftover.length) / primaries.length);
                             const end = Math.floor(((i + 1) * leftover.length) / primaries.length);
-                            const secs = leftover.slice(start, end).map(s => ({
-                              name: s,
-                              priority: cluster.priority ?? 1,
-                            }));
+                            let secs: { name: string; priority: number }[];
+                            if (leftover.length > 0) {
+                              secs = leftover.slice(start, end).map(s => ({
+                                name: s,
+                                priority: cluster.priority ?? 1,
+                              }));
+                            } else {
+                              // Cycled-primary mode: pick up to 2 same-cluster siblings
+                              // (skills other than this Q's primary), rotating the
+                              // start position so secondaries vary across the cycled
+                              // Qs (Q1 of skill A pairs with [B,C]; Q4 of skill A
+                              // pairs with [C,B] if pool is small).
+                              const others = skills.filter(s => s !== primaries[i]);
+                              if (others.length === 0) {
+                                secs = [];
+                              } else {
+                                const startIdx = i % others.length;
+                                const pick = [
+                                  others[startIdx % others.length],
+                                  others[(startIdx + 1) % others.length],
+                                ].filter((v, idx, arr) => v && arr.indexOf(v) === idx);
+                                secs = pick.map(s => ({
+                                  name: s,
+                                  priority: cluster.priority ?? 1,
+                                }));
+                              }
+                            }
                             out.push({
                               q: qNum,
                               primary: primaries[i],
@@ -2174,40 +2251,43 @@ export default function AIInterviewClusters() {
                         p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
                           : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
                           : 'bg-rose-100 text-rose-700 ring-rose-200';
+                      // Table-row renderer. Two columns: Q# + Skills (primary
+                      // + secondary chips inline). Cluster name removed per
+                      // product feedback — the chip's priority already conveys
+                      // the relative tier; the cluster name was redundant noise.
                       const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
-                        <div
+                        <tr
                           key={`${sectionKey}-${row.q}`}
-                          className="grid grid-cols-[36px_1fr] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                          className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
                         >
-                          <span className={`text-[11px] font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
-                            Q{row.q}
-                          </span>
-                          <div className="min-w-0 flex flex-wrap items-center gap-1">
-                            {/* Primary skill carries an inline priority label
-                                like the secondaries do, so every skill shows
-                                its own High/Med/Low and the redundant trailing
-                                row-level badge is gone. */}
-                            <span className="text-xs font-medium text-gray-900">{row.primary}</span>
-                            <span className={`text-[9px] font-semibold px-1 py-0 rounded ring-1 ${priorityClass(row.priority)}`}>
-                              {priorityLabel(row.priority)}
+                          <td className="align-top px-2 py-1.5 w-[40px]">
+                            <span className={`text-[11px] font-mono font-semibold ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
+                              Q{row.q}
                             </span>
-                            {row.secondaries.length > 0 && (
-                              <>
-                                <span className="text-gray-300 text-[10px]">+</span>
-                                {row.secondaries.map((s, i) => (
-                                  <span
-                                    key={`${row.q}-sec-${i}`}
-                                    className={`inline-flex items-center gap-1 px-1 py-0 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
-                                  >
-                                    {s.name}
-                                    <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
-                                  </span>
-                                ))}
-                              </>
-                            )}
-                            <span className="text-[10px] text-gray-400 ml-0.5 truncate max-w-[140px]">· {row.cluster}</span>
-                          </div>
-                        </div>
+                          </td>
+                          <td className="align-top px-2 py-1.5">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="text-xs font-medium text-gray-900">{row.primary}</span>
+                              <span className={`text-[9px] font-semibold px-1 py-0 rounded ring-1 ${priorityClass(row.priority)}`}>
+                                {priorityLabel(row.priority)}
+                              </span>
+                              {row.secondaries.length > 0 && (
+                                <>
+                                  <span className="text-gray-300 text-[10px]">+</span>
+                                  {row.secondaries.map((s, i) => (
+                                    <span
+                                      key={`${row.q}-sec-${i}`}
+                                      className={`inline-flex items-center gap-1 px-1 py-0 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
+                                    >
+                                      {s.name}
+                                      <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
+                                    </span>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       );
                       return (
                         <Popover>
@@ -2238,8 +2318,18 @@ export default function AIInterviewClusters() {
                                   <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Must-To-Have ({mthDist.length})
                                   </div>
-                                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
-                                    {mthDist.map(r => renderRow(r, 'mth'))}
+                                  <div className="border border-gray-100 rounded-md overflow-hidden">
+                                    <table className="w-full text-left">
+                                      <thead className="bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                          <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
+                                          <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {mthDist.map(r => renderRow(r, 'mth'))}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 </div>
                               )}
@@ -2248,8 +2338,18 @@ export default function AIInterviewClusters() {
                                   <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Nice-To-Have ({nthDist.length})
                                   </div>
-                                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
-                                    {nthDist.map(r => renderRow(r, 'nth'))}
+                                  <div className="border border-gray-100 rounded-md overflow-hidden">
+                                    <table className="w-full text-left">
+                                      <thead className="bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                          <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
+                                          <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {nthDist.map(r => renderRow(r, 'nth'))}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 </div>
                               )}

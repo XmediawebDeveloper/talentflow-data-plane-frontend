@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
+import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -1336,9 +1337,16 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
     setIsLoadingAssessments(true);
     try {
       const response = await assessmentService.list({ jd_id: jobId });
-      // Only show PUBLISHED assessments (not draft, not archived)
+      const revokedIds = getLocallyRevokedAssessmentIds();
+      // Only show PUBLISHED assessments (not draft, not archived) and
+      // exclude any whose invites the recruiter has revoked — once revoked
+      // an assessment is sealed against further invites (duplicate to V2
+      // for a fresh round).
       const activeAssessments = response.items.filter(
-        (a: any) => a.status === 'published' && !a.is_archived
+        (a: any) =>
+          a.status === 'published' &&
+          !a.is_archived &&
+          !isAssessmentRevoked(a, revokedIds)
       );
       setAssessments(activeAssessments);
       // Auto-select if only one assessment
@@ -1521,11 +1529,23 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">-- Choose an assessment --</option>
-              {assessments.map((assessment) => (
-                <option key={assessment.id} value={assessment.id}>
-                  {assessment.title} • {assessment.duration_minutes} min
-                </option>
-              ))}
+              {assessments.map((assessment) => {
+                // Strip any "- Version N" baked into the stored title and
+                // append the live version from `assessment.version` so the
+                // dropdown always reflects the assessment's real version.
+                const parsed = parseAssessmentTitle(assessment.title || '');
+                const displayVersion = typeof assessment.version === 'number'
+                  ? assessment.version
+                  : parsed.version;
+                const base = parsed.cleanTitle || assessment.short_id || 'Untitled assessment';
+                const versionSuffix = displayVersion ? ` — Version ${displayVersion}` : '';
+                const shortIdSuffix = assessment.short_id ? ` (${assessment.short_id})` : '';
+                return (
+                  <option key={assessment.id} value={assessment.id}>
+                    {base}{versionSuffix}{shortIdSuffix} • {assessment.duration_minutes} min
+                  </option>
+                );
+              })}
             </select>
             <p className="text-xs text-gray-500 mt-2">
               {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job

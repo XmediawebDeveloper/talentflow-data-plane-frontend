@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService, jdService } from '@/lib/services';
 import type { JDResponse } from '@/lib/services';
-import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
@@ -77,6 +77,11 @@ export default function AssessmentDetailsView({
   // (V1 + any clones). Powers the "New Versions" tab.
   const [siblingVersions, setSiblingVersions] = useState<any[]>([]);
   const [siblingsLoading, setSiblingsLoading] = useState(false);
+  // Comparison state: { [siblingId]: otherVersionId } — set when the
+  // recruiter picks a version from the "Compare with" dropdown on a card.
+  // Stored per-card so each card can hold its own comparison independently.
+  const [compareSelection, setCompareSelection] = useState<Record<string, string>>({});
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
   const [jdData, setJdData] = useState<JDResponse | null>(null);
   const [jdLoading, setJdLoading] = useState(false);
   const [jdError, setJdError] = useState<string | null>(null);
@@ -190,6 +195,117 @@ export default function AssessmentDetailsView({
     };
     fetchJd();
   }, [assessment?.jd_id, activeTab, jdData]);
+
+  // ── Version-diff helpers (used by the "New Versions" tab) ─────────────
+  // computeVersionDiff returns a list of human-readable field changes
+  // between two sibling assessments. We deliberately compare the STRIPPED
+  // title so the inevitable "- Version N" suffix doesn't register as a
+  // change every time. Topic arrays are diffed by id (added vs removed
+  // items) rather than deep-equal so the recruiter sees a useful list.
+  type VersionDiffRow = {
+    field: string;
+    label: string;
+    kind: 'scalar' | 'list' | 'description' | 'boolean';
+    oldValue?: any;
+    newValue?: any;
+    added?: string[];
+    removed?: string[];
+  };
+  const diffTopicArrays = (
+    older: any[] | null | undefined,
+    newer: any[] | null | undefined,
+  ): { added: string[]; removed: string[] } => {
+    const norm = (item: any): { key: string; label: string } => {
+      if (typeof item === 'string') return { key: item, label: item };
+      const key = item?.id ?? item?.text ?? JSON.stringify(item);
+      const label = item?.text ?? item?.name ?? item?.label ?? String(key);
+      return { key: String(key), label };
+    };
+    const oldList = (older || []).map(norm);
+    const newList = (newer || []).map(norm);
+    const oldKeys = new Set(oldList.map(o => o.key));
+    const newKeys = new Set(newList.map(n => n.key));
+    return {
+      added: newList.filter(n => !oldKeys.has(n.key)).map(n => n.label),
+      removed: oldList.filter(o => !newKeys.has(o.key)).map(o => o.label),
+    };
+  };
+  const computeVersionDiff = (older: any, newer: any): VersionDiffRow[] => {
+    if (!older || !newer) return [];
+    const rows: VersionDiffRow[] = [];
+    const push = (row: VersionDiffRow) => rows.push(row);
+
+    const oldTitle = stripVersionFromTitle(older.title || '');
+    const newTitle = stripVersionFromTitle(newer.title || '');
+    if (oldTitle !== newTitle) {
+      push({ field: 'title', label: 'Title', kind: 'scalar', oldValue: oldTitle, newValue: newTitle });
+    }
+
+    if ((older.description || '') !== (newer.description || '')) {
+      push({
+        field: 'description', label: 'Description', kind: 'description',
+        oldValue: older.description || '', newValue: newer.description || '',
+      });
+    }
+
+    if ((older.duration_minutes || 0) !== (newer.duration_minutes || 0)) {
+      push({
+        field: 'duration_minutes', label: 'Duration', kind: 'scalar',
+        oldValue: `${older.duration_minutes || 0} min`,
+        newValue: `${newer.duration_minutes || 0} min`,
+      });
+    }
+
+    // Per-section scalars + topic arrays
+    const sectionMeta: Array<{ key: 'hr' | 'technical' | 'coding'; label: string; topicKey: string; langKey?: string }> = [
+      { key: 'hr', label: 'HR', topicKey: 'hr_topics' },
+      { key: 'technical', label: 'Technical', topicKey: 'technical_topics' },
+      { key: 'coding', label: 'Coding', topicKey: 'coding_topics', langKey: 'coding_languages' },
+    ];
+    for (const sec of sectionMeta) {
+      const enabledKey = `${sec.key}_enabled`;
+      const pctKey = `${sec.key}_percentage`;
+      if ((!!older[enabledKey]) !== (!!newer[enabledKey])) {
+        push({
+          field: enabledKey, label: `${sec.label} section`, kind: 'boolean',
+          oldValue: older[enabledKey] ? 'Enabled' : 'Disabled',
+          newValue: newer[enabledKey] ? 'Enabled' : 'Disabled',
+        });
+      }
+      if ((older[pctKey] || 0) !== (newer[pctKey] || 0)) {
+        push({
+          field: pctKey, label: `${sec.label} weight`, kind: 'scalar',
+          oldValue: `${older[pctKey] || 0}%`, newValue: `${newer[pctKey] || 0}%`,
+        });
+      }
+      const topicsDiff = diffTopicArrays(older[sec.topicKey], newer[sec.topicKey]);
+      if (topicsDiff.added.length || topicsDiff.removed.length) {
+        push({
+          field: sec.topicKey, label: `${sec.label} topics`, kind: 'list',
+          added: topicsDiff.added, removed: topicsDiff.removed,
+        });
+      }
+      if (sec.langKey) {
+        const langDiff = diffTopicArrays(older[sec.langKey], newer[sec.langKey]);
+        if (langDiff.added.length || langDiff.removed.length) {
+          push({
+            field: sec.langKey, label: 'Coding languages', kind: 'list',
+            added: langDiff.added, removed: langDiff.removed,
+          });
+        }
+      }
+    }
+
+    if ((!!older.proctoring_enabled) !== (!!newer.proctoring_enabled)) {
+      push({
+        field: 'proctoring_enabled', label: 'Proctoring', kind: 'boolean',
+        oldValue: older.proctoring_enabled ? 'Enabled' : 'Disabled',
+        newValue: newer.proctoring_enabled ? 'Enabled' : 'Disabled',
+      });
+    }
+
+    return rows;
+  };
 
   // Construct sections array from individual assessment fields
   const sections = useMemo<Section[]>(() => {
@@ -435,8 +551,15 @@ export default function AssessmentDetailsView({
                 // Share is blocked for Archived (out of circulation) AND
                 // once invites have been revoked (assessment is sealed —
                 // recruiter should clone a new version for a fresh round).
+                // We use the shared isAssessmentRevoked helper so this
+                // check honours BOTH the backend has_revoked_invites flag
+                // AND the tab-local sessionStorage seal — without the
+                // local fallback, opening the details view of an assessment
+                // you just revoked left Share enabled (because the
+                // assessment prop comes straight from the list response
+                // and may not carry the backend flag yet).
                 const isArchived = assessment.status === 'Archived';
-                const hasRevoked = (assessment as any).has_revoked_invites === true;
+                const hasRevoked = isAssessmentRevoked(assessment as any);
                 const blockedReason = isArchived
                   ? 'Archived assessments cannot be shared'
                   : hasRevoked
@@ -1452,6 +1575,137 @@ export default function AssessmentDetailsView({
                               <span>{sibling.completed_count || 0} completed</span>
                             </div>
                           </div>
+
+                          {/* Compare with dropdown — only show when there are other
+                              siblings to compare against. */}
+                          {siblingVersions.length > 1 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <label className="text-xs font-medium text-gray-600 inline-flex items-center gap-1.5">
+                                  <Layers className="w-3.5 h-3.5 text-gray-500" />
+                                  Compare with
+                                </label>
+                                <select
+                                  value={compareSelection[sibling.id] || ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setCompareSelection(prev => {
+                                      const next = { ...prev };
+                                      if (v) next[sibling.id] = v;
+                                      else delete next[sibling.id];
+                                      return next;
+                                    });
+                                  }}
+                                  className="text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-brand-blue/40 focus:outline-none focus:border-brand-blue/60 focus:ring-1 focus:ring-brand-blue/30"
+                                >
+                                  <option value="">— select a version —</option>
+                                  {siblingVersions
+                                    .filter((other: any) => other.id !== sibling.id)
+                                    .map((other: any) => (
+                                      <option key={other.id} value={other.id}>
+                                        Version {other.version || 1}
+                                        {other.short_id ? ` (${other.short_id})` : ''}
+                                      </option>
+                                    ))}
+                                </select>
+                                {compareSelection[sibling.id] && (
+                                  <button
+                                    onClick={() => {
+                                      setCompareSelection(prev => {
+                                        const next = { ...prev };
+                                        delete next[sibling.id];
+                                        return next;
+                                      });
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Diff panel */}
+                              {compareSelection[sibling.id] && (() => {
+                                const other = siblingVersions.find((s: any) => s.id === compareSelection[sibling.id]);
+                                if (!other) return null;
+                                // Older version is the smaller version number so the
+                                // diff reads naturally as "old → new". If versions
+                                // are equal we keep the user's pick as the older.
+                                const [olderVer, newerVer] = (sibling.version || 1) <= (other.version || 1)
+                                  ? [sibling, other] : [other, sibling];
+                                const diff = computeVersionDiff(olderVer, newerVer);
+                                const descKey = `${sibling.id}:${other.id}`;
+                                return (
+                                  <div className="mt-3 rounded-lg border border-brand-blue/20 bg-brand-blue/5 p-3">
+                                    <div className="text-xs font-medium text-brand-blue mb-2 flex items-center gap-1.5">
+                                      <ArrowLeft className="w-3 h-3 rotate-180" />
+                                      Changes from Version {olderVer.version || 1} → Version {newerVer.version || 1}
+                                    </div>
+                                    {diff.length === 0 ? (
+                                      <p className="text-xs text-gray-600">No content differences between these versions.</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {diff.map((row, idx) => (
+                                          <div key={`${row.field}-${idx}`} className="text-xs">
+                                            <div className="font-medium text-gray-900 mb-0.5">{row.label}</div>
+                                            {row.kind === 'list' ? (
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {(row.added || []).map((a, i) => (
+                                                  <span key={`add-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 ring-1 ring-green-200 rounded text-xs">
+                                                    + {a}
+                                                  </span>
+                                                ))}
+                                                {(row.removed || []).map((r, i) => (
+                                                  <span key={`rm-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 ring-1 ring-red-200 rounded text-xs line-through">
+                                                    − {r}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            ) : row.kind === 'description' ? (
+                                              <div>
+                                                <button
+                                                  onClick={() => setExpandedDescriptions(prev => ({ ...prev, [descKey]: !prev[descKey] }))}
+                                                  className="text-xs text-brand-blue hover:underline"
+                                                >
+                                                  {expandedDescriptions[descKey] ? 'Hide' : 'Show'} description change
+                                                </button>
+                                                {expandedDescriptions[descKey] && (
+                                                  <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                                    <div className="rounded border border-red-200 bg-red-50/40 p-2">
+                                                      <div className="text-xs font-medium text-red-700 mb-1">V{olderVer.version || 1}</div>
+                                                      <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                                        {row.oldValue || <em className="text-gray-400">empty</em>}
+                                                      </div>
+                                                    </div>
+                                                    <div className="rounded border border-green-200 bg-green-50/40 p-2">
+                                                      <div className="text-xs font-medium text-green-700 mb-1">V{newerVer.version || 1}</div>
+                                                      <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                                        {row.newValue || <em className="text-gray-400">empty</em>}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="px-2 py-0.5 bg-red-50 text-red-700 ring-1 ring-red-200 rounded text-xs line-through">
+                                                  {String(row.oldValue ?? '—')}
+                                                </span>
+                                                <span className="text-gray-400">→</span>
+                                                <span className="px-2 py-0.5 bg-green-50 text-green-700 ring-1 ring-green-200 rounded text-xs">
+                                                  {String(row.newValue ?? '—')}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1869,7 +2123,7 @@ export default function AssessmentDetailsView({
               {/* Open full JD page link */}
               <div className="pt-2 border-t border-gray-100 flex justify-end">
                 <button
-                  onClick={() => router.push(`/recruitment/jd-details?id=${jdData.id}`)}
+                  onClick={() => router.push(`/recruitment/job-details?id=${jdData.id}`)}
                   className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
                 >
                   Open full JD page

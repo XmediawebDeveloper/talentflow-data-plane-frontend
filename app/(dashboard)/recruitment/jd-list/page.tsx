@@ -1,22 +1,22 @@
 'use client';
 
-import { Suspense } from 'react';
-import JDListPage from '@/components/JDListPage';
-import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-function JDListPageWrapper() {
-  return <JDListPage />;
-}
+// Legacy route — superseded by /recruitment/job-openings. Preserve query string
+// (create, returnUrl, etc.) so existing bookmarks and inline CTAs keep working.
+export default function JdListLegacyRedirect() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-export default function JDListRoute() {
+  useEffect(() => {
+    const qs = searchParams.toString();
+    router.replace(`/recruitment/job-openings${qs ? `?${qs}` : ''}`);
+  }, [router, searchParams]);
+
   return (
-    <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading job descriptions...</span>
-      </div>
-    }>
-      <JDListPageWrapper />
-    </Suspense>
+    <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+      Redirecting…
+    </div>
   );
 }

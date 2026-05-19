@@ -1,12 +1,22 @@
 'use client';
 
-import { Suspense } from 'react';
-import JDDetailsPage from '@/components/JDDetailsPage';
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function JDDetailsRoute() {
+// Legacy route — superseded by /recruitment/job-details. Preserve query string
+// (id, tab, etc.) so existing bookmarks/global-search results keep working.
+export default function JdDetailsLegacyRedirect() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const qs = searchParams.toString();
+    router.replace(`/recruitment/job-details${qs ? `?${qs}` : ''}`);
+  }, [router, searchParams]);
+
   return (
-    <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading...</div>}>
-      <JDDetailsPage />
-    </Suspense>
+    <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+      Redirecting…
+    </div>
   );
 }

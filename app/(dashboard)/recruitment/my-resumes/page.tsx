@@ -28,6 +28,7 @@ import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
 import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
@@ -1298,12 +1299,19 @@ export default function MyResumesPage() {
     setIsAssessmentModalOpen(true);
   };
 
-  // Fetch active assessments for the Assessment modal
+  // Fetch active assessments for the Assessment modal.
+  // Revoked assessments are filtered out — once the recruiter has revoked
+  // invites on an assessment they shouldn't be able to send fresh invites
+  // through any other module; they must duplicate it to start a new round.
   const fetchActiveAssessments = async () => {
     setLoadingAssessments(true);
     try {
       const response = await assessmentService.list({ status: 'published', page_size: 100 });
-      setActiveAssessments(response.items || []);
+      const revokedIds = getLocallyRevokedAssessmentIds();
+      const filtered = (response.items || []).filter(
+        (a: any) => !isAssessmentRevoked(a, revokedIds)
+      );
+      setActiveAssessments(filtered);
     } catch (error) {
       console.error('Failed to load active assessments:', error);
       toast.error('Failed to load active assessments');
@@ -2980,7 +2988,7 @@ export default function MyResumesPage() {
           onCreateFolder={handleCreateFolder}
           onViewResume={(resumeId) => {
             setIsUploadModalOpen(false);
-            router.push(`/recruitment/resume-detail/${resumeId}`);
+            router.push(`/recruitment/resume-view/${resumeId}`);
           }}
           onDuplicateDetected={(duplicateData) => {
             // Set duplicate files for the DuplicateResumeModal
@@ -4210,14 +4218,34 @@ export default function MyResumesPage() {
                                 </div>
 
                                 <div className="flex-1">
-                                  {/* Assessment ID and Title */}
+                                  {/* Assessment ID, Title, Version */}
                                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                     {assessment.short_id && (
                                       <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                                         {assessment.short_id}
                                       </span>
                                     )}
-                                    <h5 className="font-medium text-gray-900">{assessment.title}</h5>
+                                    {(() => {
+                                      // Show the assessment's title with its real version
+                                      // (derived from `version` field, falling back to a
+                                      // version baked into the title). Strips the inline
+                                      // "- Version N" suffix so we don't double-render.
+                                      const parsed = parseAssessmentTitle(assessment.title || '');
+                                      const displayVersion = typeof assessment.version === 'number'
+                                        ? assessment.version
+                                        : parsed.version;
+                                      const base = parsed.cleanTitle || 'Untitled assessment';
+                                      return (
+                                        <>
+                                          <h5 className="font-medium text-gray-900">{base}</h5>
+                                          {displayVersion && (
+                                            <span className="text-xs px-2 py-0.5 bg-brand-cyan/15 text-brand-cyan ring-1 ring-brand-cyan/30 rounded font-semibold">
+                                              V{displayVersion}
+                                            </span>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                     <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
                                       {assessment.status}
                                     </span>

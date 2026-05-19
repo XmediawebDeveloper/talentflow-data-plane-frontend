@@ -107,21 +107,133 @@ export function EvaluationDashboardV2({ data }: Props) {
   );
 }
 
-/* ─── Skills sub-view (from Vite SkillBreakdown.tsx) ──────────────────── */
+/* ─── Skills sub-view (from Vite SkillBreakdown.tsx) ────────────────────
+ * Per the spec doc — Must-Have and Nice-to-Have are EVALUATED SEPARATELY:
+ * MHS drives Pass/Fail (≥7.0), NHS is informational only. Skills must be
+ * rendered in their own sections so the recruiter doesn't have to mentally
+ * separate which 19 skills were the gate-blocking ones.
+ */
 export function SkillsView({ data }: { data: DashboardData }) {
-  const [expanded, setExpanded] = useState<number | null>(0);
-  const allClusters = [...data.mustHaveClusters, ...data.niceToHaveClusters];
-  const allSkills = allClusters.flatMap(c => c.skills.map(s => ({
-    ...s,
-    clusterPriority: c.priority,
-    clusterName: c.name,
-  })));
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const avgScore = allSkills.length > 0
-    ? allSkills.reduce((sum, s) => sum + s.score, 0) / allSkills.length
-    : 0;
-  const strongCount = allSkills.filter(s => s.score >= 8.0).length;
-  const totalWeight = allSkills.reduce((sum, s) => sum + priorityTag(s.clusterPriority).weight, 0);
+  // Flatten each section's clusters into skill rows tagged with their
+  // section so we can render two independent sections + summary blocks.
+  const flatten = (clusters: typeof data.mustHaveClusters) =>
+    clusters.flatMap(c =>
+      c.skills.map(s => ({
+        ...s,
+        clusterPriority: c.priority,
+        clusterName: c.name,
+      })),
+    );
+  const mhSkills = flatten(data.mustHaveClusters);
+  const nhSkills = flatten(data.niceToHaveClusters);
+  const allSkills = [...mhSkills, ...nhSkills];
+
+  const sectionAvg = (skills: typeof mhSkills): number =>
+    skills.length > 0
+      ? skills.reduce((sum, s) => sum + s.score, 0) / skills.length
+      : 0;
+  const mhAvg = sectionAvg(mhSkills);
+  const nhAvg = sectionAvg(nhSkills);
+
+  const renderSkillCard = (
+    s: typeof allSkills[number],
+    rowKey: string,
+  ) => {
+    const tag = priorityTag(s.clusterPriority);
+    const contribution = +(s.score * tag.weight).toFixed(1);
+    const isOpen = expanded === rowKey;
+    const color = scoreColor(s.score);
+    return (
+      <div
+        key={rowKey}
+        className={`rounded-2xl bg-white overflow-hidden transition-all ${
+          isOpen ? 'border-2 border-indigo-600 shadow-sm' : 'border border-gray-200'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded(isOpen ? null : rowKey)}
+          className="w-full text-left p-5 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="text-base font-semibold text-gray-900">{s.name}</div>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${tag.bg} ${tag.text}`}>
+                {tag.tag} • {s.clusterName}
+              </span>
+              {trendIcon(s.score)}
+            </div>
+            <div className="flex items-center gap-5 shrink-0">
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Score</div>
+                <div className="text-lg font-bold" style={{ color }}>{s.score.toFixed(1)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Weight</div>
+                <div className="text-lg font-bold text-gray-500">{tag.weight}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Contribution</div>
+                <div className="text-lg font-bold text-indigo-700">{contribution}</div>
+              </div>
+              {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+            </div>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${(s.score / 10) * 100}%`, backgroundColor: color }} />
+          </div>
+        </button>
+
+        {isOpen && (() => {
+          const { strengths, growth } = splitFeedback(s.feedback, s.score);
+          return (
+            <div className="px-5 pb-5">
+              <hr className="border-gray-200 mb-4" />
+              <div className="p-4 rounded-xl bg-gray-50 mb-4">
+                <div className="text-sm font-semibold text-gray-900 mb-1.5">AI Analysis:</div>
+                <div className="text-sm text-gray-700 leading-relaxed">
+                  {s.feedback || 'No specific feedback captured for this skill.'}
+                </div>
+              </div>
+
+              {(strengths.length > 0 || growth.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                  {strengths.length > 0 && (
+                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                      <div className="text-sm font-semibold text-emerald-700 mb-2">✓ Strengths</div>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {strengths.map((line, idx) => (
+                          <li key={idx} className="text-sm text-emerald-900 leading-relaxed">{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {growth.length > 0 && (
+                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                      <div className="text-sm font-semibold text-amber-700 mb-2">⚡ Areas for Growth</div>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {growth.map((line, idx) => (
+                          <li key={idx} className="text-sm text-amber-900 leading-relaxed">{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="p-4 rounded-xl bg-indigo-50 border border-dashed border-indigo-300">
+                <div className="text-sm font-mono font-semibold text-indigo-800">
+                  Weighted Calculation: {s.score.toFixed(1)} × {tag.weight} = {contribution}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -138,132 +250,387 @@ export function SkillsView({ data }: { data: DashboardData }) {
           No skills evaluated yet.
         </div>
       ) : (
-        <div className="space-y-3">
-          {allSkills.map((s, i) => {
-            const tag = priorityTag(s.clusterPriority);
-            const contribution = +(s.score * tag.weight).toFixed(1);
-            const isOpen = expanded === i;
-            const color = scoreColor(s.score);
-            return (
-              <div
-                key={`${s.name}-${i}`}
-                className={`rounded-2xl bg-white overflow-hidden transition-all ${
-                  isOpen ? 'border-2 border-indigo-600 shadow-sm' : 'border border-gray-200'
-                }`}
+        <>
+          {/* Must-Have Section — gate-blocking skills, MHS ≥ 7.0 = Pass */}
+          {mhSkills.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <div className="text-base font-bold text-gray-900">Must-Have Skills</div>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                    Scored for Pass/Fail
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {mhSkills.length} skill{mhSkills.length === 1 ? '' : 's'} · Avg{' '}
+                  <span className="font-semibold text-gray-900">{mhAvg.toFixed(2)}</span>/10
+                </div>
+              </div>
+              {mhSkills.map((s, i) => renderSkillCard(s, `mh-${s.name}-${i}`))}
+            </div>
+          )}
+
+          {/* Nice-to-Have Section — informational only per spec */}
+          {nhSkills.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <div className="text-base font-bold text-gray-900">Nice-to-Have Skills</div>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                    Information Only
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {nhSkills.length} skill{nhSkills.length === 1 ? '' : 's'} · Avg{' '}
+                  <span className="font-semibold text-gray-900">{nhAvg.toFixed(2)}</span>/10
+                </div>
+              </div>
+              {nhSkills.map((s, i) => renderSkillCard(s, `nh-${s.name}-${i}`))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Per-section summary — separate MHS / NHS totals so the recruiter
+          doesn't have to do mental math from a combined number. */}
+      {allSkills.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+          {mhSkills.length > 0 && (
+            <div className="rounded-2xl border border-indigo-200 p-5 bg-indigo-50/40">
+              <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3">
+                Must-Have Summary
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Avg Score</div>
+                  <div className="text-xl font-bold text-indigo-700">{mhAvg.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Skills</div>
+                  <div className="text-xl font-bold text-indigo-700">{mhSkills.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Strong (≥8)</div>
+                  <div className="text-xl font-bold text-emerald-600">
+                    {mhSkills.filter(s => s.score >= 8.0).length}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {nhSkills.length > 0 && (
+            <div className="rounded-2xl border border-amber-200 p-5 bg-amber-50/40">
+              <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-3">
+                Nice-to-Have Summary
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Avg Score</div>
+                  <div className="text-xl font-bold text-amber-600">{nhAvg.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Skills</div>
+                  <div className="text-xl font-bold text-amber-600">{nhSkills.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Strong (≥8)</div>
+                  <div className="text-xl font-bold text-emerald-600">
+                    {nhSkills.filter(s => s.score >= 8.0).length}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Questions sub-view ─────────────────────────────────────────────────
+ * Per the spec doc (timed-mode evaluation):
+ *   • Each card: question + answer + skills (with per-skill score + weight)
+ *   • Question Score = Σ(skill_score × weight) / Σ(weight), shown beside Q#
+ *   • Section Score = avg(question scores), MHS ≥ 7.0 → Pass
+ *   • Per-skill weights: P1=10, P2=7, P3=4
+ *   • HR is not scored
+ * Source: data.perQuestionDetails — built by adapter.ts:buildPerQuestionDetails.
+ */
+export function QuestionsView({ data }: { data: DashboardData }) {
+  const delivered = data.perQuestionDetails;
+
+  if (delivered.length === 0) {
+    return (
+      <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
+        No question-level data available.
+      </div>
+    );
+  }
+
+  // Linda's TTS-bound question text occasionally lands in question_history /
+  // conversation_transcript without a trailing question mark — usually
+  // because the LLM's stop token cut the sentence mid-punctuation, or the
+  // backend stripped trailing whitespace too aggressively. Append "?" when
+  // the text has no terminating punctuation so the Q reads as a question
+  // rather than a stray sentence. Skip when the text already ends with
+  // any sentence terminator (? ! .).
+  const ensureQuestionMark = (text: string): string => {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return '';
+    const last = trimmed.slice(-1);
+    if (last === '?' || last === '!' || last === '.') return trimmed;
+    return trimmed + '?';
+  };
+
+  // Score color: spec uses ≥7.0 as the Pass threshold for MHS — mirror that
+  // in the per-Q badge so the recruiter sees instantly which Qs were strong.
+  const scoreColorClass = (s: number): string => {
+    if (s >= 7.0) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+    if (s >= 4.0) return 'text-amber-600 bg-amber-50 border-amber-200';
+    return 'text-rose-600 bg-rose-50 border-rose-200';
+  };
+  // Priority chip color — mirrors the spec's weight tiers: P1 (weight 10),
+  // P2 (weight 7), P3 (weight 4). Green = high priority, lighter = lower.
+  const priorityChipClass = (level: 'High' | 'Medium' | 'Low'): string => {
+    if (level === 'High') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    if (level === 'Medium') return 'bg-sky-50 text-sky-700 border-sky-200';
+    return 'bg-violet-50 text-violet-700 border-violet-200';
+  };
+  const priorityLabel = (level: 'High' | 'Medium' | 'Low'): string =>
+    level === 'High' ? 'P1' : level === 'Medium' ? 'P2' : 'P3';
+
+  // Section grouping — render Qs grouped by section so the recruiter sees
+  // MHS / NHS / HR in distinct sections (matches the spec doc's framing).
+  // HR rounds are not scored per spec but the questions Linda asked are
+  // shown so the recruiter can review the conversation.
+  const mhQs = delivered.filter(q => q.section === 'mth');
+  const nhQs = delivered.filter(q => q.section === 'nth');
+  const hrQs = delivered.filter(q => q.section === 'hr');
+  const mhScore = mhQs.length > 0
+    ? Math.round((mhQs.reduce((s, q) => s + q.questionScore, 0) / mhQs.length) * 10) / 10
+    : 0;
+  const nhScore = nhQs.length > 0
+    ? Math.round((nhQs.reduce((s, q) => s + q.questionScore, 0) / nhQs.length) * 10) / 10
+    : 0;
+  const mhPass = mhScore >= 7.0;
+
+  // Per-Q card renderer (extracted so the grouped-by-section rendering
+  // below stays readable).
+  const renderQCard = (q: typeof delivered[number], idx: number) => {
+    const answer = (q.answer && q.answer.trim()) || '';
+    const sumW = q.skills.reduce((s, k) => s + k.weight, 0);
+    const sumWS = q.skills.reduce((s, k) => s + k.score * k.weight, 0);
+    // HR is not scored per spec — suppress score badge + per-skill score
+    // calc footer for HR cards so the recruiter doesn't mistake "0.0/10"
+    // for a performance signal on a behavioral question.
+    const isHr = q.section === 'hr';
+    return (
+      <div
+        key={`q-${idx}`}
+        className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3"
+      >
+        {/* 1. Question + question score badge (suppressed for HR) */}
+        <div>
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
+              Question {q.qNum}
+            </span>
+            {isHr ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
+                HR · Not Scored
+              </span>
+            ) : (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(q.questionScore)}`}
+                title="Question Score = Σ(skill_score × weight) / Σ(weight)"
               >
-                <button
-                  type="button"
-                  onClick={() => setExpanded(isOpen ? null : i)}
-                  className="w-full text-left p-5 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="text-base font-semibold text-gray-900">{s.name}</div>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${tag.bg} ${tag.text}`}>
-                        {tag.tag} • {s.clusterName}
-                      </span>
-                      {trendIcon(s.score)}
-                    </div>
-                    <div className="flex items-center gap-5 shrink-0">
-                      <div className="text-right">
-                        <div className="text-xs text-gray-500">Score</div>
-                        <div className="text-lg font-bold" style={{ color }}>{s.score.toFixed(1)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-gray-500">Weight</div>
-                        <div className="text-lg font-bold text-gray-500">{tag.weight}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-gray-500">Contribution</div>
-                        <div className="text-lg font-bold text-indigo-700">{contribution}</div>
-                      </div>
-                      {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-                    </div>
-                  </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(s.score / 10) * 100}%`, backgroundColor: color }} />
-                  </div>
-                </button>
+                Score: {q.questionScore.toFixed(1)}/10
+              </span>
+            )}
+          </div>
+          <div className="text-sm font-semibold text-gray-900 leading-relaxed">
+            {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
+          </div>
+        </div>
 
-                {isOpen && (() => {
-                  const { strengths, growth } = splitFeedback(s.feedback, s.score);
+        {/* 2. Candidate's answer */}
+        <div className="border-l-2 border-indigo-200 pl-3">
+          <div className="text-xs font-medium text-gray-500 mb-1">
+            Candidate's Answer
+          </div>
+          <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+            {answer || (
+              <span className="text-gray-400 italic">(no response)</span>
+            )}
+          </div>
+        </div>
+
+        {/* 3. Per-skill rows — for HR, just show plain skill chips
+            without score/weight/contribution since HR isn't scored. */}
+        {!isHr && (
+          <div>
+            <div className="text-xs font-medium text-gray-500 mb-1.5">
+              Skills assessed in this question
+            </div>
+            {q.skills.length === 0 ? (
+              <span className="text-xs text-gray-400 italic">No skills tagged</span>
+            ) : (
+              <div className="space-y-1.5">
+                {q.skills.map((s, i) => {
+                  const contribution = +(s.score * s.weight).toFixed(1);
                   return (
-                    <div className="px-5 pb-5">
-                      <hr className="border-gray-200 mb-4" />
-                      <div className="p-4 rounded-xl bg-gray-50 mb-4">
-                        <div className="text-sm font-semibold text-gray-900 mb-1.5">AI Analysis:</div>
-                        <div className="text-sm text-gray-700 leading-relaxed">
-                          {s.feedback || 'No specific feedback captured for this skill.'}
-                        </div>
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-3 p-2 rounded bg-gray-50 border border-gray-200"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-sm text-gray-900 truncate">{s.name}</span>
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${priorityChipClass(s.priority)}`}
+                        >
+                          {priorityLabel(s.priority)}
+                        </span>
                       </div>
-
-                      {(strengths.length > 0 || growth.length > 0) && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                          {strengths.length > 0 && (
-                            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-                              <div className="text-sm font-semibold text-emerald-700 mb-2">✓ Strengths</div>
-                              <ul className="list-disc pl-5 space-y-1">
-                                {strengths.map((line, idx) => (
-                                  <li key={idx} className="text-sm text-emerald-900 leading-relaxed">{line}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {growth.length > 0 && (
-                            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-                              <div className="text-sm font-semibold text-amber-700 mb-2">⚡ Areas for Growth</div>
-                              <ul className="list-disc pl-5 space-y-1">
-                                {growth.map((line, idx) => (
-                                  <li key={idx} className="text-sm text-amber-900 leading-relaxed">{line}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="p-4 rounded-xl bg-indigo-50 border border-dashed border-indigo-300">
-                        <div className="text-sm font-mono font-semibold text-indigo-800">
-                          Weighted Calculation: {s.score.toFixed(1)} × {tag.weight} = {contribution}
-                        </div>
+                      <div className="flex items-center gap-4 text-xs font-mono">
+                        <span title="LLM score for this skill">
+                          <span className="text-gray-400">Score </span>
+                          <span className="text-gray-900 font-semibold">{s.score.toFixed(1)}</span>
+                        </span>
+                        <span title="Priority weight">
+                          <span className="text-gray-400">×</span>
+                          <span className="text-gray-700"> {s.weight}</span>
+                        </span>
+                        <span title="Score × Weight">
+                          <span className="text-gray-400">= </span>
+                          <span className="text-indigo-700 font-semibold">{contribution}</span>
+                        </span>
                       </div>
                     </div>
                   );
-                })()}
+                })}
+                {sumW > 0 && (
+                  <div className="text-[11px] font-mono text-gray-500 pl-2 pt-1">
+                    Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Section header chip — small label + count badge so each block has a
+  // visible divider between MHS / NHS / HR.
+  const sectionHeader = (label: string, chipText: string, count: number, chipCls: string) => (
+    <div className="flex items-center gap-2 pt-1 pb-1">
+      <div className="text-base font-bold text-gray-900">{label}</div>
+      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${chipCls}`}>{chipText}</span>
+      <span className="text-xs text-gray-500">· {count} question{count === 1 ? '' : 's'}</span>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {mhQs.length > 0 && (
+        <>
+          {sectionHeader('Must-Have Section', 'Scored for Pass/Fail', mhQs.length, 'bg-indigo-50 text-indigo-700')}
+          {mhQs.map((q, i) => renderQCard(q, i))}
+        </>
+      )}
+      {nhQs.length > 0 && (
+        <>
+          {sectionHeader('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-amber-50 text-amber-700')}
+          {nhQs.map((q, i) => renderQCard(q, mhQs.length + i))}
+        </>
+      )}
+      {hrQs.length > 0 && (
+        <>
+          {sectionHeader('HR Round', 'Not Scored', hrQs.length, 'bg-violet-50 text-violet-700')}
+          {hrQs.map((q, i) => renderQCard(q, mhQs.length + nhQs.length + i))}
+        </>
       )}
 
-      {/* Summary stats */}
-      <div className="rounded-2xl border border-gray-200 p-6 bg-white">
-        <div className="text-base font-semibold text-gray-900 mb-4">Summary Statistics</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Average Score</div>
-            <div className="text-2xl font-bold text-indigo-700">{avgScore.toFixed(2)}</div>
+      {/* Section Score summary — spec §4 Step 4 + Step 5. HR appears as
+          a "Not Scored" info card so the recruiter knows the HR Qs were
+          asked but didn't affect the Pass/Fail decision. */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+        {mhQs.length > 0 && (
+          <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
+            <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+              Must-Have Section
+            </div>
+            <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+              <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
+                Section Score = avg of {mhQs.length} question scores
+              </div>
+              <div className="flex items-baseline justify-between gap-3 mb-2">
+                <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {mhScore.toFixed(2)}
+                </span>
+                <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  / 10
+                </span>
+              </div>
+              <div
+                className={`text-sm font-bold text-center p-2 rounded border-2 ${
+                  mhPass
+                    ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
+                    : 'bg-rose-100 border-rose-500 text-rose-800'
+                }`}
+              >
+                {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} 7.0 → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Skills Evaluated</div>
-            <div className="text-2xl font-bold text-indigo-700">{allSkills.length}</div>
+        )}
+        {nhQs.length > 0 && (
+          <div className="rounded-2xl border-2 border-amber-500 overflow-hidden">
+            <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+              Nice-to-Have Section
+            </div>
+            <div className="p-4 bg-amber-50">
+              <div className="text-xs text-amber-800 mb-1">
+                Section Score = avg of {nhQs.length} question scores
+              </div>
+              <div className="flex items-baseline justify-between gap-3 mb-2">
+                <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
+                <span className="text-sm font-semibold text-amber-700">/ 10</span>
+              </div>
+              <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
+                Informational only — does not affect Pass/Fail
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Strong Skills (≥8.0)</div>
-            <div className="text-2xl font-bold text-emerald-500">{strongCount}</div>
+        )}
+        {hrQs.length > 0 && (
+          <div className="rounded-2xl border-2 border-violet-500 overflow-hidden">
+            <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+              HR Round
+            </div>
+            <div className="p-4 bg-violet-50">
+              <div className="text-xs text-violet-800 mb-1">
+                {hrQs.length} HR question{hrQs.length === 1 ? '' : 's'} asked
+              </div>
+              <div className="text-sm font-semibold text-violet-900 mb-3">
+                Behavioral / cultural fit conversation
+              </div>
+              <div className="text-sm font-bold text-center p-2 rounded bg-violet-100 border-2 border-violet-500 text-violet-800">
+                Not scored — per evaluation spec
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Total Weight</div>
-            <div className="text-2xl font-bold text-indigo-700">{totalWeight}</div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ─── Questions sub-view (from Vite QuestionAnalysis.tsx) ─────────────── */
-export function QuestionsView({ data }: { data: DashboardData }) {
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// @ts-ignore -- kept temporarily for reference; safe to delete once new
+// QuestionsView design has been validated against a few real sessions.
+function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
   const [expanded, setExpanded] = useState<number | null>(0);
   const [transcriptOpen, setTranscriptOpen] = useState<PerQuestionDetail | null>(null);
 

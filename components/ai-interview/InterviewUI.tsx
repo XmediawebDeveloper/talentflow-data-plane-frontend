@@ -1025,9 +1025,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     isProcessingRef.current = false;
     clearNoResponseTimer();
     stopRecordingSilentRef.current();
-    if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-      wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-    }
+    // Backend now handles the 2-min hard cap natively in _timer_from_speech:
+    // it flushes captured audio (<=120s) into the natural end_turn pipeline
+    // and sends `question_window_hard_cap` to us. The client used to also
+    // send skip_question(source=timer_expired) here as a fallback, which
+    // raced with the backend's flush and cancelled Linda's TTS mid-sentence.
+    // Don't send anything from the client — let the backend drive the
+    // advance. The watchdog below still has the 25s stuck-detection re-send.
   }, [clearNoResponseTimer]);
 
   const ensureQuestionTimerRunning = useCallback((durSeconds: number) => {
@@ -1166,23 +1170,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => clearTimeout(t);
   }, [isClarification]);
 
-  // Post-expiry stuck recovery: once the timer hits 0, the backend should
-  // process the answer (or skip) and emit a fresh question_timer_started
-  // within a reasonable window. If that never happens — e.g. ASR/LLM/TTS
-  // hangs inside run_pipeline — the candidate is stranded staring at
-  // "TIME UP" forever. Re-send skip_question after 25 s so the backend's
-  // skip pipeline gets a second chance to advance.
-  useEffect(() => {
-    if (!questionTimerExpired) return;
-    const t = setTimeout(() => {
-      if (!questionTimerExpiredRef.current) return; // resolved naturally
-      console.warn("[Timer watchdog] Stuck at TIME UP for 25s — re-sending skip_question to unblock backend");
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-      }
-    }, 25_000);
-    return () => clearTimeout(t);
-  }, [questionTimerExpired]);
+  // (Watchdog removed.) The previous "post-expiry stuck recovery" watchdog
+  // fired a skip_question after 25-90s when the candidate stayed on the
+  // "TIME UP" screen. It was wrong: the backend's natural end-of-question
+  // pipeline (ASR + LLM evaluation + LLM next-Q + TTS) takes 15-40s, so a
+  // watchdog firing mid-pipeline DISCARDED a successfully captured answer
+  // (observed on session ai-1f145baf Q#3 — full 2-min Tamil/English
+  // transcript captured then dropped by the 25s watchdog before Linda
+  // finished generating Q#4). Trust the hard-cap + the backend's own 180s
+  // pipeline-level timeout. If Linda's pipeline genuinely hangs, the
+  // backend cancels and unblocks itself.
 
   // Fullscreen-exit watchdog: the per-question + global timers both pause
   // while `isFullscreenExited` is true. If the browser misses the return
@@ -2815,6 +2812,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         clearNoResponseTimer();
         stopRecordingSilentRef.current();
         setStatus("Time's up — moving to the next question...");
+        break;
+      case "question_window_hard_cap":
+        // Backend hit the 2:00 mark while candidate was still answering. It
+        // has already flushed the captured audio (<=120s) into the natural
+        // end_turn pipeline; Linda will ask the next question in a few
+        // seconds. Stop the mic so nothing said after 2:00 is sent.
+        console.log('[INTERVIEW-DEBUG] question_window_hard_cap received', {
+          question_number: data.question_number,
+          isRecording: isRecordingRef.current,
+        });
+        backendExpiredRef.current = true; // suppress any local skip_question
+        setQuestionTimerExpired(true);
+        questionTimerExpiredRef.current = true;
+        setQuestionTimerSeconds(0);
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setIsClarification(false);
+        isClarificationRef.current = false;
+        setShowSilenceBanner(false);
+        setSilenceCountdown(null);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        clearNoResponseTimer();
+        stopRecordingSilentRef.current();
+        setStatus(data.message || "Got it — moving on to the next question...");
         break;
       case "skill_coverage_update":
         setSkillCoverage({

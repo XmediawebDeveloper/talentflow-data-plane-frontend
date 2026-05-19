@@ -109,7 +109,7 @@ export default function CreateAssessmentPage() {
 
   const handleNavigateToJDCreation = () => {
     // Pass returnUrl to redirect back to assessments page after job creation
-    router.push('/recruitment/jd-list?create=true&returnUrl=/recruitment/assessments');
+    router.push('/recruitment/job-openings?create=true&returnUrl=/recruitment/assessments');
   };
 
   if (isLoading) {

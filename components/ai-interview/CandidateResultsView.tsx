@@ -1256,6 +1256,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   created_at: liveSession.created_at,
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
               // Compute avg response time from evaluations (seconds)
               const responseTimes = (eval_.evaluations || [])
@@ -1310,6 +1311,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   created_at: liveSession.created_at,
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
               return <CoverageV2 data={data} />;
             })()}
@@ -2810,6 +2812,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   created_at: liveSession.created_at,
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
               const aiConfidence = typeof eval_.ai_confidence === 'number'
                 ? eval_.ai_confidence
@@ -2867,6 +2870,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   created_at: liveSession.created_at,
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
               return <SkillsView data={data} />;
             })()}
@@ -2891,6 +2895,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   created_at: liveSession.created_at,
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
               return <QuestionsView data={data} />;
             })()}
