@@ -2,6 +2,54 @@
  * Utility functions for assessment display
  */
 
+// ───── Revoked-assessment seal ────────────────────────────────────────────
+// Once a recruiter clicks "Revoke pending invites" on an assessment, ALL
+// invite/share surfaces across the app should treat that assessment as
+// sealed (Share / Copy Link / Send Invitation disabled, or the assessment
+// excluded from invite pickers).
+//
+// The authoritative signal is the backend's `has_revoked_invites` flag on
+// the assessment list response. Until the backend ships that, the
+// Assessments page locally stores revoked IDs in sessionStorage so the
+// seal still works in the same browser tab. These helpers expose the same
+// check to every other module (Job Description, My Resumes, Scored
+// Resumes, AI Talent Match) so the gating is consistent everywhere.
+const REVOKED_IDS_STORAGE_KEY = 'tf:assessments:revoked-ids';
+
+export function getLocallyRevokedAssessmentIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set<string>();
+  try {
+    const raw = window.sessionStorage.getItem(REVOKED_IDS_STORAGE_KEY);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set<string>(parsed) : new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+}
+
+/**
+ * True if this assessment should be treated as revoked — either the
+ * backend flag is set, or the recruiter revoked it earlier in this
+ * browser tab. Use to disable Share/Invite buttons or to filter
+ * assessments out of invite pickers.
+ *
+ * @param assessment Any object that may carry `id` and `has_revoked_invites`.
+ *                   If `id` is missing returns false (we can't look up).
+ * @param locallyRevokedIds Optional pre-loaded set; pass when checking many
+ *                          assessments in a tight loop to avoid re-reading
+ *                          sessionStorage every iteration.
+ */
+export function isAssessmentRevoked(
+  assessment: { id?: string; has_revoked_invites?: boolean } | null | undefined,
+  locallyRevokedIds?: Set<string>,
+): boolean {
+  if (!assessment) return false;
+  if (assessment.has_revoked_invites === true) return true;
+  const ids = locallyRevokedIds ?? getLocallyRevokedAssessmentIds();
+  return !!(assessment.id && ids.has(assessment.id));
+}
+
 export interface ParsedAssessmentTitle {
   cleanTitle: string;  // Title without version text
   version: number | null;  // Extracted version number

@@ -16,6 +16,7 @@ import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
+import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
@@ -625,14 +626,19 @@ export default function AITalentMatchPage({
       return;
     }
 
-    // Fetch active assessments (published status)
+    // Fetch active assessments (published status). Revoked assessments are
+    // excluded — once invites have been revoked the assessment is sealed
+    // and the recruiter must duplicate it for a fresh invite round.
     try {
       const response = await assessmentService.list({ status: 'published', page_size: 100 });
-      const activeAssessments = response.items.map((a: any) => ({
-        ...a,
-        created_by_name: a.created_by_name || 'System',
-        short_id: a.short_id || `AS-${String(a.id).slice(0, 8).toUpperCase()}`,
-      }));
+      const revokedIds = getLocallyRevokedAssessmentIds();
+      const activeAssessments = response.items
+        .filter((a: any) => !isAssessmentRevoked(a, revokedIds))
+        .map((a: any) => ({
+          ...a,
+          created_by_name: a.created_by_name || 'System',
+          short_id: a.short_id || `AS-${String(a.id).slice(0, 8).toUpperCase()}`,
+        }));
 
       setAssessments(activeAssessments);
       setIsAssessmentModalOpen(true);
@@ -1517,14 +1523,33 @@ export default function AITalentMatchPage({
                             </div>
 
                             <div className="flex-1">
-                              {/* Assessment ID, Title, and Active Badge */}
+                              {/* Assessment ID, Title, Version + Active Badge */}
                               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                 {assessment.short_id && (
                                   <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                                     {assessment.short_id}
                                   </span>
                                 )}
-                                <h5 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{assessment.title}</h5>
+                                {(() => {
+                                  // Strip any "- Version N" baked into the stored title
+                                  // and render the live version (from `version`, falling
+                                  // back to the parsed title version) as its own badge.
+                                  const parsed = parseAssessmentTitle(assessment.title || '');
+                                  const displayVersion = typeof assessment.version === 'number'
+                                    ? assessment.version
+                                    : parsed.version;
+                                  const base = parsed.cleanTitle || 'Untitled assessment';
+                                  return (
+                                    <>
+                                      <h5 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{base}</h5>
+                                      {displayVersion && (
+                                        <span className="text-xs px-2 py-0.5 bg-brand-cyan/15 text-brand-cyan ring-1 ring-brand-cyan/30 rounded font-semibold">
+                                          V{displayVersion}
+                                        </span>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
                                   Active
                                 </span>
@@ -2641,14 +2666,33 @@ export default function AITalentMatchPage({
                             </div>
 
                             <div className="flex-1">
-                              {/* Assessment ID, Title, and Active Badge */}
+                              {/* Assessment ID, Title, Version + Active Badge */}
                               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                 {assessment.short_id && (
                                   <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                                     {assessment.short_id}
                                   </span>
                                 )}
-                                <h5 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{assessment.title}</h5>
+                                {(() => {
+                                  // Strip any "- Version N" baked into the stored title
+                                  // and render the live version (from `version`, falling
+                                  // back to the parsed title version) as its own badge.
+                                  const parsed = parseAssessmentTitle(assessment.title || '');
+                                  const displayVersion = typeof assessment.version === 'number'
+                                    ? assessment.version
+                                    : parsed.version;
+                                  const base = parsed.cleanTitle || 'Untitled assessment';
+                                  return (
+                                    <>
+                                      <h5 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{base}</h5>
+                                      {displayVersion && (
+                                        <span className="text-xs px-2 py-0.5 bg-brand-cyan/15 text-brand-cyan ring-1 ring-brand-cyan/30 rounded font-semibold">
+                                          V{displayVersion}
+                                        </span>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
                                   Active
                                 </span>

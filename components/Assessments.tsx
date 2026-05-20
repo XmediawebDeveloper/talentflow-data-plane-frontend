@@ -2,7 +2,7 @@
 
 import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ChevronLeft } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -100,10 +100,48 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [revokeTargetAssessment, setRevokeTargetAssessment] = useState<any | null>(null);
   const [revokeCount, setRevokeCount] = useState<number | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
-  // Set of assessment IDs revoked in THIS session. Survives reloadAssessments
-  // so the Share / Revoke buttons stay sealed even on backends that don't
-  // yet return the has_revoked_invites flag. Cleared on full page reload.
-  const [locallyRevokedIds, setLocallyRevokedIds] = useState<Set<string>>(new Set());
+  // Set of assessment IDs revoked in THIS browser tab. We use a ref (not
+  // state) because setState is async — if we set the state and then
+  // immediately call reloadAssessments, the mapper closure inside
+  // reloadAssessments still sees the OLD set, so the seal gets wiped by
+  // the refetch. A ref is mutated synchronously.
+  //
+  // We also persist to sessionStorage so the seal survives component
+  // unmount/remount (the user navigating away and back to Assessments).
+  // Without persistence, navigating away wipes the ref and the next
+  // fetch from a not-yet-redeployed backend re-enables Share / Revoke
+  // a few minutes later. sessionStorage clears on tab close, so it's a
+  // safe in-session cache that doesn't pollute other browser sessions.
+  const REVOKED_IDS_STORAGE_KEY = 'tf:assessments:revoked-ids';
+  const locallyRevokedIdsRef = useRef<Set<string>>(
+    (() => {
+      if (typeof window === 'undefined') return new Set<string>();
+      try {
+        const raw = window.sessionStorage.getItem(REVOKED_IDS_STORAGE_KEY);
+        if (!raw) return new Set<string>();
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? new Set<string>(parsed) : new Set<string>();
+      } catch {
+        return new Set<string>();
+      }
+    })()
+  );
+  // Persist the ref to sessionStorage whenever we mutate it (called from
+  // handleConfirmRevoke after adding the id).
+  const persistLocallyRevokedIds = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.sessionStorage.setItem(
+        REVOKED_IDS_STORAGE_KEY,
+        JSON.stringify(Array.from(locallyRevokedIdsRef.current)),
+      );
+    } catch {
+      /* sessionStorage full or unavailable — non-fatal */
+    }
+  };
+  // A counter that we bump whenever the ref changes, to trigger re-renders
+  // of components that need to re-evaluate based on the ref.
+  const [revokedTick, setRevokedTick] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
@@ -222,9 +260,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       // Once invites are revoked the assessment is sealed: Share + Revoke
       // both get disabled. The recruiter clones a new version if they
       // want to start a fresh invite round. We OR the backend flag with
-      // a session-local set so the seal sticks on backends that don't
-      // yet return has_revoked_invites (graceful pre-deploy behaviour).
-      has_revoked_invites: a.has_revoked_invites === true || locallyRevokedIds.has(a.id),
+      // the session-local ref so the seal sticks on backends that don't
+      // yet return has_revoked_invites — and survives reloadAssessments
+      // because the ref is mutated synchronously (state would be stale).
+      has_revoked_invites: a.has_revoked_invites === true || locallyRevokedIdsRef.current.has(a.id),
       jd_id: a.jd_id,
       jd_short_id: a.jd_short_id,
       jd_version: a.jd_version,
@@ -890,17 +929,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const revokedId = revokeTargetAssessment.id;
     try {
       const result = await assessmentService.revokePendingInvitations(revokedId);
-      // Seal the row both ways:
-      //   (a) immediate local-state patch so the current render flips Share
-      //       and Revoke to grey before any backend round-trip.
-      //   (b) add to locallyRevokedIds so the seal survives the upcoming
-      //       reloadAssessments() — important when the backend isn't yet
-      //       returning has_revoked_invites (mapper ORs the two sources).
-      setLocallyRevokedIds(prev => {
-        const next = new Set(prev);
-        next.add(revokedId);
-        return next;
-      });
+      // SYNCHRONOUSLY add to the ref before the await so the mapper inside
+      // reloadAssessments() sees it. Then bump the tick to force a re-render.
+      // This guarantees the seal survives the upcoming refetch even when the
+      // backend hasn't been redeployed with the has_revoked_invites flag.
+      // Persist to sessionStorage so the seal also survives component
+      // unmount/remount (user navigating away to another module and back).
+      locallyRevokedIdsRef.current.add(revokedId);
+      persistLocallyRevokedIds();
+      setRevokedTick(t => t + 1);
+      // Also patch the current state directly so the seal flips BEFORE the
+      // refetch round-trip completes.
       setApiAssessments(prev => prev.map(a =>
         a.id === revokedId
           ? { ...a, has_revoked_invites: true }
@@ -1111,6 +1150,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onClose={() => {
               setShowShareModal(false);
               setSelectedAssessmentForShare(null);
+              // Refresh the list so invitation counts / Track Invites
+              // badges reflect the just-sent invites.
+              reloadAssessments();
             }}
             assessment={selectedAssessmentForShare}
             inviteSource="Assessment"
@@ -2830,17 +2872,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Preview
                                 </button>
                                 {assessment.status !== 'Archived' && canCreateAssessment && (() => {
-                                  // Two separate gating signals from the backend:
-                                  //   clone_button_disabled → Draft / clone (V2, V3)
-                                  //   clone_cap_reached → V1 already at 3 versions
-                                  // The cap-reached case stays CLICKABLE so the recruiter
-                                  // gets a "max reached" popup explaining why, rather
-                                  // than a silently greyed-out button.
-                                  const buttonDisabled = !!assessment.clone_button_disabled;
-                                  const disabledReason = buttonDisabled
-                                    ? (assessment.status === 'Draft'
-                                        ? 'Publish the assessment before duplicating.'
-                                        : 'Only the original assessment (Version 1) can be duplicated.')
+                                  // Gating computed FRONT-END so it works regardless of
+                                  // whether the backend has the new clone_button_disabled
+                                  // flag deployed. Four reasons to disable:
+                                  //   1. Draft → must publish first
+                                  //   2. Clone (version > 1) → only V1 can be duplicated
+                                  //   3. Cap reached (3 sibling versions exist for this JD)
+                                  //      — counted from the currently-loaded list as a
+                                  //      fallback so V1 greys out the moment V3 is created,
+                                  //      even before the backend redeploy lands the
+                                  //      clone_cap_reached flag.
+                                  //   4. Backend flag (extra safety / future-proofing)
+                                  const isDraft = assessment.status === 'Draft';
+                                  const isClone = (assessment.version || 1) > 1;
+                                  const isV1 = (assessment.version || 1) === 1;
+                                  // Sibling count from the loaded list (live across renders).
+                                  const siblingCountInList = assessment.jd_id
+                                    ? apiAssessments.filter((x: any) =>
+                                        x.jd_id === assessment.jd_id && x.status !== 'Archived'
+                                      ).length
+                                    : 0;
+                                  const capReached =
+                                    assessment.clone_cap_reached === true ||
+                                    (assessment.jd_assessment_count !== undefined && assessment.jd_assessment_count >= 3) ||
+                                    siblingCountInList >= 3;
+                                  const backendDisabled = !!assessment.clone_button_disabled;
+                                  const buttonDisabled = isDraft || isClone || (isV1 && capReached) || backendDisabled;
+                                  const disabledReason = isDraft
+                                    ? 'Publish the assessment before duplicating.'
+                                    : isClone
+                                    ? 'Only the original assessment (Version 1) can be duplicated.'
+                                    : (isV1 && capReached)
+                                    ? 'Maximum 3 versions reached. Archive a version to duplicate again.'
                                     : '';
                                   return (
                                     <button
@@ -3001,6 +3064,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           onClose={() => {
             setShowShareModal(false);
             setSelectedAssessmentForShare(null);
+            // Refresh the list so invitation counts / Track Invites
+            // badges reflect the just-sent invites.
+            reloadAssessments();
           }}
           assessment={selectedAssessmentForShare}
           inviteSource="Assessment"

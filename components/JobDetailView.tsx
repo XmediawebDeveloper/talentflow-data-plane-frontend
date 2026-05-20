@@ -26,7 +26,7 @@ import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
-import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
@@ -171,16 +171,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       // Ask the API for ONLY published assessments. Drafts, archived, and
       // disabled assessments are excluded — candidates can't take those.
       const resp = await assessmentService.list({ jd_id: job.id, status: 'published', page_size: 100 });
+      const revokedIds = getLocallyRevokedAssessmentIds();
       const items: any[] = (resp?.items || []).filter((a: any) => {
         const status = String(a?.status || '').toLowerCase();
-        return status === 'published' || status === 'active';
+        if (status !== 'published' && status !== 'active') return false;
+        // Exclude any assessment whose invites the recruiter has revoked.
+        // Backend flag wins; locally-revoked IDs from sessionStorage are
+        // the fallback for tabs where the backend flag isn't yet returned.
+        return !isAssessmentRevoked(a, revokedIds);
       });
 
       if (items.length === 0) {
         // No usable assessment for this JD. Tell the user explicitly instead
         // of silently opening a fallback modal that they can't act on.
         toast.error(
-          'No published assessment is available for this job. Please publish an existing assessment or create a new one first.',
+          'No invitable assessment is available for this job. Published assessments whose invites have been revoked are excluded — duplicate one to start a fresh invite round.',
           { duration: 6000 }
         );
         return;

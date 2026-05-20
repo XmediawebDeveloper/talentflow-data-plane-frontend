@@ -59,21 +59,44 @@ export function OverviewSectionV2({
   const mhCov = coverage(mustHaveClusters);
   const nhCov = coverage(niceToHaveClusters);
 
-  // ── Top performing skills (limit 6, sorted by score) ────────────────
-  const topSkills = [...allSkills]
+  // ── Highest-scored skills (filter 0-score, limit 6) ─────────────────
+  // Previously this took the top 6 by score unconditionally — for failing
+  // candidates the list filled with skills scored 0.0-1.0, contradicting
+  // the "Top Performing" label. Now we drop 0-score entries (skills the
+  // candidate didn't answer at all) so the panel only surfaces skills
+  // where there's at least some signal to rank. When everything's 0 we
+  // render an empty-state instead of pretending there's a "top".
+  const scoredSkills = allSkills.filter(s => s.score > 0);
+  const topSkills = [...scoredSkills]
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
+  // Heading honesty: when no skill scored above the spec's strong-band
+  // threshold (≥7.0), the panel header should say "Highest Scoring"
+  // rather than "Top Performing" so a recruiter doesn't read a fail as
+  // a positive signal.
+  const hasStrongSkill = topSkills.some(s => s.score >= 7.0);
+  const topPanelHeading = hasStrongSkill ? 'Top Performing Skills' : 'Highest Scoring Skills';
 
-  // ── Radar chart data (top 6 skills) ─────────────────────────────────
-  const radarData = topSkills.map(s => ({ skill: s.name, score: s.score, fullMark: 10 }));
+  // ── Radar chart data (top 6 by score; pads with 0-score skills only
+  // when fewer than 3 entries to keep the polygon readable) ───────────
+  const radarBase = topSkills.length >= 3
+    ? topSkills
+    : [...topSkills, ...allSkills.filter(s => s.score === 0).slice(0, Math.max(0, 3 - topSkills.length))];
+  const radarData = radarBase.map(s => ({ skill: s.name, score: s.score, fullMark: 10 }));
 
   // ── Section breakdown table ─────────────────────────────────────────
+  // Question counts come from data.perQuestionDetails grouped by section
+  // (the same source the Question Analysis tab uses) so the numbers
+  // match across tabs. The old code filtered interviewResponses by
+  // INDEX, which had no relation to section and produced wrong counts.
+  const mhQCount = data.perQuestionDetails.filter(q => q.section === 'mth').length;
+  const nhQCount = data.perQuestionDetails.filter(q => q.section === 'nth').length;
   const sectionRows = [
     {
       key: 'mh' as const,
       label: 'Must-Have Section',
       score: scores.mustHave,
-      questions: interviewResponses.filter((_, i) => i < mustHaveClusters.length).length || mhCov.total,
+      questions: mhQCount,
       threshold: MHS_THRESHOLD,
       status: scores.mustHave >= MHS_THRESHOLD ? 'PASS' : 'FAIL',
       color: '#4F46E5',
@@ -84,7 +107,7 @@ export function OverviewSectionV2({
       key: 'nh' as const,
       label: 'Nice-to-Have Section',
       score: scores.niceToHave,
-      questions: nhCov.total,
+      questions: nhQCount,
       threshold: null,
       status: 'INFO',
       color: '#F59E0B',
@@ -233,8 +256,10 @@ export function OverviewSectionV2({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Top Performing Skills */}
         <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-sm">
-          <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-3">
-            <div className="text-base font-bold text-emerald-800">Top Performing Skills</div>
+          <div className={`border-b px-6 py-3 ${hasStrongSkill ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+            <div className={`text-base font-bold ${hasStrongSkill ? 'text-emerald-800' : 'text-amber-800'}`}>
+              {topPanelHeading}
+            </div>
           </div>
           <div className="p-6">
             {topSkills.length > 0 ? topSkills.map((skill, i) => (
@@ -327,11 +352,25 @@ export function OverviewSectionV2({
             )}
 
             <hr className="my-4 border-gray-200" />
-            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 leading-relaxed">
-              <strong>Coverage Status:</strong>{' '}
+            <div
+              className={`p-4 rounded-xl border text-xs leading-relaxed ${
+                mhCov.pct >= 80
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : mhCov.pct >= 60
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {/* Frame this as a QUESTION coverage metric (was Linda asked
+                  enough?) — NOT a performance signal (did the candidate
+                  answer well?). A failing candidate can still have 100%
+                  coverage; an excellent candidate with under-coverage is
+                  the recruiter's planner-side bug, not the candidate's. */}
+              <strong>Question Coverage:</strong>{' '}
               {mhCov.pct >= 80 ? 'Excellent' : mhCov.pct >= 60 ? 'Good' : 'Needs Improvement'}
-              {' '}— Interview questions covered {mhCov.pct}% of Must-Have skills
-              {sectionsPresent.niceToHave && ` and ${nhCov.pct}% of Nice-to-Have skills`}.
+              {' '}— Linda asked about {mhCov.pct}% of the Must-Have skills
+              {sectionsPresent.niceToHave && ` and ${nhCov.pct}% of the Nice-to-Have skills`}.
+              {' '}This reflects what the interview probed; candidate performance is shown in the Section Score Breakdown below.
             </div>
           </div>
         </div>
