@@ -494,7 +494,26 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       <div className="flex items-center gap-4 text-xs font-mono">
                         <span title="LLM score for this skill">
                           <span className="text-gray-400">Score </span>
-                          <span className="text-gray-900 font-semibold">{s.score.toFixed(1)}</span>
+                          <span
+                            className={`${s.is_skipped ? 'text-gray-400' : 'text-gray-900'} font-semibold`}
+                          >
+                            {s.score.toFixed(1)}
+                          </span>
+                          {s.is_skipped ? (
+                            <span
+                              className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                              title="Candidate skipped or said 'I don't know' — not scored for this skill."
+                            >
+                              Skipped
+                            </span>
+                          ) : s.is_fallback ? (
+                            <span
+                              className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                              title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question."
+                            >
+                              Q
+                            </span>
+                          ) : null}
                         </span>
                         <span title="Priority weight">
                           <span className="text-gray-400">×</span>
@@ -790,7 +809,28 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                                 <div className="flex items-center gap-5">
                                   <div className="text-center">
                                     <div className="text-xs text-gray-500">Score</div>
-                                    <div className="text-base font-bold text-emerald-500">{s.score.toFixed(1)}</div>
+                                    <div className="flex items-center justify-center gap-1">
+                                      <div
+                                        className={`text-base font-bold ${s.is_skipped ? 'text-gray-400' : 'text-emerald-500'}`}
+                                      >
+                                        {s.score.toFixed(1)}
+                                      </div>
+                                      {s.is_skipped ? (
+                                        <span
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                                          title="Candidate skipped or said 'I don't know' — not scored for this skill."
+                                        >
+                                          Skipped
+                                        </span>
+                                      ) : s.is_fallback ? (
+                                        <span
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                                          title="Q-level fallback: this skill was not directly evaluated by the AI; score reflects the candidate's overall answer on this question."
+                                        >
+                                          Q
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </div>
                                   <div className="text-center">
                                     <div className="text-xs text-gray-500">Weight</div>

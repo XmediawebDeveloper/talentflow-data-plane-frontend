@@ -786,9 +786,57 @@ function buildPerQuestionDetailsFromHistory(
     (evalsByQ[qn] = evalsByQ[qn] || []).push(ev);
   }
 
-  // Per-skill score lookup: prefer exact topic match, fall back to substring.
-  // Score 0 (with empty note) when the evaluator emitted no row for this skill.
-  const scoreForSkill = (qn: number, skill: string): { score: number; note: string } => {
+  // Detector for skipped / IDK responses. The evaluator often
+  // mis-scores these as `topic="Behavioural", score=5.0` (observed in
+  // production: Be25 session q=25/27/29). Without this guard, the
+  // Q-level fallback would propagate that 5.0 to every planned skill
+  // on the question — showing the candidate as having demonstrated
+  // skills they explicitly didn't answer.
+  const isSkippedOrIdk = (entry: any): boolean => {
+    const rt = String(entry?.response_type || '').toLowerCase();
+    // Backend-set response_type covers timer/silence skips + the
+    // dedicated IDK pipeline. auto_skipped_by_coverage is already
+    // filtered earlier, but kept here for safety.
+    if (
+      rt === 'skipped' || rt === 'timeout' || rt === 'idk' ||
+      rt === 'low_coverage' || rt === 'auto_skipped_by_coverage'
+    ) {
+      return true;
+    }
+    // Fallback to answer text — older sessions stored "[SKIPPED]" /
+    // "I don't know" without setting response_type cleanly.
+    const ansRaw = String(entry?.answer || '').trim();
+    if (!ansRaw) return true;
+    const ans = ansRaw.toLowerCase();
+    if (ans === '[skipped]') return true;
+    if (ans === "i don't know." || ans === "i don't know" || ans === 'i dont know' || ans === 'i dont know.') return true;
+    if (ans === "i don't know yet" || ans === 'idk' || ans === "i'm not sure" || ans === 'not sure') return true;
+    return false;
+  };
+
+  // Per-skill score lookup: prefer exact topic match, then substring.
+  // Returns `is_fallback: true` (with the question-level entry.score)
+  // when the evaluator emitted no row for this specific skill. Reason:
+  // the evaluator scores the skill its eval row names, which often
+  // diverges from the planned skill when the LLM-emitted question text
+  // covered a different topic than the slot plan (slot drift in older
+  // sessions). Without a fallback, the candidate is shown 0 for skills
+  // they actually answered — misleading. With the fallback, the score
+  // reflects their overall answer quality on that question and a "Q"
+  // badge in the UI tells the reviewer it's not a direct per-skill
+  // assessment.
+  //
+  // SKIPPED/IDK CAVEAT: When `isSkipped=true`, the fallback is
+  // suppressed (score=0, is_skipped=true). The evaluator commonly
+  // mis-scores skipped/IDK answers as topic="Behavioural" with
+  // score=5.0 — falling back to that would show the candidate as
+  // having demonstrated skills they explicitly didn't answer.
+  const scoreForSkill = (
+    qn: number,
+    skill: string,
+    qLevelFallback: number | null,
+    isSkipped: boolean,
+  ): { score: number; note: string; is_fallback: boolean; is_skipped: boolean } => {
     const sl = skill.toLowerCase().trim();
     const rows = evalsByQ[qn] || [];
     const readScore = (r: any): number => {
@@ -798,17 +846,39 @@ function buildPerQuestionDetailsFromHistory(
     const readNote = (r: any): string =>
       String(r?.one_line_note || r?.evaluation?.brief_note || '').slice(0, 250);
 
+    // Exact then substring match — these are real per-skill scores
+    // (even on skipped questions, if the evaluator did emit one).
     for (const r of rows) {
       const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
-      if (topic === sl) return { score: readScore(r), note: readNote(r) };
+      if (topic === sl) {
+        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false };
+      }
     }
     for (const r of rows) {
       const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
       if (topic && (topic.includes(sl) || sl.includes(topic))) {
-        return { score: readScore(r), note: readNote(r) };
+        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false };
       }
     }
-    return { score: 0, note: '' };
+    // Skipped/IDK: suppress fallback. Show 0 with the is_skipped flag
+    // so the UI can render a "Skipped" badge — better than a misleading
+    // 5.0 inherited from the evaluator's "Behavioural" mis-score.
+    if (isSkipped) {
+      return { score: 0, note: '', is_fallback: false, is_skipped: true };
+    }
+    // Fallback: question-level score (so a real answer doesn't show 0
+    // just because the evaluator graded a different topic name). Only
+    // fires when qLevelFallback is positive; an entry.score of 0 means
+    // the candidate genuinely scored 0 and we surface that honestly.
+    if (typeof qLevelFallback === 'number' && qLevelFallback > 0) {
+      return {
+        score: Math.max(0, Math.min(10, qLevelFallback)),
+        note: '',
+        is_fallback: true,
+        is_skipped: false,
+      };
+    }
+    return { score: 0, note: '', is_fallback: false, is_skipped: false };
   };
 
   const sectionFromRT = (rt: any): PerQuestionDetail['section'] => {
@@ -919,19 +989,17 @@ function buildPerQuestionDetailsFromHistory(
     const section = sectionFromRT(q?.round_type);
     const assigned: string[] = Array.isArray(q?.assigned_skills) ? q.assigned_skills : [];
 
-    // Source priority for the displayed skill rows:
-    //   1. Skills whose keywords appear in the actual question text
-    //      (most accurate to "what did Linda ask about"). Linda's
-    //      generated question often diverges from the planner's slot
-    //      directive — e.g. slot 3 planned for "Oracle + Spring" but
-    //      Linda asked about MongoDB/PostgreSQL/Prometheus instead.
-    //      Both `assigned_skills` and `evaluations[].topic` would then
-    //      surface the wrong skills.
-    //   2. Evaluator's topic attribution (next best — what the LLM tagged
-    //      after seeing the question).
-    //   3. Planner snapshot (`assigned_skills`).
-    //   4. `item.topic` (last-resort; backend pre-fills it with the next
-    //      uncovered skill before evaluation, which is unreliable).
+    // Source priority for the displayed skill rows — recruiter spec
+    // 2026-05-20: the Question Analysis tab must mirror the Question
+    // Distribution plan exactly, so the planner snapshot
+    // (`assigned_skills`) is now the primary source. This is what the
+    // recruiter configured + what Question Distribution UI shows; the
+    // Analysis tab has to match for the two views to line up.
+    //   1. Planner snapshot — `assigned_skills` (the slot plan).
+    //   2. Keyword scan of the actual question text (fallback when
+    //      assigned_skills is empty, e.g. legacy interviews predating
+    //      Phase 1 DB-derived slot truth).
+    //   3. Evaluator's topic attribution (final fallback).
     const jdSkillNames = Object.values(clusterCanonicalNameBySkill);
     const fromText = findSkillsInText(String(q?.question || ''), jdSkillNames);
 
@@ -943,12 +1011,12 @@ function buildPerQuestionDetailsFromHistory(
     }
 
     let baseNames: string[];
-    if (fromText.length > 0) {
+    if (assigned.length > 0) {
+      baseNames = assigned;
+    } else if (fromText.length > 0) {
       baseNames = fromText;
     } else if (evalTopics.length > 0) {
       baseNames = evalTopics.map(normalizeSkillName);
-    } else if (assigned.length > 0) {
-      baseNames = assigned;
     } else {
       baseNames = [];
     }
@@ -963,16 +1031,32 @@ function buildPerQuestionDetailsFromHistory(
       skillNames.push(s);
     }
 
+    // Read entry.score once — used both for per-skill fallback and the
+    // final questionScore. When candidate answered substantively but the
+    // evaluator didn't break out per-skill (slot drift / multi-skill Q
+    // with only one assessed topic), every planned skill falls back to
+    // this value so the candidate isn't shown 0 for skills they
+    // effectively answered. is_fallback flag drives the "Q" badge in
+    // the display layer. For SKIPPED/IDK responses, the fallback is
+    // suppressed (see scoreForSkill) so the misleading evaluator score
+    // (often "Behavioural"=5.0 for IDK) doesn't propagate.
+    const entryScore = typeof q?.score === 'number' ? q.score : null;
+    const isSkippedRow = isSkippedOrIdk(q);
+
     const skills: PerQuestionSkill[] = skillNames.map(skillName => {
       const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] || 'Medium';
       const weight = PRIORITY_WEIGHT[priority];
-      const { score, note } = scoreForSkill(origQ, skillName);
+      const { score, note, is_fallback, is_skipped } = scoreForSkill(
+        origQ, skillName, entryScore, isSkippedRow,
+      );
       return {
         name: skillName,
         priority,
         weight,
         score: Math.round(score * 10) / 10,
         note,
+        is_fallback,
+        is_skipped,
       };
     });
     skills.sort((a, b) => b.weight - a.weight || b.score - a.score);
@@ -983,7 +1067,6 @@ function buildPerQuestionDetailsFromHistory(
     const sumW = skills.reduce((s, k) => s + k.weight, 0);
     const sumWS = skills.reduce((s, k) => s + k.score * k.weight, 0);
     const weighted = sumW > 0 ? sumWS / sumW : 0;
-    const entryScore = typeof q?.score === 'number' ? q.score : null;
     const questionScore = entryScore !== null
       ? Math.round(entryScore * 10) / 10
       : Math.round(weighted * 10) / 10;
@@ -1073,18 +1156,45 @@ function buildPerQuestionDetailsFromConversation(
   // phrasings — match on any of them and tag as 'hr' so the card lands
   // in the HR section. Conservative: anything that doesn't match a
   // pattern defaults to 'mth' as before.
+  //
+  // Expanded after seeing real sessions tag motivation/career-fit/
+  // certifications/availability Qs as MHS. Categories covered:
+  //   • Self-intro / background ("tell me about yourself")
+  //   • Motivation / role fit ("what attracted you", "career goals", etc.)
+  //   • Strengths / weaknesses / achievements
+  //   • Behavioral (conflict / challenge / teamwork stories)
+  //   • Logistics (salary, notice period, start date, availability)
+  //   • Credential check (certifications) — these are factual, not skill-evaluative
   const _looksLikeHR = (q: string): boolean => {
     const t = (q || '').toLowerCase();
     return (
       /\btell me about yourself\b/.test(t)
-      || /\bwhy do you want to (?:join|work)\b/.test(t)
+      // Motivation / role fit — covers "what attracted you", "why this role",
+      // "career goals", "how do you see it aligning"
+      || /\bwhat (?:attracted|drew|brought) you (?:to)?\b/.test(t)
+      || /\bwhy (?:do|did) you (?:want to|wish to)? ?(?:join|work|apply|choose)\b/.test(t)
+      || /\b(?:career|professional) (?:goals?|aspirations?|growth|development|plan)\b/.test(t)
+      || /\baligning? with your (?:career|professional|long.?term)\b/.test(t)
+      || /\bmotivat(?:es|ed|ion)\b/.test(t)
       || /\bwhere do you see yourself\b/.test(t)
-      || /\bwhat motivates you\b/.test(t)
+      // Strengths / weaknesses / achievements
       || /\bgreatest (?:strength|weakness|achievement)\b/.test(t)
-      || /\bteam(work)? (?:experience|collaboration)\b/.test(t)
-      || /\bdescribe a (?:conflict|challenge|difficult)\b/.test(t)
-      || /\bsalary expectation/.test(t)
-      || /\bnotice period\b/.test(t)
+      || /\b(?:biggest|notable|proudest) (?:achievement|accomplishment)\b/.test(t)
+      // Behavioral stories — team / conflict / challenge
+      || /\bteam(work)? (?:experience|collaboration|player)\b/.test(t)
+      || /\bdescribe a (?:conflict|challenge|difficult|time when)\b/.test(t)
+      || /\btell me about a time\b/.test(t)
+      // Logistics — availability / salary / notice / start date
+      || /\bwould you be able to (?:start|join|relocate)\b/.test(t)
+      || /\b(?:start|join) (?:immediately|right away|asap)\b/.test(t)
+      || /\b(?:notice|joining) period\b/.test(t)
+      || /\bsalary (?:expectation|range)\b/.test(t)
+      || /\bavailable to (?:start|join|relocate)\b/.test(t)
+      // Credentials — certifications are factual recall, treated as HR-style
+      // verification rather than skill-evaluative (the skill itself is
+      // scored elsewhere when Linda actually probes it).
+      || /\bdo you have (?:any|the) (?:.{0,20})?certification/.test(t)
+      || /\bcertification(?:s|s? to mention)?\b/.test(t)
     );
   };
   const resolveSection = (questionText: string): PerQuestionDetail['section'] => {
@@ -1096,9 +1206,10 @@ function buildPerQuestionDetailsFromConversation(
   };
 
   // Drop noise: system messages, empty content, Linda's meta-only chatter
-  // (greeting prefixes with no follow-up question, closing thank-yous).
-  // The transcript view filters the same way (CandidateResultsView.tsx
-  // around line 2190 — `_isMetaAssistant`) so card count matches.
+  // (greeting prefixes with no follow-up question, closing thank-yous,
+  // and silence-nudge prompts like "Are you there?" — those aren't real
+  // interview questions, they're attention probes that shouldn't get
+  // graded slots).
   const _isClosing = (c: string): boolean => {
     const t = c.toLowerCase();
     return (
@@ -1107,11 +1218,27 @@ function buildPerQuestionDetailsFromConversation(
       (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
     );
   };
+  const _isSilenceNudge = (c: string): boolean => {
+    const t = c.toLowerCase().trim();
+    return (
+      t.startsWith('are you there?') ||
+      t.startsWith('are you still there?') ||
+      t.startsWith('are you there ') ||
+      // "Take your time — share whatever comes to mind" is the standard
+      // soft prompt Linda fires after the first silence wait; not a Q.
+      t.includes('take your time') && t.includes('share whatever') ||
+      // "Can you hear me?" mic-check prompts
+      t.startsWith('can you hear me?') ||
+      // Generic "Are you with me?" / "Still with me?" check-ins
+      /^(?:are you|still) with me\??/i.test(t)
+    );
+  };
   const cleaned = (messages || []).filter(m =>
     m?.role !== 'system'
     && typeof m?.content === 'string'
     && m.content.trim()
     && !(m.role === 'assistant' && _isClosing(m.content))
+    && !(m.role === 'assistant' && _isSilenceNudge(m.content))
   );
 
   // Per-skill score lookup from evaluations[]. Match by question text +
@@ -1169,16 +1296,25 @@ function buildPerQuestionDetailsFromConversation(
     return sumW > 0 ? Math.round((sumWS / sumW) * 10) / 10 : 0;
   };
 
-  // Resolve skills for a question text:
-  //   1. Exact-text match against question_history.assigned_skills (richest).
-  //   2. Text scan against JD skill names (catches turns the backend never
-  //      persisted to history — recruiter still sees what was probed).
+  // Resolve skills for a question text. Priority order:
+  //   1. Text scan against JD skill names — PREFERRED because Linda's
+  //      actual question wording is the ground truth for "what was asked",
+  //      and the planner-side assigned_skills frequently drift when the LLM
+  //      ignores the slot rule (observed: Q2 planned for "Semantic Search /
+  //      LLMs / AI Agents" but Linda asked about "NLP pipelines / BERT /
+  //      Hugging Face" — the displayed skills should match the question).
+  //   2. Planner snapshot (question_history.assigned_skills) — fallback
+  //      when the question text contains no recognizable JD skill names
+  //      (e.g. a generic transition Q, or a Q-text whose skill mentions
+  //      use non-canonical wording).
   const resolveSkills = (questionText: string): string[] => {
+    if (jdSkillNames.length > 0) {
+      const fromText = findSkillsInText(questionText, jdSkillNames);
+      if (fromText.length > 0) return fromText;
+    }
     const fromHistory = skillsByText.get(questionText.trim().toLowerCase());
     if (fromHistory && fromHistory.length > 0) return fromHistory;
-    if (jdSkillNames.length === 0) return [];
-    const fromText = findSkillsInText(questionText, jdSkillNames);
-    return fromText;
+    return [];
   };
 
   const buildAndScore = (qText: string): {
@@ -1487,12 +1623,70 @@ export function buildDashboardData(params: {
       }
     }
   }
-  const perQuestionDetails = buildPerQuestionDetails(
+  const perQuestionDetailsRaw = buildPerQuestionDetails(
     eval_,
     clusterPriorityBySkill,
     clusterCanonicalNameBySkill,
     conversation_transcript || [],
   );
+
+  // ── Per-section cap: enforce the configured plan size ────────────────
+  // Recruiter spec (2026-05-20): Question Analysis shows EXACTLY the
+  // planned questions — no excess rows from inflated counters, burst
+  // re-emissions, or evaluator follow-up bookkeeping. If the backend
+  // recorded N > planned for a section (defensive against any residual
+  // drift after Phase 1+2 deploy), trim to the first `planned` entries
+  // per section in chronological order (qNum ascending).
+  //
+  // Cap source priority:
+  //   1. `eval_.round_tracking[].planned_questions` (most authoritative —
+  //      reflects what the runtime actually targeted).
+  //   2. `rounds_config[].planned_questions` (config snapshot fallback).
+  // When neither has a positive value for a section, that section is
+  // left uncapped (won't filter anything out by accident).
+  const sectionCap: { mth: number | null; nth: number | null; hr: number | null } = {
+    mth: null, nth: null, hr: null,
+  };
+  const sectionKey = (rt: string): keyof typeof sectionCap | null => {
+    const t = (rt || '').toLowerCase();
+    if (t === 'must_have_skills') return 'mth';
+    if (t === 'nice_to_have_skills') return 'nth';
+    if (t === 'hr') return 'hr';
+    return null;
+  };
+  for (const rt of (eval_?.round_tracking || [])) {
+    const k = sectionKey(rt?.type);
+    if (!k) continue;
+    const pq = Number(rt?.planned_questions);
+    if (Number.isFinite(pq) && pq > 0) sectionCap[k] = pq;
+  }
+  for (const r of (rounds_config || [])) {
+    if (r?.enabled === false) continue;
+    const k = sectionKey(r?.type);
+    if (!k) continue;
+    if (sectionCap[k] !== null) continue; // round_tracking already gave us one
+    const pq = Number(r?.planned_questions);
+    if (Number.isFinite(pq) && pq > 0) sectionCap[k] = pq;
+  }
+  const perQuestionDetails: PerQuestionDetail[] = (() => {
+    const buckets: Record<'mth' | 'nth' | 'hr', PerQuestionDetail[]> = { mth: [], nth: [], hr: [] };
+    for (const row of perQuestionDetailsRaw) {
+      buckets[row.section].push(row);
+    }
+    // Chronological order (qNum ascending) so the first N planned are kept,
+    // not arbitrary tail entries from burst/duplicate noise.
+    for (const key of ['mth', 'nth', 'hr'] as const) {
+      buckets[key].sort((a, b) => a.qNum - b.qNum);
+      const cap = sectionCap[key];
+      if (cap !== null && buckets[key].length > cap) {
+        console.warn(
+          `[QuestionAnalysis] ${key.toUpperCase()} has ${buckets[key].length} rows but plan = ${cap}; trimming excess.`,
+        );
+        buckets[key] = buckets[key].slice(0, cap);
+      }
+    }
+    return [...buckets.mth, ...buckets.nth, ...buckets.hr];
+  })();
 
   return {
     candidate: {

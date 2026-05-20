@@ -286,7 +286,26 @@ function QuestionTable({
                   <td className="px-4 py-2 text-gray-800">{s.name}</td>
                   <td className="px-4 py-2 text-right">{s.priority}</td>
                   <td className="px-4 py-2 text-right">{s.weight}</td>
-                  <td className="px-4 py-2 text-right">{s.score.toFixed(1)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <span className="inline-flex items-center gap-1">
+                      <span className={s.is_skipped ? 'text-gray-400' : ''}>{s.score.toFixed(1)}</span>
+                      {s.is_skipped ? (
+                        <span
+                          className="inline-flex items-center px-1 py-0 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                          title="Candidate skipped or said 'I don't know' — not scored for this skill."
+                        >
+                          Skipped
+                        </span>
+                      ) : s.is_fallback ? (
+                        <span
+                          className="inline-flex items-center px-1 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                          title="Q-level fallback: not directly evaluated; reflects overall answer score for this question."
+                        >
+                          Q
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
                   <td className="px-4 py-2 text-right">{(s.score * s.weight).toFixed(1)}</td>
                   {idx === 0 && (
                     <td
