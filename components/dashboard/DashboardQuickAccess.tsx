@@ -129,10 +129,10 @@ function TileCard({ item, sectionId }: { item: NavItem; sectionId: string }) {
   return (
     <Link
       href={href}
-      className="group relative flex items-center gap-3 rounded-xl border border-slate-300 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-brand-blue/60 hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)]"
+      className="group relative flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white p-3 transition-all hover:-translate-y-0.5 hover:border-brand-blue/60 hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] sm:gap-3 sm:p-4"
     >
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform ${style.iconChip} group-hover:scale-105`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform sm:h-11 sm:w-11 ${style.iconChip} group-hover:scale-105`}
       >
         <Icon className="h-[18px] w-[18px]" />
       </span>
@@ -223,19 +223,19 @@ export default function DashboardQuickAccess() {
       className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-16px_rgba(15,23,42,0.18)]"
     >
       {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-4 md:px-8">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-white px-3 py-3 sm:px-4 sm:py-4 md:px-8">
         <div className="flex items-center gap-2.5">
           <Rocket className="h-5 w-5 text-slate-900" />
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">Quick access</h2>
+          <h2 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">Quick access</h2>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200 sm:px-3 sm:py-1.5 sm:text-[11px]">
           <LayoutGrid className="h-3 w-3 text-slate-500" />
           {sections.length} {sections.length === 1 ? 'category' : 'categories'} · {totalItems} tools
         </span>
       </header>
 
       {/* Tab bar — single line, scrolls horizontally if needed */}
-      <div className="bg-white px-4 pb-3 pt-0 md:px-8">
+      <div className="bg-white px-3 pb-3 pt-0 sm:px-4 md:px-8">
         <div
           role="tablist"
           aria-label="Quick access categories"
@@ -274,8 +274,8 @@ export default function DashboardQuickAccess() {
       </div>
 
       {/* Tiles — single continuous grid for all tabs to keep DOM structure stable across tab switches */}
-      <div className="px-4 py-5 md:px-8 md:py-6 min-h-[320px]">
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      <div className="min-h-[200px] px-3 py-4 sm:min-h-[320px] sm:px-4 sm:py-5 md:px-8 md:py-6">
+        <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {visibleSections.flatMap((section) =>
             section.items.map((item) => (
               <li key={item.id}>

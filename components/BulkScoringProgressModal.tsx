@@ -292,7 +292,7 @@ export default function BulkScoringProgressModal({
                 <Target className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base sm:text-xl font-bold text-white truncate">
+                <h2 className="text-base sm:text-xl font-bold text-white break-words sm:truncate">
                   {filterByJobId && filteredJobTitle ? filteredJobTitle : 'Bulk Scoring Progress'}
                 </h2>
                 <p className="text-xs sm:text-sm text-gray-300">
@@ -500,18 +500,18 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Table / Cards */}
-        <div className="flex-1 overflow-auto p-3 sm:p-5">
+        <div className="flex-1 overflow-auto p-3 sm:p-5 min-h-[200px] scrollbar-visible">
           {filteredData.length > 0 ? (
             <>
               {/* Desktop table */}
               <table className="hidden sm:table w-full">
                 <thead>
                   <tr className="border-b-2 border-gray-200 dark:border-slate-700">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Candidate Name</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Source</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Scored Date & Time</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Match Result</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Candidate Name</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Source</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Scored Date & Time</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Match Result</th>
                     {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Actions</th>}
                   </tr>
                 </thead>
@@ -523,38 +523,38 @@ export default function BulkScoringProgressModal({
                         index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
                       }`}
                     >
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1">
                           <div className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</div>
                           {item.jobTitle && !filterByJobId && (
                             <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
-                              <Target className="w-3 h-3" />
-                              <span>{item.jobTitle}</span>
+                              <Target className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate max-w-[260px]">{item.jobTitle}</span>
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 border-gray-200 dark:border-slate-700">
                           {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
                           {item.source}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border w-fit ${getStatusBadgeClass(item.status)}`}>
                             {getStatusIcon(item.status)}
                             {item.status}
                           </span>
                           {item.status === 'Failed' && item.errorReason && (
-                            <div className="flex items-start gap-1 text-xs text-red-600 mt-1">
+                            <div className="flex items-start gap-1 text-xs text-red-600 mt-1 max-w-[280px] whitespace-normal break-words">
                               <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                               <span>{item.errorReason}</span>
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         {item.scoredDateTime ? (
                           <div className="text-sm text-gray-700 dark:text-slate-300">
                             <div className="font-medium">{formatDateTimeIST(item.scoredDateTime).date}</div>
@@ -569,12 +569,12 @@ export default function BulkScoringProgressModal({
                           <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
                       </td>
                       {onRetryFailed && (
-                        <td className="py-3 px-4">
-                          {item.status === 'Failed' && (
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {item.status === 'Failed' ? (
                             <button
                               onClick={() => handleRetry(item)}
                               disabled={retryingItems.has(item.id)}
@@ -586,6 +586,8 @@ export default function BulkScoringProgressModal({
                             >
                               {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
                             </button>
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
                           )}
                         </td>
                       )}
@@ -666,7 +668,7 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-100 dark:border-slate-700/60 bg-brand-blue/[0.03] rounded-b-2xl shrink-0">
+        <div className="flex items-center justify-end gap-3 p-3 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-brand-blue/[0.03] rounded-b-2xl shrink-0">
           <button
             onClick={onClose}
             className="px-5 py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors font-medium"

@@ -52,6 +52,19 @@ export interface PerQuestionSkill {
   weight: number;        // 10 / 7 / 4
   score: number;         // 0-10
   note: string;          // short LLM rationale
+  /** True when `score` was derived from the question-level entry.score
+   *  because no per-skill evaluator row was emitted for this skill. The
+   *  UI should render a small "Q" indicator so reviewers know the score
+   *  reflects the candidate's overall answer on that question, not a
+   *  direct assessment of this specific skill. Set by the adapter when
+   *  the planned skill has no matching evaluations[] row. */
+  is_fallback?: boolean;
+  /** True when the candidate didn't actually answer this question
+   *  (skipped, timed out, "I don't know"). The Q-level fallback is
+   *  suppressed for these so a misleading high score doesn't propagate
+   *  to planned skills the candidate never demonstrated. UI should
+   *  render a "Skipped" or "IDK" badge instead of the numeric score. */
+  is_skipped?: boolean;
 }
 
 export interface PerQuestionDetail {

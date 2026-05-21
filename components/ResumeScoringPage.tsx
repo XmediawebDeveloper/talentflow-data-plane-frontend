@@ -1250,29 +1250,29 @@ export default function ResumeScoringPage({
               onLoadJdScores?.(item.jobId, item.jobTitle);
             };
             return (
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <button
                   onClick={() => {
                     setViewMode('history');
                     setSelectedHistoryItem(null);
                     setSelectedStatusFilter('all');
                   }}
-                  className="flex items-center gap-2 text-sm text-brand-blue hover:text-brand-blue-2 font-medium transition-colors"
+                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-medium text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue-2 transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4 flex-shrink-0" />
                   Back to Scored Candidates
                 </button>
                 {scoredHistory.length > 1 && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2 sm:justify-end">
                     <button
                       onClick={() => _prevItem && _goToHistoryItem(_prevItem)}
                       disabled={!_prevItem}
                       className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
                     >
-                      <ChevronLeft className="w-4 h-4" />
+                      <ChevronLeft className="w-4 h-4 flex-shrink-0" />
                       Previous
                     </button>
-                    <span className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">
+                    <span className="text-xs font-medium text-gray-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
                       {(_historyIdx >= 0 ? _historyIdx : 0) + 1} / {scoredHistory.length}
                     </span>
                     <button
@@ -1281,7 +1281,7 @@ export default function ResumeScoringPage({
                       className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
                     >
                       Next
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-4 h-4 flex-shrink-0" />
                     </button>
                   </div>
                 )}

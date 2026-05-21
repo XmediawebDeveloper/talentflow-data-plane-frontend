@@ -614,11 +614,14 @@ export default function DashboardPage() {
   ].filter((item) => item.visible);
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    // NOTE: no `overflow-hidden` here — on a `flex-1` item it zeroes the
+    // automatic `min-height`, which clips content below the fold and breaks
+    // vertical scrolling (the layout's scroll container can never see overflow).
+    <div className="relative flex-1">
       {/* parent layout bg removed — inner card provides the surface */}
 
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full my-4 md:my-5 space-y-4 md:space-y-6">
+      <div className="p-3 sm:p-4 md:p-8 w-full space-y-4 md:space-y-6">
         {/* Optional error banner — only if /dashboard failed entirely */}
         {error && (
           <div className="rounded-2xl border border-brand-orange/20 bg-brand-orange/10 px-4 py-3 text-sm text-brand-orange">
