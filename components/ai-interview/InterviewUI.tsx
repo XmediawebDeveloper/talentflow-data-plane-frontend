@@ -123,6 +123,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionTimerSeconds, setQuestionTimerSeconds] = useState<number | null>(null);
   const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
   const questionTimerExpiredRef = useRef(false); // sync ref — avoids stale closure in setTimeout/setInterval callbacks
+
+  // Bridge phrase caption — shown while Linda speaks a pre-cached transition
+  // clip after the 2-min hard-cap fires. Distinct from the question card
+  // (rendered as a "Linda · Transition" chip below the avatar) so reviewers
+  // and candidates don't mistake it for an interview question.
+  const [bridgeCaption, setBridgeCaption] = useState<string | null>(null);
   // Bumped whenever questionTimerPendingRef is set to a new duration. The
   // pending-timer useEffect uses this as a dependency so it re-fires even
   // when isAiSpeaking doesn't transition (covers the race where
@@ -2839,7 +2845,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         isProcessingRef.current = false;
         clearNoResponseTimer();
         stopRecordingSilentRef.current();
-        setStatus(data.message || "Got it — moving on to the next question...");
+        // Backend now plays a bridge phrase (Linda actually speaks) immediately
+        // after this event. Only fall back to the legacy text overlay when the
+        // bridge has been suppressed (empty `message`) — preserves backwards
+        // compatibility with pre-bridge backends that still ship the text.
+        if (data.message) {
+          setStatus(data.message);
+        }
+        break;
+      case "bridge_phrase_started":
+        // Pre-cached transition clip is about to stream. Show the phrase text
+        // as a distinct "Linda · Transition" chip — NOT in the question card.
+        // Mic stays disabled (gated by the speaking_started that follows).
+        setBridgeCaption(typeof data.text === 'string' ? data.text : null);
+        break;
+      case "bridge_phrase_ended":
+        // Brief fade-out so the chip doesn't pop off mid-syllable when the
+        // next-Q TTS arrives <500ms later.
+        setTimeout(() => setBridgeCaption(null), 400);
         break;
       case "skill_coverage_update":
         setSkillCoverage({
@@ -4860,6 +4883,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 className="absolute inset-0 pointer-events-none"
                 style={{ background: 'radial-gradient(ellipse at center, rgba(147,51,234,0.10) 0%, transparent 70%)' }}
               />
+            )}
+
+            {/* Bridge-phrase caption — pre-cached transition clip Linda speaks
+                when the 2-min hard-cap fires. Distinct "Linda · Transition"
+                chip so it's never mistaken for an interview question. Sits
+                above the status pill at the bottom of the avatar pane. */}
+            {bridgeCaption && (
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 max-w-[80%] px-4 py-2 rounded-xl bg-purple-950/60 backdrop-blur-md border border-purple-400/40 shadow-lg animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/40 text-[10px] font-semibold uppercase tracking-wider text-purple-100">
+                    Linda · Transition
+                  </span>
+                </div>
+                <p className="text-xs italic text-purple-50 leading-snug">
+                  {bridgeCaption}
+                </p>
+              </div>
             )}
 
             {/* Status pill — bottom centre */}

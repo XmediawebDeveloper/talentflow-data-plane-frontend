@@ -23,6 +23,9 @@ import TermsAcceptanceModal from '@/components/terms/TermsAcceptanceModal';
 import PlanChangeReviewBanner from '@/components/plan-change/PlanChangeReviewBanner';
 import PlanChangeReviewModal from '@/components/plan-change/PlanChangeReviewModal';
 import PlanChangeSuspendedBlock from '@/components/plan-change/PlanChangeSuspendedBlock';
+import { AdminAssignedPlanProvider } from '@/components/providers/AdminAssignedPlanProvider';
+import AdminAssignedPlanBanner from '@/components/admin-assigned-plan/AdminAssignedPlanBanner';
+import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssignedPlanModal';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -432,6 +435,7 @@ export default function DashboardLayout({
     <QuotaProvider>
       <PlanFeaturesProvider>
         <PlanChangeProvider>
+        <AdminAssignedPlanProvider>
         <TermsProvider>
         <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
           <Suspense fallback={null}>
@@ -476,6 +480,7 @@ export default function DashboardLayout({
 
               <TermsReminderBanner />
               <PlanChangeReviewBanner />
+              <AdminAssignedPlanBanner />
               <div className="flex-1 overflow-y-auto flex flex-col scrollbar-auto-hide scrollbar-auto-hide-area">
                 {children}
               </div>
@@ -492,6 +497,9 @@ export default function DashboardLayout({
 
             {/* Plan change review modal - z-[88] */}
             <PlanChangeReviewModal />
+
+            {/* Admin-assigned plan payment modal - z-[88] */}
+            <AdminAssignedPlanModal />
 
             {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
             <PlanChangeSuspendedOverlay />
@@ -516,6 +524,7 @@ export default function DashboardLayout({
           </div>
         </SessionTimeoutProvider>
         </TermsProvider>
+        </AdminAssignedPlanProvider>
         </PlanChangeProvider>
       </PlanFeaturesProvider>
     </QuotaProvider>

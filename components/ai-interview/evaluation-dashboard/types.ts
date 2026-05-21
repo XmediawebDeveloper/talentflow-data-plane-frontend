@@ -67,6 +67,19 @@ export interface PerQuestionSkill {
   is_skipped?: boolean;
 }
 
+export interface PerQuestionFollowUp {
+  question: string;
+  answer: string;
+  /** LLM evaluator topic for this follow-up turn (if any). Helpful for the
+   *  recruiter to see what the follow-up actually probed. */
+  topic?: string;
+  /** 0-10 score from the evaluator for this follow-up's response, if the
+   *  pipeline emitted one. */
+  score?: number;
+  /** Short LLM rationale for the follow-up's score (one-line note). */
+  note?: string;
+}
+
 export interface PerQuestionDetail {
   qNum: number;                          // 1-based display index (matches Q&A tab)
   section: 'mth' | 'nth' | 'hr';
@@ -78,6 +91,13 @@ export interface PerQuestionDetail {
   answer: string;
   skills: PerQuestionSkill[];
   questionScore: number;                 // 0-10, weighted average
+  /** Follow-up Q&As that fired within this main question's slot. Each
+   *  follow-up shares the parent's `qNum`. Empty/undefined when the
+   *  candidate answered the main question well enough not to warrant
+   *  one (or when timed-mode strict distribution suppresses probes).
+   *  Surfaced under the main card so reviewers can verify whether
+   *  Linda actually probed deeper. */
+  followUps?: PerQuestionFollowUp[];
 }
 
 export interface DashboardData {

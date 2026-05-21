@@ -742,6 +742,10 @@ export const aiInterviewService = {
     bucket: 'MTH' | 'NTH';
     jdTitle?: string;
     jdDescription?: string;
+    // Skills the recruiter typed in the OTHER bucket. Backend uses this
+    // to keep MTH expansion from absorbing NTH-configured skills (e.g.
+    // pulling "Git" into MTH when it was explicitly placed in NTH).
+    otherBucketSkills?: string[];
   }): Promise<{
     expanded_skills: { parent: string; sub_skills: string[] }[];
     flat_skills: string[];
@@ -753,6 +757,7 @@ export const aiInterviewService = {
         bucket: args.bucket,
         jd_title: args.jdTitle,
         jd_description: args.jdDescription,
+        other_bucket_skills: args.otherBucketSkills,
       });
       return response.data;
     } catch (error) {
@@ -885,6 +890,11 @@ export const aiInterviewService = {
     nthQuestions: number;
     jdTitle?: string;
     jdDescription?: string;
+    // Broader JD-extracted skill pools — used as a widening pool when a
+    // bucket has fewer cluster skills than allocated questions. Prevents
+    // every question in an under-populated bucket from probing the same skill.
+    mthJdSkillPool?: string[];
+    nthJdSkillPool?: string[];
   }): Promise<{
     mth_questions: Array<{
       question_number: number;
@@ -911,6 +921,8 @@ export const aiInterviewService = {
         nth_questions: args.nthQuestions,
         jd_title: args.jdTitle,
         jd_description: args.jdDescription,
+        jd_must_have_skill_pool: args.mthJdSkillPool,
+        jd_nice_to_have_skill_pool: args.nthJdSkillPool,
       });
       return response.data;
     } catch (error) {

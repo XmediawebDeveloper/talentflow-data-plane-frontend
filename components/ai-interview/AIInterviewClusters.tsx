@@ -1291,6 +1291,11 @@ export default function AIInterviewClusters() {
           // a soft hint.
           const mthTarget = Math.max(mthQ * 2, mthExpandInput.length + 1);
           const nthTarget = Math.max(nthQ * 2, nthExpandInput.length + 1);
+          // Pass the other bucket's already-typed skills so the LLM does
+          // not pull them into THIS bucket (e.g. Git typed in NTH must not
+          // be absorbed into MTH expansion).
+          const mthOtherBucket = nthSkillNames;
+          const nthOtherBucket = mthSkillNames;
           const [mthExpandRes, nthExpandRes] = await Promise.all([
             (mthShort || mthRecover)
               ? aiInterviewService.expandSkills({
@@ -1299,6 +1304,7 @@ export default function AIInterviewClusters() {
                   bucket: 'MTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
+                  otherBucketSkills: mthOtherBucket,
                 })
               : Promise.resolve({ flat_skills: mthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] }),
             (nthShort || nthRecover)
@@ -1308,6 +1314,7 @@ export default function AIInterviewClusters() {
                   bucket: 'NTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
+                  otherBucketSkills: nthOtherBucket,
                 })
               : Promise.resolve({ flat_skills: nthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] }),
           ]);
@@ -1822,6 +1829,32 @@ export default function AIInterviewClusters() {
           const mthQs = timedAllocation.mthQuestions ?? 0;
           const nthQs = (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
           if (mthQs > 0 || nthQs > 0) {
+            // Pool the configured cluster skills + the broader JD-extracted
+            // skill list so the backend can widen primaries beyond the trimmed
+            // cluster pool. Without this, a bucket configured with 1 skill
+            // and 4 Qs ends up showing the same primary in all 4 rows.
+            // Exclude skills that belong to the OTHER bucket's clusters so
+            // we don't pull MTH skills into NTH (cross-bucket pollution).
+            const _mthExclude = new Set(
+              nthClusters.flatMap(c => c.skills ?? [])
+                .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                .map(s => s.toLowerCase()),
+            );
+            const _nthExclude = new Set(
+              mthClusters.flatMap(c => c.skills ?? [])
+                .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                .map(s => s.toLowerCase()),
+            );
+            const _mthJdPool = Array.from(new Set([
+              ...mthClusters.flatMap(c => c.skills),
+              ...mthSkills.map(s => s.name),
+              ...((config as any).jd_must_have_skills || []),
+            ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !_mthExclude.has(s.toLowerCase()))));
+            const _nthJdPool = Array.from(new Set([
+              ...nthClusters.flatMap(c => c.skills),
+              ...nthSkills.map(s => s.name),
+              ...((config as any).jd_nice_to_have_skills || []),
+            ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !_nthExclude.has(s.toLowerCase()))));
             const dist = await aiInterviewService.distributeSkills({
               mthClusters: mthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })),
               nthClusters: nthEnabled ? nthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })) : [],
@@ -1829,6 +1862,8 @@ export default function AIInterviewClusters() {
               nthQuestions: nthQs,
               jdTitle: config.jd_title,
               jdDescription: (config as any).jd_description,
+              mthJdSkillPool: _mthJdPool,
+              nthJdSkillPool: nthEnabled ? _nthJdPool : [],
             });
             si.skill_distribution = {
               mth_questions: dist.mth_questions || [],
@@ -2064,8 +2099,21 @@ export default function AIInterviewClusters() {
                       //   - Secondary picks prefer "never used as secondary" within
                       //     the same cluster; fall back to other same-cluster mates,
                       //     and finally skip rather than dup the primary.
-                      const distribute = (clusters: Cluster[], qCount: number): DistRow[] => {
+                      const distribute = (clusters: Cluster[], qCount: number, jdPool: string[] = []): DistRow[] => {
                         if (qCount <= 0 || clusters.length === 0) return [];
+                        // Normalize JD widening pool — dedupe (case-insensitive),
+                        // keep original casing for display.
+                        const _jdPoolSeen = new Set<string>();
+                        const jdPoolClean: string[] = [];
+                        for (const s of jdPool) {
+                          if (typeof s !== 'string') continue;
+                          const t = s.trim();
+                          if (!t) continue;
+                          const k = t.toLowerCase();
+                          if (_jdPoolSeen.has(k)) continue;
+                          _jdPoolSeen.add(k);
+                          jdPoolClean.push(t);
+                        }
                         // Filter empty + sort by priority desc.
                         const sorted = [...clusters]
                           .filter(c => (c.skills?.length ?? 0) > 0)
@@ -2150,6 +2198,15 @@ export default function AIInterviewClusters() {
                         }
 
                         // ── STEP 2: build per-Q rows ─────────────────────────────────
+                        // Track every skill already used across ALL Qs in this
+                        // bucket (as primary OR secondary). Secondaries never
+                        // reuse a skill — if the pool is exhausted, leave the
+                        // slot empty rather than repeating. This is what makes
+                        // the NTH preview show "Q1 Agile / Q2 Containerization
+                        // / Q3 Cloud / Q4 CI/CD" with at most ONE JD-pool
+                        // secondary per Q instead of every Q showing the same
+                        // 2 JD skills.
+                        const bucketUsedLower = new Set<string>();
                         const out: DistRow[] = [];
                         let qNum = 0;
                         // Track orphan skills (from clusters with alloc=0) for later assignment
@@ -2166,19 +2223,33 @@ export default function AIInterviewClusters() {
                             continue;
                           }
                           // When alloc > skills.length the recruiter asked for more
-                          // questions than this cluster has unique skills. Cycle
-                          // primaries round-robin so every requested slot fires —
-                          // the same skill may appear as primary on multiple Qs
-                          // (different angles / scenarios at interview time).
-                          // When alloc <= skills.length the slice keeps the original
-                          // "each primary appears once, leftover become secondaries"
-                          // behavior.
+                          // questions than this cluster has unique skills. Pull
+                          // extra primaries from the JD pool (skills extracted from
+                          // the JD description that aren't already in this cluster)
+                          // BEFORE falling back to cycling — that keeps each Q on
+                          // a different primary instead of probing the same skill
+                          // multiple times. Only cycle when both pools are exhausted.
                           const primaries: string[] = [];
                           if (alloc <= skills.length) {
                             primaries.push(...skills.slice(0, alloc));
                           } else {
-                            for (let p = 0; p < alloc; p++) primaries.push(skills[p % skills.length]);
+                            primaries.push(...skills);
+                            const usedLower = new Set(skills.map(s => s.toLowerCase()));
+                            for (const jdSkill of jdPoolClean) {
+                              if (primaries.length >= alloc) break;
+                              if (usedLower.has(jdSkill.toLowerCase())) continue;
+                              primaries.push(jdSkill);
+                              usedLower.add(jdSkill.toLowerCase());
+                            }
+                            // Final fallback if JD pool also exhausted — cycle cluster skills
+                            for (let p = primaries.length; p < alloc; p++) {
+                              primaries.push(skills[p % skills.length]);
+                            }
                           }
+                          // Register every primary in this cluster as "used" so
+                          // the secondary picker below never re-emits them as
+                          // secondaries on another Q.
+                          for (const p of primaries) bucketUsedLower.add(p.toLowerCase());
                           const leftover = alloc <= skills.length ? skills.slice(alloc) : [];
                           // Distribute leftover evenly across primaries (only meaningful
                           // when alloc <= skills.length; otherwise leftover is empty
@@ -2189,30 +2260,47 @@ export default function AIInterviewClusters() {
                             const end = Math.floor(((i + 1) * leftover.length) / primaries.length);
                             let secs: { name: string; priority: number }[];
                             if (leftover.length > 0) {
-                              secs = leftover.slice(start, end).map(s => ({
+                              const slice = leftover.slice(start, end);
+                              for (const s of slice) bucketUsedLower.add(s.toLowerCase());
+                              secs = slice.map(s => ({
                                 name: s,
                                 priority: cluster.priority ?? 1,
                               }));
                             } else {
-                              // Cycled-primary mode: pick up to 2 same-cluster siblings
-                              // (skills other than this Q's primary), rotating the
-                              // start position so secondaries vary across the cycled
-                              // Qs (Q1 of skill A pairs with [B,C]; Q4 of skill A
-                              // pairs with [C,B] if pool is small).
-                              const others = skills.filter(s => s !== primaries[i]);
-                              if (others.length === 0) {
-                                secs = [];
-                              } else {
-                                const startIdx = i % others.length;
-                                const pick = [
-                                  others[startIdx % others.length],
-                                  others[(startIdx + 1) % others.length],
-                                ].filter((v, idx, arr) => v && arr.indexOf(v) === idx);
-                                secs = pick.map(s => ({
-                                  name: s,
-                                  priority: cluster.priority ?? 1,
-                                }));
+                              // Empty-leftover branch — two distinct sub-cases:
+                              //
+                              //  (a) alloc == skills.length: cluster is EXACTLY
+                              //      sized for primaries. User expectation:
+                              //      "cluster has 4 skills, 4 Qs → each Q gets
+                              //      1 skill, no extras". Leave secondaries
+                              //      EMPTY — do NOT widen from JD pool here.
+                              //
+                              //  (b) alloc > skills.length (cycled-primary mode):
+                              //      cluster is short. Widen secondaries from
+                              //      the JD pool, never reusing a skill that's
+                              //      already appeared in this bucket.
+                              const cycled = alloc > skills.length;
+                              const picked: string[] = [];
+                              if (cycled) {
+                                const tryPick = (cand: string) => {
+                                  const k = cand.toLowerCase();
+                                  if (bucketUsedLower.has(k)) return;
+                                  bucketUsedLower.add(k);
+                                  picked.push(cand);
+                                };
+                                for (let j = 0; j < jdPoolClean.length && picked.length < 2; j++) {
+                                  tryPick(jdPoolClean[j]);
+                                }
+                                if (picked.length < 2) {
+                                  for (let j = 0; j < skills.length && picked.length < 2; j++) {
+                                    tryPick(skills[j]);
+                                  }
+                                }
                               }
+                              secs = picked.map(s => ({
+                                name: s,
+                                priority: cluster.priority ?? 1,
+                              }));
                             }
                             out.push({
                               q: qNum,
@@ -2239,56 +2327,84 @@ export default function AIInterviewClusters() {
                         }
                         return out;
                       };
-                      const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
-                      const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : [];
+                      // Build JD pools per bucket, then strip out skills that
+                      // belong to the OTHER bucket's clusters. Without this
+                      // exclusion, NTH secondaries can pick up MTH cluster
+                      // skills (e.g. "Microservices architecture") via the
+                      // JD-extracted lists, polluting the NTH bucket.
+                      const _otherBucketLower = (bucket: 'mth' | 'nth') => {
+                        const otherClusters = bucket === 'mth' ? nthClusters : mthClusters;
+                        return new Set(
+                          otherClusters
+                            .flatMap(c => c.skills ?? [])
+                            .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                            .map(s => s.toLowerCase()),
+                        );
+                      };
+                      const mthExclude = _otherBucketLower('mth');
+                      const nthExclude = _otherBucketLower('nth');
+                      const mthJdPool = Array.from(new Set([
+                        ...mthClusters.flatMap(c => c.skills),
+                        ...mthSkills.map(s => s.name),
+                        ...(((config as any)?.jd_must_have_skills as string[] | undefined) ?? []),
+                      ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !mthExclude.has(s.toLowerCase()))));
+                      const nthJdPool = Array.from(new Set([
+                        ...nthClusters.flatMap(c => c.skills),
+                        ...nthSkills.map(s => s.name),
+                        ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
+                      ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
+                      const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
+                      const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : [];
                       const totalQ = mthDist.length + nthDist.length;
                       const totalSkillsCovered = new Set([
                         ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
                         ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
                       ]).size;
-                      const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
+                      // P1/P2/P3 tier labels (replaces High/Medium/Low + the
+                      // primary-vs-secondary visual highlight). Every skill in
+                      // a Q now renders identically — same chip style, same tag
+                      // shape — so the recruiter sees a flat list per Q instead
+                      // of one "important" skill + accessory chips.
+                      const priorityLabel = (p: number) => p >= 3 ? 'P1' : p === 2 ? 'P2' : 'P3';
                       const priorityClass = (p: number) =>
-                        p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                          : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
-                          : 'bg-rose-100 text-rose-700 ring-rose-200';
-                      // Table-row renderer. Two columns: Q# + Skills (primary
-                      // + secondary chips inline). Cluster name removed per
-                      // product feedback — the chip's priority already conveys
-                      // the relative tier; the cluster name was redundant noise.
-                      const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
-                        <tr
-                          key={`${sectionKey}-${row.q}`}
-                          className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
-                        >
-                          <td className="align-top px-2 py-1.5 w-[40px]">
-                            <span className={`text-[11px] font-mono font-semibold ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
-                              Q{row.q}
-                            </span>
-                          </td>
-                          <td className="align-top px-2 py-1.5">
-                            <div className="flex flex-wrap items-center gap-1">
-                              <span className="text-xs font-medium text-gray-900">{row.primary}</span>
-                              <span className={`text-[9px] font-semibold px-1 py-0 rounded ring-1 ${priorityClass(row.priority)}`}>
-                                {priorityLabel(row.priority)}
+                        p >= 3 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                          : p === 2 ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                          : 'bg-rose-50 text-rose-700 ring-rose-200';
+                      const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => {
+                        // Treat primary + secondaries as a single flat list of
+                        // chips. Primary keeps its own priority (from the
+                        // cluster); secondaries carry their own priority too
+                        // (when borrowed from a different-priority cluster).
+                        const chips = [
+                          { name: row.primary, priority: row.priority },
+                          ...row.secondaries,
+                        ];
+                        return (
+                          <tr
+                            key={`${sectionKey}-${row.q}`}
+                            className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="align-top px-2 py-1.5 w-[40px]">
+                              <span className={`text-[11px] font-mono font-semibold ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
+                                Q{row.q}
                               </span>
-                              {row.secondaries.length > 0 && (
-                                <>
-                                  <span className="text-gray-300 text-[10px]">+</span>
-                                  {row.secondaries.map((s, i) => (
-                                    <span
-                                      key={`${row.q}-sec-${i}`}
-                                      className={`inline-flex items-center gap-1 px-1 py-0 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
-                                    >
-                                      {s.name}
-                                      <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
-                                    </span>
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
+                            </td>
+                            <td className="align-top px-2 py-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {chips.map((s, i) => (
+                                  <span
+                                    key={`${row.q}-chip-${i}`}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
+                                  >
+                                    {s.name}
+                                    <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      };
                       return (
                         <Popover>
                           <PopoverTrigger asChild>

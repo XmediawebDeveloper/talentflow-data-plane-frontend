@@ -992,7 +992,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     // { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
     // Sentiment tab removed per Vite design — Sentiment had no equivalent in the Vite source. Block below kept (commented) for revert.
     // { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
-    { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
+    // Q&A tab hidden per recruiter spec 2026-05-21 — content overlaps with
+    // Question Analysis + Transcript. Keep the route + render block below
+    // so deep-link URLs (?activeTab=qa) don't 404; just remove from the
+    // visible tab nav.
+    // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
@@ -2896,6 +2900,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
                 conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
+                // Pass special_instructions so the Analysis tab can read
+                // the Question Distribution plan (mth/nth_question_skill_map)
+                // and show EXACTLY the configured skills per slot — no
+                // text-scan extras, no evaluator-topic extras.
+                special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
               });
               return <QuestionsView data={data} />;
             })()}
