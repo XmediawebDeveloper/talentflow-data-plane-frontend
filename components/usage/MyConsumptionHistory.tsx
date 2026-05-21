@@ -24,7 +24,6 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   unitPoolService,
   UnitType,
@@ -153,7 +152,6 @@ export default function MyConsumptionHistory() {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Usage History' }]} />
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between">

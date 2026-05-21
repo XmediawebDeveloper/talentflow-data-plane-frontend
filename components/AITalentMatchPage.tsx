@@ -906,7 +906,7 @@ export default function AITalentMatchPage({
               className="mb-4 md:mb-6"
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
-                { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
+                { label: 'AI Talent Match', onClick: () => setViewMode('history') },
                 { label: 'Match Details' },
               ]}
             />
@@ -2092,7 +2092,7 @@ export default function AITalentMatchPage({
             className="mb-4 md:mb-6"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
+              { label: 'AI Talent Match', onClick: () => setViewMode('history') },
               { label: selectedJobData?.title || 'Results' },
             ]}
           />

@@ -15,6 +15,13 @@ export interface BreadcrumbCrumb {
   label: string;
   /** Link target. Omit on the current (last) crumb so it renders as plain text. */
   href?: string;
+  /**
+   * Click handler for crumbs that navigate within a single-route view (e.g. an
+   * in-page step/view switch). Used when `href` would point at the route the
+   * user is already on, which a normal link cannot re-trigger. Ignored if
+   * `href` is set or on the last crumb.
+   */
+  onClick?: () => void;
 }
 
 /**
@@ -36,14 +43,24 @@ export default function PageBreadcrumb({
           return (
             <React.Fragment key={`${crumb.label}-${idx}`}>
               <BreadcrumbItem>
-                {isLast || !crumb.href ? (
+                {isLast ? (
                   <BreadcrumbPage className="font-semibold text-brand-blue">
                     {crumb.label}
                   </BreadcrumbPage>
-                ) : (
+                ) : crumb.href ? (
                   <BreadcrumbLink asChild>
                     <Link href={crumb.href}>{crumb.label}</Link>
                   </BreadcrumbLink>
+                ) : crumb.onClick ? (
+                  <BreadcrumbLink asChild>
+                    <button type="button" onClick={crumb.onClick} className="cursor-pointer">
+                      {crumb.label}
+                    </button>
+                  </BreadcrumbLink>
+                ) : (
+                  <BreadcrumbPage className="font-semibold text-brand-blue">
+                    {crumb.label}
+                  </BreadcrumbPage>
                 )}
               </BreadcrumbItem>
               {!isLast && <BreadcrumbSeparator />}

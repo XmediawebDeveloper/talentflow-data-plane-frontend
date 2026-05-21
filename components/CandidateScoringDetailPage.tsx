@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -79,9 +79,15 @@ interface CandidateScoringDetailPageProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /**
+   * Breadcrumb crumbs for this view. Supply this when the component is rendered
+   * as an in-page view (e.g. inside Resume Scoring) so the parent crumbs can use
+   * `onClick` to switch views instead of an `href` to the route already shown.
+   */
+  breadcrumbItems?: BreadcrumbCrumb[];
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack, onMinimize, currentIndex, totalCount, onPrev, onNext }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user } = useAuth();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo'>('overview');
@@ -404,7 +410,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={[
+            items={breadcrumbItems ?? [
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
               { label: 'Candidate Details' },

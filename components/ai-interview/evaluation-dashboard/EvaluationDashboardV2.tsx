@@ -536,6 +536,46 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             )}
           </div>
         )}
+
+        {/* 4. Follow-ups (when any fired for this slot) — surfaced so
+            the recruiter knows whether Linda probed deeper and how the
+            candidate responded. Nothing rendered when followUps is
+            empty/undefined (the common case in timed mode after
+            strict-distribution turned probe-mode off). */}
+        {q.followUps && q.followUps.length > 0 && (
+          <div className="border-l-2 border-amber-300 pl-3 mt-1">
+            <div className="text-xs font-semibold text-amber-700 mb-1.5">
+              Follow-up{q.followUps.length === 1 ? '' : 's'} ({q.followUps.length})
+            </div>
+            <div className="space-y-2">
+              {q.followUps.map((fu, fi) => (
+                <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                      FU{fi + 1}
+                    </span>
+                    {fu.topic && (
+                      <span className="text-[10px] text-amber-700 italic">on {fu.topic}</span>
+                    )}
+                    {typeof fu.score === 'number' && (
+                      <span className="ml-auto text-[10px] font-mono text-amber-800">
+                        Score {fu.score.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-800">{fu.question || <span className="italic text-gray-500">(no follow-up text)</span>}</div>
+                  <div className="text-xs text-gray-700">
+                    <span className="text-gray-500">Answer: </span>
+                    {fu.answer ? fu.answer : <span className="italic text-gray-500">(no response)</span>}
+                  </div>
+                  {fu.note && (
+                    <div className="text-[11px] italic text-gray-600">{fu.note}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };

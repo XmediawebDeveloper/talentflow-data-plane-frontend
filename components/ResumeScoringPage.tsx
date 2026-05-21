@@ -272,6 +272,8 @@ export default function ResumeScoringPage({
   // Drill-in for the two action cards: list (Job-grouped + Global view) stays
   // hidden until either card is clicked.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  // Whether the floating Progress Tables icon has revealed its label.
+  const [showProgressLabel, setShowProgressLabel] = useState(false);
 
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -414,16 +416,6 @@ export default function ResumeScoringPage({
     } finally {
       setIsLoadingGlobal(false);
     }
-  };
-
-  // Toggle global view
-  const handleToggleGlobalView = () => {
-    if (!isGlobalView) {
-      // Entering global view - fetch data
-      fetchGlobalScoredResumes();
-    }
-    setIsGlobalView(!isGlobalView);
-    setSelectedScoredResumes([]); // Clear selection when switching views
   };
 
   // Handle initial JD ID from URL - auto-open scored resumes view or start new scoring
@@ -1175,6 +1167,21 @@ export default function ResumeScoringPage({
         totalCount={_scoredList.length}
         onPrev={_currentIdx > 0 ? () => _goToCandidate(_scoredList[_currentIdx - 1]) : undefined}
         onNext={_currentIdx < _scoredList.length - 1 ? () => _goToCandidate(_scoredList[_currentIdx + 1]) : undefined}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Resume Scoring', onClick: () => {
+            setSelectedCandidateForView(null);
+            setSelectedHistoryItem(null);
+            setViewMode('history');
+            router.push(`/recruitment/resume-scoring`, { scroll: false });
+          } },
+          { label: selectedHistoryItem.jobTitle, onClick: () => {
+            setSelectedCandidateForView(null);
+            setViewMode('details');
+            router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
+          } },
+          { label: 'Candidate Details' },
+        ]}
         onBack={() => {
           setSelectedCandidateForView(null);
           setViewMode('details');
@@ -1213,6 +1220,15 @@ export default function ResumeScoringPage({
         totalCount={globalScoredResumes.length}
         onPrev={_globalIdx > 0 ? () => _goToGlobalCandidate(globalScoredResumes[_globalIdx - 1]) : undefined}
         onNext={_globalIdx >= 0 && _globalIdx < globalScoredResumes.length - 1 ? () => _goToGlobalCandidate(globalScoredResumes[_globalIdx + 1]) : undefined}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Resume Scoring', onClick: () => {
+            setSelectedCandidateForView(null);
+            setViewMode('history');
+            router.push(`/recruitment/resume-scoring`, { scroll: false });
+          } },
+          { label: 'Candidate Details' },
+        ]}
         onBack={() => {
           setSelectedCandidateForView(null);
           setViewMode('history');
@@ -1236,7 +1252,15 @@ export default function ResumeScoringPage({
       <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring', href: '/recruitment/resume-scoring' }, { label: selectedHistoryItem.jobTitle }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Resume Scoring', onClick: () => {
+            setViewMode('history');
+            setSelectedHistoryItem(null);
+            setSelectedStatusFilter('all');
+          } },
+          { label: selectedHistoryItem.jobTitle },
+        ]} />
         {/* Header with Back Button + Prev/Next nav */}
         <div className="mb-5">
           {(() => {
@@ -1571,7 +1595,7 @@ export default function ResumeScoringPage({
     return (
       <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100vh-7rem)]' : ''}`}>
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
@@ -1654,19 +1678,6 @@ export default function ResumeScoringPage({
               </button>
             )} */}
 
-            {/* View All Candidates Button */}
-            <button
-              onClick={handleToggleGlobalView}
-              className={`px-3 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md ${
-                isGlobalView
-                  ? 'bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25 ring-1 ring-white/10'
-                  : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-              }`}
-            >
-              <Eye className="w-4 h-4" />
-              <span>{isGlobalView ? 'View by Job' : 'View All Candidates'}</span>
-            </button>
-
             {/* Score Resumes Button - only shown to users with run scoring permission */}
             {canRunScoring && (
               <button
@@ -1685,79 +1696,113 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
-        {/* Card grid — uniform styling for both action cards. Compact size,
-            same brand-blue icon, same border/hover. Clicking either card
-            switches to list view; the list below is hidden until then. */}
-        <div className="grid grid-cols-2 gap-2 mb-4 sm:mb-5 max-w-md">
-          {/* Progress Tables card */}
-          {scoredHistory.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                const allProgressData = scoredHistory.flatMap(item =>
-                  item.scoredResumes.map(resume => ({
-                    id: resume.id,
-                    candidateName: resume.candidateName || resume.name || 'Unknown',
-                    jobTitle: item.jobTitle,
-                    jobId: item.jobId,
-                    source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
-                    status: 'Scored successfully' as const,
-                    scoredDateTime: new Date(item.scoredAt),
-                    matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                 : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                 : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                 : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                 : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                 : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                    score: resume.overall_score || resume.scorePercentage || 0,
-                  }))
-                );
-                setProgressData(allProgressData);
-                setShowJobTitleColumn(true);
-                setFilterByJobId(undefined);
-                setShowProgressModal(true);
-                setPageView('list');
-              }}
-              className={`text-left w-full rounded-lg border bg-white dark:bg-slate-900 p-2 sm:p-2.5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-medium text-gray-500 dark:text-slate-500">Progress Tables</p>
-                  <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50">
-                    {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
-                  </p>
-                </div>
-                <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                  <Clock className="w-3.5 h-3.5 text-white" />
+        {/* Overview cards — always visible; the active card is highlighted
+            once its list is open below. */}
+          <div className="mb-4 sm:mb-5">
+            {/* Progress Tables — floating action button at the bottom-right
+                corner. Clicking it reveals its label and opens the modal. */}
+            {scoredHistory.length > 0 && (
+              <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30">
+                <div className="mx-auto flex max-w-[1400px] justify-end px-6 md:px-10">
+                  <div className="pointer-events-auto flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProgressLabel(true);
+                    const allProgressData = scoredHistory.flatMap(item =>
+                      item.scoredResumes.map(resume => ({
+                        id: resume.id,
+                        candidateName: resume.candidateName || resume.name || 'Unknown',
+                        jobTitle: item.jobTitle,
+                        jobId: item.jobId,
+                        source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
+                        status: 'Scored successfully' as const,
+                        scoredDateTime: new Date(item.scoredAt),
+                        matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                     : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                     : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                     : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                     : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                     : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
+                        score: resume.overall_score || resume.scorePercentage || 0,
+                      }))
+                    );
+                    setProgressData(allProgressData);
+                    setShowJobTitleColumn(true);
+                    setFilterByJobId(undefined);
+                    setShowProgressModal(true);
+                  }}
+                  aria-label="Progress Tables"
+                  title="Progress Tables"
+                  className="h-12 w-12 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors"
+                >
+                  <Clock className="w-5 h-5" />
+                </button>
+                {showProgressLabel && (
+                  <span className="order-first rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-brand-blue shadow-sm ring-1 ring-brand-blue/15">
+                    Progress Tables
+                  </span>
+                )}
+                  </div>
                 </div>
               </div>
-            </button>
-          )}
+            )}
 
-          {/* View All Candidates card */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!isGlobalView) handleToggleGlobalView();
-              setPageView('list');
-            }}
-            className={`text-left w-full rounded-lg border bg-white dark:bg-slate-900 p-2 sm:p-2.5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[10px] font-medium text-gray-500 dark:text-slate-500">
-                  {isGlobalView ? 'View by Job' : 'View All Candidates'}
-                </p>
-                <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50">
-                  {isGlobalView ? globalScoredResumes.length : scoredHistory.length}
-                </p>
-              </div>
-              <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                <Eye className="w-3.5 h-3.5 text-white" />
-              </div>
+            {/* Action cards — "View by Job" and "View All Candidates" as two
+                separate cards. Clicking either opens its list view. */}
+            <div className="grid grid-cols-2 gap-2 max-w-md">
+              {/* View by Job card */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isGlobalView) {
+                    setIsGlobalView(false);
+                    setSelectedScoredResumes([]);
+                  }
+                  setPageView('list');
+                }}
+                className={`text-left w-full rounded-lg border bg-white dark:bg-slate-900 p-2 sm:p-2.5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' && !isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium text-gray-500 dark:text-slate-500">View by Job</p>
+                    <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50">
+                      {scoredHistory.length}
+                    </p>
+                  </div>
+                  <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                    <Briefcase className="w-3.5 h-3.5 text-white" />
+                  </div>
+                </div>
+              </button>
+
+              {/* View All Candidates card */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isGlobalView) {
+                    fetchGlobalScoredResumes();
+                    setIsGlobalView(true);
+                    setSelectedScoredResumes([]);
+                  }
+                  setPageView('list');
+                }}
+                className={`text-left w-full rounded-lg border bg-white dark:bg-slate-900 p-2 sm:p-2.5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' && isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium text-gray-500 dark:text-slate-500">View All Candidates</p>
+                    <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50">
+                      {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
+                    </p>
+                  </div>
+                  <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                    <Users className="w-3.5 h-3.5 text-white" />
+                  </div>
+                </div>
+              </button>
             </div>
-          </button>
-        </div>
+          </div>
 
         {pageView === 'list' && (
         <>

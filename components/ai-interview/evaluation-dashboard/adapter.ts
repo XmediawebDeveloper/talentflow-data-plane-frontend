@@ -6,7 +6,7 @@
 
 import type {
   DashboardData, Cluster, Skill, Level, Recommendation, InterviewResponse,
-  PerQuestionDetail, PerQuestionSkill,
+  PerQuestionDetail, PerQuestionSkill, PerQuestionFollowUp,
 } from './types';
 
 interface ClusterConfigDef {
@@ -929,7 +929,26 @@ function buildPerQuestionDetailsFromHistory(
   //   • exact-duplicate question text within the same round (collapses
   //     timeout/silence echo rows that inherit the previous question text)
   const _seenExactKeys = new Set<string>();
+  // Split history into main candidates and explicit follow-ups. A row
+  // counts as a follow-up only when `is_follow_up=true` AND a non-empty
+  // parent_question_number points to an earlier main row (lower qnum).
+  // Bug-tagged rows where is_follow_up=true but parent_question_number is
+  // missing/equal still flow into the main filter (backwards-compat with
+  // the skip-recovery mis-tagging documented earlier).
+  const explicitFollowUps = indexedHistory.filter(q => {
+    if (!q?.is_follow_up) return false;
+    const parentQn = Number(q?.parent_question_number);
+    const ownQn = Number(q?.question_number);
+    if (!Number.isFinite(parentQn) || parentQn <= 0) return false;
+    if (Number.isFinite(ownQn) && ownQn === parentQn) return true; // standard follow-up shares parent qnum
+    // Or it sits ahead of its parent in chronological order — fine.
+    return parentQn < (ownQn || Number.MAX_SAFE_INTEGER);
+  });
+  const followUpHistoryIds = new Set(
+    explicitFollowUps.map(f => Number(f._historyIdx)),
+  );
   const mains = indexedHistory.filter(q => {
+    if (followUpHistoryIds.has(Number(q._historyIdx))) return false;
     if (_isGreeting(q)) return false;
     if (!q?.question || !String(q.question).trim()) return false;
     const rt = String(q?.response_type || '').toLowerCase();
@@ -945,6 +964,33 @@ function buildPerQuestionDetailsFromHistory(
   // Transcript order. The transcript adapter renders rows in their raw
   // history-array order; we now mirror that here even after filtering.
   mains.sort((a, b) => Number(a._historyIdx) - Number(b._historyIdx));
+
+  // Group follow-ups by their parent_question_number so each main row
+  // can attach the right set when we render it. Each entry preserves
+  // the chronological order they were asked (history index ascending).
+  explicitFollowUps.sort((a, b) => Number(a._historyIdx) - Number(b._historyIdx));
+  const followUpsByParentQn = new Map<number, PerQuestionFollowUp[]>();
+  for (const fu of explicitFollowUps) {
+    const parentQn = Number(fu?.parent_question_number);
+    if (!Number.isFinite(parentQn) || parentQn <= 0) continue;
+    const ev = (evalsByQ[parentQn] || []).find(
+      e => String(e?.question || '').trim() === String(fu?.question || '').trim(),
+    );
+    const fuScore = typeof fu?.score === 'number'
+      ? fu.score
+      : ev
+        ? Math.max(0, Math.min(10, Number(ev?.score ?? ev?.evaluation?.overall ?? 0)))
+        : undefined;
+    const entry: PerQuestionFollowUp = {
+      question: String(fu?.question || '').trim(),
+      answer: String(fu?.answer || '').trim(),
+      topic: String(fu?.topic || ev?.topic || ev?.evaluation?.topic || '').trim() || undefined,
+      score: typeof fuScore === 'number' ? Math.round(fuScore * 10) / 10 : undefined,
+      note: String(ev?.one_line_note || ev?.evaluation?.brief_note || '').slice(0, 250) || undefined,
+    };
+    if (!followUpsByParentQn.has(parentQn)) followUpsByParentQn.set(parentQn, []);
+    followUpsByParentQn.get(parentQn)!.push(entry);
+  }
 
   // Map evaluator topic strings (possibly truncated / paraphrased — e.g.
   // "cloud platforms") back to the canonical JD skill name (e.g.
@@ -1071,6 +1117,12 @@ function buildPerQuestionDetailsFromHistory(
       ? Math.round(entryScore * 10) / 10
       : Math.round(weighted * 10) / 10;
 
+    // Attach explicit follow-ups for this main Q. Looked up by the raw
+    // history question_number (origQ) since follow-up entries store the
+    // same `parent_question_number`. displayQ is a chronological index
+    // and doesn't match parent_question_number on older sessions.
+    const followUps = followUpsByParentQn.get(origQ);
+
     return {
       qNum: displayQ,
       section,
@@ -1078,6 +1130,7 @@ function buildPerQuestionDetailsFromHistory(
       answer: String(q?.answer || ''),
       skills,
       questionScore,
+      followUps: followUps && followUps.length > 0 ? followUps : undefined,
     };
   });
 }
@@ -1197,10 +1250,42 @@ function buildPerQuestionDetailsFromConversation(
       || /\bcertification(?:s|s? to mention)?\b/.test(t)
     );
   };
+  // 2026-05-21: prefix-tolerant section lookup. The backend strips
+  // acknowledgment prefixes ("No problem, let's move on. ", "Thank you
+  // for sharing. ", "No worries, let's keep moving. ", etc.) from some
+  // question_history entries — specifically the ones following an IDK
+  // turn — while the conversation_transcript keeps the full prefix.
+  // Exact-text matching against roundTypeByText then misses those
+  // questions and they default to 'mth' even though their planned
+  // round_type was 'nice_to_have_skills' / 'hr'. Observed for Chandra
+  // (session b70e3a37): NTH showed only 2 rows because Q11 AWS, Q12
+  // Docker, Q14 "open to learning", Q15 "available onsite" all matched
+  // qh entries by suffix but not by exact text.
+  //
+  // Build a SUFFIX index keyed on the stored qh question — Linda's
+  // transition prefix is always at the START in the transcript, never
+  // at the end, so suffix containment is a safe heuristic.
+  const roundTypeBySuffix: Array<{ key: string; rt: string }> = [];
+  for (const [key, rt] of roundTypeByText.entries()) {
+    // Skip very short qh entries (< 30 chars) — they risk substring
+    // matching unrelated long questions. The real cases we want to
+    // catch are full-sentence questions whose prefix got stripped.
+    if (key.length >= 30) {
+      roundTypeBySuffix.push({ key, rt });
+    }
+  }
+  // Sort longest-first so the most specific suffix wins (avoids a
+  // generic short qh entry shadowing a longer-matching one).
+  roundTypeBySuffix.sort((a, b) => b.key.length - a.key.length);
+
   const resolveSection = (questionText: string): PerQuestionDetail['section'] => {
     const txt = questionText.trim().toLowerCase();
     const fromHistory = roundTypeByText.get(txt);
     if (fromHistory) return sectionFromRT(fromHistory);
+    // Prefix-tolerant fallback: transcript text ends with stored qh text.
+    for (const { key, rt } of roundTypeBySuffix) {
+      if (txt.endsWith(key)) return sectionFromRT(rt);
+    }
     if (_looksLikeHR(questionText)) return 'hr';
     return 'mth';
   };
@@ -1364,7 +1449,7 @@ function buildPerQuestionDetailsFromConversation(
     const { skills, score } = buildAndScore(pending.question);
     out.push({
       qNum: ++qNum,
-      section: 'mth',
+      section: resolveSection(pending.question),
       question: pending.question,
       answer: '',
       skills,
@@ -1480,8 +1565,14 @@ export function buildDashboardData(params: {
    *  source the Transcript view renders from. Caller should pass
    *  liveSession.conversation_transcript ?? interview.conversation_transcript. */
   conversation_transcript?: any[];
+  /** Raw special_instructions JSON string from the session row. Used to
+   *  extract `mth_question_skill_map` + `nth_question_skill_map` so the
+   *  Question Analysis tab can display the SAME skills per slot as the
+   *  Question Distribution UI — strictly, no extras. Per recruiter spec
+   *  2026-05-20. */
+  special_instructions?: string | null;
 }): DashboardData {
-  const { ai_evaluation: eval_, cluster_config, candidate, interview, rounds_config, conversation_transcript } = params;
+  const { ai_evaluation: eval_, cluster_config, candidate, interview, rounds_config, conversation_transcript, special_instructions } = params;
 
   // Planned question counts per section — feeds the Question Analysis page's
   // section-score denominator. Sum across all enabled rounds matching each
@@ -1630,6 +1721,81 @@ export function buildDashboardData(params: {
     conversation_transcript || [],
   );
 
+  // ── Strict Question-Distribution alignment ─────────────────────────────
+  // Recruiter spec (2026-05-20): the Question Analysis tab MUST show the
+  // exact set of skills configured for each slot in the Question
+  // Distribution UI. No keyword-scan extras, no evaluator topic extras,
+  // no leftovers from older buggy `assigned_skills` writes.
+  //
+  // Source: `special_instructions.mth_question_skill_map[]` and
+  // `nth_question_skill_map[]` — same DB-backed plan the Question
+  // Distribution UI reads. Each row carries `primary_skill` +
+  // `secondary_skills` for that slot.
+  //
+  // Mapping: history rows are bucketed by section, sorted by qNum
+  // ascending; the i-th row in MTH maps to MTH slot (i+1), same for NTH.
+  // For HR, no skill plan exists (HR is question-bank-text-based), so
+  // HR rows keep their existing (likely empty) skills list.
+  //
+  // When `special_instructions` is missing/malformed or no plan exists
+  // for a slot, the row's existing `skills` is preserved as fallback —
+  // older interviews predate this snapshot and shouldn't regress.
+  const parsedSpecialInstructions = (() => {
+    if (!special_instructions || typeof special_instructions !== 'string') return null;
+    try {
+      const p = JSON.parse(special_instructions);
+      return p && typeof p === 'object' ? p : null;
+    } catch {
+      return null;
+    }
+  })();
+  const planRowsBySection: Record<'mth' | 'nth', any[]> = { mth: [], nth: [] };
+  if (parsedSpecialInstructions) {
+    const mth = Array.isArray(parsedSpecialInstructions.mth_question_skill_map)
+      ? parsedSpecialInstructions.mth_question_skill_map
+      : [];
+    const nth = Array.isArray(parsedSpecialInstructions.nth_question_skill_map)
+      ? parsedSpecialInstructions.nth_question_skill_map
+      : [];
+    planRowsBySection.mth = [...mth].sort((a, b) =>
+      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
+    );
+    planRowsBySection.nth = [...nth].sort((a, b) =>
+      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
+    );
+  }
+  const buildSkillsFromPlanRow = (row: any): PerQuestionSkill[] => {
+    if (!row) return [];
+    const primary = String(row?.primary_skill || '').trim();
+    const secs = Array.isArray(row?.secondary_skills)
+      ? row.secondary_skills.filter((s: any) => typeof s === 'string' && s.trim())
+      : [];
+    const names: string[] = [];
+    if (primary) names.push(primary);
+    for (const s of secs) names.push(s);
+    // Case-insensitive dedupe.
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const n of names) {
+      const k = n.toLowerCase().trim();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      unique.push(n);
+    }
+    return unique.map(name => {
+      const priority = clusterPriorityBySkill[name.toLowerCase().trim()] || 'Medium';
+      return {
+        name,
+        priority,
+        weight: PRIORITY_WEIGHT[priority],
+        score: 0,
+        note: '',
+      };
+    });
+  };
+
+  // ── Per-section cap: enforce the configured plan size ────────────────
+
   // ── Per-section cap: enforce the configured plan size ────────────────
   // Recruiter spec (2026-05-20): Question Analysis shows EXACTLY the
   // planned questions — no excess rows from inflated counters, burst
@@ -1685,6 +1851,76 @@ export function buildDashboardData(params: {
         buckets[key] = buckets[key].slice(0, cap);
       }
     }
+
+    // ── Override skills with the Question Distribution plan ─────────
+    // For each row in MTH/NTH, replace `skills` with the planned slot's
+    // [primary, ...secondaries] from special_instructions. Scores are
+    // preserved by matching plan-skill names against the original row's
+    // skills (case-insensitive); any plan skill not found in the row
+    // falls back to the row's questionScore with the Q badge — same
+    // policy as the per-skill score path.
+    const applyPlanForSection = (
+      section: 'mth' | 'nth',
+      planRows: any[],
+      rows: PerQuestionDetail[],
+    ): PerQuestionDetail[] => {
+      if (planRows.length === 0) return rows;
+      return rows.map((row, idx) => {
+        const planRow = planRows[idx];
+        if (!planRow) return row;
+        const planSkills = buildSkillsFromPlanRow(planRow);
+        if (planSkills.length === 0) return row;
+        // Index existing per-skill scores from the original row.
+        const existingByName: Record<string, PerQuestionSkill> = {};
+        for (const s of row.skills) {
+          existingByName[s.name.toLowerCase().trim()] = s;
+        }
+        const isSkippedRow = (row.skills.some(s => s.is_skipped)) ||
+          (!row.answer || !row.answer.trim());
+        const qScore = row.questionScore;
+        const replacedSkills: PerQuestionSkill[] = planSkills.map(ps => {
+          const match = existingByName[ps.name.toLowerCase().trim()];
+          if (match) {
+            // Preserve original per-skill score + flags exactly.
+            return { ...match, priority: ps.priority, weight: ps.weight };
+          }
+          // No direct match — derive a sensible score:
+          //   • Skipped row → 0 with Skipped badge
+          //   • Otherwise → Q-fallback at the question's overall score
+          if (isSkippedRow) {
+            return { ...ps, score: 0, is_skipped: true };
+          }
+          if (qScore > 0) {
+            return {
+              ...ps,
+              score: Math.round(qScore * 10) / 10,
+              is_fallback: true,
+            };
+          }
+          return ps; // score 0, no flags
+        });
+        return { ...row, skills: replacedSkills };
+      });
+    };
+    buckets.mth = applyPlanForSection('mth', planRowsBySection.mth, buckets.mth);
+    buckets.nth = applyPlanForSection('nth', planRowsBySection.nth, buckets.nth);
+    // HR rows keep their existing skills (HR is bank-text-based; no plan).
+
+    // ── Renumber qNum to clean 1-based section-local index ──────────
+    // Recruiter spec 2026-05-21: Question Analysis Q-numbers must
+    // match the Question Distribution UI exactly — Q1-Q8 in MTH,
+    // Q1-Q4 in NTH, Q1-Q3 in HR. Previous behavior used `_historyIdx`
+    // (raw history-array position), which produced gaps like
+    // "MTH Q1, Q2, Q3, Q4, Q5, Q6, Q15, Q16" when buffer-mode rows
+    // crept into the data (observed: kanimozhi's session, 21 rows
+    // for a 15-Q interview with q_nums 1-22). After sort+cap, the
+    // displayed slot numbers should mirror the plan slot numbers.
+    // This also makes Analysis Q5 = Question Distribution slot 5,
+    // so the recruiter cross-references map 1:1.
+    for (const key of ['mth', 'nth', 'hr'] as const) {
+      buckets[key] = buckets[key].map((row, idx) => ({ ...row, qNum: idx + 1 }));
+    }
+
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];
   })();
 

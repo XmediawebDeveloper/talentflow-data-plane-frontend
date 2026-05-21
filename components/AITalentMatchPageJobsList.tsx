@@ -117,7 +117,7 @@ export default function AITalentMatchPageJobsList({
             className="mb-4 md:mb-6"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
+              { label: 'AI Talent Match', onClick: onViewHistory },
               { label: 'Select Job Description' },
             ]}
           />
