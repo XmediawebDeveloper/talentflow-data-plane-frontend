@@ -84,19 +84,19 @@ export default function DowngradeWarningModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl mx-4 bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-red-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-red-50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-100 rounded-lg">
               <AlertTriangle className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-50">
                 {hasOverages ? 'Downgrade with Read-Only Mode' : 'Confirm Downgrade'}
               </h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-slate-400">
                 {currentPlanName} → {targetPlanName}
               </p>
             </div>
@@ -104,14 +104,14 @@ export default function DowngradeWarningModal({
           <button
             onClick={onClose}
             disabled={isDowngrading}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
            aria-label="Close">
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+        <div className="px-6 py-6 overflow-y-auto flex-1">
           {hasOverages ? (
             <>
               {/* Warning Message */}
@@ -132,8 +132,8 @@ export default function DowngradeWarningModal({
 
               {/* Quota Overages */}
               <div className="space-y-4 mb-6">
-                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-gray-600" />
+                <h4 className="font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400" />
                   Usage Overages
                 </h4>
 
@@ -143,8 +143,8 @@ export default function DowngradeWarningModal({
                       <div className="flex items-start gap-3">
                         {getQuotaIcon(overage.quotaType)}
                         <div>
-                          <h5 className="font-semibold text-gray-900">{overage.quotaLabel}</h5>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <h5 className="font-semibold text-gray-900 dark:text-slate-50">{overage.quotaLabel}</h5>
+                          <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                             You need to reduce your usage to fit within the new plan limit
                           </p>
                         </div>
@@ -153,24 +153,24 @@ export default function DowngradeWarningModal({
 
                     <div className="grid grid-cols-3 gap-4 text-sm mb-4">
                       <div>
-                        <p className="text-gray-600">Current Usage</p>
-                        <p className="font-bold text-gray-900 text-lg">
+                        <p className="text-gray-600 dark:text-slate-400">Current Usage</p>
+                        <p className="font-bold text-gray-900 dark:text-slate-50 text-lg">
                           {overage.currentUsage.toLocaleString()}
-                          {overage.unit && <span className="text-sm text-gray-600 ml-1">{overage.unit}</span>}
+                          {overage.unit && <span className="text-sm text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>}
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-600">New Plan Limit</p>
+                        <p className="text-gray-600 dark:text-slate-400">New Plan Limit</p>
                         <p className="font-bold text-blue-600 text-lg">
                           {overage.newPlanLimit.toLocaleString()}
-                          {overage.unit && <span className="text-sm text-gray-600 ml-1">{overage.unit}</span>}
+                          {overage.unit && <span className="text-sm text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>}
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Must Remove</p>
+                        <p className="text-gray-600 dark:text-slate-400">Must Remove</p>
                         <p className="font-bold text-red-600 text-lg">
                           {overage.overage.toLocaleString()}
-                          {overage.unit && <span className="text-sm text-gray-600 ml-1">{overage.unit}</span>}
+                          {overage.unit && <span className="text-sm text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>}
                         </p>
                       </div>
                     </div>
@@ -260,7 +260,7 @@ export default function DowngradeWarningModal({
                 </div>
               </div>
 
-              <div className="space-y-3 text-sm text-gray-700 mb-6">
+              <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300 mb-6">
                 <p className="flex items-start gap-2">
                   <span className="text-blue-500 font-bold">•</span>
                   <span>Your billing will be adjusted to the lower plan rate</span>
@@ -296,9 +296,9 @@ export default function DowngradeWarningModal({
 
                   <div className="space-y-3">
                     {nearLimitQuotas.map((quota, index) => (
-                      <div key={index} className="p-3 bg-white rounded-lg border border-amber-200">
+                      <div key={index} className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-200">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-gray-900">{quota.quotaLabel}</span>
+                          <span className="font-semibold text-gray-900 dark:text-slate-50">{quota.quotaLabel}</span>
                           <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded">
                             {quota.percentageUsed.toFixed(0)}% Used
                           </span>
@@ -306,13 +306,13 @@ export default function DowngradeWarningModal({
 
                         <div className="grid grid-cols-3 gap-3 text-sm mb-2">
                           <div>
-                            <p className="text-gray-600 text-xs">Used</p>
-                            <p className="font-bold text-gray-900">
+                            <p className="text-gray-600 dark:text-slate-400 text-xs">Used</p>
+                            <p className="font-bold text-gray-900 dark:text-slate-50">
                               {quota.currentUsage.toLocaleString()}
                             </p>
                           </div>
                           <div>
-                            <p className="text-gray-600 text-xs">Limit</p>
+                            <p className="text-gray-600 dark:text-slate-400 text-xs">Limit</p>
                             <p className="font-bold text-blue-600">
                               {quota.newPlanLimit.toLocaleString()}
                             </p>
@@ -326,7 +326,7 @@ export default function DowngradeWarningModal({
                         </div>
 
                         {/* Progress bar */}
-                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
                           <div
                             className={`h-full transition-all ${
                               quota.percentageUsed >= 90
@@ -361,11 +361,11 @@ export default function DowngradeWarningModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <button
             onClick={onClose}
             disabled={isDowngrading}
-            className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

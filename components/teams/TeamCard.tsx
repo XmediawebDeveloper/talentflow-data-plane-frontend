@@ -13,8 +13,8 @@ interface TeamCardProps {
 
 export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false }: TeamCardProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10">
-      <div className="border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
+    <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10">
+      <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <Shield className="h-5 w-5 text-brand-blue" />
@@ -23,36 +23,36 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
             Team
           </span>
         </div>
-        <h3 className="line-clamp-1 text-xl font-semibold tracking-tight text-gray-900">{team.name}</h3>
-        <p className="mt-2 line-clamp-2 text-sm text-gray-600">
+        <h3 className="line-clamp-1 text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
+        <p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-slate-400">
           {team.description || 'No description provided for this team yet.'}
         </p>
       </div>
 
       <div className="p-6">
         <div className="mb-6 grid grid-cols-3 gap-4">
-          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
             <div className="mb-1 flex items-center gap-2">
               <Users className="w-4 h-4 text-brand-blue" />
-              <p className="text-2xl font-semibold text-gray-900">{team.member_count}</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-slate-50">{team.member_count}</p>
             </div>
-            <p className="text-xs text-gray-600">Members</p>
+            <p className="text-xs text-gray-600 dark:text-slate-400">Members</p>
           </div>
 
-          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
             <div className="mb-1 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-brand-cyan" />
-              <p className="text-2xl font-semibold text-gray-900">{team.active_jobs_count}</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-slate-50">{team.active_jobs_count}</p>
             </div>
-            <p className="text-xs text-gray-600">Active Jobs</p>
+            <p className="text-xs text-gray-600 dark:text-slate-400">Active Jobs</p>
           </div>
 
-          <div className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
             <div className="mb-1 flex items-center gap-2">
               <FileText className="w-4 h-4 text-brand-teal" />
-              <p className="text-2xl font-semibold text-gray-900">{team.resumes_count}</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-slate-50">{team.resumes_count}</p>
             </div>
-            <p className="text-xs text-gray-600">Resumes</p>
+            <p className="text-xs text-gray-600 dark:text-slate-400">Resumes</p>
           </div>
         </div>
 
@@ -69,7 +69,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
             ))}
           </div>
           {team.member_count > 4 && (
-            <span className="text-sm text-gray-600">+{team.member_count - 4} more</span>
+            <span className="text-sm text-gray-600 dark:text-slate-400">+{team.member_count - 4} more</span>
           )}
         </div>
 
@@ -84,7 +84,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
           {canManage && (
             <button
               onClick={() => onManageTeam(team.id)}
-              className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+              className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
             >
               Manage Team
             </button>
@@ -97,8 +97,8 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
 
 export function TeamCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-      <div className="border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
+    <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+      <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
         <Skeleton className="mb-3 h-10 w-10 rounded-xl" />
         <Skeleton className="mb-2 h-6 w-48" />
         <Skeleton className="h-4 w-32" />

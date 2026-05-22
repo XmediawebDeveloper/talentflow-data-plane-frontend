@@ -14,8 +14,10 @@ export interface ExperienceLevel {
   max_years: number | null;
   sort_order: number;
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  // Optional because static fallback constants (used before master data loads)
+  // do not carry persistence timestamps.
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EducationLevel {
@@ -25,8 +27,8 @@ export interface EducationLevel {
   level: number | null;
   sort_order: number;
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface IndustryType {

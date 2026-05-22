@@ -360,13 +360,15 @@ export interface QuestionEvaluation {
   question_text: string;
   round_type: string;
   question_type: string;
-  score: number;
+  // The recruiter (assessment) view does not populate `score`; only the
+  // candidate-facing summary does. Kept optional so both shapes overlap.
+  score?: number;
   points_earned: number;
   points_possible: number;
   is_correct: boolean;
-  feedback: string;
-  strengths: string[];
-  areas_for_improvement: string[];
+  feedback?: string;
+  strengths?: string[];
+  areas_for_improvement?: string[];
   // Candidate's answer
   candidate_answer_text?: string;
   candidate_selected_options?: string[];
@@ -377,6 +379,44 @@ export interface QuestionEvaluation {
   options?: { id: string; text: string }[];
   // Expected answer points (for text questions)
   expected_answer_points?: string[];
+
+  // Additional fields surfaced by the detailed-result endpoint (assessment side)
+  // and consumed by CandidateResultDetails / scorecard views. Kept optional so
+  // the two shapes overlap structurally and the existing call sites compile.
+  problem_title?: string | null;
+  input_format?: string | null;
+  output_format?: string | null;
+  sample_input?: string | null;
+  sample_output?: string | null;
+  constraints?: string | null;
+  explanation?: string | null;
+  candidate_code_input?: string;
+  candidate_code_execution_status?: string;
+  candidate_code_execution_output?: string;
+  candidate_code_execution_error?: string;
+  candidate_test_results?: {
+    passed?: number;
+    failed?: number;
+    total?: number;
+    points_earned?: number;
+    points_total?: number;
+    testcase_points_earned?: number;
+    testcase_points_total?: number;
+    question_points_earned?: number;
+    question_points_total?: number;
+    score_percentage?: number;
+    syntax_valid?: boolean;
+    execution_status?: string;
+    summary?: string;
+    strengths?: string[];
+    improvements?: string[];
+    marks_breakdown?: {
+      syntax?: { earned: number; total: number; status?: string; reason?: string };
+      execution?: { earned: number; total: number; status?: string; reason?: string };
+      [key: string]: { earned: number; total: number; status?: string; reason?: string } | undefined;
+    };
+    [key: string]: any;
+  };
 }
 
 export interface RoundScore {

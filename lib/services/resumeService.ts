@@ -21,8 +21,14 @@ export interface Resume {
   skills: string[];
   technical_skills?: string[];
   soft_skills?: string[];
-  education: any[];
-  experience: any[];
+  // Education / experience come back from the backend in two shapes depending on
+  // endpoint: a normalized array (used by list endpoints) and a richer "_details"
+  // structure used by the candidate detail view. Legacy mock data also uses a
+  // single string label (e.g. "Bachelor's Degree"); the union covers both.
+  education: any[] | string;
+  education_details?: any[];
+  experience: any[] | string;
+  experience_details?: any[];
   experience_years?: number;
   certifications: any[];
   languages?: any[];
@@ -34,12 +40,20 @@ export interface Resume {
   file_size?: number;  // In bytes
   file_size_kb?: number;
   file_type?: string;
-  source: 'manual_upload' | 'bulk_upload' | 'api_import' | 'ai_match';
+  /**
+   * Resume origin. The backend uses snake_case codes (manual_upload, bulk_upload,
+   * api_import, ai_match); legacy UI/mock data still uses 'Manual' | 'TalentFlow'.
+   * Both are accepted here so the shared `Resume` type covers transitional code.
+   */
+  source: 'manual_upload' | 'bulk_upload' | 'api_import' | 'ai_match' | 'Manual' | 'TalentFlow';
   version: number;
   version_count: number;  // Total versions for this candidate
+  versions?: ResumeVersion[];   // Inline version history (populated by detail endpoints)
   is_duplicate: boolean;
   is_archived?: boolean;  // Whether resume is archived
   archived_at?: string;  // When resume was archived
+  // Team assignment (recruiter id) — surfaced on internal-DB and my-resumes lists
+  assigned_to?: string;
   created_at: string;
   updated_at: string;
   // Additional sections (snake_case from backend)
@@ -57,6 +71,107 @@ export interface Resume {
   // Additional content
   objective?: string;
   additional_info?: string;
+
+  // ---------------------------------------------------------------------------
+  // CamelCase aliases — kept optional for backwards compatibility with older UI
+  // code paths. New code should prefer the snake_case fields above. These will
+  // be removed once the consumer sweep is complete.
+  // ---------------------------------------------------------------------------
+  /** @deprecated use candidate_name */
+  candidateName?: string;
+  /** @deprecated use candidate_name (legacy UI alias) */
+  name?: string;
+  /** @deprecated use current_title */
+  title?: string;
+  /** @deprecated use current_company */
+  currentCompany?: string;
+  /** @deprecated use previous_company */
+  previousCompany?: string;
+  /** @deprecated use notice_period */
+  noticePeriod?: string;
+  /** @deprecated use created_at */
+  uploadDate?: string;
+  /** @deprecated use updated_at */
+  lastUpdated?: string;
+  /** @deprecated use uploaded_by_name */
+  uploadedBy?: string;
+  /** @deprecated use folder_id */
+  folderId?: string;
+  /** @deprecated use version_count */
+  versionCount?: number;
+  /** @deprecated use assigned_to */
+  assignedTo?: string;
+  /** @deprecated use file_name */
+  fileName?: string;
+  /** @deprecated use file_type */
+  fileType?: string;
+  /** @deprecated use file_size_kb */
+  fileSizeKb?: number;
+  /** @deprecated use is_archived */
+  isArchived?: boolean;
+  /** @deprecated use archived_at */
+  archivedAt?: string;
+  /** @deprecated use professional_summary */
+  professionalSummary?: string;
+  /** @deprecated use technical_skills */
+  technicalSkills?: string[];
+  /** @deprecated use soft_skills */
+  softSkills?: string[];
+  /** @deprecated use education_details */
+  educationDetails?: any[];
+  /** @deprecated use experience_details */
+  experienceDetails?: any[];
+  /** @deprecated use linkedin_url */
+  linkedinUrl?: string;
+  /** @deprecated use github_url */
+  githubUrl?: string;
+  /** @deprecated use portfolio_url */
+  portfolioUrl?: string;
+  /** @deprecated use additional_info */
+  additionalInfo?: string;
+  /** @deprecated use extracted_text */
+  extractedText?: string;
+  /** @deprecated use volunteer_experience */
+  volunteerExperience?: any[];
+  /** Legacy count field present on some list endpoints. */
+  attachments?: number;
+}
+
+export interface ResumeVersion {
+  id: string;
+  version: number;
+  file_name?: string;
+  file_size_kb?: number;
+  uploaded_by?: string;
+  uploaded_by_name?: string;
+  /** Optional because mock data and some legacy endpoints omit it. */
+  created_at?: string;
+  // Optional: full extracted text for this version (populated by version-detail endpoint)
+  extracted_text?: string;
+  // Legacy camelCase aliases — see Resume above.
+  /** @deprecated use file_name */
+  fileName?: string;
+  /** @deprecated use created_at */
+  uploadDate?: string;
+  /** @deprecated use uploaded_by_name */
+  uploadedBy?: string;
+  /** @deprecated use extracted_text */
+  extractedText?: string;
+  /** Display name (often candidate name + version) populated by some endpoints. */
+  name?: string;
+  /** Human-readable file size string ("2.4 MB"). */
+  size?: string;
+  // Optional per-version snapshot fields produced by detail/version endpoints
+  // and used by legacy version-history UI.
+  skills?: string[];
+  technicalSkills?: string[];
+  experience?: any;
+  education?: any;
+  certifications?: any[];
+  currentTitle?: string;
+  currentCompany?: string;
+  location?: string;
+  professionalSummary?: string;
 }
 
 export interface ResumeListResponse {
@@ -158,6 +273,14 @@ export const resumeService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Alias for `get(id)` — kept for legacy call sites that follow the
+   * `<entity>Service.getById(id)` convention used by other services.
+   */
+  async getById(id: string): Promise<Resume> {
+    return this.get(id);
   },
 
   /**

@@ -27,7 +27,8 @@ import {
   List,
   Archive,
   Power,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -796,32 +797,48 @@ export default function JobOpeningsPage() {
       {/* Job Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Briefcase className="w-8 h-8 text-red-600" />
+          <div className="bg-white rounded-xl border border-gray-200 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
+            {/* Header */}
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Job Quota Exceeded</h3>
+              <button
+                onClick={() => setShowQuotaModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Briefcase className="w-8 h-8 text-red-600" />
+                </div>
+                <p className="text-gray-600">
+                  You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
+                </p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Job Quota Exceeded</h3>
-              <p className="text-gray-600 mb-6">
-                You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => setShowQuotaModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowQuotaModal(false);
-                    router.push('/subscription/current-plan');
-                  }}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
-                >
-                  Upgrade Plan
-                </button>
-              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex gap-3 justify-center shrink-0">
+              <button
+                onClick={() => setShowQuotaModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowQuotaModal(false);
+                  router.push('/subscription/current-plan');
+                }}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
+              >
+                Upgrade Plan
+              </button>
             </div>
           </div>
         </div>
@@ -830,61 +847,76 @@ export default function JobOpeningsPage() {
       {/* Insufficient Units Modal - when RS, RU, AS are all 0 */}
       {showInsufficientUnitsModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-8 h-8 text-orange-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
-              <p className="text-gray-600 mb-4">
-                You cannot create a new job because all your units have been exhausted.
-              </p>
+          <div className="bg-white rounded-xl border border-gray-200 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
+            {/* Header */}
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Insufficient Units</h3>
+              <button
+                onClick={() => setShowInsufficientUnitsModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
 
-              {/* Unit Details */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
-                <p className="text-sm font-medium text-gray-700 mb-2">Current Unit Balance:</p>
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Resume Upload (RU)</span>
-                    <span className={`font-medium ${unitQuotas?.RU === 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {unitQuotas?.RU || 0} units
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Resume Scoring (RS)</span>
-                    <span className={`font-medium ${unitQuotas?.RS === 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {unitQuotas?.RS || 0} units
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Assessment (AS)</span>
-                    <span className={`font-medium ${unitQuotas?.AS === 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {unitQuotas?.AS || 0} units
-                    </span>
-                  </div>
+            {/* Body */}
+            <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="w-8 h-8 text-orange-600" />
                 </div>
-                <p className="text-xs text-gray-500 mt-3">
-                  At least one unit type must have available units to create a job.
+                <p className="text-gray-600 mb-4">
+                  You cannot create a new job because all your units have been exhausted.
                 </p>
-              </div>
 
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => setShowInsufficientUnitsModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowInsufficientUnitsModal(false);
-                    router.push('/subscription/usage-quotas');
-                  }}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
-                >
-                  Buy Units
-                </button>
+                {/* Unit Details */}
+                <div className="bg-gray-50 rounded-lg p-4 text-left">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Current Unit Balance:</p>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Resume Upload (RU)</span>
+                      <span className={`font-medium ${unitQuotas?.RU === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitQuotas?.RU || 0} units
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Resume Scoring (RS)</span>
+                      <span className={`font-medium ${unitQuotas?.RS === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitQuotas?.RS || 0} units
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Assessment (AS)</span>
+                      <span className={`font-medium ${unitQuotas?.AS === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitQuotas?.AS || 0} units
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">
+                    At least one unit type must have available units to create a job.
+                  </p>
+                </div>
               </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex gap-3 justify-center shrink-0">
+              <button
+                onClick={() => setShowInsufficientUnitsModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowInsufficientUnitsModal(false);
+                  router.push('/subscription/usage-quotas');
+                }}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
+              >
+                Buy Units
+              </button>
             </div>
           </div>
         </div>

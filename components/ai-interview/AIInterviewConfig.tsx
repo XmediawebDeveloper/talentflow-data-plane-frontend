@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 
@@ -2170,8 +2171,17 @@ export default function AIInterviewConfig() {
   /* ─────────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
-      <div className="w-full">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: 'Configure Interview' },
+            ]}
+          />
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
@@ -2944,6 +2954,7 @@ export default function AIInterviewConfig() {
         </DialogContent>
       </Dialog>
 
-    </div>
+      </div>
+    </main>
   );
 }

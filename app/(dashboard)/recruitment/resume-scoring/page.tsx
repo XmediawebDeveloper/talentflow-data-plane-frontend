@@ -753,14 +753,15 @@ export default function ResumeScoringRoute() {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50">
         <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-        <span className="ml-3 text-sm text-gray-600">Loading job descriptions...</span>
+        <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading job descriptions...</span>
       </div>
     );
   }
 
   return (
     <FeatureGate feature="resume_scoring">
-      <ResumeScoringPage
+      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+        <ResumeScoringPage
         jobs={jobs}
         resumes={resumes}
         folders={folders}
@@ -777,6 +778,7 @@ export default function ResumeScoringRoute() {
         pendingScoringData={pendingScoringData}
         batchProgress={batchProgress}
       />
+      </div>
     </FeatureGate>
   );
 }

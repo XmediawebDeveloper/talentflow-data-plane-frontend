@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 interface SearchFilters {
@@ -825,7 +826,7 @@ export default function ResumeDatabasePage() {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50">
         <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-        <span className="ml-3 text-sm text-gray-600">Loading resume database...</span>
+        <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading resume database...</span>
       </div>
     );
   }
@@ -833,21 +834,23 @@ export default function ResumeDatabasePage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-4 md:p-8 overflow-x-hidden bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Internal Database' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-start gap-3">
-          <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
+          <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30 items-center justify-center shrink-0">
             <Search className="w-4 h-4 text-brand-blue" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Internal Resume Database</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Internal Resume Database</h1>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
                 {resumes.length.toLocaleString()} Resumes
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
               Search and filter resumes from your organization's database
             </p>
           </div>
@@ -868,7 +871,7 @@ export default function ResumeDatabasePage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
         <SearchFilterBarCompact
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
@@ -880,7 +883,7 @@ export default function ResumeDatabasePage() {
 
         {/* Loading indicator for filter changes */}
         {loading && (
-          <div className="flex items-center justify-center py-3 border-b border-gray-100 bg-brand-blue/5">
+          <div className="flex items-center justify-center py-3 border-b border-gray-100 dark:border-slate-700 bg-brand-blue/5 dark:bg-brand-blue/10">
             <Loader2 className="w-4 h-4 animate-spin text-brand-blue mr-2" />
             <span className="text-xs sm:text-sm text-brand-blue">Searching...</span>
           </div>
@@ -888,10 +891,10 @@ export default function ResumeDatabasePage() {
 
         {/* Search Results Summary */}
         {(appliedSearchQuery || activeFilterCount > 0) && !loading && (
-          <div className="px-4 py-3 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
+          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-brand-blue" />
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-gray-700 dark:text-slate-300">
                 Found <span className="font-semibold">{filteredAndSortedResumes.length.toLocaleString()}</span> matching resume{filteredAndSortedResumes.length !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
@@ -905,7 +908,7 @@ export default function ResumeDatabasePage() {
                   setAppliedSearchQuery('');
                   setFilters({});
                 }}
-                className="text-sm text-red-600 hover:text-red-700 hover:underline"
+                className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline"
               >
                 Clear all filters
               </button>
@@ -932,15 +935,15 @@ export default function ResumeDatabasePage() {
 
         {/* Pagination */}
         {calculatedTotalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-slate-50">
-            <div className="text-sm text-gray-600">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div className="text-sm text-gray-600 dark:text-slate-400">
               Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-md border border-gray-200 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -953,20 +956,20 @@ export default function ResumeDatabasePage() {
                     className={`px-3 py-1 rounded-md text-sm transition-all ${
                       currentPage === page
                         ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                        : 'border border-gray-200 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30'
+                        : 'border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30'
                     }`}
                   >
                     {page}
                   </button>
                 ) : (
-                  <span key={index} className="px-2 text-gray-500">...</span>
+                  <span key={index} className="px-2 text-gray-500 dark:text-slate-500">...</span>
                 )
               ))}
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === calculatedTotalPages}
-                className="p-2 rounded-md border border-gray-200 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -1124,6 +1127,7 @@ export default function ResumeDatabasePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
       </div>
     </main>
     </DndProvider>

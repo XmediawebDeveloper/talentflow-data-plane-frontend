@@ -602,14 +602,14 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto relative">
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
           <div className="min-w-0">
-            <h2 className="text-base sm:text-xl text-gray-900">Upload Resume</h2>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">
+            <h2 className="text-base sm:text-xl text-gray-900 dark:text-slate-50">Upload Resume</h2>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">
               {activeTab === 'single' ? 'Upload a single resume file' : 'Upload multiple resumes at once'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100 flex-shrink-0 ml-2"
+            className="p-1 text-gray-500 dark:text-slate-500 hover:text-gray-700 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 flex-shrink-0 ml-2"
            aria-label="Close">
             <X className="w-5 h-5" />
           </button>
@@ -622,41 +622,27 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
               </div>
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">Resume Uploaded Successfully!</h3>
-              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 px-2">
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-1.5 sm:mb-2">Resume Uploaded Successfully!</h3>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-4 sm:mb-6 px-2">
                 {uploadSuccess.candidateName} has been added to your resume database.
               </p>
 
-              <div className="space-y-2 sm:space-y-3 max-w-sm mx-auto">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 max-w-md mx-auto">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Done
+                </button>
                 <button
                   onClick={() => {
                     onScoreResume?.(uploadSuccess.resumeId, uploadSuccess.candidateName);
                     onClose();
                   }}
-                  className="w-full px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+                  className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                 >
-                  <Target className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Target className="w-4 h-4" />
                   Score Against a Job
-                </button>
-
-                {onViewResume && (
-                  <button
-                    onClick={() => {
-                      onViewResume(uploadSuccess.resumeId);
-                      onClose();
-                    }}
-                    className="w-full px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
-                  >
-                    <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                    View Resume Details
-                  </button>
-                )}
-
-                <button
-                  onClick={onClose}
-                  className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-gray-500 hover:text-gray-700 transition-colors text-sm sm:text-base"
-                >
-                  Done
                 </button>
               </div>
             </div>
@@ -668,15 +654,15 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-blue-800 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-0.5 sm:gap-2">
-                  <span className="text-xs sm:text-sm text-gray-900">Resume Upload Units (RU)</span>
+                  <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">Resume Upload Units (RU)</span>
                   {isCheckingQuota ? (
-                    <span className="text-xs sm:text-sm text-gray-500">Checking...</span>
+                    <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">Checking...</span>
                   ) : quotaInfo ? (
-                    <span className="text-xs sm:text-sm text-gray-700">
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                       {quotaInfo.total_remaining.toLocaleString()} / {quotaInfo.subscription.limit.toLocaleString()} available
                     </span>
                   ) : (
-                    <span className="text-xs sm:text-sm text-gray-500">Unable to check quota</span>
+                    <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">Unable to check quota</span>
                   )}
                 </div>
                 {quotaInfo && (
@@ -692,7 +678,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       />
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] sm:text-xs text-gray-700 font-medium">
+                      <span className="text-[10px] sm:text-xs text-gray-700 dark:text-slate-300 font-medium">
                         {quotaInfo.subscription.used.toLocaleString()} used
                       </span>
                       {(quotaInfo.status === 'APPROACHING' || quotaInfo.status === 'WARNING' || quotaInfo.status === 'CRITICAL') && (
@@ -712,46 +698,40 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             </div>
           </div>
 
-          <div className="flex gap-2 sm:gap-4 mb-4 sm:mb-6">
+          <div className="flex gap-2 mb-4 sm:mb-5">
             <button
               onClick={() => handleTabSwitch('single')}
               disabled={activeTab !== 'single' && selectedFiles.length > 0}
               title={activeTab !== 'single' && selectedFiles.length > 0 ? 'Clear selected files before switching to Single Upload' : undefined}
-              className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
+              className={`flex-1 px-3 py-2 rounded-lg border transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'single'
-                  ? 'border-blue-600 bg-blue-50 shadow-sm'
+                  ? 'border-brand-blue/30 bg-brand-blue/5 shadow-sm'
                   : selectedFiles.length > 0
-                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
               }`}
             >
-              <div className="text-center">
-                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'single' ? 'text-blue-600' : 'text-gray-400'}`} />
-                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${activeTab === 'single' ? 'text-blue-700' : 'text-gray-900'}`}>
-                  Single Upload
-                </div>
-                <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Upload one resume at a time</div>
-              </div>
+              <Upload className={`w-4 h-4 ${activeTab === 'single' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+              <span className={`text-sm font-medium ${activeTab === 'single' ? 'text-brand-blue' : 'text-gray-900 dark:text-slate-50'}`}>
+                Single Upload
+              </span>
             </button>
             <button
               onClick={() => handleTabSwitch('bulk')}
               disabled={activeTab !== 'bulk' && selectedFiles.length > 0}
               title={activeTab !== 'bulk' && selectedFiles.length > 0 ? 'Clear selected files before switching to Bulk Upload' : undefined}
-              className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
+              className={`flex-1 px-3 py-2 rounded-lg border transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'bulk'
-                  ? 'border-blue-600 bg-blue-50 shadow-sm'
+                  ? 'border-brand-blue/30 bg-brand-blue/5 shadow-sm'
                   : selectedFiles.length > 0
-                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
               }`}
             >
-              <div className="text-center">
-                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'bulk' ? 'text-blue-600' : 'text-gray-400'}`} />
-                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${activeTab === 'bulk' ? 'text-blue-700' : 'text-gray-900'}`}>
-                  Bulk Upload
-                </div>
-                <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Upload multiple resumes (up to 100)</div>
-              </div>
+              <Upload className={`w-4 h-4 ${activeTab === 'bulk' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+              <span className={`text-sm font-medium ${activeTab === 'bulk' ? 'text-brand-blue' : 'text-gray-900 dark:text-slate-50'}`}>
+                Bulk Upload
+              </span>
             </button>
           </div>
 
@@ -777,18 +757,18 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-lg p-6 sm:p-10 lg:p-12 text-center cursor-pointer transition-colors ${
               isDragging
-                ? 'border-gray-800 bg-gray-50'
-                : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                ? 'border-gray-800 bg-gray-50 dark:bg-slate-800/50'
+                : 'border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
           >
-            <Upload className={`w-10 h-10 sm:w-14 sm:h-14 lg:w-16 lg:h-16 mx-auto mb-3 sm:mb-4 ${isDragging ? 'text-gray-800' : 'text-gray-400'}`} />
-            <p className="text-sm sm:text-base text-gray-900 mb-1.5 sm:mb-2">
+            <Upload className={`w-10 h-10 sm:w-14 sm:h-14 lg:w-16 lg:h-16 mx-auto mb-3 sm:mb-4 ${isDragging ? 'text-gray-800' : 'text-gray-400 dark:text-slate-500'}`} />
+            <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1.5 sm:mb-2">
               {activeTab === 'single' ? 'Drop your resume here or click to browse' : 'Drop multiple resumes here or click to browse'}
             </p>
-            <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-3 sm:mb-4">
               Supported formats: PDF, DOCX, DOC
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-6 text-[10px] sm:text-xs text-gray-500">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-6 text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">
               <span className="flex items-center gap-1">
                 <FileText className="w-3 h-3" />
                 Max file size: {maxFileSizeMB} MB
@@ -808,7 +788,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           {selectedFiles.length > 0 && (
             <div className="mt-4 sm:mt-6">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
-                <span className="text-xs sm:text-sm text-gray-700">
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
                 </span>
                 <div className="flex items-center gap-1 sm:gap-2">
@@ -819,7 +799,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                         e.stopPropagation();
                         fileInputRef.current?.click();
                       }}
-                      className="text-xs sm:text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+                      className="text-xs sm:text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900 flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                     >
                       <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                       <span className="hidden sm:inline">Add More Files</span>
@@ -846,15 +826,15 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   >
                     <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs sm:text-sm text-gray-900 truncate">{file.name}</div>
-                      <div className="text-[10px] sm:text-xs text-gray-500">{formatFileSize(file.size)}</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">{file.name}</div>
+                      <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">{formatFileSize(file.size)}</div>
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleRemoveFile(index);
                       }}
-                      className="p-1 text-gray-500 hover:text-red-600 rounded flex-shrink-0"
+                      className="p-1 text-gray-500 dark:text-slate-500 hover:text-red-600 rounded flex-shrink-0"
                     >
                       <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
@@ -894,7 +874,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     )}
                     <div className="flex-1 min-w-0">
                       {error.fileName && (
-                        <div className="text-xs sm:text-sm text-gray-900 truncate mb-1">{error.fileName}</div>
+                        <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate mb-1">{error.fileName}</div>
                       )}
                       <div className={`text-xs sm:text-sm whitespace-pre-line ${
                         error.type === 'virus' ? 'text-red-800' :
@@ -906,15 +886,15 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       </div>
                       {/* Show existing resume details for duplicates */}
                       {error.type === 'duplicate' && error.existingResume && (
-                        <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-white rounded-lg border border-amber-200">
-                          <div className="text-[10px] sm:text-xs text-gray-500 mb-1">Existing Resume</div>
+                        <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-200">
+                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mb-1">Existing Resume</div>
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-xs sm:text-sm font-medium text-gray-900 truncate">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                                 {error.existingResume.candidateName}
                               </div>
                               {error.existingResume.uploadedAt && (
-                                <div className="text-[10px] sm:text-xs text-gray-500">
+                                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">
                                   Uploaded: {formatISTDate(error.existingResume.uploadedAt)}
                                 </div>
                               )}
@@ -941,7 +921,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           )}
 
           <div className="mt-4 sm:mt-6">
-            <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+            <label className="block text-xs sm:text-sm text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">
               Select Folder (Optional)
             </label>
 
@@ -950,7 +930,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 <select
                   value={selectedFolder || rootFolder?.id || ''}
                   onChange={(e) => setSelectedFolder(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm sm:text-base text-black"
+                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm sm:text-base text-black"
                 >
                   {/* Show Root folder first as default */}
                   {rootFolder && (
@@ -978,7 +958,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 
                 <button
                   onClick={() => setShowCreateFolder(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm border-2 border-dashed border-gray-300 text-gray-700 rounded-md hover:border-gray-700 hover:text-gray-800 hover:bg-gray-50 transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs border border-dashed border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-md hover:border-gray-700 hover:text-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all"
                 >
                   <FolderPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Create New Folder
@@ -986,13 +966,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </div>
             ) : (
               <div className="space-y-2 sm:space-y-3">
-                <div className="p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
                   <div className="flex items-start gap-2 sm:gap-3">
-                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <FolderPlus className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
+                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+                      <FolderPlus className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+                      <label className="block text-xs sm:text-sm text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                         New Folder Name
                       </label>
                       <input
@@ -1009,9 +989,9 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                         }}
                         placeholder="e.g., Senior Developers, Frontend Team..."
                         autoFocus
-                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm"
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm"
                       />
-                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Press Enter to create, Esc to cancel</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">Press Enter to create, Esc to cancel</p>
                     </div>
                   </div>
 
@@ -1028,7 +1008,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                         setShowCreateFolder(false);
                         setNewFolderName('');
                       }}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-xs sm:text-sm"
+                      className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm"
                     >
                       Cancel
                     </button>
@@ -1065,17 +1045,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200">
           <button
             onClick={onClose}
-            className="px-4 sm:px-6 py-2 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-black"
+            className="px-4 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-black"
           >
             Cancel
           </button>
           <button
             onClick={handleValidateAndUpload}
             disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXCEEDED') || selectedFiles.length === 0}
-            className={`px-4 sm:px-8 py-2 sm:py-2.5 rounded-md transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm ${
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm ${
               selectedFiles.length === 0 && !isUploading && !isCheckingQuota
                 ? 'bg-gray-400 text-white hover:bg-gray-500 cursor-pointer'
-                : 'bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed'
+                : 'bg-brand-blue text-white hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
             }`}
           >
             {isCheckingQuota ? (

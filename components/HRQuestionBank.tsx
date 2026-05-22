@@ -6,6 +6,7 @@ import api from '@/lib/services/api';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -357,7 +358,17 @@ export default function HRQuestionBank() {
   };
 
   return (
-    <div className="space-y-5">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'HR Question Bank' },
+            ]}
+          />
+          <div className="space-y-5">
       {!canViewHRQuestionBank ? (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
           You do not have permission to view the HR Question Bank.
@@ -652,6 +663,9 @@ export default function HRQuestionBank() {
       />
         </>
       )}
-    </div>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }

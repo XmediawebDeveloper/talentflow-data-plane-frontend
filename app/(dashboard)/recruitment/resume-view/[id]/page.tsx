@@ -203,6 +203,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function ResumeViewPage() {
   const params = useParams();
@@ -762,25 +763,27 @@ Best regards`);
 
   return (
     <FeatureGate feature="resume_upload">
-    <div className="flex-1 bg-slate-50 min-h-screen">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Internal Database', href: '/recruitment/resume-database' },
+              { label: 'Resume Details' },
+            ]}
+          />
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0">
-            <button
-              onClick={() => router.back()}
-              className="text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors flex-shrink-0"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 tracking-tight truncate">Resume Details</h1>
-                <p className="text-xs sm:text-sm text-gray-600 truncate">{resume.name}</p>
-              </div>
+      <div className="border-b border-gray-100 py-3 sm:py-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 tracking-tight truncate">Resume Details</h1>
+              <p className="text-xs sm:text-sm text-gray-600 truncate">{resume.name}</p>
             </div>
           </div>
           {navList.length > 0 && navIndex >= 0 && (
@@ -810,8 +813,8 @@ Best regards`);
       </div>
 
       {/* Action Bar */}
-      <div className="bg-white border-b border-gray-100 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 sticky top-0 z-10 overflow-x-auto scrollbar-hide shadow-sm shadow-brand-blue/5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 min-w-max sm:min-w-0">
+      <div className="border-b border-gray-100 py-2.5 sm:py-3 mb-4 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center justify-between gap-3 min-w-max sm:min-w-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
@@ -859,8 +862,8 @@ Best regards`);
       </div>
 
       {/* Content */}
-      <div className="p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
+      <div>
+        <div className="space-y-6">
 
           {/* Personal Info Card */}
           <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
@@ -2245,7 +2248,9 @@ Best regards`);
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </div>
+    </main>
     </FeatureGate>
   );
 }

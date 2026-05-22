@@ -117,9 +117,9 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
   return (
     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
         {/* Header */}
-        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 bg-gradient-to-r from-brand-cyan/[0.05] via-white to-brand-blue/[0.04] flex items-start sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 bg-gradient-to-r from-brand-cyan/[0.05] via-white to-brand-blue/[0.04] flex items-start sm:items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-md shadow-brand-cyan/25 ring-1 ring-white/20 flex-shrink-0">
               <Network className="w-5 h-5 text-white" />
@@ -449,7 +449,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 shrink-0">
           <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue">
               {(matrix?.features || Object.keys(matrix?.feature_names || {})).length || 0} features

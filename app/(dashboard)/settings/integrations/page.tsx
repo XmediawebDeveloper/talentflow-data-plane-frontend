@@ -4,6 +4,7 @@ import { Link as LinkIcon, Plus, Settings, Trash2, Loader2, Sparkles } from 'luc
 import { useState, useEffect } from 'react';
 import { integrationsApi, Integration } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -69,9 +70,9 @@ export default function IntegrationsPage() {
   if (isLoading) {
     return (
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 flex items-center justify-center">
-        <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8 flex flex-col items-center gap-3 sm:gap-4">
+        <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8 flex flex-col items-center gap-3 sm:gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="text-sm font-semibold text-gray-600">Loading integrations...</p>
+          <p className="text-sm font-semibold text-gray-600 dark:text-slate-400">Loading integrations...</p>
         </div>
       </main>
     );
@@ -79,9 +80,12 @@ export default function IntegrationsPage() {
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Integrations' }]} />
+
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+        <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
           <div className="relative flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <LinkIcon className="h-5 w-5 text-brand-blue" />
@@ -91,8 +95,8 @@ export default function IntegrationsPage() {
                 <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                 Connected apps
               </div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900">Integrations</h1>
-              <p className="mt-2 max-w-2xl text-sm text-gray-600 sm:text-base">Connect TalentFlow with your favorite tools and services.</p>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Integrations</h1>
+              <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Connect TalentFlow with your favorite tools and services.</p>
             </div>
           </div>
         </section>
@@ -106,7 +110,7 @@ export default function IntegrationsPage() {
               className={`inline-flex items-center justify-center h-9 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                 filter === category
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                  : 'bg-white text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200 hover:border-brand-blue/30'
+                  : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
               }`}
             >
               {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -117,18 +121,18 @@ export default function IntegrationsPage() {
         {/* Integrations Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           {filteredIntegrations.length === 0 ? (
-            <div className="md:col-span-2 rounded-xl border border-gray-100 bg-white p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="md:col-span-2 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <LinkIcon className="w-6 h-6 text-brand-blue" />
               </span>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">No integrations found</h3>
-              <p className="text-sm text-gray-500">No integrations available in this category.</p>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">No integrations found</h3>
+              <p className="text-sm text-gray-500 dark:text-slate-500">No integrations available in this category.</p>
             </div>
           ) : (
             filteredIntegrations.map((integration) => (
               <div
                 key={integration.id}
-                className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5 lg:p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] hover:shadow-md hover:border-brand-blue/30 transition-all"
+                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-5 lg:p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:shadow-md hover:border-brand-blue/30 transition-all"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-4 min-w-0 flex-1">
@@ -137,14 +141,14 @@ export default function IntegrationsPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-gray-900">{integration.name}</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-slate-50">{integration.name}</h3>
                         {integration.is_connected && (
                           <span className="px-2 py-0.5 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-semibold">
                             Connected
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">{integration.description}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">{integration.description}</p>
                       {integration.category && (
                         <span className="inline-block mt-2 px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-full text-xs font-semibold">
                           {integration.category}
@@ -155,7 +159,7 @@ export default function IntegrationsPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {integration.is_connected ? (
                       <>
-                        <button className="p-2 rounded-lg text-gray-500 transition hover:bg-brand-blue/5 hover:text-brand-blue" aria-label="Settings" title="Settings">
+                        <button className="p-2 rounded-lg text-gray-500 dark:text-slate-500 transition hover:bg-brand-blue/5 hover:text-brand-blue" aria-label="Settings" title="Settings">
                           <Settings className="w-4 h-4" />
                         </button>
                         <button
@@ -193,15 +197,16 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Request Integration */}
-        <div className="mt-6 sm:mt-8 rounded-xl border border-gray-100 bg-white p-5 sm:p-6 text-center ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <h3 className="text-base font-semibold text-gray-900 mb-1.5">Need a different integration?</h3>
-          <p className="text-xs sm:text-sm text-gray-500 mb-4">
+        <div className="mt-6 sm:mt-8 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 sm:p-6 text-center ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1.5">Need a different integration?</h3>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-4">
             Let us know what tools you&apos;d like to connect with TalentFlow.
           </p>
-          <button className="inline-flex items-center justify-center px-4 py-2 bg-white border border-gray-200 text-sm text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-semibold rounded-lg transition-colors">
+          <button className="inline-flex items-center justify-center px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-semibold rounded-lg transition-colors">
             Request Integration
           </button>
         </div>
+      </div>
       </div>
     </main>
   );

@@ -55,22 +55,22 @@ export default function AssignAssessmentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
               <ClipboardCheck className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Assign Assessment</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Send assessment invitations to candidates</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Assign Assessment</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Send assessment invitations to candidates</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
+            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -80,14 +80,14 @@ export default function AssignAssessmentModal({
         {/* Content */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* Selected Resumes Summary */}
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
             <div className="flex items-start gap-2 sm:gap-3">
-              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-800 mb-1">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
                 </h3>
-                <div className="text-xs text-gray-900 space-y-1">
+                <div className="text-xs text-gray-900 dark:text-slate-50 space-y-1">
                   {resumes.slice(0, 3).map(resume => (
                     <div key={resume.id} className="flex items-center gap-2 min-w-0">
                       <CheckCircle className="w-3 h-3 flex-shrink-0" />
@@ -95,7 +95,7 @@ export default function AssignAssessmentModal({
                     </div>
                   ))}
                   {resumes.length > 3 && (
-                    <div className="text-gray-800 font-medium italic">
+                    <div className="text-gray-800 dark:text-slate-100 font-medium italic">
                       +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
                     </div>
                   )}
@@ -106,7 +106,7 @@ export default function AssignAssessmentModal({
 
           {/* Assessment Selection */}
           <div className="mb-4 sm:mb-6">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">
               Select Assessment to Assign
             </label>
 
@@ -118,18 +118,18 @@ export default function AssignAssessmentModal({
                   className={`w-full text-left p-3 sm:p-4 rounded-lg border-2 transition-all ${
                     selectedAssessment === assessment.id
                       ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                      : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
+                      : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                   }`}
                 >
                   <div className="flex items-start gap-2 sm:gap-3">
                     <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      selectedAssessment === assessment.id ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 text-gray-700'
+                      selectedAssessment === assessment.id ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'
                     }`}>
                       <ClipboardCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{assessment.title}</h4>
-                      <div className="flex items-center gap-2 sm:gap-4 text-xs text-gray-700 mb-2 flex-wrap">
+                      <h4 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">{assessment.title}</h4>
+                      <div className="flex items-center gap-2 sm:gap-4 text-xs text-gray-700 dark:text-slate-300 mb-2 flex-wrap">
                         <span className="flex items-center gap-1">
                           <Target className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">{assessment.linkedJD}</span>
@@ -140,10 +140,10 @@ export default function AssignAssessmentModal({
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 sm:gap-2 text-xs flex-wrap">
-                        <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-900 rounded font-medium">
+                        <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50 rounded font-medium">
                           {assessment.sections} Sections
                         </span>
-                        <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-medium">
+                        <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 rounded font-medium">
                           {assessment.questions} Questions
                         </span>
                         <span className={`px-1.5 sm:px-2 py-0.5 rounded font-medium ${
@@ -164,8 +164,8 @@ export default function AssignAssessmentModal({
             </div>
 
             {assessments.filter(assessment => assessment.status === 'Active' && !assessment.is_archived).length === 0 && (
-              <div className="text-center py-6 sm:py-8 text-gray-500">
-                <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400" />
+              <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-slate-500">
+                <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
                 <p className="text-xs sm:text-sm font-medium">No active assessments available.</p>
                 <p className="text-xs mt-1">Please create and publish an assessment first.</p>
               </div>
@@ -178,8 +178,8 @@ export default function AssignAssessmentModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2">What Happens Next?</h4>
-                  <ul className="text-xs text-gray-700 space-y-1">
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">What Happens Next?</h4>
+                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li className="flex items-start gap-2">
                       <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
                       <span>Email invitations will be sent to all selected candidates</span>
@@ -204,10 +204,10 @@ export default function AssignAssessmentModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+        <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
           <button
             onClick={onClose}
-            className="order-2 sm:order-1 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+            className="order-2 sm:order-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
           >
             Cancel
           </button>

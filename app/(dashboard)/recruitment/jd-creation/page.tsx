@@ -103,36 +103,36 @@ function AccessBlockedError({
 
   return (
     <div className="flex-1 flex items-center justify-center bg-slate-50 p-4 sm:p-8">
-      <div className="max-w-md w-full bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 p-5 sm:p-8 text-center">
+      <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-2xl shadow-brand-blue/10 p-5 sm:p-8 text-center">
         <div className="flex justify-center mb-4 sm:mb-6">
           {getErrorIcon()}
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3 tracking-tight">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 mb-2 sm:mb-3 tracking-tight">
           {getErrorTitle()}
         </h2>
-        <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-4 sm:mb-6">
           {errorMessage}
         </p>
 
         {/* Show unit details if insufficient units */}
         {errorCode === 'INSUFFICIENT_UNITS' && accessCheck?.units && (
-          <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
-            <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Unit Availability:</p>
-            <div className="space-y-1 text-sm text-gray-600">
-              <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 font-medium' : ''}>
+          <div className="bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:ring-brand-blue/30 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
+            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
+            <div className="space-y-1 text-sm text-gray-600 dark:text-slate-300">
+              <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Resume Upload: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
               </p>
-              <p className={!accessCheck.units.RS?.sufficient ? 'text-red-600 font-medium' : ''}>
+              <p className={!accessCheck.units.RS?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Resume Scoring: {accessCheck.units.RS?.available || 0} available {!accessCheck.units.RS?.sufficient && '❌'}
               </p>
-              <p className={!accessCheck.units.AS?.sufficient ? 'text-red-600 font-medium' : ''}>
+              <p className={!accessCheck.units.AS?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Assessment: {accessCheck.units.AS?.available || 0} available {!accessCheck.units.AS?.sufficient && '❌'}
               </p>
-              <p className={!accessCheck.units.AIU?.sufficient ? 'text-red-600 font-medium' : ''}>
+              <p className={!accessCheck.units.AIU?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 AI Interview: {accessCheck.units.AIU?.available || 0} available {!accessCheck.units.AIU?.sufficient && '❌'}
               </p>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
               Required unit types shown above, including AI Interview, are unavailable. Please purchase units to continue.
             </p>
           </div>
@@ -140,9 +140,9 @@ function AccessBlockedError({
 
         {/* Show job quota details if exceeded */}
         {errorCode === 'JOB_QUOTA_EXCEEDED' && accessCheck?.job_quota && (
-          <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm font-medium text-gray-700 mb-2">Job Quota:</p>
-            <div className="text-sm text-gray-600">
+          <div className="bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:ring-brand-blue/30 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Job Quota:</p>
+            <div className="text-sm text-gray-600 dark:text-slate-300">
               <p>Used: {accessCheck.job_quota.used} / {accessCheck.job_quota.is_unlimited ? '∞' : accessCheck.job_quota.limit}</p>
             </div>
           </div>
@@ -152,7 +152,7 @@ function AccessBlockedError({
           {getActionButton()}
           <button
             onClick={onBack}
-            className="px-4 sm:px-5 py-2 sm:py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors text-sm"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors text-sm"
           >
             Go Back
           </button>
@@ -393,7 +393,7 @@ function JDCreationContent() {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <span className="ml-3 text-gray-600">Checking access...</span>
+        <span className="ml-3 text-gray-600 dark:text-slate-400">Checking access...</span>
       </div>
     );
   }
@@ -412,13 +412,18 @@ function JDCreationContent() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="h-[calc(100vh-64px)] overflow-hidden">
+      <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-slate-50">
         <JDCreation
           onBack={handleViewAllJobs}
           onPublish={handleJDPublish}
           editingJD={memoizedEditingJD}
           isJDInUse={isJDInUse}
           jdUsageMessage={jdUsageMessage}
+          breadcrumbItems={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+            { label: editingJD ? 'Edit Job Description' : 'Create Job Description' },
+          ]}
         />
       </div>
     </DndProvider>
@@ -430,7 +435,7 @@ export default function JDCreationPage() {
     <Suspense fallback={
       <div className="flex-1 flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <span className="ml-3 text-gray-600">Loading...</span>
+        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
       </div>
     }>
       <JDCreationContent />

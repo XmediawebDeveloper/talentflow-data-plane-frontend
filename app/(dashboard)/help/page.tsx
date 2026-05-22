@@ -24,6 +24,7 @@ import {
   ArrowRight,
   Zap,
 } from 'lucide-react';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Step component for instructions
 const Step = ({ number, title, children }: { number: number; title: string; children: React.ReactNode }) => (
@@ -1141,7 +1142,9 @@ export default function HelpCenterPage() {
   if (selectedArticle) {
     return (
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-5 sm:py-8">
+        <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center', href: '/help' }, { label: selectedArticle.title }]} />
           {/* Back button */}
           <button
             onClick={() => router.push('/help')}
@@ -1203,6 +1206,7 @@ export default function HelpCenterPage() {
             </div>
           </div>
         </div>
+        </div>
       </main>
     );
   }
@@ -1210,7 +1214,9 @@ export default function HelpCenterPage() {
   // Help center home
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center' }]} />
         {/* Header */}
         <div className="text-center mb-6 sm:mb-10">
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3 sm:mb-4">
@@ -1351,6 +1357,7 @@ export default function HelpCenterPage() {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </main>
   );

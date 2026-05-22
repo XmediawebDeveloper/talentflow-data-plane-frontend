@@ -68,22 +68,22 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0">
             <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
               <Sparkles className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">AI Talent Match</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Select a job to find matching candidates</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">AI Talent Match</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select a job to find matching candidates</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
+            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -93,27 +93,27 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Selected Candidates Summary */}
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
             <div className="flex items-start gap-2 sm:gap-3">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="text-xs sm:text-sm text-gray-800 mb-2">
+                <h3 className="text-xs sm:text-sm text-gray-800 dark:text-slate-100 mb-2">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected for AI Matching
                 </h3>
                 <div className="space-y-2">
                   {resumes.slice(0, 3).map(resume => (
-                    <div key={resume.id} className="flex items-center gap-3 p-2 bg-white rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-900">
+                    <div key={resume.id} className="flex items-center gap-3 p-2 bg-white dark:bg-slate-900 rounded-lg">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-900 dark:text-slate-50">
                         {resume.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 truncate">{resume.name}</div>
-                        <div className="text-xs text-gray-500 truncate">{resume.title}</div>
+                        <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{resume.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{resume.title}</div>
                       </div>
                     </div>
                   ))}
                   {resumes.length > 3 && (
-                    <div className="text-xs text-gray-900 pl-2">
+                    <div className="text-xs text-gray-900 dark:text-slate-50 pl-2">
                       +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
                     </div>
                   )}
@@ -124,15 +124,15 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
 
           {/* Job Search */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-700 mb-2">Search Jobs for AI Matching</label>
+            <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Search Jobs for AI Matching</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Search by job title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
               />
             </div>
           </div>
@@ -140,13 +140,13 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
           {/* Job Selection */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm text-gray-700">
+              <label className="text-sm text-gray-700 dark:text-slate-300">
                 Select Job Opening{selectedJob ? ' (1 selected)' : ''}
               </label>
               {selectedJob && (
                 <button
                   onClick={() => setSelectedJob(null)}
-                  className="text-xs text-gray-800 hover:text-gray-900"
+                  className="text-xs text-gray-800 dark:text-slate-100 hover:text-gray-900"
                 >
                   Clear Selection
                 </button>
@@ -166,7 +166,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                       draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
                       published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
                       Published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-                      archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
+                      archived: { bg: 'bg-gray-50 dark:bg-slate-800/50', text: 'text-gray-600 dark:text-slate-400', dot: 'bg-gray-400' },
                       disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
                     };
                     const config = configs[status] || configs.draft;
@@ -194,10 +194,10 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                   return (
                     <label
                       key={job.id}
-                      className={`block bg-white rounded-lg border-2 p-3 sm:p-4 cursor-pointer transition-all ${
+                      className={`block bg-white dark:bg-slate-900 rounded-lg border-2 p-3 sm:p-4 cursor-pointer transition-all ${
                         isSelected
                           ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                          : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
+                          : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                       }`}
                     >
                       <div className="flex items-start gap-2 sm:gap-4">
@@ -206,7 +206,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => setSelectedJob(isSelected ? null : job.id)}
-                          className="w-4 h-4 mt-1 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40 flex-shrink-0"
+                          className="w-4 h-4 mt-1 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
                           {/* Row 1: Job ID, Title, Status, Creation Method */}
@@ -218,19 +218,19 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                               </span>
                             )}
                             {/* Title */}
-                            <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">{job.title}</h3>
+                            <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{job.title}</h3>
                             {/* Status Badge */}
                             {getStatusBadge(job.status)}
                             {/* Creation Method Badge */}
                             {(job as any).creation_method && getCreationMethodBadge((job as any).creation_method)}
                             {/* Selected indicator */}
                             {isSelected && (
-                              <CheckCircle className="w-5 h-5 text-gray-800 ml-auto flex-shrink-0" />
+                              <CheckCircle className="w-5 h-5 text-gray-800 dark:text-slate-100 ml-auto flex-shrink-0" />
                             )}
                           </div>
 
                           {/* Row 2: Industry, Location, Employment Type, Work Mode */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-2 flex-wrap">
                             {/* Industry/Department */}
                             {((job as any).industry_type || (job as any).department) && (
                               <span className="flex items-center gap-1">
@@ -262,7 +262,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                           </div>
 
                           {/* Row 3: Posted Date, Posted By, Last Updated */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 mb-2 sm:mb-3 flex-wrap">
+                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-2 sm:mb-3 flex-wrap">
                             {/* Posted Date */}
                             {((job as any).postedDate || (job as any).published_at) && (
                               <span className="flex items-center gap-1">
@@ -288,8 +288,8 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
 
                           {/* Row 4: Applicants */}
                           <div className="flex items-center gap-2 text-xs sm:text-sm">
-                            <Users className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-600">{job.applicants || (job as any).applicants_count || 0} applicants</span>
+                            <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            <span className="text-gray-600 dark:text-slate-400">{job.applicants || (job as any).applicants_count || 0} applicants</span>
                           </div>
                         </div>
                       </div>
@@ -298,8 +298,8 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 sm:py-12 text-gray-500">
-                <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400" />
+              <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
+                <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
                 <p className="text-xs sm:text-sm">
                   {searchQuery ? 'No jobs found matching your search' : 'No active jobs available'}
                 </p>
@@ -313,8 +313,8 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
               <div className="flex items-start gap-2 sm:gap-3">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-sm text-gray-900 mb-1">Next Steps</h4>
-                  <ul className="text-xs text-gray-700 space-y-1">
+                  <h4 className="text-sm text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
+                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li>• You'll be taken to the AI Talent Match page</li>
                     <li>• AI will analyze selected resumes against the job requirements</li>
                     <li>• Get detailed match scores and recommendations</li>
@@ -327,8 +327,8 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50">
-          <div className="text-xs sm:text-sm text-gray-600">
+        <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
+          <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
             {!selectedJob && 'Select a job to continue'}
             {selectedJob && (
               <span className="flex items-center gap-1.5">
@@ -341,7 +341,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
             <button
               onClick={onClose}
               disabled={isMatching}
-              className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

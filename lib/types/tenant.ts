@@ -107,6 +107,39 @@ export interface Permission {
   canBulkOperations?: boolean;
   canExport?: boolean;
   canApiAccess?: boolean;
+
+  // ---------------------------------------------------------------------------
+  // Additional camelCase fields the UI relies on (User/Resume management).
+  // ---------------------------------------------------------------------------
+  canCreateUsers?: boolean;
+  canUpdateUsers?: boolean;
+  canDeleteUsers?: boolean;
+  canManageResumes?: boolean;
+
+  // ---------------------------------------------------------------------------
+  // Deprecated typo aliases (lowercase 'Jd' instead of canonical 'JD').
+  // Kept optional so existing call sites compile; new code MUST use canonical
+  // canDeleteJD / canUpdateJD / canArchiveJD / canDisableJD instead.
+  // ---------------------------------------------------------------------------
+  /** @deprecated use canDeleteJD */
+  canDeleteJd?: boolean;
+  /** @deprecated use canUpdateJD */
+  canUpdateJd?: boolean;
+  /** @deprecated use canArchiveJD */
+  canArchiveJd?: boolean;
+  /** @deprecated use canDisableJD */
+  canDisableJd?: boolean;
+
+  // ---------------------------------------------------------------------------
+  // Deprecated snake_case aliases — used by legacy UI code that reads the
+  // backend permission shape directly. Prefer the camelCase fields above.
+  // ---------------------------------------------------------------------------
+  /** @deprecated use canManageUsers */
+  can_manage_users?: boolean;
+  /** @deprecated use canManageSettings */
+  can_manage_settings?: boolean;
+  /** @deprecated use canViewAnalytics */
+  can_view_analytics?: boolean;
 }
 
 // RBAC06: Feature flags for user-level assignment
@@ -190,6 +223,13 @@ export interface User {
   suspendedAt?: string;
   tenantSubdomain?: string;
   tenantAdminEmail?: string;
+  // Permission codes from the backend (RBAC string-code form) — populated by
+  // the login response alongside the structured Permission map.
+  permission_codes?: string[];
+  // Pending payment hand-off: when a checkout was started but not completed,
+  // backend surfaces a flag and the redirect URL to resume the flow.
+  pending_payment?: boolean;
+  pending_payment_redirect?: string;
 }
 
 export interface PlanLimits {

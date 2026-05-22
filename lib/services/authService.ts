@@ -144,6 +144,31 @@ export interface User {
     can_publish_ai_interviews?: boolean;
     can_archive_ai_interviews?: boolean;
     can_delete_ai_interviews?: boolean;
+    // Granular billing section view permissions
+    can_view_current_plan?: boolean;
+    can_view_payment_methods?: boolean;
+    can_view_billing_history?: boolean;
+    can_view_refund_history?: boolean;
+    can_view_dispute_history?: boolean;
+    // Granular settings section view permissions
+    can_view_general_settings?: boolean;
+    can_view_permissions_roles?: boolean;
+    can_view_roles?: boolean;
+    can_view_api_management?: boolean;
+    can_view_branding?: boolean;
+    can_view_security_settings?: boolean;
+    can_view_support?: boolean;
+    // Granular billing action permissions
+    can_upgrade_plan?: boolean;
+    can_export_usage?: boolean;
+    can_add_payment_method?: boolean;
+    can_edit_payment_method?: boolean;
+    can_delete_payment_method?: boolean;
+    // Granular settings action permissions
+    can_manage_permissions_roles?: boolean;
+    can_manage_api_management?: boolean;
+    can_manage_branding?: boolean;
+    can_manage_security_settings?: boolean;
   };
   // RBAC06: Feature flags
   feature_flags?: FeatureFlags;

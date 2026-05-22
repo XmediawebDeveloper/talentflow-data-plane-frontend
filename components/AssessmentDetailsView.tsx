@@ -9,6 +9,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -444,69 +445,71 @@ export default function AssessmentDetailsView({
   };
 
   return (
-    <div className="flex-1 bg-slate-50 overflow-y-auto">
+    <div className="flex-1 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+      {/* Breadcrumb */}
+      <div className="px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-5">
+        <PageBreadcrumb
+          items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Assessments', href: '/recruitment/assessments' },
+            { label: assessment.short_id || stripVersionFromTitle(assessment.title) || 'Assessment Details' },
+          ]}
+        />
+      </div>
+
       {/* Sticky Header */}
-      <div className="bg-brand-blue border-b-2 border-brand-blue/50 sticky top-0 z-20 shadow-lg shadow-brand-blue/20">
-        <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white transition-colors text-sm sm:text-base"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              Back to Assessments
-            </button>
-            {totalCount != null && totalCount > 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onPrev}
-                  disabled={!onPrev || currentIndex === 0}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 ring-1 ring-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </button>
-                <span className="text-sm text-white/80 font-medium px-1">
-                  {(currentIndex ?? 0) + 1} / {totalCount}
-                </span>
-                <button
-                  onClick={onNext}
-                  disabled={!onNext || currentIndex === totalCount - 1}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 ring-1 ring-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
+      <div className="sticky top-0 z-20">
+        <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          {totalCount != null && totalCount > 0 && (
+            <div className="flex items-center justify-end gap-2 mb-3 sm:mb-4">
+              <button
+                onClick={onPrev}
+                disabled={!onPrev || currentIndex === 0}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-sm text-gray-500 dark:text-slate-400 font-medium px-1">
+                {(currentIndex ?? 0) + 1} / {totalCount}
+              </span>
+              <button
+                onClick={onNext}
+                disabled={!onNext || currentIndex === totalCount - 1}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/20 backdrop-blur-sm rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 {/* Line 1: AS-022 SQL Developer - Assessment V1  Active AI-Generated */}
                 <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2 flex-wrap">
-                  <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-white/95 text-brand-blue rounded text-xs sm:text-sm font-bold ring-1 ring-white/20 shadow-sm">
+                  <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-brand-blue text-white rounded text-xs sm:text-sm font-bold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     {assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}
                   </span>
-                  <h1 className="text-sm sm:text-base lg:text-xl text-white font-semibold truncate tracking-tight">
+                  <h1 className="text-sm sm:text-base lg:text-xl text-gray-900 dark:text-slate-50 font-semibold truncate tracking-tight">
                     {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
                   </h1>
-                  <VersionBadge version={assessment.version} size="md" variant="primary" />
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  <VersionBadge version={assessment.version} size="md" variant="secondary" />
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ring-1 ${
                     assessment.status === 'Active'
-                      ? 'bg-green-100/90 text-green-800 ring-1 ring-green-200/50'
+                      ? 'bg-green-100 text-green-700 ring-green-200'
                       : assessment.status === 'Draft'
-                      ? 'bg-brand-orange/20 text-white ring-1 ring-brand-orange/40'
-                      : 'bg-white/15 text-white ring-1 ring-white/20'
+                      ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                      : 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700'
                   }`}>
                     {assessment.status}
                   </span>
                   {sections.length > 0 && (
-                    <span className="px-2 py-1 bg-brand-cyan/25 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 ring-1 ring-white/20">
+                    <span className="px-2 py-1 bg-brand-cyan/10 text-brand-cyan rounded text-xs flex items-center gap-1 ring-1 ring-brand-cyan/20">
                       <Sparkles className="w-3 h-3" />
                       AI-Generated
                     </span>
@@ -515,19 +518,19 @@ export default function AssessmentDetailsView({
 
                 {/* Line 2: Linked to: JD-025 - SQL Developer v2 */}
                 {assessment.jd_short_id && (
-                  <div className="text-sm text-gray-100 mb-2">
+                  <div className="text-sm text-gray-700 dark:text-slate-300 mb-2">
                     <span className="font-medium">Linked to: {assessment.jd_short_id}</span>
                     {assessment.jd_title && (
                       <span> - {assessment.jd_title}</span>
                     )}
                     {assessment.jd_version && (
-                      <span className="ml-1 text-gray-300">v{assessment.jd_version}</span>
+                      <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
                     )}
                   </div>
                 )}
 
                 {/* Line 3: 30 min 3 sections 1 candidates Created 9 Feb 2026 at 06:46 pm Last Updated date_time */}
-                <div className="text-xs sm:text-sm text-gray-100 flex items-center gap-2 sm:gap-3 lg:gap-4 flex-wrap">
+                <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 flex items-center gap-2 sm:gap-3 lg:gap-4 flex-wrap">
                   <span>{formattedDuration}</span>
                   <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
                   <span>{assessment.candidates || 0} candidates</span>
@@ -571,10 +574,10 @@ export default function AssessmentDetailsView({
                     onClick={disabled ? undefined : onShare}
                     disabled={disabled}
                     title={blockedReason}
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/20 shadow-sm shadow-brand-blue/10 transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
                       disabled
-                        ? 'bg-white/60 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-brand-blue hover:bg-brand-blue/5'
+                        ? 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                        : 'bg-brand-blue hover:bg-brand-blue-2 text-white'
                     }`}
                   >
                     <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -588,12 +591,12 @@ export default function AssessmentDetailsView({
       </div>
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 sticky top-[120px] sm:top-[148px] lg:top-[168px] z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-[120px] sm:top-[148px] lg:top-[168px] z-10">
         <div className="px-3 sm:px-5 lg:px-8">
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
                 activeTab === 'overview'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -603,7 +606,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('activity')}
-              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
                 activeTab === 'activity'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -613,7 +616,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('versions')}
-              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
                 activeTab === 'versions'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -623,7 +626,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('info')}
-              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
                 activeTab === 'info'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -633,7 +636,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('viewjd')}
-              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
                 activeTab === 'viewjd'
                   ? 'border-brand-blue text-brand-blue font-medium'
                   : 'border-transparent text-gray-600 hover:text-brand-blue'
@@ -656,13 +659,13 @@ export default function AssessmentDetailsView({
       </div>
 
       {/* Content */}
-      <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-6 w-full">
+      <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-6 w-full bg-white dark:bg-slate-900">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Assessment Details Section */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+            <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
                   <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
@@ -693,7 +696,7 @@ export default function AssessmentDetailsView({
                   <h4 className="text-sm font-medium text-gray-700">Assessment Rounds</h4>
 
                   {assessment.hr_enabled && (
-                    <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                    <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           HR Round
@@ -722,7 +725,7 @@ export default function AssessmentDetailsView({
                   )}
 
                   {assessment.technical_enabled && (
-                    <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                    <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           Technical Round
@@ -769,7 +772,7 @@ export default function AssessmentDetailsView({
                     if (!hasCompiler) return null;
 
                     return (
-                    <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                    <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
                           Coding Round
@@ -800,14 +803,14 @@ export default function AssessmentDetailsView({
                 </div>
 
                 {/* Sections Details - Moved from Sections tab */}
-                <div className="mt-8 pt-6 border-t border-gray-100">
+                <div className="mt-8 pt-6 border-t border-gray-200">
                   <h4 className="text-sm font-medium text-gray-700 mb-4">Section Details</h4>
                   <div className="space-y-4">
                     {sections.length > 0 ? (
                       sections.map((section, index) => {
                         const SectionIcon = section.icon;
                         return (
-                          <div key={section.type} className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-4">
+                          <div key={section.type} className="bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white">
@@ -860,19 +863,19 @@ export default function AssessmentDetailsView({
                             )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                              <div className="p-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                              <div className="p-2 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
                                 <div className="text-xs text-gray-600 mb-1">Question Type</div>
                                 <div className="text-xs text-gray-900 font-medium">
                                   {section.type === 'coding' ? 'Code Challenge' : 'Mixed Format'}
                                 </div>
                               </div>
-                              <div className="p-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                              <div className="p-2 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
                                 <div className="text-xs text-gray-600 mb-1">Time Allocation</div>
                                 <div className="text-xs text-gray-900 font-medium">
                                   {Math.round((assessment.duration_minutes || 30) * (section.percentage / 100))} min
                                 </div>
                               </div>
-                              <div className="p-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                              <div className="p-2 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
                                 <div className="text-xs text-gray-600 mb-1">Weightage</div>
                                 <div className="text-xs text-gray-900 font-medium">{section.percentage}%</div>
                               </div>
@@ -890,11 +893,11 @@ export default function AssessmentDetailsView({
                 </div>
 
                 {/* Analytics - Moved from Analytics tab */}
-                <div className="mt-8 pt-6 border-t border-gray-100">
+                <div className="mt-8 pt-6 border-t border-gray-200">
                   <h4 className="text-sm font-medium text-gray-700 mb-4">Performance Analytics</h4>
 
                   {analyticsData.completed === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
+                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02]">
                       <TrendingUp className="w-10 h-10 text-brand-blue/30 mx-auto mb-2" />
                       <p className="text-gray-600 text-sm mb-1">No performance data available yet</p>
                       <p className="text-xs text-gray-500">Data will appear after candidates complete the assessment</p>
@@ -903,7 +906,7 @@ export default function AssessmentDetailsView({
                     <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'md:grid-cols-2' : ''} gap-6`}>
                       {/* Technical Performance */}
                       {assessment.technical_enabled && (
-                        <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                        <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
                           <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Technical Performance</h5>
                           <div className="space-y-3">
                             {(() => {
@@ -965,7 +968,7 @@ export default function AssessmentDetailsView({
 
                       {/* Coding Performance */}
                       {assessment.coding_enabled && (
-                        <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-4">
+                        <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
                           <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Coding Performance</h5>
                           <div className="space-y-3">
                             {(() => {
@@ -1031,8 +1034,8 @@ export default function AssessmentDetailsView({
             </div>
 
             {/* Invitation Status Section */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+            <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
                   <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                     <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
@@ -1156,7 +1159,7 @@ export default function AssessmentDetailsView({
                         const formattedDate = activityDate ? formatIST(activityDate) : 'N/A';
 
                         return (
-                          <div key={activity.id} className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-2.5 sm:p-3 lg:p-4 hover:bg-brand-blue/5 transition-colors">
+                          <div key={activity.id} className="bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] p-2.5 sm:p-3 lg:p-4 hover:bg-brand-blue/5 transition-colors">
                             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
                               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs sm:text-sm">
                                 {activity.candidate_name?.charAt(0).toUpperCase() || 'U'}
@@ -1226,8 +1229,8 @@ export default function AssessmentDetailsView({
 
         {/* Activity Tab */}
         {activeTab === 'activity' && (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <h3 className="text-sm sm:text-base lg:text-lg text-gray-900 tracking-tight flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <BarChart className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
@@ -1328,7 +1331,7 @@ export default function AssessmentDetailsView({
 
                   {/* Pagination — 10 events per page. */}
                   {recentActivity.length > ACTIVITY_PAGE_SIZE && (
-                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-100 flex items-center justify-between text-xs sm:text-sm text-gray-600">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex items-center justify-between text-xs sm:text-sm text-gray-600">
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, recentActivity.length)} of {recentActivity.length}
                       </span>
@@ -1363,8 +1366,8 @@ export default function AssessmentDetailsView({
 
         {/* Version History Tab */}
         {activeTab === 'versions' && (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
@@ -1427,7 +1430,7 @@ export default function AssessmentDetailsView({
                           </div>
 
                           {/* Configuration Details */}
-                          <div className="bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl p-2.5 sm:p-3 lg:p-4">
+                          <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-2.5 sm:p-3 lg:p-4">
                             <div className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-3 tracking-tight">
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
@@ -1758,8 +1761,8 @@ export default function AssessmentDetailsView({
         const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
 
         return (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
@@ -1780,7 +1783,7 @@ export default function AssessmentDetailsView({
                 {/* Key Metadata Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
                   {/* Job Complexity Level */}
-                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                  <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Layers className="w-4 h-4 text-brand-blue" />
@@ -1797,7 +1800,7 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Experience Level */}
-                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                  <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <TrendingUp className="w-4 h-4 text-brand-cyan" />
@@ -1814,7 +1817,7 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Primary Domain */}
-                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                  <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Globe className="w-4 h-4 text-brand-blue" />
@@ -1829,7 +1832,7 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Coding Requirement */}
-                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                  <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <Code className="w-4 h-4 text-brand-cyan" />
@@ -1842,7 +1845,7 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Eligible Programming Languages */}
-                  <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
+                  <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-9 h-9 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                         <Zap className="w-4 h-4 text-brand-orange-deep" />
@@ -1938,8 +1941,8 @@ export default function AssessmentDetailsView({
       })()}
 
       {activeTab === 'viewjd' && (
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
@@ -2121,7 +2124,7 @@ export default function AssessmentDetailsView({
               )}
 
               {/* Open full JD page link */}
-              <div className="pt-2 border-t border-gray-100 flex justify-end">
+              <div className="pt-2 border-t border-gray-200 flex justify-end">
                 <button
                   onClick={() => router.push(`/recruitment/job-details?id=${jdData.id}`)}
                   className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"

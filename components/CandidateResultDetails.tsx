@@ -399,11 +399,8 @@ export default function CandidateResultDetails({
 
   if (isLoadingDetails) {
     return (
-      <div className="flex-1 bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-brand-blue mx-auto mb-4 animate-spin" />
-          <p className="text-gray-600">Loading detailed results...</p>
-        </div>
+      <div className="flex items-center justify-center h-64 bg-slate-50 dark:bg-slate-950">
+        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     );
   }
@@ -431,7 +428,7 @@ export default function CandidateResultDetails({
           gradient bar so the inner Question-Analysis tab nav (z-20) can no
           longer climb on top of it during scroll. */}
       <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
-        <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4">
+        <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <button
@@ -532,7 +529,7 @@ export default function CandidateResultDetails({
 
       {/* Header */}
       <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10">
-        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+        <div className="px-3 sm:px-4 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-brand-blue flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 font-semibold">
@@ -569,7 +566,7 @@ export default function CandidateResultDetails({
       </div>
 
       {/* Content */}
-      <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+      <div className="py-4 sm:py-6 bg-white">
         {/* Assessment Info */}
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
@@ -2416,15 +2413,15 @@ export default function CandidateResultDetails({
 
                           {/* Pagination footer */}
                           {eventsTotalPages > 1 && (
-                            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-gray-100">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-gray-100">
                               <span className="text-xs text-gray-500">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5">
                                 <button
                                   onClick={() => setEventsPage(p => Math.max(1, p - 1))}
                                   disabled={eventsPage === 1}
-                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  className="inline-flex items-center justify-center min-w-[64px] h-8 px-3 rounded-md text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 >
                                   ‹ Prev
                                 </button>
@@ -2440,7 +2437,7 @@ export default function CandidateResultDetails({
                                     <button
                                       key={page}
                                       onClick={() => setEventsPage(page)}
-                                      className={`min-w-[28px] px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                      className={`inline-flex items-center justify-center min-w-[32px] h-8 px-2 rounded-md text-xs font-medium border transition-colors ${
                                         page === eventsPage
                                           ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
                                           : 'bg-white text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
@@ -2453,7 +2450,7 @@ export default function CandidateResultDetails({
                                 <button
                                   onClick={() => setEventsPage(p => Math.min(eventsTotalPages, p + 1))}
                                   disabled={eventsPage === eventsTotalPages}
-                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  className="inline-flex items-center justify-center min-w-[64px] h-8 px-3 rounded-md text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 >
                                   Next ›
                                 </button>

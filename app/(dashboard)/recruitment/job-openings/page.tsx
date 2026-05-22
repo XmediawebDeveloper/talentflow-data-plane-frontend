@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, AlertTriangle, X } from 'lucide-react';
+import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
@@ -21,6 +21,13 @@ import {
 } from '@/components/ui/alert-dialog';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
+
+// Master-data quick links surfaced on the Job Openings page (moved here from the sidebar).
+const MASTER_DATA_LINKS = [
+  { id: 'experience-levels', label: 'Experience Levels', href: '/masters/experience-levels', icon: Clock },
+  { id: 'education-levels', label: 'Education Levels', href: '/masters/education-levels', icon: GraduationCap },
+  { id: 'industry-types', label: 'Industry Types', href: '/masters/industry-types', icon: Factory },
+];
 
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -45,6 +52,7 @@ export default function JobOpeningsPage() {
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission } = useAuth();
+  const canManageMasters = hasPermission('canManageSettings');
 
   // Sync filter with URL parameter
   useEffect(() => {
@@ -175,6 +183,18 @@ export default function JobOpeningsPage() {
   const handleAIMatch = (job: Job) => {
     sessionStorage.setItem('preselectedJobId', job.id);
     router.push('/recruitment/ai-talent-match');
+  };
+
+  const handleScoreResumes = (job: Job) => {
+    router.push(`/recruitment/job-details?id=${job.id}&action=score-resumes`);
+  };
+
+  const handleInviteAssessment = (job: Job) => {
+    router.push(`/recruitment/job-details?id=${job.id}&action=invite-assessment`);
+  };
+
+  const handleAssessmentStatus = (job: Job) => {
+    router.push(`/recruitment/job-details?id=${job.id}&tab=assessment-results&action=assessment-status`);
   };
 
   const handleUpdateJobStatus = async (jobId: string, status: string) => {
@@ -340,13 +360,16 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <>
+    <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       <JobsListing
         jobs={jobs}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
         onViewApplicants={handleViewApplicants}
         onAIMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleAIMatch : undefined}
+        onScoreResumes={hasPermission('canRunScoring') || isTenantAdmin ? handleScoreResumes : undefined}
+        onInviteAssessment={hasPermission('canCreateAssessments') || isTenantAdmin ? handleInviteAssessment : undefined}
+        onAssessmentStatus={hasPermission('canViewAssessments') || isTenantAdmin ? handleAssessmentStatus : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleEditJob : undefined}
         onPublishJob={hasPermission('canCreateJD') || isTenantAdmin ? handlePublishJob : undefined}
@@ -357,6 +380,7 @@ export default function JobOpeningsPage() {
         onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
+        masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
       />
 
       {/* Edit Warning Dialog */}
@@ -524,6 +548,6 @@ export default function JobOpeningsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

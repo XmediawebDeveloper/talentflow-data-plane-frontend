@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Users, Check, X, Edit2, Save, Plus, Loader2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -236,10 +237,13 @@ export default function PermissionsPage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Permissions & Roles' }]} />
+
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+        <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -250,13 +254,13 @@ export default function PermissionsPage() {
                   <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Access control
                 </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900">Permissions & Roles</h1>
-                <p className="mt-2 max-w-2xl text-sm text-gray-600 sm:text-base">Configure what each role can see and do across the platform.</p>
+                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Permissions & Roles</h1>
+                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Configure what each role can see and do across the platform.</p>
               </div>
             </div>
             <button
               onClick={fetchData}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition-all"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition-all"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh
@@ -279,8 +283,8 @@ export default function PermissionsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Roles List */}
-          <div className="rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-3 sm:p-4 lg:p-6">
-            <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Roles</h2>
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 lg:p-6">
+            <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Roles</h2>
             <div className="space-y-2 sm:space-y-3">
               {roles.map((role) => (
                 <button
@@ -289,17 +293,17 @@ export default function PermissionsPage() {
                   className={`w-full p-3 sm:p-4 rounded-lg text-left transition-all ${
                     selectedRole?.id === role.id
                       ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10'
-                      : 'hover:bg-brand-blue/5 border border-gray-200 hover:border-brand-blue/30'
+                      : 'hover:bg-brand-blue/5 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{role.name}</p>
+                    <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{role.name}</p>
                     {(role.is_system || role.code === 'recruiter') && (
                       <span className="text-[10px] sm:text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
-                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-500">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
+                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">
                     <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3 text-brand-blue/70" />{role.permission_count || role.permissions?.length || 0} perms</span>
                     <span className="inline-flex items-center gap-1"><Users className="w-3 h-3 text-brand-cyan/70" />{role.user_count} users</span>
                   </div>
@@ -309,13 +313,13 @@ export default function PermissionsPage() {
           </div>
 
           {/* Permissions Grid */}
-          <div className="lg:col-span-2 rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-3 sm:p-4 lg:p-6">
+          <div className="lg:col-span-2 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 lg:p-6">
             {selectedRole ? (
               <>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                   <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 truncate">{selectedRole.name} Permissions</h2>
-                    <p className="text-xs sm:text-sm text-gray-500 truncate">{selectedRole.description || 'No description'}</p>
+                    <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">{selectedRole.name} Permissions</h2>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                     {canManage && !selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
@@ -332,7 +336,7 @@ export default function PermissionsPage() {
                         <button
                           onClick={() => setIsEditing(false)}
                           disabled={saving}
-                          className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold disabled:opacity-50 transition"
+                          className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold disabled:opacity-50 transition"
                         >
                           Cancel
                         </button>
@@ -367,7 +371,7 @@ export default function PermissionsPage() {
 
                 <div className="space-y-4 sm:space-y-6 max-h-[500px] sm:max-h-[600px] overflow-y-auto">
                   {Object.entries(permissionsByModule).map(([module, modulePermissions]) => (
-                    <div key={module} className="border border-gray-100 rounded-lg p-3 sm:p-4 bg-slate-50 ring-1 ring-black/[0.02]">
+                    <div key={module} className="border border-gray-100 dark:border-slate-700/60 rounded-lg p-3 sm:p-4 bg-white dark:bg-slate-900 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                       <h3 className="font-semibold text-brand-blue mb-2 sm:mb-3 text-xs sm:text-sm lg:text-base">
                         {moduleDisplayNames[module] || module.charAt(0).toUpperCase() + module.slice(1)}
                       </h3>
@@ -381,17 +385,17 @@ export default function PermissionsPage() {
                             <div
                               key={permission.id}
                               className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border gap-2 transition ${
-                                hasPermission ? 'bg-brand-cyan/5 border-brand-cyan/20 ring-1 ring-brand-cyan/10' : 'bg-white border-gray-200'
+                                hasPermission ? 'bg-brand-cyan/5 border-brand-cyan/20 ring-1 ring-brand-cyan/10' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
                               }`}
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-gray-900 text-xs sm:text-sm">{permission.name}</p>
+                                <p className="font-semibold text-gray-900 dark:text-slate-50 text-xs sm:text-sm">{permission.name}</p>
                               </div>
                               {isEditing && !selectedRole.is_system && selectedRole.code !== 'recruiter' ? (
                                 <button
                                   onClick={() => togglePermission(permission.id)}
                                   className={`w-9 sm:w-10 h-5 sm:h-6 rounded-full transition-colors flex-shrink-0 ${
-                                    hasPermission ? 'bg-brand-cyan' : 'bg-gray-300'
+                                    hasPermission ? 'bg-brand-cyan' : 'bg-gray-300 dark:bg-slate-700'
                                   }`}
                                 >
                                   <div
@@ -402,12 +406,12 @@ export default function PermissionsPage() {
                                 </button>
                               ) : (
                                 <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                  hasPermission ? 'bg-brand-cyan/15 ring-1 ring-brand-cyan/20' : 'bg-gray-200'
+                                  hasPermission ? 'bg-brand-cyan/15 ring-1 ring-brand-cyan/20' : 'bg-gray-200 dark:bg-slate-800'
                                 }`}>
                                   {hasPermission ? (
                                     <Check className="w-3 h-3 sm:w-4 sm:h-4 text-brand-cyan" />
                                   ) : (
-                                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
+                                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500" />
                                   )}
                                 </div>
                               )}
@@ -420,12 +424,13 @@ export default function PermissionsPage() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center h-40 sm:h-64 text-gray-500 text-sm">
+              <div className="flex items-center justify-center h-40 sm:h-64 text-gray-500 dark:text-slate-500 text-sm">
                 Select a role to view its permissions
               </div>
             )}
           </div>
         </div>
+      </div>
       </div>
     </main>
   );

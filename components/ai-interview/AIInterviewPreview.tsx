@@ -14,6 +14,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -651,7 +652,8 @@ export default function AIInterviewPreview() {
         variant="info"
       />
 
-    </div>
-    </div>
+      </div>
+      </div>
+    </main>
   );
 }

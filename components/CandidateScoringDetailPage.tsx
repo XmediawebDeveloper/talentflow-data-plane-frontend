@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -19,13 +20,27 @@ interface ScoredResume {
   scoredDate: string;
   scoredBy: string;
   experience?: string;
-  education?: string;
+  // Education may be a single label string or the structured detail array from
+  // the candidate endpoint. Renderers below branch on the runtime shape.
+  education?: string | Array<{ degree?: string; institution?: string; school?: string; year?: string; graduation_year?: string; gpa?: string }>;
   certifications?: (string | { name?: string; date?: string; issuer?: string; credential_id?: string })[];
   aiSummary?: string;
   strengths?: string[];
   gaps?: string[];
   matchReason?: string;
-  scoreBreakdown?: any[]; // Array of score breakdown items from API
+  // Score breakdown returned by the scoring API. The backend can return either
+  // a structured object (single record with skillsMatch / experienceMatch /
+  // educationMatch / overallFit) or an array of breakdown items. Callers below
+  // read the object form via optional chaining, so allow both shapes.
+  scoreBreakdown?:
+    | {
+        skillsMatch?: number;
+        experienceMatch?: number;
+        educationMatch?: number;
+        overallFit?: number;
+        [key: string]: any;
+      }
+    | any[];
   criteriaScores?: Record<string, any>; // Criteria scores object from API
   title?: string;
   currentCompany?: string;
@@ -64,9 +79,15 @@ interface CandidateScoringDetailPageProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /**
+   * Breadcrumb crumbs for this view. Supply this when the component is rendered
+   * as an in-page view (e.g. inside Resume Scoring) so the parent crumbs can use
+   * `onClick` to switch views instead of an `href` to the route already shown.
+   */
+  breadcrumbItems?: BreadcrumbCrumb[];
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack, onMinimize, currentIndex, totalCount, onPrev, onNext }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user } = useAuth();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo'>('overview');
@@ -384,12 +405,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={breadcrumbItems ?? [
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+              { label: 'Candidate Details' },
+            ]}
+          />
       {/* Back Button + Prev/Next Navigation */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors hover:gap-3 text-sm sm:text-base"
+          className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors text-sm sm:text-base cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Scored Resumes
@@ -1261,6 +1292,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           )}
         </div>
       </div>
-    </div>
+        </div>
+      </div>
+    </main>
   );
 }
