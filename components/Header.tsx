@@ -1,4 +1,4 @@
-import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -30,7 +30,7 @@ interface HeaderProps {
 export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps) {
   if (!user) return null;
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
@@ -1116,7 +1116,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-xs text-gray-500">Update your personal information</p>
                     </div>
                   </button>
-                  {(user.is_tenant_admin || user.permissions?.can_manage_users) && (
+                  {(isTenantAdmin || hasPermission('canManageUsers')) && (
                     <button
                       onClick={() => {
                         if (subscriptionExpired) return;
@@ -1152,7 +1152,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-xs text-gray-500">Billing & subscription</p>
                     </div>
                   </button>
-                  {(user.is_tenant_admin || user.permissions?.can_manage_settings) && (
+                  {(isTenantAdmin || hasPermission('canManageSettings')) && (
                     <button
                       onClick={() => {
                         if (subscriptionExpired) return;
@@ -1175,23 +1175,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     onClick={() => {
                       if (subscriptionExpired) return;
                       setShowUserMenu(false);
-                      router.push('/settings/security');
-                    }}
-                    disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
-                  >
-                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                      <Shield className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Security</p>
-                      <p className="text-xs text-gray-500">Password & authentication</p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (subscriptionExpired) return;
-                      setShowUserMenu(false);
                       router.push('/audits/activity');
                     }}
                     disabled={subscriptionExpired}
@@ -1201,7 +1184,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <Activity className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">Activity Log</p>
+                      <p className="font-medium text-gray-900">Audit Log</p>
                       <p className="text-xs text-gray-500">View your recent activity</p>
                     </div>
                   </button>

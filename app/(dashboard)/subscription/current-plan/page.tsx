@@ -1990,6 +1990,8 @@ function CurrentPlanContent() {
           </div>
         )}
 
+        {activeSection === 'current-plan' && (
+        <>
         {/* Account Locked Warning */}
         {isLocked && (
           <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
@@ -2820,6 +2822,8 @@ function CurrentPlanContent() {
           <div className="text-center py-12 text-gray-600 dark:text-slate-400">
             <p>No plans available at the moment.</p>
           </div>
+        )}
+        </>
         )}
       </div>
       </div>

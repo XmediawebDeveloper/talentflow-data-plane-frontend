@@ -36,7 +36,7 @@ export default function PageBreadcrumb({
   className?: string;
 }) {
   return (
-    <Breadcrumb className={`bg-slate-50 ring-1 ring-slate-200/80 rounded-lg px-3 py-2 ${className}`}>
+    <Breadcrumb className={`sticky top-0 z-10 bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
       <BreadcrumbList>
         {items.map((crumb, idx) => {
           const isLast = idx === items.length - 1;

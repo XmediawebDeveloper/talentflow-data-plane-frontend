@@ -225,6 +225,11 @@ export default function AuditTrailPage() {
   const [entityFilter, setEntityFilter] = useState('');
   const [dateRange, setDateRange] = useState('30');
   const [errorOriginFilter, setErrorOriginFilter] = useState<'' | ErrorOrigin>('');
+  // user_id selected from the Active Users popup; applied client-side to filteredLogs.
+  const [userFilter, setUserFilter] = useState('');
+  // Which stats card popup is open (Active Users / Action Types / Entity Types).
+  const [statsPopup, setStatsPopup] = useState<'users' | 'actions' | 'entities' | null>(null);
+  const statsPopupRef = useRef<HTMLDivElement>(null);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -526,6 +531,18 @@ export default function AuditTrailPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Close stats popup on outside click
+  useEffect(() => {
+    if (!statsPopup) return;
+    const handler = (e: MouseEvent) => {
+      if (statsPopupRef.current && !statsPopupRef.current.contains(e.target as Node)) {
+        setStatsPopup(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [statsPopup]);
+
   const openExportModal = (format: 'csv' | 'excel') => {
     setExportFormat(format);
     setExportDropdownOpen(false);
@@ -736,6 +753,9 @@ export default function AuditTrailPage() {
     // Error origin filter
     if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
 
+    // User filter (selected from Active Users popup)
+    if (userFilter && log.user_id !== userFilter) return false;
+
     // Then filter by search query
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
@@ -822,85 +842,211 @@ export default function AuditTrailPage() {
           </div>
         </section>
 
-        {/* Stats Cards — clicking any card drills into the audit log list below */}
+        {/* Stats Cards — Total Actions opens the list; the other three open a
+            filter popup that lets the user drill into a specific user/action/entity. */}
         {stats && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5 mb-4 sm:mb-6 lg:mb-8">
-            <button
-              type="button"
-              onClick={openListView}
-              className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
-                  <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
-                    <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                    Last {stats.period_days} days
-                  </p>
+          <div ref={statsPopupRef} className="relative mb-4 sm:mb-6 lg:mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5">
+              <button
+                type="button"
+                onClick={() => { setStatsPopup(null); openListView(); }}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' && !statsPopup ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
+                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                      <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                      Last {stats.period_days} days
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
+                    <Activity className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
+                  </div>
                 </div>
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
-                  <Activity className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsPopup(p => p === 'users' ? null : 'users')}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${statsPopup === 'users' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
+                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                      <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                      {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-teal rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
+                    <Users className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsPopup(p => p === 'actions' ? null : 'actions')}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${statsPopup === 'actions' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Action Types</p>
+                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                      <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                      {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-orange rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
+                    <Zap className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsPopup(p => p === 'entities' ? null : 'entities')}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${statsPopup === 'entities' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
+                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                      <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                      {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-teal rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
+                    <FolderOpen className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Filter popup anchored below the stats cards */}
+            {statsPopup && (
+              <div className="absolute left-0 right-0 top-full mt-2 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/50">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                    {statsPopup === 'users' ? 'Top Active Users' : statsPopup === 'actions' ? 'Action Types' : 'Entity Types'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {((statsPopup === 'users' && userFilter) || (statsPopup === 'actions' && actionFilter) || (statsPopup === 'entities' && entityFilter)) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (statsPopup === 'users') setUserFilter('');
+                          if (statsPopup === 'actions') { setActionFilter(''); setPage(1); }
+                          if (statsPopup === 'entities') { setEntityFilter(''); setPage(1); }
+                        }}
+                        className="text-xs font-medium text-brand-blue hover:text-brand-blue-2"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setStatsPopup(null)}
+                      className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700/60">
+                  {statsPopup === 'users' && (
+                    stats.top_active_users.length === 0 ? (
+                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No users found.</p>
+                    ) : (
+                      stats.top_active_users.map((u) => {
+                        const isActive = userFilter === u.user_id;
+                        return (
+                          <button
+                            key={u.user_id}
+                            type="button"
+                            onClick={() => {
+                              setUserFilter(isActive ? '' : u.user_id);
+                              setStatsPopup(null);
+                              openListView();
+                            }}
+                            className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors ${isActive ? 'bg-brand-blue/[0.06]' : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'}`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-brand-blue text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                                {(u.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{u.user_name || 'Unknown'}</p>
+                                {u.user_email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{u.user_email}</p>}
+                              </div>
+                            </div>
+                            <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{u.action_count}</span>
+                          </button>
+                        );
+                      })
+                    )
+                  )}
+                  {statsPopup === 'actions' && (
+                    Object.entries(stats.actions_by_type).length === 0 ? (
+                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No actions found.</p>
+                    ) : (
+                      Object.entries(stats.actions_by_type)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([action, count]) => {
+                          const isActive = actionFilter === action;
+                          const label = action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                          return (
+                            <button
+                              key={action}
+                              type="button"
+                              onClick={() => {
+                                setActionFilter(isActive ? '' : action);
+                                setPage(1);
+                                setStatsPopup(null);
+                                openListView();
+                              }}
+                              className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors ${isActive ? 'bg-brand-blue/[0.06]' : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'}`}
+                            >
+                              <span className="text-sm text-gray-800 dark:text-slate-100 truncate">{label}</span>
+                              <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{count}</span>
+                            </button>
+                          );
+                        })
+                    )
+                  )}
+                  {statsPopup === 'entities' && (
+                    Object.entries(stats.actions_by_entity).length === 0 ? (
+                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No entities found.</p>
+                    ) : (
+                      Object.entries(stats.actions_by_entity)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([entity, count]) => {
+                          const isActive = entityFilter === entity;
+                          const label = entity.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                          return (
+                            <button
+                              key={entity}
+                              type="button"
+                              onClick={() => {
+                                setEntityFilter(isActive ? '' : entity);
+                                setPage(1);
+                                setStatsPopup(null);
+                                openListView();
+                              }}
+                              className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors ${isActive ? 'bg-brand-blue/[0.06]' : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'}`}
+                            >
+                              <span className="text-sm text-gray-800 dark:text-slate-100 truncate">{label}</span>
+                              <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{count}</span>
+                            </button>
+                          );
+                        })
+                    )
+                  )}
                 </div>
               </div>
-            </button>
-            <button
-              type="button"
-              onClick={openListView}
-              className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
-                  <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
-                    <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                    Registered users
-                  </p>
-                </div>
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-teal rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-                </div>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={openListView}
-              className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Action Types</p>
-                  <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
-                    <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                    Unique types
-                  </p>
-                </div>
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-orange rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
-                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-                </div>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={openListView}
-              className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
-                  <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
-                    <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                    Resources tracked
-                  </p>
-                </div>
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-teal rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
-                  <FolderOpen className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-                </div>
-              </div>
-            </button>
+            )}
           </div>
         )}
 
@@ -1088,11 +1234,12 @@ export default function AuditTrailPage() {
                 );
               })}
             </div>
-            {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
+            {/* Desktop Table — capped height with sticky header so the body scrolls
+                independently of the page. */}
+            <div className="hidden md:block max-h-[600px] overflow-auto">
               <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50/80 dark:bg-slate-800/50">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gray-50/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Timestamp</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">User ID</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">User</th>

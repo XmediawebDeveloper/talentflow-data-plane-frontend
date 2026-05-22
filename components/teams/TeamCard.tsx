@@ -13,7 +13,7 @@ interface TeamCardProps {
 
 export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false }: TeamCardProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10">
+    <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10">
       <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gradient-to-r from-brand-blue/[0.05] via-brand-cyan/[0.04] to-transparent p-6">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">

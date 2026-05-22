@@ -18,6 +18,7 @@ import {
   Layers3,
   Sparkles,
   ArrowUpRight,
+  ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -60,6 +61,16 @@ export default function RoleManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingRole, setViewingRole] = useState<RoleListItem | null>(null);
   const [viewingRolePermissions, setViewingRolePermissions] = useState<Permission[]>([]);
+  // Two-step drill-in: 'cards' shows only the 4 stat tiles; clicking one expands
+  // into a focused list view. Each card drives a different listView so the
+  // expanded panel reflects what was clicked (mirrors /recruitment/job-openings).
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [listView, setListView] = useState<'roles-all' | 'roles-system' | 'users' | 'permissions'>('roles-all');
+  const openListView = (view: 'roles-all' | 'roles-system' | 'users' | 'permissions') => {
+    setListView(view);
+    setPageView('list');
+  };
+  const isRolesView = listView === 'roles-all' || listView === 'roles-system';
 
   useEffect(() => {
     const checkPermission = async () => {
@@ -119,10 +130,40 @@ export default function RoleManagement() {
     }
   }, [activeTab]);
 
-  const filteredRoles = roles.filter((role) =>
-    role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    role.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredRoles = roles.filter((role) => {
+    if (listView === 'roles-system' && !role.is_system) return false;
+    return (
+      role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      role.code.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  // Assigned Users view: roles sorted by user_count (descending), filtered to
+  // those that actually have at least one user assigned. Search bar applies the
+  // same role-name/code match.
+  const userAssignmentRoles = roles
+    .filter((role) => (role.user_count || 0) > 0)
+    .filter((role) =>
+      role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      role.code.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => (b.user_count || 0) - (a.user_count || 0));
+
+  // Permissions Catalog view: grouped by module so admins can scan capabilities
+  // by area. Search applies to code/name/description so a quick filter works.
+  const filteredPermissions = permissions.filter((p) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      p.code.toLowerCase().includes(q) ||
+      p.name.toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      p.module.toLowerCase().includes(q)
+    );
+  });
+  const permissionsByModule = filteredPermissions.reduce<Record<string, Permission[]>>((acc, p) => {
+    (acc[p.module] ||= []).push(p);
+    return acc;
+  }, {});
 
   const systemRolesCount = roles.filter((role) => role.is_system).length;
   const customRolesCount = roles.length - systemRolesCount;
@@ -371,36 +412,14 @@ export default function RoleManagement() {
 
         {activeTab === 'roles' && (
           <>
-            <section className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative w-full lg:max-w-md">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-                  <input
-                    aria-label="Search roles"
-                    type="text"
-                    placeholder="Search by role name or code"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-slate-500">
-                  <span className="inline-flex items-center rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
-                    {filteredRoles.length} visible roles
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-3 py-1.5 text-brand-blue ring-1 ring-brand-cyan/20">
-                    {customRolesCount} custom
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1.5 text-brand-teal ring-1 ring-brand-teal/20">
-                    {systemRolesCount} system
-                  </span>
-                </div>
-              </div>
-            </section>
-
+            {/* Stats Cards — clicking any card drills into the roles list below.
+                System Roles also pre-filters by type. */}
             <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => openListView('roles-all')}
+                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'roles-all' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm text-gray-500 dark:text-slate-500">Total Roles</p>
@@ -410,8 +429,12 @@ export default function RoleManagement() {
                     <Shield className="h-5 w-5 text-brand-blue" />
                   </span>
                 </div>
-              </div>
-              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              </button>
+              <button
+                type="button"
+                onClick={() => openListView('roles-system')}
+                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'roles-system' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm text-gray-500 dark:text-slate-500">System Roles</p>
@@ -421,8 +444,12 @@ export default function RoleManagement() {
                     <Lock className="h-5 w-5 text-brand-cyan" />
                   </span>
                 </div>
-              </div>
-              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              </button>
+              <button
+                type="button"
+                onClick={() => openListView('users')}
+                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'users' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm text-gray-500 dark:text-slate-500">Assigned Users</p>
@@ -432,8 +459,12 @@ export default function RoleManagement() {
                     <Users className="h-5 w-5 text-brand-teal" />
                   </span>
                 </div>
-              </div>
-              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              </button>
+              <button
+                type="button"
+                onClick={() => openListView('permissions')}
+                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'permissions' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm text-gray-500 dark:text-slate-500">Permissions Catalog</p>
@@ -443,9 +474,80 @@ export default function RoleManagement() {
                     <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                   </span>
                 </div>
+              </button>
+            </section>
+
+            {pageView === 'list' && (
+            <>
+            {/* Back to overview — header tally adapts to the active view */}
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <button
+                onClick={() => { setPageView('cards'); setListView('roles-all'); setSearchQuery(''); }}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back to overview
+              </button>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                {listView === 'permissions'
+                  ? `${filteredPermissions.length} ${filteredPermissions.length === 1 ? 'permission' : 'permissions'}`
+                  : listView === 'users'
+                    ? `${userAssignmentRoles.length} ${userAssignmentRoles.length === 1 ? 'role with users' : 'roles with users'}`
+                    : `${filteredRoles.length} ${filteredRoles.length === 1 ? 'role' : 'roles'}`}
+              </span>
+            </div>
+
+            <section className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-md">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                  <input
+                    aria-label={listView === 'permissions' ? 'Search permissions' : 'Search roles'}
+                    type="text"
+                    placeholder={listView === 'permissions' ? 'Search by permission code, name or module' : 'Search by role name or code'}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-slate-500">
+                  {listView === 'permissions' ? (
+                    <>
+                      <span className="inline-flex items-center rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
+                        {filteredPermissions.length} visible permissions
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-3 py-1.5 text-brand-orange-deep ring-1 ring-brand-orange/20">
+                        {Object.keys(permissionsByModule).length} modules
+                      </span>
+                    </>
+                  ) : listView === 'users' ? (
+                    <>
+                      <span className="inline-flex items-center rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
+                        {userAssignmentRoles.length} roles with users
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1.5 text-brand-teal ring-1 ring-brand-teal/20">
+                        {assignedUsersCount} total assignments
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-flex items-center rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
+                        {filteredRoles.length} visible roles
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-3 py-1.5 text-brand-blue ring-1 ring-brand-cyan/20">
+                        {customRolesCount} custom
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1.5 text-brand-teal ring-1 ring-brand-teal/20">
+                        {systemRolesCount} system
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </section>
 
+            {isRolesView && (
             <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                 <div>
@@ -538,7 +640,7 @@ export default function RoleManagement() {
                                 {!protectedRoleCodes.includes(role.code) ? (
                                   <button
                                     onClick={() => handleEditRole(role)}
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                                     title={`Edit ${role.name}`}
                                     aria-label={`Edit ${role.name}`}
                                   >
@@ -652,6 +754,128 @@ export default function RoleManagement() {
                 </>
               )}
             </section>
+            )}
+
+            {/* Assigned Users view — roles ranked by user_count. The roles list
+                is still the source of truth (no per-user API call). */}
+            {listView === 'users' && (
+              <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">User Assignments</h2>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">How many users hold each role across the organization.</p>
+                  </div>
+                </div>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
+                  </div>
+                ) : userAssignmentRoles.length === 0 ? (
+                  <div className="px-6 py-16 text-center">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+                      <Users className="h-6 w-6 text-brand-teal" />
+                    </div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No assignments yet</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Users will appear here once roles are assigned to them.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px]">
+                      <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                        <tr className="text-left">
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Users</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                        {userAssignmentRoles.map((role) => (
+                          <tr key={role.id} className="transition-colors hover:bg-brand-teal/[0.04]">
+                            <td className="px-6 py-4">
+                              <div className="flex items-start gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+                                  <Users className="h-5 w-5 text-brand-teal" />
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
+                                  <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
+                                {role.is_system ? 'System' : 'Custom'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{role.permission_count}</td>
+                            <td className="px-6 py-4 text-right">
+                              <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1 text-sm font-semibold text-brand-teal ring-1 ring-brand-teal/20">
+                                {role.user_count}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Permissions Catalog view — permissions grouped by module. */}
+            {listView === 'permissions' && (
+              <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Permissions Catalog</h2>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">All permissions available to assign, grouped by module.</p>
+                  </div>
+                </div>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
+                  </div>
+                ) : filteredPermissions.length === 0 ? (
+                  <div className="px-6 py-16 text-center">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-orange/10 ring-1 ring-brand-orange/15">
+                      <Sparkles className="h-6 w-6 text-brand-orange-deep" />
+                    </div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No permissions found</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                    {Object.entries(permissionsByModule)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([module, perms]) => (
+                        <div key={module} className="px-4 py-4 sm:px-6">
+                          <div className="mb-3 flex items-center justify-between">
+                            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-700 dark:text-slate-300">{module.replace(/_/g, ' ')}</h3>
+                            <span className="text-xs text-gray-500 dark:text-slate-500">{perms.length} {perms.length === 1 ? 'permission' : 'permissions'}</span>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {perms.map((p) => (
+                              <div key={p.id} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/40 p-3 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{p.name}</p>
+                                  <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500 whitespace-nowrap">{p.action}</span>
+                                </div>
+                                <p className="mt-1 font-mono text-[11px] text-brand-blue">{p.code}</p>
+                                {p.description && (
+                                  <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{p.description}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </section>
+            )}
+            </>
+            )}
           </>
         )}
 

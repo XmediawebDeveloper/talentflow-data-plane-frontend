@@ -319,7 +319,7 @@ export default function DisputeHistoryPage() {
             <button
               onClick={handleExportCSV}
               disabled={loading || filteredDisputes.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/25 hover:text-brand-blue disabled:translate-y-0 disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
               Export CSV
@@ -597,7 +597,7 @@ export default function DisputeHistoryPage() {
                           <button
                             onClick={() => handleDownloadDispute(dispute)}
                             disabled={downloadingId === dispute.id}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:translate-y-0 disabled:opacity-50"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:opacity-50"
                             aria-label="Download Record" title="Download Record"
                           >
                             {downloadingId === dispute.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}

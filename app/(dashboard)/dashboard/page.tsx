@@ -610,7 +610,6 @@ export default function DashboardPage() {
   // CTAs (gated by real permissions)
   const featuredActions = [
     { label: 'Create job', href: '/recruitment/jd-creation', visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
-    { label: 'Assessments', href: '/recruitment/assessments', visible: true, primary: false, icon: ClipboardList },
   ].filter((item) => item.visible);
 
   return (
@@ -668,12 +667,6 @@ export default function DashboardPage() {
 
             {/* CTAs */}
             <div className="flex flex-wrap items-center gap-2 md:mr-32 lg:mr-40">
-              <Link
-                href="/settings/general-settings"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:text-brand-blue"
-              >
-                View profile
-              </Link>
               {featuredActions.map((item) => {
                 const ItemIcon = item.icon;
                 return (
@@ -682,8 +675,8 @@ export default function DashboardPage() {
                     href={item.href}
                     className={
                       item.primary
-                        ? 'inline-flex items-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:opacity-90'
-                        : 'inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        ? 'inline-flex items-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-colors hover:opacity-90'
+                        : 'inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:border-brand-blue/30 hover:text-brand-blue'
                     }
                   >
                     <ItemIcon className="h-4 w-4" />
@@ -935,7 +928,7 @@ export default function DashboardPage() {
                     <Link
                       key={item.id}
                       href={item.href}
-                      className="group flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:bg-slate-50/60"
+                      className="group flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:bg-slate-50/60"
                     >
                       <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ${item.accent}`}>
                         <ItemIcon className="h-4 w-4" />

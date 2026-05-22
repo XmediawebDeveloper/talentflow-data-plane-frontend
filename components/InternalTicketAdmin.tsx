@@ -448,7 +448,7 @@ export default function InternalTicketAdmin() {
 
               <button
                 onClick={() => { setFilterAssignment('all'); setView('tickets'); }}
-                className="group rounded-2xl border border-gray-100 bg-white p-6 text-left shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
+                className="group rounded-2xl border border-gray-100 bg-white p-6 text-left shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md"
               >
                 <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                   <Ticket className="w-5 h-5" />

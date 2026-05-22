@@ -95,7 +95,7 @@ export default function DashboardKpiRow({
           <Link
             key={k.id}
             href={k.href}
-            className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md sm:px-5 sm:py-5"
+            className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.02] transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md sm:px-5 sm:py-5"
           >
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${k.accent}`}>
               <Icon className="h-5 w-5" />
