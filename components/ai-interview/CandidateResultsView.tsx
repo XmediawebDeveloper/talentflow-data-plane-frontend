@@ -1141,7 +1141,21 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           if (!rawReason) return null;
 
           // Normal completions — no banner needed.
-          const normal = new Set(['all_rounds_completed', 'candidate_ended', 'max_questions', '']);
+          // Backend emits several distinct strings for "interview finished normally":
+          //   - max_questions_reached    → hard cap in add_assistant_message (timed mode, q_count >= max)
+          //   - max_questions: <n>       → check_closing_conditions soft path
+          //   - all_rounds_completed     → all planned rounds done
+          //   - all_rounds_completed_in_buffer → same but detected during audio buffer flush
+          //   - candidate_ended          → candidate clicked End Interview
+          // Anything else is an anomaly worth surfacing (silence cap, time limit, proctor, disconnect).
+          const normal = new Set([
+            'all_rounds_completed',
+            'all_rounds_completed_in_buffer',
+            'candidate_ended',
+            'max_questions',
+            'max_questions_reached',
+            '',
+          ]);
           if (normal.has(rawReason.toLowerCase().split(':')[0].trim())) return null;
 
           // Auto-close reasons we want to surface prominently.

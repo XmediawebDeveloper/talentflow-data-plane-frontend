@@ -987,6 +987,15 @@ function buildPerQuestionDetailsFromHistory(
       topic: String(fu?.topic || ev?.topic || ev?.evaluation?.topic || '').trim() || undefined,
       score: typeof fuScore === 'number' ? Math.round(fuScore * 10) / 10 : undefined,
       note: String(ev?.one_line_note || ev?.evaluation?.brief_note || '').slice(0, 250) || undefined,
+      // Trigger metadata stamped by the backend when the followup fired.
+      // Drives the "Note: This follow-up was asked because..." line in
+      // the UI so recruiters know why an extra question appeared at
+      // this slot.
+      reason: String(fu?.followup_reason || '').trim() || undefined,
+      focus_skill: String(fu?.followup_focus_skill || '').trim() || undefined,
+      source_qnum: typeof fu?.followup_source_qnum === 'number' && fu.followup_source_qnum > 0
+        ? fu.followup_source_qnum
+        : undefined,
     };
     if (!followUpsByParentQn.has(parentQn)) followUpsByParentQn.set(parentQn, []);
     followUpsByParentQn.get(parentQn)!.push(entry);
@@ -1885,8 +1894,25 @@ export function buildDashboardData(params: {
       rows: PerQuestionDetail[],
     ): PerQuestionDetail[] => {
       if (planRows.length === 0) return rows;
+      // Index plan rows by question_number so we pair by slot identity, not
+      // array position. Previously this used `planRows[idx]` which shifted
+      // every row whenever a history entry was dropped from the bucket
+      // (e.g. a rejected resume-ack or a slot-overflow guard rejection).
+      // Build a 1-based fallback for legacy snapshots missing
+      // `question_number` so the pairing still resolves.
+      const planByQnum = new Map<number, any>();
+      planRows.forEach((pr, i) => {
+        const qn = Number(pr?.question_number);
+        const key = Number.isFinite(qn) && qn > 0 ? qn : i + 1;
+        planByQnum.set(key, pr);
+      });
       return rows.map((row, idx) => {
-        const planRow = planRows[idx];
+        // Prefer row.qNum (the global q_num saved by the backend); fall back
+        // to bucket index for legacy rows without it.
+        const lookupKey = (Number.isFinite(row.qNum as number) && (row.qNum as number) > 0)
+          ? (row.qNum as number)
+          : (idx + 1);
+        const planRow = planByQnum.get(lookupKey) ?? planRows[idx];
         if (!planRow) return row;
         const planSkills = buildSkillsFromPlanRow(planRow);
         if (planSkills.length === 0) return row;

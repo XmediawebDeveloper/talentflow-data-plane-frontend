@@ -78,6 +78,24 @@ export interface PerQuestionFollowUp {
   score?: number;
   /** Short LLM rationale for the follow-up's score (one-line note). */
   note?: string;
+  /** Why this follow-up fired. One of:
+   *    - "validate_volunteered_primary": this slot's planned primary was
+   *      already mentioned by the candidate in an earlier Q's answer
+   *    - "probe_touched_secondary": this slot's planned secondary was
+   *      already mentioned in an earlier Q's answer
+   *    - "volunteered_skill": candidate volunteered a JD-relevant skill
+   *      in this slot's main answer
+   *  The Question Analysis tab uses this to render a friendly
+   *  explanation note like "This follow-up was asked because the
+   *  candidate mentioned this skill in Q1's answer." */
+  reason?: string;
+  /** Specific skill the follow-up targeted (focus_aspect). Falls back to
+   *  topic when missing. */
+  focus_skill?: string;
+  /** When > 0, the question number where the candidate first volunteered
+   *  the focus_skill. Used in the explanation note to point the
+   *  recruiter at the right earlier answer. */
+  source_qnum?: number;
 }
 
 export interface PerQuestionDetail {

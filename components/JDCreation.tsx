@@ -14,6 +14,7 @@ import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import { State as CSCState, City as CSCCity } from 'country-state-city';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -147,7 +148,8 @@ interface ExtractedData {
   salaryFrom: string;
   salaryTo: string;
   compensationType: 'hourly' | 'daily' | 'monthly' | 'yearly';
-  locations: Array<{ city: string; radius: string; radiusKm?: number; isRequired?: boolean }>;
+  salaryCurrency: 'INR' | 'USD';
+  locations: Array<{ city: string; radius: string; radiusKm?: number; isRequired?: boolean; country?: 'IN' | 'US' }>;
   locationsRequired: boolean;
   assessmentGuidance: string;
   internalRecruiterComments: string[];
@@ -188,7 +190,8 @@ interface EditingJDData {
   certifications?: string[];
   domain_keywords?: string[];
   allow_overqualified?: boolean;
-  locations?: Array<{ city: string; state?: string; radius_km?: number; is_required?: boolean }>;
+  locations?: Array<{ city: string; state?: string; country?: string; radius_km?: number; is_required?: boolean }>;
+  salary_currency?: 'INR' | 'USD' | string;
   // Seniority level extracted from JD body (e.g. "entry" | "senior") — surfaced
   // by the AI extraction step so the review UI can re-edit it before save.
   job_level?: string;
@@ -743,6 +746,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     salaryFrom: '',
     salaryTo: '',
     compensationType: 'yearly',
+    salaryCurrency: 'INR',
     locations: [],
     locationsRequired: false,
     assessmentGuidance: '',
@@ -763,6 +767,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const [locationStateFilter, setLocationStateFilter] = useState<string>('all');
+  const [locationCountry, setLocationCountry] = useState<'IN' | 'US'>('IN');
   
   // Inline editing states
   const [editingSkillIndex, setEditingSkillIndex] = useState<{ category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number } | null>(null);
@@ -860,7 +865,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // If only min is filled, prompt for max
     if (minSalary !== null && maxSalary === null) {
-      return 'Please enter the maximum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+      return 'Enter the maximum salary to complete the range.';
     }
 
     // If only max is filled, validate limit then prompt for min
@@ -868,7 +873,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (maxSalary > 99999999) {
         return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
       }
-      return 'Please enter the minimum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+      return 'Enter the minimum salary to complete the range.';
     }
 
     // Max salary must not exceed 8 digits (99,999,999)
@@ -878,7 +883,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Both are filled - validate range
     if (minSalary >= maxSalary) {
-      return 'Minimum salary must be less than maximum salary';
+      return 'Maximum salary must be greater than minimum salary.';
     }
 
     return undefined;
@@ -1786,12 +1791,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryTypeRequired: params.industry_mandatory || false,
         department: isEditMode ? extractedData.department : '',
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
-        employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
-        workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
+        employmentType: (params.job_type as 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary') || (isEditMode ? extractedData.employmentType : 'full_time'),
+        workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
         salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || extractedData.salaryFrom || '') : (extractedData.salaryFrom || ''),
         salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || extractedData.salaryTo || '') : (extractedData.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
+        salaryCurrency: (params.salary_currency as 'INR' | 'USD') || extractedData.salaryCurrency || 'INR',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
           radius: '50'  // Default radius
@@ -1873,6 +1879,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extraction.compensationType,
+        salary_currency: extraction.salaryCurrency,
         employment_type: extraction.employmentType,
         remote_type: extraction.workModel,
         certifications: extraction.certifications,
@@ -1885,6 +1892,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
           is_required: extraction.locationsRequired,
+          country: loc.country || locationCountry,
         })),
         // Mandatory flags - determines if criteria is Required vs Preferred in scoring
         experience_mandatory: extraction.experienceRequired || false,
@@ -2501,7 +2509,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         ...prev,
         locations: [...prev.locations, {
           city: newLocation.city.trim(),
-          radius: newLocation.radius || '50'
+          radius: newLocation.radius || '50',
+          country: locationCountry,
         }],
       }));
       setNewLocation({ city: '', radius: '50' });
@@ -2526,6 +2535,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             city: loc.city,
             radius_km: loc.radiusKm,
             is_required: loc.isRequired,
+            country: loc.country || locationCountry,
           })),
         });
         console.log('[Delete] Location deleted and saved to DB');
@@ -2772,6 +2782,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
+        salary_currency: extractedData.salaryCurrency,
         employment_type: extractedData.employmentType,
         remote_type: extractedData.workModel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
@@ -2786,6 +2797,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
           is_required: extractedData.locationsRequired,
+          country: loc.country || locationCountry,
         })),
         // Mandatory flags - determines if criteria is Required vs Preferred in scoring
         experience_mandatory: extractedData.experienceRequired || false,
@@ -3036,6 +3048,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
+        salary_currency: extractedData.salaryCurrency,
         job_level: extractedData.experience || undefined,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
@@ -3051,6 +3064,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return {
             city: parts[0],
             state: parts[1] || null,
+            country: loc.country || locationCountry,
             radius_km: parseInt(loc.radius) || 50,
             is_required: extractedData.locationsRequired,
           };
@@ -3096,14 +3110,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       // Create the job object for UI
       if (onPublish) {
-        const newJob: Job = {
+        const newJob = {
           id: publishedJd.id,
           title: jobTitle.trim(),
           department: extractedData.department || '',
           location: extractedData.locations.length > 0
             ? extractedData.locations[0].city
             : '',
-          type: 'Full-time',
+          employmentType: 'Full-time',
           postedDate: new Date().toISOString(),
           applicants: 0,
           // Backend / API returns lowercase legacy "active"; the shared Job UI
@@ -3111,10 +3125,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // literal at runtime while satisfying the union.
           status: 'active' as unknown as Job['status'],
           description: generatedJD || manualJD,
-          requirements: [
-            ...extractedData.mustHaveSkills.map(skill => `Must have: ${skill}`),
-            ...extractedData.niceToHaveSkills.map(skill => `Nice to have: ${skill}`),
-          ],
           mustHaveSkills: extractedData.mustHaveSkills,
           niceToHaveSkills: extractedData.niceToHaveSkills,
           education: extractedData.education,
@@ -3122,7 +3132,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           salary: extractedData.salaryFrom && extractedData.salaryTo
             ? `${extractedData.salaryFrom} - ${extractedData.salaryTo} (${extractedData.compensationType})`
             : undefined,
-        };
+        } as unknown as Job;
 
         console.log('[JDCreation] Calling onPublish with job:', newJob);
 
@@ -3330,6 +3340,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
+        salary_currency: extractedData.salaryCurrency,
         job_level: extractedData.experience || undefined,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
@@ -3346,6 +3357,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return {
             city: parts[0],
             state: parts[1] || null,
+            country: loc.country || locationCountry,
             radius_km: parseInt(loc.radius) || 50,
             is_required: extractedData.locationsRequired,
           };
@@ -3589,6 +3601,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           salaryFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
           salaryTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
           compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
+          salaryCurrency: (effectiveEditingJD.salary_currency === 'USD' ? 'USD' : 'INR'),
           assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: effectiveEditingJD.must_have_comments || [],
@@ -3602,9 +3615,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             // Reconstruct "City, State" format for UI dropdown matching
             city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
             radius: loc.radius_km?.toString() || '50',
+            country: (loc.country === 'US' ? 'US' : 'IN') as 'IN' | 'US',
           })) || [],
           locationsRequired: effectiveEditingJD.locations?.some(loc => loc.is_required) || false,
         }));
+
+        // Sync the standalone country dropdown to the first saved location's country
+        const firstCountry = effectiveEditingJD.locations?.[0]?.country;
+        if (firstCountry === 'US' || firstCountry === 'IN') {
+          setLocationCountry(firstCountry);
+        }
 
         console.log('[TalentFlow] Extracted data loaded successfully from database');
       }
@@ -4657,10 +4677,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               {/* Salary */}
               <div className="mb-6 sm:mb-8">
-                <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3">Salary Range</h3>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-3">
+                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Salary Range</h3>
+                  <div className="flex items-center gap-4">
+                    <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <input
+                        type="radio"
+                        name="salaryCurrency"
+                        value="INR"
+                        checked={extractedData.salaryCurrency === 'INR'}
+                        onChange={() => { setExtractedData(prev => ({ ...prev, salaryCurrency: 'INR' })); markExtractedDataModified(); }}
+                        className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
+                        disabled={isRegenerating}
+                      />
+                      <span className="text-sm text-gray-700 dark:text-slate-300">INR (₹)</span>
+                    </label>
+                    <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <input
+                        type="radio"
+                        name="salaryCurrency"
+                        value="USD"
+                        checked={extractedData.salaryCurrency === 'USD'}
+                        onChange={() => { setExtractedData(prev => ({ ...prev, salaryCurrency: 'USD' })); markExtractedDataModified(); }}
+                        className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
+                        disabled={isRegenerating}
+                      />
+                      <span className="text-sm text-gray-700 dark:text-slate-300">USD ($)</span>
+                    </label>
+                  </div>
+                </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{extractedData.salaryCurrency === 'USD' ? '$' : '₹'}</span>
                       <input
                         type="text"
                         value={extractedData.salaryFrom || ''}
@@ -4682,7 +4730,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                     <span className="text-gray-400 dark:text-slate-500 hidden sm:block">–</span>
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{extractedData.salaryCurrency === 'USD' ? '$' : '₹'}</span>
                       <input
                         type="text"
                         value={extractedData.salaryTo || ''}
@@ -4715,8 +4763,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </select>
                   </div>
                   {validationErrors.salaryRange && (
-                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">!</span>
+                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
                       {validationErrors.salaryRange}
                     </p>
                   )}
@@ -4739,9 +4787,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </label>
                 </div>
 
-                {/* Inline Add Location - State, City, Radius in one line - Hidden when read-only */}
+                {/* Inline Add Location - Country, State, City, Radius in one line - Hidden when read-only */}
                 {!isRegenerating && (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3 mb-4">
+                  {/* Country Dropdown */}
+                  <div className="flex-1">
+                    <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Country</label>
+                    <select
+                      value={locationCountry}
+                      onChange={(e) => {
+                        setLocationCountry(e.target.value as 'IN' | 'US');
+                        setLocationStateFilter('all');
+                        setNewLocation(prev => ({ ...prev, city: '' }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
+                    >
+                      <option value="IN">India</option>
+                      <option value="US">United States</option>
+                    </select>
+                  </div>
+
                   {/* State Filter Dropdown */}
                   <div className="flex-1">
                     <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1">State</label>
@@ -4754,6 +4819,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
                     >
                       <option value="all">All States</option>
+                      {locationCountry === 'US' && CSCState.getStatesOfCountry('US').map((s) => (
+                        <option key={s.isoCode} value={s.name}>{s.name}</option>
+                      ))}
+                      {locationCountry === 'IN' && (<>
                       <option value="Delhi NCR">Delhi NCR</option>
                       <option value="Andaman And Nicobar Islands">Andaman And Nicobar Islands</option>
                       <option value="Andhra Pradesh">Andhra Pradesh</option>
@@ -4792,6 +4861,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <option value="Uttarakhand">Uttarakhand</option>
                       <option value="West Bengal">West Bengal</option>
                       <option value="Remote">Remote/Hybrid</option>
+                      </>)}
                     </select>
                   </div>
 
@@ -4804,6 +4874,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
                     >
                       <option value="">Select a city</option>
+                      {locationCountry === 'US' && (() => {
+                        const usStates = CSCState.getStatesOfCountry('US');
+                        const selectedUsState = locationStateFilter === 'all'
+                          ? null
+                          : usStates.find((s) => s.name === locationStateFilter);
+                        const statesToShow = selectedUsState ? [selectedUsState] : usStates;
+                        return statesToShow.map((s) => {
+                          const cities = CSCCity.getCitiesOfState('US', s.isoCode);
+                          if (!cities.length) return null;
+                          return (
+                            <optgroup key={s.isoCode} label={s.name}>
+                              {cities.map((c, idx) => (
+                                <option key={`${s.isoCode}-${idx}`} value={`${c.name}, ${s.name}`}>{c.name}</option>
+                              ))}
+                            </optgroup>
+                          );
+                        });
+                      })()}
+                      {locationCountry === 'IN' && (<>
                       {(locationStateFilter === 'all' || locationStateFilter === 'Delhi NCR') && (
                         <optgroup label="Delhi NCR">
                           <option value="Delhi NCR">Delhi NCR (All)</option>
@@ -5702,6 +5791,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           <option value="Hybrid - Flexible">Hybrid - Flexible</option>
                         </optgroup>
                       )}
+                      </>)}
                     </select>
                   </div>
 

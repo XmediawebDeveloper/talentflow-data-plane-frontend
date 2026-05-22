@@ -987,8 +987,67 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             ...nthClusters.flatMap(c => c.skills),
                             ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                           ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
-                          const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
-                          const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : [];
+                          // 2026-05-22 fix: stealth-dot popover MUST mirror
+                          // the saved skill_distribution (what Linda actually
+                          // asks at runtime). Previously it ran a local
+                          // distribute() with the old priority-block layout
+                          // and drifted from the DB-stored priority-mixed
+                          // layout. Read saved data first; fall back to
+                          // local distribute only when no save has happened.
+                          const savedSDDetails = (() => {
+                            try {
+                              const raw = (config as any)?.special_instructions;
+                              if (!raw) return null;
+                              const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                              return s?.skill_distribution || null;
+                            } catch { return null; }
+                          })();
+                          // Build a skill→priority map from both bucket's
+                          // clusters so each secondary's chip shows the
+                          // skill's TRUE priority (not the primary's).
+                          // Saved secondary_skills are flat strings — we
+                          // look up each one in the cluster definitions.
+                          const skillPriorityMap = new Map<string, number>();
+                          for (const c of [...mthClusters, ...nthClusters]) {
+                            const pri = c.priority ?? 1;
+                            for (const s of (c.skills ?? [])) {
+                              if (typeof s === 'string' && s.trim()) {
+                                const k = s.toLowerCase().trim();
+                                if (!skillPriorityMap.has(k)) skillPriorityMap.set(k, pri);
+                              }
+                            }
+                          }
+                          const sdToRowDetails = (q: any, idx: number): DistRow => {
+                            const primary = String(q?.primary_skill || '').trim();
+                            const primaryPri = Number(q?.cluster_priority)
+                              || skillPriorityMap.get(primary.toLowerCase())
+                              || 1;
+                            const secs = Array.isArray(q?.secondary_skills)
+                              ? q.secondary_skills
+                                  .filter((s: any) => typeof s === 'string' && s.trim())
+                                  .map((s: string) => ({
+                                    name: s.trim(),
+                                    // Look up THIS skill's own priority — fall back
+                                    // to primary's only if the skill isn't in any
+                                    // cluster (extremely rare; happens for JD-pool
+                                    // additions that didn't end up in a cluster).
+                                    priority: skillPriorityMap.get(s.trim().toLowerCase()) ?? primaryPri,
+                                  }))
+                              : [];
+                            return {
+                              q: Number(q?.question_number) || (idx + 1),
+                              primary,
+                              secondaries: secs,
+                              cluster: String(q?.cluster_name || ''),
+                              priority: primaryPri,
+                            };
+                          };
+                          const mthDist: DistRow[] = (savedSDDetails?.mth_questions?.length)
+                            ? savedSDDetails.mth_questions.map(sdToRowDetails)
+                            : distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
+                          const nthDist: DistRow[] = (savedSDDetails?.nth_questions?.length)
+                            ? savedSDDetails.nth_questions.map(sdToRowDetails)
+                            : (nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : []);
                           const totalQ = mthDist.length + nthDist.length;
                           const totalSkillsCovered = new Set([
                             ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),

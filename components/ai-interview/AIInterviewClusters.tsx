@@ -2335,7 +2335,94 @@ export default function AIInterviewClusters() {
                             priority: o.cluster.priority ?? 1,
                           });
                         }
-                        return out;
+
+                        // ── STEP 4 — 2026-05-22 cross-priority remix ─────────
+                        // Rebuild secondaries to mix priorities within each Q
+                        // and round-robin primary priorities across Q#s.
+                        // Mirror of backend _apply_cross_priority_mix so the
+                        // preview matches what runtime + DB will store.
+                        type Pool = { skill: string; priority: number };
+                        const allSkillsPool: Pool[] = [];
+                        const _seenPool = new Set<string>();
+                        for (const c of clusters) {
+                          for (const s of (c.skills ?? [])) {
+                            if (typeof s !== 'string' || !s.trim()) continue;
+                            const sl = s.toLowerCase();
+                            if (_seenPool.has(sl)) continue;
+                            _seenPool.add(sl);
+                            allSkillsPool.push({ skill: s, priority: c.priority ?? 1 });
+                          }
+                        }
+                        const primariesLower = new Set(out.map(r => r.primary.toLowerCase()));
+                        const remixByPri = new Map<number, string[]>();
+                        for (const p of allSkillsPool) {
+                          if (primariesLower.has(p.skill.toLowerCase())) continue;
+                          const arr = remixByPri.get(p.priority) ?? [];
+                          arr.push(p.skill);
+                          remixByPri.set(p.priority, arr);
+                        }
+                        const remixPriDesc = [...remixByPri.keys()].sort((a, b) => b - a);
+                        const usedSecRemix = new Set<string>();
+                        // Wipe existing secondaries.
+                        for (const r of out) r.secondaries = [];
+                        // Pass 1: OTHER-priority skills first.
+                        for (const r of out) {
+                          for (const op of remixPriDesc) {
+                            if (op === r.priority) continue;
+                            if (r.secondaries.length >= 2) break;
+                            const bucket = remixByPri.get(op) ?? [];
+                            const pick = bucket.find(s => !usedSecRemix.has(s.toLowerCase()));
+                            if (pick) {
+                              r.secondaries.push({ name: pick, priority: op });
+                              usedSecRemix.add(pick.toLowerCase());
+                            }
+                          }
+                        }
+                        // Pass 2: same-priority leftovers.
+                        for (const r of out) {
+                          if (r.secondaries.length >= 2) continue;
+                          for (const s of (remixByPri.get(r.priority) ?? [])) {
+                            if (r.secondaries.length >= 2) break;
+                            if (usedSecRemix.has(s.toLowerCase())) continue;
+                            if (s.toLowerCase() === r.primary.toLowerCase()) continue;
+                            r.secondaries.push({ name: s, priority: r.priority });
+                            usedSecRemix.add(s.toLowerCase());
+                          }
+                        }
+                        // Pass 3: every still-unused skill goes to the Q with fewest secondaries.
+                        const stillUnusedRemix: { name: string; priority: number }[] = [];
+                        for (const p of remixPriDesc) {
+                          for (const s of (remixByPri.get(p) ?? [])) {
+                            if (!usedSecRemix.has(s.toLowerCase())) {
+                              stillUnusedRemix.push({ name: s, priority: p });
+                            }
+                          }
+                        }
+                        for (const u of stillUnusedRemix) {
+                          const target = out
+                            .filter(r => r.primary.toLowerCase() !== u.name.toLowerCase())
+                            .sort((a, b) => a.secondaries.length - b.secondaries.length)[0];
+                          if (target) {
+                            target.secondaries.push({ name: u.name, priority: u.priority });
+                            usedSecRemix.add(u.name.toLowerCase());
+                          }
+                        }
+                        // Round-robin Q order by primary priority.
+                        const remixGroups = new Map<number, DistRow[]>();
+                        for (const r of out) {
+                          const arr = remixGroups.get(r.priority) ?? [];
+                          arr.push(r);
+                          remixGroups.set(r.priority, arr);
+                        }
+                        const remixKeysDesc = [...remixGroups.keys()].sort((a, b) => b - a);
+                        const remixInterleaved: DistRow[] = [];
+                        while (remixKeysDesc.some(k => (remixGroups.get(k)?.length ?? 0) > 0)) {
+                          for (const k of remixKeysDesc) {
+                            const arr = remixGroups.get(k);
+                            if (arr && arr.length > 0) remixInterleaved.push(arr.shift()!);
+                          }
+                        }
+                        return remixInterleaved.map((r, i) => ({ ...r, q: i + 1 }));
                       };
                       // Build JD pools per bucket, then strip out skills that
                       // belong to the OTHER bucket's clusters. Without this
@@ -2754,61 +2841,158 @@ export default function AIInterviewClusters() {
             // si.skill_distribution at save time (see saveAndNavigate). The
             // panel below renders that when present, falling back to this
             // local function for the live in-progress preview.
+            // 2026-05-22 cross-priority mix (mirrors backend
+            // _apply_cross_priority_mix). Every Q gets a mix of P1+P2+P3
+            // skills when the pool allows, primary priorities round-
+            // robin across Q#s. Replaces the old priority-block layout
+            // (Q1-Q4 all P1, Q5-Q6 all P2, Q7-Q8 all P3).
             const distribute = (clusters: Cluster[], qCount: number): DistRow[] => {
               if (qCount <= 0 || clusters.length === 0) return [];
-              const sorted = [...clusters]
-                .filter(c => (c.skills?.length ?? 0) > 0)
-                .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-              const flat: { skill: string; cluster: Cluster }[] = [];
-              for (const c of sorted) {
+              const valid = clusters.filter(c => (c.skills?.length ?? 0) > 0);
+              if (valid.length === 0) return [];
+
+              // Group all skills by priority (P3=High=3, P2=Medium=2, P1=Low=1)
+              type PoolEntry = { skill: string; cluster: Cluster; priority: number };
+              const byPriority = new Map<number, PoolEntry[]>();
+              for (const c of valid) {
+                const pri = c.priority ?? 1;
                 for (const s of (c.skills ?? [])) {
-                  if (typeof s === 'string' && s.trim()) flat.push({ skill: s, cluster: c });
+                  if (typeof s !== 'string' || !s.trim()) continue;
+                  const arr = byPriority.get(pri) ?? [];
+                  arr.push({ skill: s, cluster: c, priority: pri });
+                  byPriority.set(pri, arr);
                 }
               }
-              if (flat.length === 0) return [];
+              const priDesc = [...byPriority.keys()].sort((a, b) => b - a);
+              if (priDesc.length === 0) return [];
+
+              // Pass 1: pick primaries round-robin across priorities — Q1=highest
+              // available, Q2=next priority, Q3=next, cycle. If a bucket is
+              // exhausted, the slot falls to the next non-empty bucket.
               const used = new Set<string>();
+              const cursor = new Map<number, number>();
+              priDesc.forEach(p => cursor.set(p, 0));
               const out: DistRow[] = [];
-              let idx = 0;
-              // Pass 1: primaries
-              for (let q = 1; q <= qCount; q++) {
-                let pick: { skill: string; cluster: Cluster } | null = null;
-                for (let attempts = 0; attempts < flat.length; attempts++) {
-                  const cand = flat[idx % flat.length];
-                  idx++;
-                  if (!used.has(cand.skill.toLowerCase())) { pick = cand; break; }
+              let priIdx = 0;
+              while (out.length < qCount) {
+                let placed = false;
+                // Try priorities in round-robin order starting from priIdx.
+                for (let attempt = 0; attempt < priDesc.length; attempt++) {
+                  const p = priDesc[(priIdx + attempt) % priDesc.length];
+                  const bucket = byPriority.get(p) ?? [];
+                  const startCur = cursor.get(p) ?? 0;
+                  for (let i = startCur; i < bucket.length; i++) {
+                    const cand = bucket[i];
+                    if (used.has(cand.skill.toLowerCase())) continue;
+                    out.push({
+                      q: out.length + 1,
+                      primary: cand.skill,
+                      secondaries: [],
+                      cluster: cand.cluster.name ?? '',
+                      priority: cand.priority,
+                    });
+                    used.add(cand.skill.toLowerCase());
+                    cursor.set(p, i + 1);
+                    priIdx = (priIdx + attempt + 1) % priDesc.length;
+                    placed = true;
+                    break;
+                  }
+                  if (placed) break;
                 }
-                if (!pick) pick = flat[(q - 1) % flat.length];
-                used.add(pick.skill.toLowerCase());
-                out.push({
-                  q,
-                  primary: pick.skill,
-                  secondaries: [],
-                  cluster: pick.cluster.name ?? '',
-                  priority: pick.cluster.priority ?? 1,
-                });
+                if (!placed) break;  // all buckets exhausted
               }
-              // Pass 2: distribute ALL remaining unused skills as secondaries —
-              // place each on the same-cluster Q with the fewest secondaries so
-              // they spread evenly. No cap; every skill must appear.
-              const remaining = flat.filter(({ skill }) => !used.has(skill.toLowerCase()));
-              for (const { skill, cluster } of remaining) {
+
+              // Pass 2: rebuild secondaries — every Q tries OTHER-priority
+              // skills first, then same-priority leftovers.
+              const usedSec = new Set<string>();
+              const remainingByPriority = new Map<number, string[]>();
+              priDesc.forEach(p => {
+                const bucket = byPriority.get(p) ?? [];
+                remainingByPriority.set(p, bucket
+                  .filter(e => !used.has(e.skill.toLowerCase()))
+                  .map(e => e.skill));
+              });
+
+              for (const row of out) {
+                // Pick one OTHER-priority skill from each bucket first.
+                for (const op of priDesc) {
+                  if (op === row.priority) continue;
+                  if (row.secondaries.length >= 2) break;
+                  const bucket = remainingByPriority.get(op) ?? [];
+                  const pick = bucket.find(s => !usedSec.has(s.toLowerCase()));
+                  if (pick) {
+                    row.secondaries.push(pick);
+                    usedSec.add(pick.toLowerCase());
+                  }
+                }
+                // Same-priority fallback if still under 2.
+                if (row.secondaries.length < 2) {
+                  const bucket = remainingByPriority.get(row.priority) ?? [];
+                  for (const s of bucket) {
+                    if (row.secondaries.length >= 2) break;
+                    if (usedSec.has(s.toLowerCase())) continue;
+                    if (s.toLowerCase() === row.primary.toLowerCase()) continue;
+                    row.secondaries.push(s);
+                    usedSec.add(s.toLowerCase());
+                  }
+                }
+              }
+
+              // Pass 3: any still-unused skill → row with fewest secondaries.
+              // Guarantees every skill appears at least once in coverage.
+              const stillUnused: string[] = [];
+              for (const p of priDesc) {
+                for (const s of (remainingByPriority.get(p) ?? [])) {
+                  if (!usedSec.has(s.toLowerCase())) stillUnused.push(s);
+                }
+              }
+              for (const skill of stillUnused) {
                 const candidates = out
-                  .filter(row => row.cluster === (cluster.name ?? ''))
+                  .filter(r => r.primary.toLowerCase() !== skill.toLowerCase())
                   .sort((a, b) => a.secondaries.length - b.secondaries.length);
-                const target = candidates[0] ?? out
-                  .slice()
-                  .sort((a, b) => a.secondaries.length - b.secondaries.length)[0];
+                const target = candidates[0];
                 if (target) {
                   target.secondaries.push(skill);
-                  used.add(skill.toLowerCase());
+                  usedSec.add(skill.toLowerCase());
                 }
               }
+
               return out;
             };
-            const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
-            const nthDist = nthEnabled
-              ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0)
-              : [];
+            // 2026-05-22 fix: Distribution panel must mirror the saved
+            // skill_distribution that the runtime actually follows. The
+            // older local `distribute()` recomputed a DIFFERENT layout
+            // (priority-block layout) which never matched what Linda
+            // asked. Read from saved si.skill_distribution when present;
+            // fall back to local distribute() only for fresh sessions
+            // that haven't generated/saved yet.
+            const savedSD = (() => {
+              try {
+                const raw = (config as any)?.special_instructions;
+                if (!raw) return null;
+                const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                return s?.skill_distribution || null;
+              } catch { return null; }
+            })();
+            const sdToRow = (q: any, idx: number): DistRow => {
+              const primary = String(q?.primary_skill || '').trim();
+              const secs = Array.isArray(q?.secondary_skills)
+                ? q.secondary_skills.filter((s: any) => typeof s === 'string' && s.trim()).map((s: string) => s.trim())
+                : [];
+              return {
+                q: Number(q?.question_number) || (idx + 1),
+                primary,
+                secondaries: secs,
+                cluster: String(q?.cluster_name || ''),
+                priority: Number(q?.cluster_priority) || 1,
+              };
+            };
+            const mthDist: DistRow[] = (savedSD?.mth_questions?.length)
+              ? savedSD.mth_questions.map(sdToRow)
+              : distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
+            const nthDist: DistRow[] = (savedSD?.nth_questions?.length)
+              ? savedSD.nth_questions.map(sdToRow)
+              : (nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : []);
             const totalQ = mthDist.length + nthDist.length;
             const totalSkillsCovered = new Set([
               ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.toLowerCase())]),
@@ -3043,8 +3227,9 @@ export default function AIInterviewClusters() {
           </div>
 
           </div>{/* closes two-column flex */}
-        </div>{/* closes w-full */}
-      </div>{/* closes flex-1 p-4 */}
+          </div>{/* closes p-4 inner wrapper */}
+        </div>{/* closes mx-auto max-w wrapper */}
+      </main>{/* closes flex-1 main */}
 
       {/* ── Sticky footer ── */}
       <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-10">

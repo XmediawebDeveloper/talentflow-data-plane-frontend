@@ -548,31 +548,64 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               Follow-up{q.followUps.length === 1 ? '' : 's'} ({q.followUps.length})
             </div>
             <div className="space-y-2">
-              {q.followUps.map((fu, fi) => (
-                <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
-                      FU{fi + 1}
-                    </span>
-                    {fu.topic && (
-                      <span className="text-[10px] text-amber-700 italic">on {fu.topic}</span>
-                    )}
-                    {typeof fu.score === 'number' && (
-                      <span className="ml-auto text-[10px] font-mono text-amber-800">
-                        Score {fu.score.toFixed(1)}
+              {q.followUps.map((fu, fi) => {
+                // Friendly explanation derived from the backend trigger
+                // reason. Tells the recruiter WHY this extra question
+                // appeared at this slot — usually because the candidate
+                // mentioned the skill in an earlier answer.
+                const explainReason = (): string | null => {
+                  if (!fu.reason) return null;
+                  const focus = fu.focus_skill || fu.topic || 'this skill';
+                  const srcRef = fu.source_qnum
+                    ? `Q${fu.source_qnum}'s answer`
+                    : 'an earlier answer';
+                  switch (fu.reason) {
+                    case 'validate_volunteered_primary':
+                      return `Follow-up asked because the candidate mentioned ${focus} in ${srcRef} (volunteered earlier). Linda validated the claim at this slot.`;
+                    case 'probe_touched_secondary':
+                      return `Follow-up asked because ${focus} was already volunteered in ${srcRef}. Linda probed depth at this slot instead of asking it fresh.`;
+                    case 'volunteered_skill':
+                      return `Follow-up asked because the candidate volunteered ${focus} while answering this question — Linda validated the claim.`;
+                    case 'weak_answer':
+                      return `Follow-up asked because the main answer scored low — giving the candidate a second chance.`;
+                    case 'incomplete':
+                      return `Follow-up asked because the main answer was incomplete — Linda probed for more detail.`;
+                    default:
+                      return null;
+                  }
+                };
+                const reasonNote = explainReason();
+                return (
+                  <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                        FU{fi + 1}
                       </span>
+                      {fu.topic && (
+                        <span className="text-[10px] text-amber-700 italic">on {fu.topic}</span>
+                      )}
+                      {typeof fu.score === 'number' && (
+                        <span className="ml-auto text-[10px] font-mono text-amber-800">
+                          Score {fu.score.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-800">{fu.question || <span className="italic text-gray-500">(no follow-up text)</span>}</div>
+                    <div className="text-xs text-gray-700">
+                      <span className="text-gray-500">Answer: </span>
+                      {fu.answer ? fu.answer : <span className="italic text-gray-500">(no response)</span>}
+                    </div>
+                    {fu.note && (
+                      <div className="text-[11px] italic text-gray-600">{fu.note}</div>
+                    )}
+                    {reasonNote && (
+                      <div className="text-[11px] text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 mt-1">
+                        <span className="font-semibold">Note:</span> {reasonNote}
+                      </div>
                     )}
                   </div>
-                  <div className="text-sm text-gray-800">{fu.question || <span className="italic text-gray-500">(no follow-up text)</span>}</div>
-                  <div className="text-xs text-gray-700">
-                    <span className="text-gray-500">Answer: </span>
-                    {fu.answer ? fu.answer : <span className="italic text-gray-500">(no response)</span>}
-                  </div>
-                  {fu.note && (
-                    <div className="text-[11px] italic text-gray-600">{fu.note}</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
