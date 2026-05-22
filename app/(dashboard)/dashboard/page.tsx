@@ -635,8 +635,8 @@ export default function DashboardPage() {
           {/* Identity row: avatar + name+text (left) · CTAs (center) · illustration (right) */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-4">
-              {/* Avatar — gradient rounded square */}
-              <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-indigo-500 to-purple-500 text-base font-semibold text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/20">
+              {/* Avatar — solid rounded square */}
+              <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-brand-blue text-base font-semibold text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/20">
                 {user?.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />

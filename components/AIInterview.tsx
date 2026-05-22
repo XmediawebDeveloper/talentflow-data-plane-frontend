@@ -886,21 +886,25 @@ export default function AIInterview() {
                 onClick={() => openListView(tab, { invitedOnly: !!cardInvitedOnly })}
                 className="group relative text-left bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-5 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 hover:border-brand-blue/30 transition-all duration-200 cursor-pointer min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
               >
-                <div className="flex items-start justify-between mb-2.5 sm:mb-4 gap-2">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
-                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </div>
-                  {trend === 'up' && (
+                {trend === 'up' && (
+                  <div className="flex justify-end mb-1.5">
                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-semibold ring-1 ring-green-200 flex-shrink-0">
                       <ArrowUpRight className="w-3 h-3" />
                       Live
                     </span>
-                  )}
+                  </div>
+                )}
+                {/* Row 1: icon (left) + count (right) */}
+                <div className="flex items-center gap-3 mb-2 sm:mb-3">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  <div className="text-xl sm:text-3xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight tabular-nums truncate">
+                    {value}
+                  </div>
                 </div>
-                <div className="text-xl sm:text-3xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight tabular-nums truncate">
-                  {value}
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-1 min-w-0">
+                {/* Row 2: label text */}
+                <div className="flex items-center justify-between gap-1 min-w-0">
                   <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 font-medium truncate">{label}</span>
                   <span className="hidden lg:inline text-[11px] text-gray-400 dark:text-slate-500 truncate">{hint}</span>
                 </div>

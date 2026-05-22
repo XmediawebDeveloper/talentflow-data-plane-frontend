@@ -1,6 +1,7 @@
 'use client';
 
 import { Sparkles, Target, Filter, Search, ChevronDown, ChevronLeft, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -190,6 +191,8 @@ export default function AITalentMatchPage({
   const [historyFilterExpMax, setHistoryFilterExpMax] = useState<number | ''>('');
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
+  // Two-step view: 'cards' shows just the Matched Jobs stats card; clicking it reveals 'list'.
+  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list'>('cards');
 
   useEffect(() => {
     setHistoryCurrentPage(1);
@@ -1747,6 +1750,31 @@ export default function AITalentMatchPage({
           </div>
         </div>
 
+        {/* Stats Cards — clicking Matched Jobs drills into the list */}
+        <StatsCardGrid className="mb-5">
+          <StatsCard
+            tone="blue"
+            icon={History}
+            label="Matched Jobs"
+            value={matchHistory.length}
+            sparkline={false}
+            onClick={() => setHistoryPageView('list')}
+          />
+        </StatsCardGrid>
+
+        {historyPageView === 'list' && (
+        <>
+        {/* Back to cards button */}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <button
+            onClick={() => setHistoryPageView('cards')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to overview
+          </button>
+        </div>
+
         {/* Search and Filter Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
           <div className="flex-1 relative">
@@ -2065,6 +2093,8 @@ export default function AITalentMatchPage({
               </button>
             </div>
           </div>
+        )}
+        </>
         )}
         </div>
       </div>

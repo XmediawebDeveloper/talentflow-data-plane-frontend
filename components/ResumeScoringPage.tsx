@@ -1750,7 +1750,7 @@ export default function ResumeScoringPage({
 
             {/* Action cards — "View by Job" and "View All Candidates" as two
                 separate cards. Clicking either opens its list view. */}
-            <div className="grid grid-cols-2 gap-2 max-w-md">
+            <div className="flex flex-wrap items-stretch gap-2">
               {/* View by Job card */}
               <button
                 type="button"
@@ -1761,18 +1761,16 @@ export default function ResumeScoringPage({
                   }
                   setPageView('list');
                 }}
-                className={`text-left w-full rounded-lg border bg-white dark:bg-slate-900 p-2 sm:p-2.5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' && !isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
+                className={`inline-flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-900 px-6 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md text-left ${pageView === 'list' && !isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium text-gray-500 dark:text-slate-500">View by Job</p>
-                    <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50">
-                      {scoredHistory.length}
-                    </p>
-                  </div>
-                  <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                    <Briefcase className="w-3.5 h-3.5 text-white" />
-                  </div>
+                <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Briefcase className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-500 dark:text-slate-500 leading-tight">View by Job</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 leading-tight mt-0.5">
+                    {scoredHistory.length}
+                  </p>
                 </div>
               </button>
 
@@ -1787,18 +1785,16 @@ export default function ResumeScoringPage({
                   }
                   setPageView('list');
                 }}
-                className={`text-left w-full rounded-lg border bg-white dark:bg-slate-900 p-2 sm:p-2.5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' && isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
+                className={`inline-flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-900 px-6 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md text-left ${pageView === 'list' && isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium text-gray-500 dark:text-slate-500">View All Candidates</p>
-                    <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50">
-                      {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
-                    </p>
-                  </div>
-                  <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                    <Users className="w-3.5 h-3.5 text-white" />
-                  </div>
+                <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Users className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-500 dark:text-slate-500 leading-tight">View All Candidates</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 leading-tight mt-0.5">
+                    {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
+                  </p>
                 </div>
               </button>
             </div>
@@ -2671,7 +2667,7 @@ export default function ResumeScoringPage({
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${showJobDropdown ? 'min-h-[780px]' : ''}`}>
       <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
       {/* Header */}
       <div className="mb-5">
@@ -2767,7 +2763,7 @@ export default function ResumeScoringPage({
                 </div>
               </div>
               {/* Options */}
-              <div className="max-h-72 overflow-y-auto">
+              <div className="min-h-[400px] max-h-[400px] overflow-y-auto">
                 {publishedJobs
                   .filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase()))
                   .map(job => (
