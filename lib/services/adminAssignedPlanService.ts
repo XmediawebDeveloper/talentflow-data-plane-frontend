@@ -27,12 +27,14 @@ export interface AdminAssignedPlan {
   new_plan_name?: string;
   plan_name?: string;
   plan_tier?: string;
+  plan_description?: string;
   billing_interval?: string;
   payment_amount?: number;
   payment_currency?: string;
   invoice_number?: string;
   notes?: string;
   plan_quotas?: Record<string, unknown>;
+  plan_features?: Record<string, unknown> | unknown[];
   created_at?: string;
   // Added by DP backend so the modal can offer "apply on expiry" only when
   // there's an active paid plan to queue behind.
@@ -88,18 +90,10 @@ export const adminAssignedPlanService = {
     return (response.data?.data as AdminAssignedPlan | null) ?? null;
   },
 
-  async createOrder(
-    tenantId: string,
-    planId: number,
-    billingInterval: string,
-    options?: { schema_per_tenant?: boolean; database_per_tenant?: boolean },
-  ): Promise<CreateOrderResponse> {
-    const response = await api.post(`/subscription/${tenantId}/create-order`, {
-      plan_id: planId,
-      billing_interval: billingInterval,
-      schema_per_tenant: options?.schema_per_tenant ?? true,
-      database_per_tenant: options?.database_per_tenant ?? false,
-    });
+  async createOrder(): Promise<CreateOrderResponse> {
+    // Admin-assigned plans aren't in /public/plans, so we use the dedicated
+    // DP endpoint that reads price + plan from CP's /plan-queue/pending data.
+    const response = await api.post('/subscription/admin-assigned-plan/create-order');
     return response.data;
   },
 

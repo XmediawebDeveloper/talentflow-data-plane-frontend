@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Sparkles, X, CreditCard, Loader2, AlertCircle, CheckCircle2, Zap, CalendarClock } from 'lucide-react';
+import { Sparkles, X, CreditCard, Loader2, AlertCircle, CheckCircle2, Zap, CalendarClock, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAssignedPlan } from '@/components/providers/AdminAssignedPlanProvider';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -15,6 +15,25 @@ function formatINR(amount: number): string {
     ? amount.toLocaleString('en-IN')
     : amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `₹${trimmed}`;
+}
+
+const QUOTA_LABELS: Record<string, string> = {
+  RU: 'Resume Uploads',
+  RS: 'Resume Scoring',
+  AS: 'Assessments',
+  AIU: 'AI Interviews',
+  max_seats: 'Team Seats',
+  max_jobs: 'Job Postings',
+  storage_gb: 'Storage (GB)',
+  api_rate_limit: 'API Rate Limit',
+  support_level: 'Support',
+};
+
+function formatQuotaValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (value === -1 || value === 'unlimited' || value === 'Unlimited') return 'Unlimited';
+  if (typeof value === 'number') return value.toLocaleString();
+  return String(value);
 }
 
 export default function AdminAssignedPlanModal() {
@@ -70,13 +89,11 @@ export default function AdminAssignedPlanModal() {
     setPaymentProcessing(true);
 
     try {
-      // 1. Create Razorpay order via the existing authenticated endpoint
+      // 1. Create Razorpay order via the admin-assigned-plan-specific endpoint
+      //    (it reads price + plan from CP's /plan-queue/pending, since the
+      //    plan isn't exposed via /public/plans).
       setPaymentStep('Preparing payment...');
-      const order = await adminAssignedPlanService.createOrder(
-        user.tenantId,
-        planId,
-        billingInterval,
-      );
+      const order = await adminAssignedPlanService.createOrder();
 
       // 2. Open Razorpay checkout
       setPaymentStep('Opening payment gateway...');
@@ -206,6 +223,12 @@ export default function AdminAssignedPlanModal() {
               </div>
             )}
 
+            {pendingPlan.plan_description && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm text-gray-700">{pendingPlan.plan_description}</p>
+              </div>
+            )}
+
             {pendingPlan.notes && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Admin note</p>
@@ -213,6 +236,29 @@ export default function AdminAssignedPlanModal() {
               </div>
             )}
           </div>
+
+          {/* Quotas — what the tenant gets with this plan */}
+          {pendingPlan.plan_quotas && Object.keys(pendingPlan.plan_quotas).length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Package className="w-4 h-4 text-indigo-600" />
+                <p className="text-sm font-semibold text-gray-900">What&rsquo;s included</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                {Object.entries(pendingPlan.plan_quotas)
+                  .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                  .map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0 sm:border-0"
+                    >
+                      <span className="text-gray-600">{QUOTA_LABELS[key] || key}</span>
+                      <span className="font-medium text-gray-900">{formatQuotaValue(value)}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Apply-mode choice — only shown when there's an active paid plan to queue against */}
           {canQueue && (
