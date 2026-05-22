@@ -1243,6 +1243,22 @@ function buildPerQuestionDetailsFromConversation(
       || /\b(?:notice|joining) period\b/.test(t)
       || /\bsalary (?:expectation|range)\b/.test(t)
       || /\bavailable to (?:start|join|relocate)\b/.test(t)
+      // 2026-05-21: additional HR patterns observed in real sessions
+      // (Chandra session b70e3a37: backend tagged HR Qs as `nth` due to
+      // a round-transition timing bug — qh.round_type can't be trusted
+      // for these. The frontend heuristic must catch them on the
+      // question text alone so HR section isn't empty.)
+      //   • "Are you open to {learning|relocating|...}" — growth/fit
+      //   • "Are you available for {onsite|remote|hybrid|relocation}" —
+      //     work-arrangement availability
+      //   • "Are you comfortable working {in|with} a team" — collaboration
+      //   • "Work style and preferences" — soft-skill probe opener
+      //   • "How do you handle {pressure|stress|deadlines}" — behavioral
+      || /\bare you open to\b/.test(t)
+      || /\bare you available for\b/.test(t)
+      || /\bare you (?:comfortable|willing|interested) (?:working|to work|with)\b/.test(t)
+      || /\bwork style and preferences\b/.test(t)
+      || /\bhow do you handle (?:pressure|stress|deadlines|conflict)\b/.test(t)
       // Credentials — certifications are factual recall, treated as HR-style
       // verification rather than skill-evaluative (the skill itself is
       // scored elsewhere when Linda actually probes it).
@@ -1280,13 +1296,17 @@ function buildPerQuestionDetailsFromConversation(
 
   const resolveSection = (questionText: string): PerQuestionDetail['section'] => {
     const txt = questionText.trim().toLowerCase();
+    // HR text heuristic FIRST — it overrides qh's round_type, which is
+    // unreliable for HR questions (backend can tag them as `nth` if the
+    // round transition fires late). When the question text is
+    // unambiguously HR-style, trust the text over qh.
+    if (_looksLikeHR(questionText)) return 'hr';
     const fromHistory = roundTypeByText.get(txt);
     if (fromHistory) return sectionFromRT(fromHistory);
     // Prefix-tolerant fallback: transcript text ends with stored qh text.
     for (const { key, rt } of roundTypeBySuffix) {
       if (txt.endsWith(key)) return sectionFromRT(rt);
     }
-    if (_looksLikeHR(questionText)) return 'hr';
     return 'mth';
   };
 

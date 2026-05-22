@@ -790,42 +790,42 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     // mapping.
                     mode === 'fixed' && (mthClusters.length > 0 || (nthEnabled && nthClusters.length > 0))
                       ? (() => {
-                          type DistRow = {
-                            q: number;
-                            primary: string;
-                            // Each secondary carries its own priority so the UI
-                            // can render per-skill High/Med/Low badges — secondaries
-                            // can come from the primary's cluster OR from a 0-alloc
-                            // orphan cluster with a different priority.
-                            secondaries: { name: string; priority: number }[];
-                            cluster: string;
-                            priority: number;
-                          };
-                          // Deterministic per-cluster question distribution.
-                          // Mirrors the algorithm in AIInterviewClusters.tsx so
-                          // the two views never disagree on what gets asked.
-                          const distribute = (
-                            clusters: typeof mthClusters,
-                            qCount: number,
-                          ): DistRow[] => {
+                          // Each secondary carries its own priority so the UI can
+                          // render per-skill P1/P2/P3 badges (secondaries may
+                          // come from a 0-alloc orphan cluster with a different
+                          // priority than the primary's cluster).
+                          type DistRow = { q: number; primary: string; secondaries: { name: string; priority: number }[]; cluster: string; priority: number };
+                          // Distribute skills across N questions deterministically.
+                          // Ported verbatim from AIInterviewClusters.tsx so the
+                          // create-page popover and the details-page popover
+                          // always show the same per-Q skill mapping.
+                          const distribute = (clusters: typeof mthClusters, qCount: number, jdPool: string[] = []): DistRow[] => {
                             if (qCount <= 0 || clusters.length === 0) return [];
+                            const _jdPoolSeen = new Set<string>();
+                            const jdPoolClean: string[] = [];
+                            for (const s of jdPool) {
+                              if (typeof s !== 'string') continue;
+                              const t = s.trim();
+                              if (!t) continue;
+                              const k = t.toLowerCase();
+                              if (_jdPoolSeen.has(k)) continue;
+                              _jdPoolSeen.add(k);
+                              jdPoolClean.push(t);
+                            }
                             const sorted = [...clusters]
                               .filter(c => (c.skills?.length ?? 0) > 0)
                               .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
                             if (sorted.length === 0) return [];
-                            const skillCounts = sorted.map(c => c.skills?.length ?? 0);
-                            const totalWeight = sorted.reduce(
-                              (sum, c, i) => sum + ((c.priority ?? 1) * skillCounts[i]),
-                              0,
-                            );
-                            const rawAlloc = sorted.map((c, i) =>
-                              totalWeight > 0
-                                ? (qCount * (c.priority ?? 1) * skillCounts[i]) / totalWeight
+
+                            // STEP 1 — per-cluster Q allocation by skill count
+                            const skillCounts = sorted.map(c => (c.skills?.length ?? 0));
+                            const totalSkills = skillCounts.reduce((s, n) => s + n, 0);
+                            const rawAlloc = sorted.map((_, i) =>
+                              totalSkills > 0
+                                ? (qCount * skillCounts[i]) / totalSkills
                                 : 0,
                             );
-                            const allocations = rawAlloc.map((r, i) =>
-                              Math.min(skillCounts[i], Math.floor(r)),
-                            );
+                            const allocations = rawAlloc.map(r => Math.floor(r));
                             if (qCount < sorted.length) {
                               for (let i = 0; i < allocations.length; i++) {
                                 allocations[i] = i < qCount ? 1 : 0;
@@ -851,13 +851,25 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             }
                             while (diff > 0) {
                               const fracs = rawAlloc
-                                .map((r, i) => ({ frac: r - Math.floor(r), i }))
-                                .filter(({ i }) => allocations[i] < skillCounts[i])
-                                .sort((a, b) => b.frac - a.frac);
+                                .map((r, i) => ({
+                                  frac: r - Math.floor(r),
+                                  priority: sorted[i].priority ?? 1,
+                                  skillCount: skillCounts[i],
+                                  i,
+                                }))
+                                .filter(({ skillCount }) => skillCount > 0)
+                                .sort((a, b) =>
+                                  b.frac - a.frac
+                                  || b.priority - a.priority
+                                  || b.skillCount - a.skillCount,
+                                );
                               if (fracs.length === 0) break;
                               allocations[fracs[0].i] += 1;
                               diff -= 1;
                             }
+
+                            // STEP 2 — build per-Q rows
+                            const bucketUsedLower = new Set<string>();
                             const out: DistRow[] = [];
                             let qNum = 0;
                             const orphanSkills: { skill: string; cluster: typeof mthClusters[number] }[] = [];
@@ -865,20 +877,66 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               const cluster = sorted[ci];
                               const alloc = allocations[ci];
                               const skills = (cluster.skills ?? []).filter(
-                                s => typeof s === 'string' && s.trim(),
+                                s => typeof s === 'string' && s.trim()
                               );
-                              if (alloc === 0) {
+                              if (alloc === 0 || skills.length === 0) {
                                 for (const s of skills) orphanSkills.push({ skill: s, cluster });
                                 continue;
                               }
-                              const primaries = skills.slice(0, alloc);
-                              const leftover = skills.slice(alloc);
+                              const primaries: string[] = [];
+                              if (alloc <= skills.length) {
+                                primaries.push(...skills.slice(0, alloc));
+                              } else {
+                                primaries.push(...skills);
+                                const usedLower = new Set(skills.map(s => s.toLowerCase()));
+                                for (const jdSkill of jdPoolClean) {
+                                  if (primaries.length >= alloc) break;
+                                  if (usedLower.has(jdSkill.toLowerCase())) continue;
+                                  primaries.push(jdSkill);
+                                  usedLower.add(jdSkill.toLowerCase());
+                                }
+                                for (let p = primaries.length; p < alloc; p++) {
+                                  primaries.push(skills[p % skills.length]);
+                                }
+                              }
+                              for (const p of primaries) bucketUsedLower.add(p.toLowerCase());
+                              const leftover = alloc <= skills.length ? skills.slice(alloc) : [];
                               for (let i = 0; i < primaries.length; i++) {
                                 qNum += 1;
-                                const secs = leftover.slice(i * 2, i * 2 + 2).map(s => ({
-                                  name: s,
-                                  priority: cluster.priority ?? 1,
-                                }));
+                                const start = Math.floor((i * leftover.length) / primaries.length);
+                                const end = Math.floor(((i + 1) * leftover.length) / primaries.length);
+                                let secs: { name: string; priority: number }[];
+                                if (leftover.length > 0) {
+                                  const slice = leftover.slice(start, end);
+                                  for (const s of slice) bucketUsedLower.add(s.toLowerCase());
+                                  secs = slice.map(s => ({
+                                    name: s,
+                                    priority: cluster.priority ?? 1,
+                                  }));
+                                } else {
+                                  const cycled = alloc > skills.length;
+                                  const picked: string[] = [];
+                                  if (cycled) {
+                                    const tryPick = (cand: string) => {
+                                      const k = cand.toLowerCase();
+                                      if (bucketUsedLower.has(k)) return;
+                                      bucketUsedLower.add(k);
+                                      picked.push(cand);
+                                    };
+                                    for (let j = 0; j < jdPoolClean.length && picked.length < 2; j++) {
+                                      tryPick(jdPoolClean[j]);
+                                    }
+                                    if (picked.length < 2) {
+                                      for (let j = 0; j < skills.length && picked.length < 2; j++) {
+                                        tryPick(skills[j]);
+                                      }
+                                    }
+                                  }
+                                  secs = picked.map(s => ({
+                                    name: s,
+                                    priority: cluster.priority ?? 1,
+                                  }));
+                                }
                                 out.push({
                                   q: qNum,
                                   primary: primaries[i],
@@ -888,8 +946,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                 });
                               }
                             }
+
+                            // STEP 3 — orphan-cluster skills go to Q with fewest secondaries (no cap)
                             for (const o of orphanSkills) {
-                              const target = out.find(r => r.secondaries.length < 2);
+                              const target = out
+                                .slice()
+                                .sort((a, b) => a.secondaries.length - b.secondaries.length)[0];
                               if (!target) break;
                               target.secondaries.push({
                                 name: o.skill,
@@ -898,53 +960,72 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             }
                             return out;
                           };
-                          const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0);
-                          const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0) : [];
+                          // JD pool widening — same logic as create page, minus
+                          // the mthSkills/nthSkills pool objects which only exist
+                          // mid-edit. We still exclude the other bucket's skills
+                          // so NTH secondaries can't accidentally pull MTH skills.
+                          const _otherBucketLower = (bucket: 'mth' | 'nth') => {
+                            const otherClusters = bucket === 'mth' ? nthClusters : mthClusters;
+                            return new Set(
+                              otherClusters
+                                .flatMap(c => c.skills ?? [])
+                                .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                                .map(s => s.toLowerCase()),
+                            );
+                          };
+                          const mthExclude = _otherBucketLower('mth');
+                          const nthExclude = _otherBucketLower('nth');
+                          const mthJdPool = Array.from(new Set([
+                            ...mthClusters.flatMap(c => c.skills),
+                            ...(((config as any)?.jd_must_have_skills as string[] | undefined) ?? []),
+                          ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !mthExclude.has(s.toLowerCase()))));
+                          const nthJdPool = Array.from(new Set([
+                            ...nthClusters.flatMap(c => c.skills),
+                            ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
+                          ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
+                          const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
+                          const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : [];
                           const totalQ = mthDist.length + nthDist.length;
                           const totalSkillsCovered = new Set([
                             ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
                             ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
                           ]).size;
-                          const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
+                          const priorityLabel = (p: number) => p >= 3 ? 'P1' : p === 2 ? 'P2' : 'P3';
                           const priorityClass = (p: number) =>
-                            p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                              : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
-                              : 'bg-rose-100 text-rose-700 ring-rose-200';
-                          const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
-                            <div
-                              key={`${sectionKey}-${row.q}`}
-                              className="grid grid-cols-[36px_1fr] items-start gap-2 px-2 py-1.5 hover:bg-gray-50 transition-colors"
-                            >
-                              <span className={`text-[11px] font-mono font-semibold mt-0.5 ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
-                                Q{row.q}
-                              </span>
-                              <div className="min-w-0 flex flex-wrap items-center gap-1">
-                                {/* Primary skill — same inline priority label
-                                    style as secondaries, so every skill shows
-                                    its own priority and the trailing row-level
-                                    badge is no longer needed. */}
-                                <span className="text-xs font-medium text-gray-900">{row.primary}</span>
-                                <span className={`text-[9px] font-semibold px-1 py-0 rounded ring-1 ${priorityClass(row.priority)}`}>
-                                  {priorityLabel(row.priority)}
-                                </span>
-                                {row.secondaries.length > 0 && (
-                                  <>
-                                    <span className="text-gray-300 text-[10px]">+</span>
-                                    {row.secondaries.map((s, i) => (
+                            p >= 3 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                              : p === 2 ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                              : 'bg-rose-50 text-rose-700 ring-rose-200';
+                          const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => {
+                            const chips = [
+                              { name: row.primary, priority: row.priority },
+                              ...row.secondaries,
+                            ];
+                            return (
+                              <tr
+                                key={`${sectionKey}-${row.q}`}
+                                className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
+                              >
+                                <td className="align-top px-2 py-1.5 w-[40px]">
+                                  <span className={`text-[11px] font-mono font-semibold ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
+                                    Q{row.q}
+                                  </span>
+                                </td>
+                                <td className="align-top px-2 py-1.5">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {chips.map((s, i) => (
                                       <span
-                                        key={`${row.q}-sec-${i}`}
-                                        className={`inline-flex items-center gap-1 px-1 py-0 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
+                                        key={`${row.q}-chip-${i}`}
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
                                       >
                                         {s.name}
                                         <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
                                       </span>
                                     ))}
-                                  </>
-                                )}
-                                <span className="text-[10px] text-gray-400 ml-0.5 truncate max-w-[140px]">· {row.cluster}</span>
-                              </div>
-                            </div>
-                          );
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          };
                           return (
                             <Popover>
                               <PopoverTrigger asChild>
@@ -974,8 +1055,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                       <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                         Must-To-Have ({mthDist.length})
                                       </div>
-                                      <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
-                                        {mthDist.map(r => renderRow(r, 'mth'))}
+                                      <div className="border border-gray-100 rounded-md overflow-hidden">
+                                        <table className="w-full text-left">
+                                          <thead className="bg-gray-50 border-b border-gray-100">
+                                            <tr>
+                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
+                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {mthDist.map(r => renderRow(r, 'mth'))}
+                                          </tbody>
+                                        </table>
                                       </div>
                                     </div>
                                   )}
@@ -984,8 +1075,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                       <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                         Nice-To-Have ({nthDist.length})
                                       </div>
-                                      <div className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
-                                        {nthDist.map(r => renderRow(r, 'nth'))}
+                                      <div className="border border-gray-100 rounded-md overflow-hidden">
+                                        <table className="w-full text-left">
+                                          <thead className="bg-gray-50 border-b border-gray-100">
+                                            <tr>
+                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
+                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {nthDist.map(r => renderRow(r, 'nth'))}
+                                          </tbody>
+                                        </table>
                                       </div>
                                     </div>
                                   )}

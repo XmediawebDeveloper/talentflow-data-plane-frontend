@@ -60,6 +60,8 @@ interface Message {
   responseTimeSeconds?: number;
   /** IST timestamp string (e.g. "2:34 PM") captured when the message was created */
   timestamp?: string;
+  /** True if this assistant message is a follow-up question (bundles a previously-volunteered skill or fires as in-slot validation). Renders a 'Follow' chip. */
+  isFollowup?: boolean;
 }
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
@@ -89,6 +91,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [textInput, setTextInput] = useState("");
+  /** True while Linda is currently streaming a question that the backend
+   *  flagged as a follow-up (`question_meta` with is_followup=true).
+   *  Renders a 'Follow' chip on the live bubble and is stamped onto the
+   *  finalized Message so the history bubble shows it too. */
+  const [isCurrentFollowup, setIsCurrentFollowup] = useState(false);
+  const isCurrentFollowupRef = useRef(false);
 
   // Interview closing state
   const [isClosing, setIsClosing] = useState(false);
@@ -1485,12 +1493,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // Always use full tokenBuffer — currentAiTextRef may be partially revealed
     const text = tokenBufferRef.current.trim();
     if (text) {
+      const wasFollowup = isCurrentFollowupRef.current;
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: "assistant",
         content: text,
         timestamp: nowIST(),
+        isFollowup: wasFollowup,
       }]);
+      // Reset for the next turn — backend will re-set if the next question
+      // is also a follow-up.
+      isCurrentFollowupRef.current = false;
+      setIsCurrentFollowup(false);
       currentAiTextRef.current = "";
       tokenBufferRef.current = "";
       revealedCharsRef.current = 0;
@@ -2114,6 +2128,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             stopRecordingSilentRef.current();
           }
         }, 150);
+        break;
+      case "question_meta":
+        // Backend signals that the upcoming question is a follow-up (bundles
+        // a previously-volunteered skill, or fires as an in-slot validation
+        // turn). Set the chip flag BEFORE the first llm_token arrives so the
+        // live bubble renders the 'Follow' badge from the first character.
+        console.log(`[WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}`);
+        if (data.is_followup) {
+          isCurrentFollowupRef.current = true;
+          setIsCurrentFollowup(true);
+        } else {
+          isCurrentFollowupRef.current = false;
+          setIsCurrentFollowup(false);
+        }
         break;
       case "llm_token":
         console.log(`[WS ${timestamp}] LLM token: token_length=${data.token?.length}, buffer_length=${tokenBufferRef.current.length}`);
@@ -5165,7 +5193,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       <span className="text-white text-[8px] font-bold">L</span>
                     </div>
                     <div className="max-w-[80%]">
-                      <span className="text-[10px] font-semibold text-purple-600 mb-0.5 block">LINDA</span>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
+                        {msg.isFollowup && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm">
+                            Follow
+                          </span>
+                        )}
+                      </div>
                       <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
                         <p className="text-sm leading-relaxed">{msg.content}</p>
                       </div>
@@ -5215,7 +5250,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   <span className="text-white text-[8px] font-bold">L</span>
                 </div>
                 <div className="max-w-[80%]">
-                  <span className="text-[10px] font-semibold text-purple-600 mb-0.5 block">LINDA</span>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
+                    {isCurrentFollowup && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm">
+                        Follow
+                      </span>
+                    )}
+                  </div>
                   <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
                     <div className="flex items-center gap-1 mb-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
