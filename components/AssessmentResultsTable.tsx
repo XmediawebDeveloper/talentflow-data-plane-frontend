@@ -1016,44 +1016,36 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       return null;
                     })}
 
-                    {/* Actions — same icon-only trio as the assessment-
-                        side Results page (View / PDF / Delete) so the JD
-                        view matches it visually. */}
+                    {/* Actions — restored to always-visible old-code behavior
+                        (View Details + Download PDF) so the column is never
+                        empty for Pending rows or users without download perms. */}
                     <td className="px-2 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
-                        {getResultStatus(result) !== 'Pending' && (
-                          <button
-                            onClick={() => {
-                              if (result.assessmentId) {
-                                router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
-                              }
-                            }}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                            title="View Details"
-                            aria-label={`View details for ${result.candidateName || 'candidate'}`}
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </button>
-                        )}
-                        {canDownloadPDF && canDownloadResultPdf(result) && (
-                          <button
-                            onClick={() => handleDownloadPDF(result.id)}
-                            disabled={downloadingPDF === result.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Download PDF Report"
-                            aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
-                          >
-                            {downloadingPDF === result.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
-                            ) : (
-                              <Download className="w-3 h-3 flex-shrink-0" />
-                            )}
-                          </button>
-                        )}
-                        {/* Delete removed — destructive per-row delete
-                            broke the audit trail (AS27) and there's no
-                            recruiter workflow that needs it. Erasure goes
-                            through the candidates RTBF flow instead. */}
+                        <button
+                          onClick={() => {
+                            if (result.assessmentId) {
+                              router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
+                            }
+                          }}
+                          className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                          title="View Details"
+                          aria-label={`View details for ${result.candidateName || 'candidate'}`}
+                        >
+                          <Eye className="w-3.5 h-3.5 shrink-0" />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadPDF(result.id)}
+                          disabled={downloadingPDF === result.id}
+                          className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Download PDF Report"
+                          aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
+                        >
+                          {downloadingPDF === result.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                          ) : (
+                            <Download className="w-3 h-3 flex-shrink-0" />
+                          )}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -1241,9 +1233,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     )}
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions — always-visible (old-code behavior). */}
                   <div className="flex items-center gap-2">
-                    {getResultStatus(result) !== 'Pending' && (
                     <button
                       onClick={() => {
                         if (result.assessmentId) {
@@ -1255,22 +1246,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       <Award className="w-3.5 h-3.5" />
                       View Details
                     </button>
-                    )}
-                    {canDownloadPDF && canDownloadResultPdf(result) && (
-                      <button
-                        onClick={() => handleDownloadPDF(result.id)}
-                        disabled={downloadingPDF === result.id}
-                        className="flex-1 px-3 py-1.5 text-xs bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {downloadingPDF === result.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Download className="w-3.5 h-3.5" />
-                        )}
-                        {downloadingPDF === result.id ? 'Downloading...' : 'PDF'}
-                      </button>
-                    )}
-                    {/* Delete removed — see desktop-table comment above. */}
+                    <button
+                      onClick={() => handleDownloadPDF(result.id)}
+                      disabled={downloadingPDF === result.id}
+                      className="flex-1 px-3 py-1.5 text-xs bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {downloadingPDF === result.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      {downloadingPDF === result.id ? 'Downloading...' : 'PDF'}
+                    </button>
                   </div>
 
                   {/* Expanded Details */}

@@ -1,6 +1,12 @@
 import { Resume, Folder, Job } from '@/lib/types/types';
 
-export const mockResumes: Resume[] = [
+/**
+ * Legacy mock fixture data. The objects use the old camelCase Resume shape
+ * (predates the snake_case API contract) and intentionally omit backend-only
+ * fields like tenant_id / file_name / created_at. Cast through `unknown` so the
+ * fixture remains assignable to Resume[] without weakening the production type.
+ */
+export const mockResumes: Resume[] = ([
   {
     id: '1',
     name: 'John Doe',
@@ -161,7 +167,7 @@ export const mockResumes: Resume[] = [
     noticePeriod: '30 Days',
     lastUpdated: '2025-11-20T15:45:00Z',
   },
-];
+] as unknown as Resume[]);
 
 export const mockFolders: Folder[] = [
   {

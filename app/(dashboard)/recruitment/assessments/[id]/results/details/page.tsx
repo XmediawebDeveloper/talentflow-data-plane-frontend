@@ -7,6 +7,7 @@ import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
 import FeatureGate from '@/components/shared/FeatureGate';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 function DetailsContent() {
   const params = useParams();
@@ -23,7 +24,6 @@ function DetailsContent() {
   const [jdTitle, setJdTitle] = useState<string>('');
   const [jdId, setJdId] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Prev/Next navigation: AssessmentResults stores the visible candidate list
@@ -64,8 +64,6 @@ function DetailsContent() {
       } catch (err: any) {
         console.error('[TalentFlow] Failed to fetch assessment:', err);
         setError(err.message || 'Failed to load assessment');
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -79,50 +77,62 @@ function DetailsContent() {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
   };
 
-  if (!candidateId) {
-    return (
-      <div className="w-full max-w-[1400px] mx-auto">
-        <div className="flex flex-col items-center justify-center h-64 space-y-3">
-          <div className="text-red-500 text-base">No candidate selected</div>
-          <button
-            onClick={handleBack}
-            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-          >
-            Back to Results
-          </button>
+  const breadcrumb = (
+    <PageBreadcrumb
+      className="mb-4 md:mb-8"
+      items={[
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Assessments', href: '/recruitment/assessments' },
+        { label: 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
+        { label: 'Candidate Details' },
+      ]}
+    />
+  );
+
+  const wrapState = (children: React.ReactNode) => (
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {breadcrumb}
+          {children}
         </div>
       </div>
-    );
-  }
+    </main>
+  );
 
-  if (isLoading) {
-    return (
-      <div className="w-full max-w-[1400px] mx-auto">
-        <div className="flex items-center justify-center h-64 bg-slate-50">
-          <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
-        </div>
+  if (!candidateId) {
+    return wrapState(
+      <div className="flex flex-col items-center justify-center h-64 space-y-3">
+        <div className="text-red-500 dark:text-red-400 text-base">No candidate selected</div>
+        <button
+          onClick={handleBack}
+          className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+        >
+          Back to Results
+        </button>
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="w-full max-w-[1400px] mx-auto">
-        <div className="flex flex-col items-center justify-center h-64 space-y-3">
-          <div className="text-red-500 text-base">{error}</div>
-          <button
-            onClick={handleBack}
-            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-          >
-            Back to Results
-          </button>
-        </div>
+    return wrapState(
+      <div className="flex flex-col items-center justify-center h-64 space-y-3">
+        <div className="text-red-500 dark:text-red-400 text-base">{error}</div>
+        <button
+          onClick={handleBack}
+          className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+        >
+          Back to Results
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {breadcrumb}
       <CandidateResultDetails
         onBack={handleBack}
         assessmentId={assessmentId}
@@ -138,7 +148,9 @@ function DetailsContent() {
         onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
         onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
       />
-    </div>
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -146,10 +158,8 @@ export default function CandidateResultDetailsPage() {
   return (
     <FeatureGate feature="assessment">
       <Suspense fallback={
-        <div className="w-full max-w-[1400px] mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-          </div>
+        <div className="flex items-center justify-center h-64 bg-slate-50">
+          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>
       }>
         <DetailsContent />

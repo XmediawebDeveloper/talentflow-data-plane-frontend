@@ -13,6 +13,7 @@ import {
   IndustryTypeCreate,
 } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -251,7 +252,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
     } else if (type === 'industry') {
       const indItem = item as IndustryType;
       return indItem.description ? (
-        <span className="text-gray-600 truncate max-w-[200px] block" title={indItem.description}>
+        <span className="text-gray-600 dark:text-slate-400 truncate max-w-[200px] block" title={indItem.description}>
           {indItem.description}
         </span>
       ) : '-';
@@ -260,8 +261,17 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   };
 
   return (
-    <div className="bg-slate-50 p-4 sm:p-6 lg:p-8 min-h-screen overflow-x-hidden">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <PageBreadcrumb
+        className="mb-4"
+        items={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: type === 'experience' ? 'Experience Levels' : type === 'education' ? 'Education Levels' : 'Industry Types' },
+        ]}
+      />
       {/* SaaS Hero Header */}
       <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -295,19 +305,19 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
       </section>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
         {loading ? (
           <div className="p-12 text-center">
             <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-brand-blue" />
-            <p className="font-medium text-gray-600">Loading...</p>
+            <p className="font-medium text-gray-600 dark:text-slate-400">Loading...</p>
           </div>
         ) : items.length === 0 ? (
           <div className="p-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Icon className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">No items found</h3>
-            <p className="mt-1 text-sm text-gray-500">Add your first {config.title.slice(0, -1).toLowerCase()} to get started.</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No items found</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add your first {config.title.slice(0, -1).toLowerCase()} to get started.</p>
             <button
               onClick={openCreateModal}
               className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
@@ -324,32 +334,32 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                   {config.columns.map((col) => (
                     <th
                       key={col}
-                      className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500"
+                      className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500"
                     >
                       {col}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {paginatedItems.map((item) => (
                   <tr key={item.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                     <td className="px-4 py-4">
-                      <span className="text-sm font-semibold text-gray-900">{item.label}</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.label}</span>
                     </td>
                     <td className="px-4 py-4">
                       <code className="rounded-md bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">{item.code}</code>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-600">
+                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-slate-400">
                       {renderExtraColumn(item)}
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{item.sort_order}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700 dark:text-slate-300">{item.sort_order}</td>
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
                           item.is_active
                             ? 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
-                            : 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200'
                         }`}
                       >
                         {item.is_active ? 'Active' : 'Inactive'}
@@ -359,7 +369,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => openEditModal(item)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-all hover:-translate-y-0.5 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                           aria-label="Edit" title="Edit"
                         >
                           <Edit2 className="h-4 w-4" />
@@ -375,7 +385,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                             </button>
                             <button
                               onClick={() => setShowDeleteConfirm(null)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-all hover:bg-gray-50"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 transition-all hover:bg-gray-50 dark:hover:bg-slate-800"
                               aria-label="Cancel" title="Cancel"
                             >
                               <X className="h-4 w-4" />
@@ -412,8 +422,8 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-            <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5 flex flex-col">
+            <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white shrink-0 rounded-t-3xl">
               <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
               <div className="relative flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
@@ -439,9 +449,9 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
               </div>
             </div>
 
-            <div className="max-h-[calc(100dvh-200px)] space-y-4 overflow-y-auto p-5">
+            <div className="space-y-4 overflow-y-auto p-5 flex-1">
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-700">
+                <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                   Label <span className="text-brand-orange">*</span>
                 </span>
                 <input
@@ -449,44 +459,44 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                   value={formData.label}
                   onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                   placeholder="e.g., 5-7 years"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                  className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   autoFocus
                 />
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-700">
-                  Code <span className="text-gray-400">(optional, auto-generated)</span>
+                <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Code <span className="text-gray-400 dark:text-slate-500">(optional, auto-generated)</span>
                 </span>
                 <input
                   type="text"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   placeholder="Auto-generated from label"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                  className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
               </label>
 
               {type === 'experience' && (
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">Min Years</span>
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Min Years</span>
                     <input
                       type="number"
                       value={formData.min_years}
                       onChange={(e) => setFormData({ ...formData, min_years: e.target.value })}
                       placeholder="0"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">Max Years</span>
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Max Years</span>
                     <input
                       type="number"
                       value={formData.max_years}
                       onChange={(e) => setFormData({ ...formData, max_years: e.target.value })}
                       placeholder="5"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
                   </label>
                 </div>
@@ -494,49 +504,49 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
 
               {type === 'education' && (
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">
-                    Level <span className="text-gray-400">(numeric ranking)</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                    Level <span className="text-gray-400 dark:text-slate-500">(numeric ranking)</span>
                   </span>
                   <input
                     type="number"
                     value={formData.level}
                     onChange={(e) => setFormData({ ...formData, level: e.target.value })}
                     placeholder="1"
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </label>
               )}
 
               {type === 'industry' && (
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Description</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Description</span>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Brief description of the industry"
                     rows={2}
-                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full resize-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </label>
               )}
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-700">Sort Order</span>
+                <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Sort Order</span>
                 <input
                   type="number"
                   value={formData.sort_order}
                   onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })}
                   placeholder="0"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                  className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
-                <p className="mt-1 text-xs text-gray-500">Lower numbers appear first</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Lower numbers appear first</p>
               </label>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-gray-100 bg-slate-50/60 px-5 py-4 sm:gap-3">
+            <div className="flex justify-end gap-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-5 py-4 sm:gap-3 shrink-0 rounded-b-3xl">
               <button
                 onClick={closeModal}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
@@ -562,6 +572,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
         </div>
       )}
       </div>
-    </div>
+      </div>
+    </main>
   );
 }

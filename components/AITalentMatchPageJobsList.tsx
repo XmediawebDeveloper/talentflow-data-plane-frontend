@@ -2,6 +2,7 @@ import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSi
 import { useState, useEffect } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import ListPagination from '@/components/ListPagination';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 interface Job {
   id: string;
@@ -109,8 +110,17 @@ export default function AITalentMatchPageJobsList({
   );
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Talent Match', onClick: onViewHistory },
+              { label: 'Select Job Description' },
+            ]}
+          />
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
@@ -467,6 +477,7 @@ export default function AITalentMatchPageJobsList({
               <span><strong>Step 4:</strong> Select top candidates and submit them for detailed scoring</span>
             </li>
           </ul>
+        </div>
         </div>
       </div>
       </div>

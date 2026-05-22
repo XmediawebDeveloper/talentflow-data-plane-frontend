@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
 
@@ -225,7 +226,10 @@ export default function InternalHelpDesk() {
   const totalTickets = stats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-full">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk' }]} />
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="px-8 py-6">
@@ -772,6 +776,8 @@ export default function InternalHelpDesk() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+      </div>
+    </main>
   );
 }

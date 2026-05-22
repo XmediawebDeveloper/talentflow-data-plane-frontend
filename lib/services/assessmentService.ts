@@ -66,6 +66,14 @@ export interface AssessmentResponse {
   invitations_count: number;
   completed_count: number;
   passed_count: number;
+  // Aggregate metrics computed from completed attempts
+  average_score?: number;
+  pass_rate?: number;
+  // Versioning / sequencing
+  jd_version?: number;        // Version of the JD at the time of assessment creation
+  sequence_number?: number;   // Position of this assessment within the JD's assessment list
+  // Proctoring configuration (controlled in AssessmentUpdate, surfaced here for UI)
+  proctoring_enabled?: boolean;
   // JD-extracted metadata snapshot (Assessment Info tab)
   jd_experience_level?: string | null;
   jd_complexity?: string | null;
@@ -107,6 +115,8 @@ export interface InvitationResponse {
   resume_id?: string;
   invitation_token: string;
   invitation_link?: string;
+  /** @deprecated use invitation_token. Legacy alias kept for older invitee UI. */
+  token?: string;
   status: 'pending' | 'sent' | 'opened' | 'started' | 'completed' | 'expired' | 'abandoned';
   // Latest attempt's UUID — populated by the listing endpoint and used by
   // Track Invites' "View Results" deep-link. Null until the candidate has
@@ -220,6 +230,12 @@ export interface QuestionEvaluation {
   strengths?: string[];
   areas_for_improvement?: string[];
   question_status?: 'pending' | 'answered' | 'skipped' | 'scored';
+  // Numeric percentage score per question (0-100). Populated by candidate-facing
+  // summary endpoints; recruiter view may rely on points_earned/points_possible.
+  score?: number;
+  // Problem statement extras for coding rounds.
+  constraints?: string | null;
+  explanation?: string | null;
 }
 
 export interface RoundScore {
@@ -304,6 +320,12 @@ export interface AssessmentStatsResponse {
   average_score: number | null;
   units_consumed: number;
   units_refunded: number;
+  // Extra counters surfaced by the dashboard view of stats (historical totals
+  // and completion-only breakdown). Optional because the basic stats endpoint
+  // omits them.
+  total_ever_created?: number;
+  total_deleted?: number;
+  total_candidates_completed?: number;
 }
 
 // 2. Clone Assessment

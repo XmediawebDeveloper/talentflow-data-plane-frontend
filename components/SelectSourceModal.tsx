@@ -750,7 +750,7 @@ export default function SelectSourceModal({
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm group ${
               isSelected
                 ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue font-medium'
-                : 'text-gray-700 hover:bg-gray-100'
+                : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
@@ -765,7 +765,7 @@ export default function SelectSourceModal({
                   e.stopPropagation();
                   toggleFolderSelection(folder.id);
                 }}
-                className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200"
+                className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
                 title={
                   selectionState === 'all'
                     ? `Deselect all ${count} resumes in this folder`
@@ -777,7 +777,7 @@ export default function SelectSourceModal({
                 ) : selectionState === 'partial' ? (
                   <MinusSquare className="w-4 h-4 text-blue-600" />
                 ) : (
-                  <Square className="w-4 h-4 text-gray-400" />
+                  <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                 )}
               </span>
             ) : (
@@ -790,7 +790,7 @@ export default function SelectSourceModal({
                   e.stopPropagation();
                   toggleFolder(folder.id);
                 }}
-                className="p-0.5 hover:bg-gray-200 rounded"
+                className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-4 h-4" />
@@ -814,7 +814,7 @@ export default function SelectSourceModal({
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               isSelected
                 ? 'bg-brand-blue/15 text-brand-blue'
-                : 'bg-gray-200 text-gray-600'
+                : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
             }`}>
               {count}
             </span>
@@ -830,41 +830,41 @@ export default function SelectSourceModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 bg-slate-50 flex-shrink-0">
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
               <Target className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-0.5 sm:mb-1">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">
                 <span className="hidden sm:inline">Select Applicants to Score</span>
                 <span className="sm:hidden">Select Applicants</span>
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">
-                Job: <span className="font-medium text-gray-900">{jobTitle}</span>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
+                Job: <span className="font-medium text-gray-900 dark:text-slate-50">{jobTitle}</span>
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
            aria-label="Close">
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-100 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 flex-shrink-0">
+        <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex gap-1 sm:gap-2">
             <button
               onClick={() => handleTabChange('my-resumes')}
               className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                 activeTab === 'my-resumes'
-                  ? 'bg-white text-brand-blue border-b-2 border-brand-blue shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
               }`}
             >
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -873,7 +873,7 @@ export default function SelectSourceModal({
               <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${
                 activeTab === 'my-resumes'
                   ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
-                  : 'bg-gray-200 text-gray-600'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
                 {activeTab === 'my-resumes' ? resumes.length : '...'}
               </span>
@@ -884,8 +884,8 @@ export default function SelectSourceModal({
                 onClick={() => handleTabChange('internal-db')}
                 className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                   activeTab === 'internal-db'
-                    ? 'bg-white text-brand-cyan border-b-2 border-brand-cyan shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-white dark:bg-slate-900 text-brand-cyan border-b-2 border-brand-cyan shadow-sm'
+                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
                 }`}
               >
                 <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -894,7 +894,7 @@ export default function SelectSourceModal({
                 <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${
                   activeTab === 'internal-db'
                     ? 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15 text-brand-cyan'
-                    : 'bg-gray-200 text-gray-600'
+                    : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   {activeTab === 'internal-db' ? resumes.length : '...'}
                 </span>
@@ -907,9 +907,9 @@ export default function SelectSourceModal({
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Folder Tree (Only for My Resumes) - hidden on mobile */}
           {activeTab === 'my-resumes' && (
-            <div className="hidden lg:block w-56 border-r border-gray-100 bg-slate-50 overflow-y-auto flex-shrink-0">
+            <div className="hidden lg:block w-56 border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0">
               <div className="p-4">
-                <h3 className="text-xs font-medium text-gray-500 uppercase mb-3 px-3">Folders</h3>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-3 px-3">Folders</h3>
 
                 {/* All Resumes */}
                 {(() => {
@@ -921,7 +921,7 @@ export default function SelectSourceModal({
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm mb-2 ${
                         selectedFolder === 'all'
                           ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                       }`}
                     >
                       {/* Master checkbox: select/deselect every non-archived resume */}
@@ -932,7 +932,7 @@ export default function SelectSourceModal({
                           e.stopPropagation();
                           toggleFolderSelection('all');
                         }}
-                        className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200"
+                        className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
                         title={
                           allState === 'all'
                             ? 'Deselect all resumes'
@@ -944,7 +944,7 @@ export default function SelectSourceModal({
                         ) : allState === 'partial' ? (
                           <MinusSquare className="w-4 h-4 text-blue-600" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         )}
                       </span>
                       <FolderOpen className="w-4 h-4" />
@@ -957,7 +957,7 @@ export default function SelectSourceModal({
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         selectedFolder === 'all'
                           ? 'bg-brand-blue/15 text-brand-blue'
-                          : 'bg-gray-200 text-gray-600'
+                          : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                       }`}>
                         {resumes.length}
                       </span>
@@ -971,9 +971,9 @@ export default function SelectSourceModal({
                     {renderFolderTree(undefined, 0)}
                   </div>
                 ) : (
-                  <div className="px-3 py-4 text-xs text-gray-500 text-center">
+                  <div className="px-3 py-4 text-xs text-gray-500 dark:text-slate-500 text-center">
                     <p className="mb-2">No folders yet</p>
-                    <p className="text-gray-400">Create folders from My Resumes page</p>
+                    <p className="text-gray-400 dark:text-slate-500">Create folders from My Resumes page</p>
                   </div>
                 )}
               </div>
@@ -983,16 +983,16 @@ export default function SelectSourceModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white border-b border-gray-100">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, skills..."
-                    className="w-full pl-10 pr-4 py-2 sm:py-2.5 border border-gray-200 rounded-lg text-black text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full pl-10 pr-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-black text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
@@ -1018,7 +1018,7 @@ export default function SelectSourceModal({
                       <button
                         onClick={handleSelectAll}
                         disabled={filteredResumes.length === 0}
-                        className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
+                        className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
                       >
                         {allVisibleSelected ? (
                           <>
@@ -1042,7 +1042,7 @@ export default function SelectSourceModal({
                       </button>
                     );
                   })()}
-                  <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-transparent font-medium whitespace-nowrap">
+                  <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-transparent font-medium whitespace-nowrap">
                     <span className="text-brand-blue">{selectedResumes.length}</span> <span className="hidden sm:inline">selected</span>
                   </div>
                 </div>
@@ -1054,12 +1054,12 @@ export default function SelectSourceModal({
               {loading ? (
                 <div className="flex items-center justify-center py-10 sm:py-16">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
-                  <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600">Loading resumes...</span>
+                  <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600 dark:text-slate-400">Loading resumes...</span>
                 </div>
               ) : filteredResumes.length > 0 ? (
                 <div className="space-y-2">
                   {/* Desktop Table Header - hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border border-gray-100 rounded-lg text-xs font-medium text-gray-600 uppercase sticky top-0 z-10">
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 rounded-lg text-xs font-medium text-gray-600 dark:text-slate-400 uppercase sticky top-0 z-10">
                     <div className="col-span-1 flex items-center justify-center">
                       {(() => {
                         const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
@@ -1069,14 +1069,14 @@ export default function SelectSourceModal({
                         return (
                       <button
                         onClick={handleSelectAll}
-                        className="p-1 hover:bg-gray-200 rounded"
+                        className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
                       >
                         {allVisibleSelected ? (
                           <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : someVisibleSelected ? (
                           <MinusSquare className="w-4 h-4 text-blue-600" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         )}
                       </button>
                         );
@@ -1114,7 +1114,7 @@ export default function SelectSourceModal({
                               ? 'border-brand-orange/20 bg-brand-orange/5 ring-1 ring-brand-orange/20 opacity-60 cursor-not-allowed'
                               : isSelected
                                 ? 'border-brand-blue/40 bg-brand-blue/5 ring-1 ring-brand-blue/15 cursor-pointer'
-                                : 'border-gray-200 bg-white cursor-pointer'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer'
                           }`}>
                             <div className="flex items-start gap-2">
                               <button
@@ -1128,7 +1128,7 @@ export default function SelectSourceModal({
                                 {isSelected ? (
                                   <CheckSquare className="w-4 h-4 text-brand-blue" />
                                 ) : (
-                                  <Square className="w-4 h-4 text-gray-400" />
+                                  <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                                 )}
                               </button>
                               <div className="w-8 h-8 rounded-full bg-brand-blue flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
@@ -1136,13 +1136,13 @@ export default function SelectSourceModal({
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-900 truncate">{resume.candidate_name || 'Unknown'}</span>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.candidate_name || 'Unknown'}</span>
                                   {isArchived && (
                                     <span className="text-[10px] text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1 py-0.5 rounded flex-shrink-0">Archived</span>
                                   )}
                                 </div>
-                                <p className="text-xs text-gray-600 truncate">{resume.current_title || 'N/A'}{resume.current_company ? ` · ${resume.current_company}` : ''}</p>
-                                <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-500 flex-wrap">
+                                <p className="text-xs text-gray-600 dark:text-slate-400 truncate">{resume.current_title || 'N/A'}{resume.current_company ? ` · ${resume.current_company}` : ''}</p>
+                                <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-500 dark:text-slate-500 flex-wrap">
                                   {resume.location && (
                                     <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{resume.location}</span>
                                   )}
@@ -1153,10 +1153,10 @@ export default function SelectSourceModal({
                                 {resume.skills && resume.skills.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-1.5">
                                     {resume.skills.slice(0, 3).map((skill, idx) => (
-                                      <span key={idx} className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded text-[10px]">{skill}</span>
+                                      <span key={idx} className="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-[10px]">{skill}</span>
                                     ))}
                                     {resume.skills.length > 3 && (
-                                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">+{resume.skills.length - 3}</span>
+                                      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-[10px]">+{resume.skills.length - 3}</span>
                                     )}
                                   </div>
                                 )}
@@ -1172,7 +1172,7 @@ export default function SelectSourceModal({
                               ? 'border-brand-orange/20 bg-brand-orange/5 ring-1 ring-brand-orange/20 opacity-60 cursor-not-allowed'
                               : isSelected
                                 ? 'border-brand-blue/40 bg-brand-blue/5 ring-1 ring-brand-blue/15 shadow-sm cursor-pointer'
-                                : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm cursor-pointer'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-gray-300 dark:hover:border-slate-700 hover:shadow-sm cursor-pointer'
                           }`}
                           onClick={() => {
                             if (isArchived) {
@@ -1194,12 +1194,12 @@ export default function SelectSourceModal({
                                 handleToggleResume(resume.id);
                               }}
                               disabled={isArchived}
-                              className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50"
+                              className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {isSelected ? (
                                 <CheckSquare className="w-5 h-5 text-brand-blue" />
                               ) : (
-                                <Square className="w-5 h-5 text-gray-400" />
+                                <Square className="w-5 h-5 text-gray-400 dark:text-slate-500" />
                               )}
                             </button>
                           </div>
@@ -1211,14 +1211,14 @@ export default function SelectSourceModal({
                                 {(resume.candidate_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                               </div>
                               <div className="min-w-0">
-                                <div className="font-medium text-gray-900 truncate">{resume.candidate_name || 'Unknown'}</div>
+                                <div className="font-medium text-gray-900 dark:text-slate-50 truncate">{resume.candidate_name || 'Unknown'}</div>
                                 {isArchived && (
                                   <span className="inline-flex items-center gap-1 text-xs text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded mt-0.5">
                                     Archived
                                   </span>
                                 )}
                                 {resume.location && (
-                                  <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
                                     <MapPin className="w-3 h-3" />
                                     {resume.location}
                                   </div>
@@ -1229,9 +1229,9 @@ export default function SelectSourceModal({
 
                           {/* Current Role */}
                           <div className="col-span-2">
-                            <div className="text-sm text-gray-900">{resume.current_title || 'N/A'}</div>
+                            <div className="text-sm text-gray-900 dark:text-slate-50">{resume.current_title || 'N/A'}</div>
                             {resume.current_company && (
-                              <div className="text-xs text-gray-500 mt-0.5">{resume.current_company}</div>
+                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.current_company}</div>
                             )}
                           </div>
 
@@ -1239,14 +1239,14 @@ export default function SelectSourceModal({
                           <div className="col-span-2">
                             {resume.email && (
                               <div className="flex items-center gap-1.5 mb-1">
-                                <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="text-xs text-gray-600 truncate">{resume.email}</span>
+                                <Mail className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                <span className="text-xs text-gray-600 dark:text-slate-400 truncate">{resume.email}</span>
                               </div>
                             )}
                             {resume.phone && (
                               <div className="flex items-center gap-1.5">
-                                <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="text-xs text-gray-600">{resume.phone}</span>
+                                <Phone className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                <span className="text-xs text-gray-600 dark:text-slate-400">{resume.phone}</span>
                               </div>
                             )}
                           </div>
@@ -1254,15 +1254,15 @@ export default function SelectSourceModal({
                           {/* Experience */}
                           <div className="col-span-2">
                             <div className="flex items-center gap-1.5">
-                              <Briefcase className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                              <span className="text-sm text-gray-700">
+                              <Briefcase className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-700 dark:text-slate-300">
                                 {resume.experience_years ? `${resume.experience_years} years` : 'N/A'}
                               </span>
                             </div>
                             {resume.notice_period && (
                               <div className="flex items-center gap-1.5 mt-1">
-                                <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="text-xs text-gray-500">{resume.notice_period}</span>
+                                <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                <span className="text-xs text-gray-500 dark:text-slate-500">{resume.notice_period}</span>
                               </div>
                             )}
                           </div>
@@ -1274,19 +1274,19 @@ export default function SelectSourceModal({
                                 {resume.skills.slice(0, 3).map((skill, idx) => (
                                   <span
                                     key={idx}
-                                    className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+                                    className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
                                   >
                                     {skill}
                                   </span>
                                 ))}
                                 {resume.skills.length > 3 && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
+                                  <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-xs">
                                     +{resume.skills.length - 3}
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs text-gray-400">No skills listed</span>
+                              <span className="text-xs text-gray-400 dark:text-slate-500">No skills listed</span>
                             )}
                           </div>
                         </div>
@@ -1296,9 +1296,9 @@ export default function SelectSourceModal({
                 </div>
               ) : (
                 <div className="text-center py-10 sm:py-16">
-                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300" />
-                  <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No Resumes Found</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 max-w-md mx-auto">
+                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
                     {searchTerm
                       ? 'No resumes match your search. Try different keywords.'
                       : activeTab === 'my-resumes'
@@ -1312,12 +1312,12 @@ export default function SelectSourceModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3 flex-shrink-0">
+        <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-            <div className="text-xs sm:text-sm text-gray-600">
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
               {selectedResumes.length > 0 ? (
                 <span>
-                  <span className="font-medium text-gray-900">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected
+                  <span className="font-medium text-gray-900 dark:text-slate-50">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected
                 </span>
               ) : (
                 <span>Select resumes to score</span>
@@ -1326,7 +1326,7 @@ export default function SelectSourceModal({
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium"
+                className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium"
               >
                 Cancel
               </button>

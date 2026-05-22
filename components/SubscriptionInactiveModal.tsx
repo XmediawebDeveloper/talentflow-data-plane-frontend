@@ -90,13 +90,13 @@ export default function SubscriptionInactiveModal() {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
 
         {/* Top colored banner */}
-        <div className={`h-1.5 ${isSuspended ? 'bg-red-500' : 'bg-brand-orange'}`} />
+        <div className={`h-1.5 ${isSuspended ? 'bg-red-500' : 'bg-brand-orange'} shrink-0`} />
 
         {/* Header Section */}
-        <div className="pt-7 pb-2 px-6 sm:px-8 text-center">
+        <div className="pt-7 pb-2 px-6 sm:px-8 text-center shrink-0">
           {/* Icon */}
           <div className={`mx-auto w-16 h-16 sm:w-20 sm:h-20 ${isSuspended ? 'bg-red-100 ring-1 ring-red-200' : 'bg-brand-orange/10 ring-1 ring-brand-orange/15'} rounded-full flex items-center justify-center mb-4`}>
             {isSuspended ? (
@@ -116,7 +116,7 @@ export default function SubscriptionInactiveModal() {
           </h2>
 
           {/* Subtitle */}
-          <p className="text-gray-600 text-sm">
+          <p className="text-gray-600 dark:text-slate-400 text-sm">
             {isSuspended
               ? 'Your account access has been temporarily restricted.'
               : isExpired
@@ -127,7 +127,7 @@ export default function SubscriptionInactiveModal() {
         </div>
 
         {/* Body */}
-        <div className="px-6 sm:px-8 pb-6">
+        <div className="px-6 sm:px-8 pb-6 flex-1 overflow-y-auto">
 
           {/* Suspension Reason Card */}
           {isSuspended && errorDetails?.reason && (
@@ -152,7 +152,7 @@ export default function SubscriptionInactiveModal() {
 
           {/* Suspended Date */}
           {isSuspended && errorDetails?.suspended_at && (
-            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-500 mb-4">
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-4">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -163,8 +163,8 @@ export default function SubscriptionInactiveModal() {
           )}
 
           {/* Help Text */}
-          <div className="bg-slate-50 rounded-lg p-3 sm:p-4 mb-5 border border-gray-100">
-            <p className="text-xs sm:text-sm text-gray-600 text-center">
+          <div className="bg-slate-50 dark:bg-slate-950 rounded-lg p-3 sm:p-4 mb-5 border border-gray-100 dark:border-slate-700/60">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 text-center">
               {isSuspended
                 ? 'If you believe this is an error or need assistance, please contact our support team.'
                 : 'Renew your subscription to restore full access to your account.'
@@ -198,7 +198,7 @@ export default function SubscriptionInactiveModal() {
 
             <button
               onClick={handleLogout}
-              className="w-full px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -210,12 +210,12 @@ export default function SubscriptionInactiveModal() {
 
         {/* Footer with Support Email */}
         {errorDetails?.support_email && (
-          <div className="px-6 sm:px-8 py-3 bg-slate-50 border-t border-gray-100">
+          <div className="px-6 sm:px-8 py-3 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 shrink-0">
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-gray-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              <span className="text-gray-500">Need help?</span>
+              <span className="text-gray-500 dark:text-slate-500">Need help?</span>
               <a
                 href={`mailto:${errorDetails.support_email}`}
                 className="text-brand-blue font-medium hover:underline"

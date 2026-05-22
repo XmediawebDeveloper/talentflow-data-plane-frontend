@@ -114,15 +114,21 @@ export default function AssessmentResultsPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-slate-50">
-        <div className="text-red-500 text-base">{error}</div>
-        <button
-          onClick={handleBack}
-          className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-        >
-          {fromSource === 'jd' ? 'Back to Job Details' : 'Back to Assessments'}
-        </button>
-      </div>
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <div className="flex flex-col items-center justify-center h-64 space-y-3">
+              <div className="text-red-500 dark:text-red-400 text-base">{error}</div>
+              <button
+                onClick={handleBack}
+                className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              >
+                {fromSource === 'jd' ? 'Back to Job Details' : 'Back to Assessments'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
     );
   }
 

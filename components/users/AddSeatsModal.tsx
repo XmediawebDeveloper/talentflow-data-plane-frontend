@@ -268,8 +268,8 @@ export default function AddSeatsModal({
   const addonDisplayName = (pricing?.addon_name || 'User Seat Pack').replace(/\s*-?\s*Pro$/i, '').trim();
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/60 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
         {/* Header */}
         <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-brand-blue flex-shrink-0 overflow-hidden">
@@ -299,13 +299,13 @@ export default function AddSeatsModal({
         </div>
 
         {/* Scrollable Body */}
-        <div className="overflow-y-auto flex-1 bg-white">
+        <div className="overflow-y-auto flex-1 bg-white dark:bg-slate-900">
           <div className="p-5 sm:p-7 space-y-5">
 
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-                <p className="text-sm text-gray-500">Loading pricing...</p>
+                <p className="text-sm text-gray-500 dark:text-slate-500">Loading pricing...</p>
               </div>
             ) : (
               <>
@@ -337,7 +337,7 @@ export default function AddSeatsModal({
 
                 {/* Addon Details Card */}
                 {pricing && (
-                  <div className="relative bg-white border border-gray-200 rounded-xl p-4 sm:p-5 overflow-hidden shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all">
+                  <div className="relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 sm:p-5 overflow-hidden shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all">
                     <div className="absolute top-0 right-0 w-28 h-28 bg-brand-blue/5 rounded-full -translate-y-10 translate-x-10" />
                     <div className="relative flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -345,14 +345,14 @@ export default function AddSeatsModal({
                           <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight truncate">
+                          <h3 className="font-bold text-gray-900 dark:text-slate-50 text-base sm:text-lg leading-tight truncate">
                             {addonDisplayName}
                           </h3>
-                          <p className="text-xs text-gray-500 mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs text-gray-500">Per pack</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500">Per pack</p>
                         <p className="text-lg font-bold text-brand-blue">₹{pricePerPack}</p>
                       </div>
                     </div>
@@ -363,11 +363,11 @@ export default function AddSeatsModal({
                 {pricing && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-semibold text-gray-800">Select Quantity</label>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-gray-200 bg-gray-50 text-gray-600">Max {maxPacks} packs</span>
+                      <label className="text-sm font-semibold text-gray-800 dark:text-slate-100">Select Quantity</label>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-gray-200 bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400">Max {maxPacks} packs</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center bg-white rounded-xl border border-gray-200 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
+                      <div className="flex items-center bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
                           className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
@@ -380,7 +380,7 @@ export default function AddSeatsModal({
                           max={maxPacks}
                           value={quantity}
                           onChange={(e) => setQuantity(Math.max(1, Math.min(maxPacks, parseInt(e.target.value) || 1)))}
-                          className="w-14 sm:w-16 text-center bg-transparent border-none outline-none font-bold text-xl sm:text-2xl text-gray-900"
+                          className="w-14 sm:w-16 text-center bg-transparent border-none outline-none font-bold text-xl sm:text-2xl text-gray-900 dark:text-slate-50"
                         />
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
@@ -403,37 +403,37 @@ export default function AddSeatsModal({
 
                 {/* Order Summary */}
                 {pricing && (
-                  <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                    <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 flex items-center justify-between">
+                  <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                    <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                           <Receipt className="w-4 h-4 text-white" />
                         </div>
-                        <h4 className="font-semibold text-gray-800 text-sm">Order Summary</h4>
+                        <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-sm">Order Summary</h4>
                       </div>
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan">{quantity} pack{quantity > 1 ? 's' : ''}</span>
                     </div>
                     <div className="p-4 sm:p-5 space-y-3">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">Pack size</span>
-                        <span className="font-medium text-gray-800">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''}</span>
+                        <span className="text-gray-500 dark:text-slate-500">Pack size</span>
+                        <span className="font-medium text-gray-800 dark:text-slate-100">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">Quantity</span>
-                        <span className="font-medium text-gray-800">×{quantity}</span>
+                        <span className="text-gray-500 dark:text-slate-500">Quantity</span>
+                        <span className="font-medium text-gray-800 dark:text-slate-100">×{quantity}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">Subtotal</span>
-                        <span className="font-medium text-gray-800">₹{subtotal.toFixed(2)}</span>
+                        <span className="text-gray-500 dark:text-slate-500">Subtotal</span>
+                        <span className="font-medium text-gray-800 dark:text-slate-100">₹{subtotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">GST (18%)</span>
-                        <span className="font-medium text-gray-800">₹{gst.toFixed(2)}</span>
+                        <span className="text-gray-500 dark:text-slate-500">GST (18%)</span>
+                        <span className="font-medium text-gray-800 dark:text-slate-100">₹{gst.toFixed(2)}</span>
                       </div>
-                      <div className="mt-1 pt-3 border-t border-gray-200 flex justify-between items-center">
+                      <div className="mt-1 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
                         <div>
-                          <p className="font-semibold text-gray-900 text-sm">Total Amount</p>
-                          <p className="text-xs text-gray-500">Incl. all taxes</p>
+                          <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">Total Amount</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500">Incl. all taxes</p>
                         </div>
                         <div className="text-right">
                           <p className="text-2xl sm:text-3xl font-bold text-brand-blue">₹{total.toFixed(2)}</p>
@@ -449,11 +449,11 @@ export default function AddSeatsModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-gray-100 bg-white flex-shrink-0">
+        <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-5 py-3 border border-gray-200 rounded-lg text-gray-700 font-semibold text-sm hover:bg-gray-50 hover:border-brand-blue/30 hover:text-brand-blue transition-all"
+              className="px-5 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 hover:text-brand-blue transition-all"
             >
               Cancel
             </button>
@@ -475,7 +475,7 @@ export default function AddSeatsModal({
               )}
             </button>
           </div>
-          <p className="text-center text-[11px] text-gray-500 mt-3 flex items-center justify-center gap-1.5">
+          <p className="text-center text-[11px] text-gray-500 dark:text-slate-500 mt-3 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3 h-3 text-brand-cyan" />
             <span>Secured by Razorpay · 256-bit SSL encryption</span>
           </p>

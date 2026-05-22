@@ -192,7 +192,7 @@ export default function ScoringJobProgressModal({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'queued':
-        return <Clock className="w-4 h-4 text-gray-400" />;
+        return <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />;
       case 'processing':
         return <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />;
       case 'completed':
@@ -202,14 +202,14 @@ export default function ScoringJobProgressModal({
       case 'already_scored':
         return <AlertCircle className="w-4 h-4 text-brand-orange-deep" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-400" />;
+        return <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />;
     }
   };
 
   const getStatusBg = (status: string) => {
     switch (status) {
       case 'queued':
-        return 'bg-slate-50 border-gray-100';
+        return 'bg-slate-50 dark:bg-slate-950 border-gray-100 dark:border-slate-700/60';
       case 'processing':
         return 'bg-brand-blue/5 border-brand-blue/20';
       case 'completed':
@@ -219,7 +219,7 @@ export default function ScoringJobProgressModal({
       case 'already_scored':
         return 'bg-brand-orange/5 border-brand-orange/20';
       default:
-        return 'bg-slate-50 border-gray-100';
+        return 'bg-slate-50 dark:bg-slate-950 border-gray-100 dark:border-slate-700/60';
     }
   };
 
@@ -241,17 +241,17 @@ export default function ScoringJobProgressModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-2xl overflow-hidden max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-2xl overflow-hidden max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-slate-50 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
               <Target className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Scoring: {jobTitle}</h2>
-              <p className="text-xs sm:text-sm text-gray-600">{overallCompleted}/{overallTotal} resumes scored</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">Scoring: {jobTitle}</h2>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">{overallCompleted}/{overallTotal} resumes scored</p>
             </div>
           </div>
 
@@ -267,20 +267,20 @@ export default function ScoringJobProgressModal({
 
             {/* Progress bar - hidden on mobile */}
             <div className="hidden md:flex items-center gap-2">
-              <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="w-24 h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-brand-cyan' : 'bg-brand-blue'}`}
                   style={{ width: `${overallPercentage}%` }}
                 />
               </div>
-              <span className="text-sm font-semibold w-10 text-gray-700">{overallPercentage}%</span>
+              <span className="text-sm font-semibold w-10 text-gray-700 dark:text-slate-300">{overallPercentage}%</span>
             </div>
 
             <div className="flex items-center gap-1">
               {onMinimize && (
                 <button
                   onClick={onMinimize}
-                  className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                  className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
                   aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-4 h-4" />
@@ -288,7 +288,7 @@ export default function ScoringJobProgressModal({
               )}
               <button
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
                 aria-label="Close" title="Close"
               >
                 <X className="w-4 h-4" />
@@ -298,7 +298,7 @@ export default function ScoringJobProgressModal({
         </div>
 
         {/* Stats Row - Responsive */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-50 border-b border-gray-100 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
           {/* Mobile: Show elapsed time here - only when scoring is in progress */}
           {isScoringInProgress && (
             <div className="flex sm:hidden items-center gap-1.5 px-2 py-1 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-md">
@@ -309,13 +309,13 @@ export default function ScoringJobProgressModal({
 
           {/* Mobile: Progress bar */}
           <div className="flex md:hidden items-center gap-2 w-full sm:w-auto">
-            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-brand-cyan' : 'bg-brand-blue'}`}
                 style={{ width: `${overallPercentage}%` }}
               />
             </div>
-            <span className="text-sm font-semibold text-gray-700">{overallPercentage}%</span>
+            <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">{overallPercentage}%</span>
           </div>
 
           {/* Stats */}
@@ -323,24 +323,24 @@ export default function ScoringJobProgressModal({
             {alreadyScoredCount > 0 && (
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-brand-orange-deep" />
-                <span className="text-xs sm:text-sm text-gray-600">Duplicate: <span className="font-semibold text-brand-orange-deep">{alreadyScoredCount}</span></span>
+                <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Duplicate: <span className="font-semibold text-brand-orange-deep">{alreadyScoredCount}</span></span>
               </div>
             )}
             <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-gray-400" />
-              <span className="text-xs sm:text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{overallQueued}</span></span>
+              <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Queue: <span className="font-semibold text-gray-900 dark:text-slate-50">{overallQueued}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <Loader2 className={`w-3.5 h-3.5 text-brand-blue ${overallInProgress > 0 ? 'animate-spin' : ''}`} />
-              <span className="text-xs sm:text-sm text-gray-600">Processing: <span className="font-semibold text-brand-blue">{overallInProgress}</span></span>
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Processing: <span className="font-semibold text-brand-blue">{overallInProgress}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-brand-cyan" />
-              <span className="text-xs sm:text-sm text-gray-600">Done: <span className="font-semibold text-brand-cyan">{overallCompleted - alreadyScoredCount}</span></span>
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Done: <span className="font-semibold text-brand-cyan">{overallCompleted - alreadyScoredCount}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5 text-red-500" />
-              <span className="text-xs sm:text-sm text-gray-600">Failed: <span className="font-semibold text-red-600">{overallFailed}</span></span>
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Failed: <span className="font-semibold text-red-600">{overallFailed}</span></span>
             </div>
           </div>
 
@@ -355,7 +355,7 @@ export default function ScoringJobProgressModal({
         {/* Resume List - Scrollable */}
         <div className="flex-1 overflow-y-auto min-h-0">
           {allItems.length > 0 ? (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {allItems.map((item, index) => (
                 <div
                   key={item.resumeId || index}
@@ -364,7 +364,7 @@ export default function ScoringJobProgressModal({
                     item.status === 'completed' ? 'border-l-brand-cyan' :
                     item.status === 'failed' ? 'border-l-red-500' :
                     item.status === 'already_scored' ? 'border-l-brand-orange' :
-                    'border-l-gray-200'
+                    'border-l-gray-200 dark:border-l-slate-700'
                   }`}
                 >
                   {/* Resume Icon */}
@@ -373,20 +373,20 @@ export default function ScoringJobProgressModal({
                     item.status === 'completed' ? 'bg-brand-cyan/10 ring-1 ring-brand-cyan/20' :
                     item.status === 'failed' ? 'bg-red-100' :
                     item.status === 'already_scored' ? 'bg-brand-orange/10 ring-1 ring-brand-orange/20' :
-                    'bg-gray-100'
+                    'bg-gray-100 dark:bg-slate-800'
                   }`}>
                     <User className={`w-4 h-4 sm:w-5 sm:h-5 ${
                       item.status === 'processing' ? 'text-brand-blue' :
                       item.status === 'completed' ? 'text-brand-cyan' :
                       item.status === 'failed' ? 'text-red-600' :
                       item.status === 'already_scored' ? 'text-brand-orange-deep' :
-                      'text-gray-500'
+                      'text-gray-500 dark:text-slate-500'
                     }`} />
                   </div>
 
                   {/* Candidate Name */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                       {item.candidateName || 'Unknown Candidate'}
                     </p>
                     {item.status === 'failed' && item.errorMessage && (
@@ -402,7 +402,7 @@ export default function ScoringJobProgressModal({
                       item.status === 'completed' ? 'text-brand-cyan' :
                       item.status === 'failed' ? 'text-red-600' :
                       item.status === 'already_scored' ? 'text-brand-orange-deep' :
-                      'text-gray-500'
+                      'text-gray-500 dark:text-slate-500'
                     }`}>
                       {getStatusText(item.status)}
                     </span>
@@ -417,7 +417,7 @@ export default function ScoringJobProgressModal({
                       disabled={retryingItems.has(item.resumeId)}
                       className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
                         retryingItems.has(item.resumeId)
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
                           : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 border border-brand-blue/20'
                       }`}
                       aria-label="Retry scoring" title="Retry scoring"
@@ -439,8 +439,8 @@ export default function ScoringJobProgressModal({
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-gray-500">
-              <FileText className="w-10 h-10 sm:w-12 sm:h-12 mb-3 text-gray-300" />
+            <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
+              <FileText className="w-10 h-10 sm:w-12 sm:h-12 mb-3 text-gray-300 dark:text-slate-500" />
               <p className="text-sm">Preparing resumes for scoring...</p>
             </div>
           )}

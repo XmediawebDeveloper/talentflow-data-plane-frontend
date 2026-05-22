@@ -95,12 +95,14 @@ export default function AssessmentsRoute() {
 
   return (
     <FeatureGate feature="assessment">
-      <Assessments
-        jobs={jobs}
-        autoOpenCreate={initialAutoCreate.current}
-        preSelectedJdId={initialPreSelectedJdId.current || undefined}
-        preSelectedJdTitle={initialPreSelectedJdTitle.current ? decodeURIComponent(initialPreSelectedJdTitle.current) : undefined}
-      />
+      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+        <Assessments
+          jobs={jobs}
+          autoOpenCreate={initialAutoCreate.current}
+          preSelectedJdId={initialPreSelectedJdId.current || undefined}
+          preSelectedJdTitle={initialPreSelectedJdTitle.current ? decodeURIComponent(initialPreSelectedJdTitle.current) : undefined}
+        />
+      </div>
     </FeatureGate>
   );
 }

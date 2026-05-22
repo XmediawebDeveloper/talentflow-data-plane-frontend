@@ -277,8 +277,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   // Show blocked message for exact duplicates only
   if (hasOnlyExactDuplicates) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col">
           {/* Header */}
           <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
             <div className="flex items-start gap-4">
@@ -286,16 +286,29 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                 <Ban className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
                   Upload Blocked
                 </h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-slate-400">
                   {exactDuplicates.length === 1
                     ? 'This resume is an exact duplicate and cannot be uploaded.'
                     : `${exactDuplicates.length} resumes are exact duplicates and cannot be uploaded.`}
                 </p>
               </div>
             </div>
+            <button
+              onClick={() => {
+                const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
+                  fileIndex: originalIndex,
+                  action: 'discard' as const
+                }));
+                onResolve(autoResolutions);
+              }}
+              className="p-2 hover:bg-red-100 rounded-lg transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
+            </button>
           </div>
 
           {/* Content */}
@@ -319,8 +332,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               </ul>
             </div>
 
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-600">
+            <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+              <p className="text-xs text-gray-600 dark:text-slate-400">
                 <span className="font-medium">Note:</span> Exact duplicates are automatically blocked to prevent data redundancy.
                 The existing candidate records remain unchanged. This window will close automatically.
               </p>
@@ -328,8 +341,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
 
             {/* Auto-close countdown */}
             <div className="mt-4 flex items-center justify-center">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                <Loader2 className="w-4 h-4 text-gray-600 dark:text-slate-400 animate-spin" />
                 <span>Closing automatically...</span>
               </div>
             </div>
@@ -363,8 +376,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
 
   return (
     <>
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
           <div className="flex items-start gap-4">
@@ -372,23 +385,23 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               <AlertTriangle className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
                 Resume Update Detected
               </h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-slate-400">
                 This candidate already exists in the system. Choose how to handle this update.
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
-            <X className="w-5 h-5 text-gray-500" />
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
+            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
         {/* File Counter */}
         <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
               Resume {currentVersionIndex + 1} of {versionsWithChanges.length}
             </span>
             {exactDuplicates.length > 0 && (
@@ -407,14 +420,14 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-320px)]">
           {/* Candidate Info */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="mb-6 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-medium">
                 {currentDuplicate.existingResume.candidate_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">{currentDuplicate.existingResume.candidate_name}</h3>
-                <p className="text-sm text-gray-500">{currentDuplicate.existingResume.email}</p>
+                <h3 className="font-semibold text-gray-900 dark:text-slate-50">{currentDuplicate.existingResume.candidate_name}</h3>
+                <p className="text-sm text-gray-500 dark:text-slate-500">{currentDuplicate.existingResume.email}</p>
               </div>
             </div>
           </div>
@@ -422,34 +435,34 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           {/* Comparison Grid */}
           <div className="grid grid-cols-2 gap-6 mb-6">
             {/* Existing Resume */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
-                <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gray-600" />
+            <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 bg-gray-100 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                <h4 className="font-medium text-gray-900 dark:text-slate-50 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                   Existing Resume
                 </h4>
               </div>
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <FolderOpen className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Location:</span>
-                  <span className="text-gray-900">{currentDuplicate.existingResume.folder_path || 'My Resumes'}</span>
+                  <FolderOpen className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <span className="text-gray-600 dark:text-slate-400">Location:</span>
+                  <span className="text-gray-900 dark:text-slate-50">{currentDuplicate.existingResume.folder_path || 'My Resumes'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Upload Date:</span>
-                  <span className="text-gray-900">{formatISTDate(currentDuplicate.existingResume.upload_date)}</span>
+                  <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <span className="text-gray-600 dark:text-slate-400">Upload Date:</span>
+                  <span className="text-gray-900 dark:text-slate-50">{formatISTDate(currentDuplicate.existingResume.upload_date)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <HardDrive className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">File Size:</span>
-                  <span className="text-gray-900">{formatFileSize(currentDuplicate.existingResume.file_size)}</span>
+                  <HardDrive className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <span className="text-gray-600 dark:text-slate-400">File Size:</span>
+                  <span className="text-gray-900 dark:text-slate-50">{formatFileSize(currentDuplicate.existingResume.file_size)}</span>
                 </div>
                 {currentDuplicate.existingResume.version > 1 && (
                   <div className="flex items-center gap-2 text-sm">
-                    <GitBranch className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-600">Version:</span>
-                    <span className="text-gray-900">v{currentDuplicate.existingResume.version}</span>
+                    <GitBranch className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <span className="text-gray-600 dark:text-slate-400">Version:</span>
+                    <span className="text-gray-900 dark:text-slate-50">v{currentDuplicate.existingResume.version}</span>
                   </div>
                 )}
                 <button
@@ -473,19 +486,19 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               </div>
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">File Name:</span>
-                  <span className="text-gray-900 truncate">{currentDuplicate.file.name}</span>
+                  <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <span className="text-gray-600 dark:text-slate-400">File Name:</span>
+                  <span className="text-gray-900 dark:text-slate-50 truncate">{currentDuplicate.file.name}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Upload Date:</span>
-                  <span className="text-gray-900">{formatISTDate(new Date().toISOString())}</span>
+                  <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <span className="text-gray-600 dark:text-slate-400">Upload Date:</span>
+                  <span className="text-gray-900 dark:text-slate-50">{formatISTDate(new Date().toISOString())}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <HardDrive className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">File Size:</span>
-                  <span className="text-gray-900">{formatFileSize(currentDuplicate.file.size)}</span>
+                  <HardDrive className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <span className="text-gray-600 dark:text-slate-400">File Size:</span>
+                  <span className="text-gray-900 dark:text-slate-50">{formatFileSize(currentDuplicate.file.size)}</span>
                 </div>
                 <button
                   onClick={() => handlePreviewNew(currentDuplicate.file)}
@@ -519,37 +532,37 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
 
           {/* Action Options */}
           <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 mb-3">Choose an action:</h4>
+            <h4 className="font-medium text-gray-900 dark:text-slate-50 mb-3">Choose an action:</h4>
 
             {/* Option 1: Discard */}
             <button
               onClick={() => handleSelectAction('discard')}
               className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
                 selectedAction === 'discard'
-                  ? 'border-gray-800 bg-gray-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-gray-800 bg-gray-50 dark:bg-slate-800/50'
+                  : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'discard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+                  selectedAction === 'discard' ? 'bg-gray-800 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <h5 className="font-semibold text-gray-900">1. Discard New Resume</h5>
+                    <h5 className="font-semibold text-gray-900 dark:text-slate-50">1. Discard New Resume</h5>
                     {selectedAction === 'discard' && (
                       <Check className="w-5 h-5 text-gray-800" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                     Keep existing resume unchanged. New resume will be deleted.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-                    <span>• Old resume: <span className="text-gray-700">Unchanged</span></span>
+                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                    <span>• Old resume: <span className="text-gray-700 dark:text-slate-300">Unchanged</span></span>
                     <span>• New resume: <span className="text-red-600">Deleted</span></span>
-                    <span>• Storage: <span className="text-gray-700">No impact</span></span>
+                    <span>• Storage: <span className="text-gray-700 dark:text-slate-300">No impact</span></span>
                   </div>
                 </div>
               </div>
@@ -561,26 +574,26 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
                 selectedAction === 'overwrite'
                   ? 'border-orange-500 bg-orange-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'overwrite' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
+                  selectedAction === 'overwrite' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   <RefreshCw className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <h5 className="font-semibold text-gray-900">2. Overwrite Existing Resume</h5>
+                    <h5 className="font-semibold text-gray-900 dark:text-slate-50">2. Overwrite Existing Resume</h5>
                     {selectedAction === 'overwrite' && (
                       <Check className="w-5 h-5 text-orange-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                     Replace old resume with new one. Original will be permanently deleted.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
                     <span>• Old resume: <span className="text-red-600">Deleted</span></span>
                     <span>• New resume: <span className="text-green-600">Saved</span></span>
                     <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
@@ -595,24 +608,24 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               disabled={isVersionLimitReached}
               className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
                 isVersionLimitReached
-                  ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed'
+                  ? 'border-gray-300 dark:border-slate-700 bg-gray-100 dark:bg-slate-800 opacity-60 cursor-not-allowed'
                   : selectedAction === 'version'
                   ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                   isVersionLimitReached
-                    ? 'bg-gray-300 text-gray-500'
-                    : selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
+                    ? 'bg-gray-300 text-gray-500 dark:text-slate-500'
+                    : selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   {isVersionLimitReached ? <Ban className="w-5 h-5" /> : <GitBranch className="w-5 h-5" />}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h5 className={`font-semibold ${isVersionLimitReached ? 'text-gray-500' : 'text-gray-900'}`}>
+                      <h5 className={`font-semibold ${isVersionLimitReached ? 'text-gray-500 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>
                         3. Save as New Version
                       </h5>
                       {!isVersionLimitReached && (
@@ -642,10 +655,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                         Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
                       </p>
-                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
                         <span>• Old resume: <span className="text-green-600">Kept</span></span>
                         <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
                         <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
@@ -658,8 +671,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           </div>
 
           {/* Note */}
-          <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-xs text-gray-600">
+          <div className="mt-6 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+            <p className="text-xs text-gray-600 dark:text-slate-400">
               <span className="font-medium">Note:</span> All actions are fully audit logged.
               Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
             </p>
@@ -673,7 +686,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
             <button
               onClick={handlePrevious}
               disabled={currentVersionIndex === 0}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               <ChevronLeft className="w-4 h-4" />
               Previous
@@ -681,7 +694,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
             <button
               onClick={handleNext}
               disabled={currentVersionIndex === versionsWithChanges.length - 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               Next
               <ChevronRight className="w-4 h-4" />
@@ -708,7 +721,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium"
+              className="px-5 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors font-medium"
             >
               Cancel All
             </button>
@@ -731,10 +744,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-blue-600" />
-              <h3 className="font-semibold text-gray-900">{previewTitle}</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-slate-50">{previewTitle}</h3>
             </div>
-            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">
-              <X className="w-5 h-5 text-gray-500" />
+            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
+              <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
@@ -745,7 +758,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                 title={previewTitle}
               />
             ) : (
-              <div ref={docxContainerRef} className="w-full h-full overflow-auto bg-white p-4" />
+              <div ref={docxContainerRef} className="w-full h-full overflow-auto bg-white dark:bg-slate-900 p-4" />
             )}
           </div>
         </div>

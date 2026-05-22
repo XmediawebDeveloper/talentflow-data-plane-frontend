@@ -12,6 +12,8 @@ import {
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
+import FeatureGate from '@/components/shared/FeatureGate';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 // Main API - Local backend handles everything including support tickets
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -715,10 +717,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = internalStats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-slate-50 h-screen overflow-x-hidden overflow-y-auto">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <div className="flex-1 bg-slate-50 overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="px-4 md:px-8 pt-4 md:pt-6">
+        <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
+      </div>
       {/* SaaS Hero Header */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
+      <div className="px-4 md:px-8 pt-4 md:pt-6">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
@@ -738,6 +744,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
                     {activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
                   </p>
+                  <FeatureGate feature="priority_support" mode="hidden">
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-50 ring-1 ring-emerald-300/30 backdrop-blur-sm">
+                      <Sparkles className="h-3 w-3 text-emerald-200" />
+                      Priority Support is enabled for your plan — tickets are handled with higher priority and faster response times.
+                    </div>
+                  </FeatureGate>
                 </div>
               </div>
 
@@ -812,43 +824,59 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         {/* Overview */}
         {activeTab === 'external' && view === 'overview' && (
           <div className="space-y-4 sm:space-y-6">
-            {/* Stats Cards */}
+            {/* Stats Cards — clicking a card drills into the tickets list pre-filtered by that status */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('open'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{openTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">Awaiting response</div>
-              </div>
+              </button>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('in_progress'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{inProgressTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">Being worked on</div>
-              </div>
+              </button>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('resolved'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{resolvedTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">Successfully solved</div>
-              </div>
+              </button>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setFilterStatus('all'); setView('tickets'); }}
+                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{totalTickets}</div>
                 <div className="text-[10px] sm:text-xs text-gray-600">All time</div>
-              </div>
+              </button>
             </div>
 
             {/* Quick Actions */}
@@ -2187,6 +2215,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
           </div>
         )}
+      </div>
       </div>
       </div>
     </div>

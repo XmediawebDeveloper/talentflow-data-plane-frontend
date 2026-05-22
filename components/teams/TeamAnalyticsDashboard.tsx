@@ -217,7 +217,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         {/* Summary Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div key={i} className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <Skeleton className="w-10 h-10 rounded-lg mb-3" />
               <Skeleton className="h-8 w-20 mb-1" />
               <Skeleton className="h-4 w-32" />
@@ -227,11 +227,11 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
         {/* Charts Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <Skeleton className="h-5 w-32 mb-4" />
             <Skeleton className="h-[300px] w-full rounded-lg" />
           </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <Skeleton className="h-5 w-40 mb-4" />
             <Skeleton className="h-[300px] w-full rounded-lg" />
           </div>
@@ -259,42 +259,42 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   return (
     <div className="space-y-6">
       {/* Header with Period Selector */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-5 ring-1 ring-black/[0.02] lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Analytics</h3>
+            <p className="text-sm text-gray-600 dark:text-slate-400">
               {isTenantAdmin ? 'Organization-wide usage analytics' : 'Your team usage analytics'}
             </p>
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Calendar className="w-4 h-4 text-gray-500" />
+            <Calendar className="w-4 h-4 text-gray-500 dark:text-slate-500" />
             <input
               type="date"
               value={fromDate}
               max={toDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+              className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
             />
-            <span className="text-sm text-gray-500">to</span>
+            <span className="text-sm text-gray-500 dark:text-slate-500">to</span>
             <input
               type="date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setToDate(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+              className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
             />
           </div>
           {canExport && teamsUsage?.teams && teamsUsage.teams.length > 0 && (
             <button
               onClick={handleExport}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
             >
               <Download className="w-4 h-4" />
               Export CSV
@@ -305,79 +305,79 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Summary Cards - Unit Consumption */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <FileText className="w-5 h-5 text-brand-blue" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{Math.round(totals.RS)}</p>
-          <p className="text-sm text-gray-600">Resume Scoring</p>
-          <p className="text-xs text-gray-500 mt-1">{actionCounts.RS} actions</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{Math.round(totals.RS)}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Resume Scoring</p>
+          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.RS} actions</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
               <ClipboardCheck className="w-5 h-5 text-brand-teal" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{totals.AS.toFixed(1)}</p>
-          <p className="text-sm text-gray-600">Assessment</p>
-          <p className="text-xs text-gray-500 mt-1">{actionCounts.AS} actions</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{totals.AS.toFixed(1)}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Assessment</p>
+          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.AS} actions</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
               <Users className="w-5 h-5 text-brand-cyan" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{Math.round(totals.AIU)}</p>
-          <p className="text-sm text-gray-600">AI Interview</p>
-          <p className="text-xs text-gray-500 mt-1">{actionCounts.AIU} actions</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{Math.round(totals.AIU)}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">AI Interview</p>
+          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.AIU} actions</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
               <Upload className="w-5 h-5 text-orange-600" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{Math.round(totals.RU)}</p>
-          <p className="text-sm text-gray-600">Resume Upload</p>
-          <p className="text-xs text-gray-500 mt-1">{actionCounts.RU} actions</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{Math.round(totals.RU)}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Resume Upload</p>
+          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.RU} actions</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-indigo-600" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{creationCounts.jds}</p>
-          <p className="text-sm text-gray-600">JDs Created</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{creationCounts.jds}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">JDs Created</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
               <ClipboardCheck className="w-5 h-5 text-teal-600" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{creationCounts.assessments}</p>
-          <p className="text-sm text-gray-600">Assessments Created</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{creationCounts.assessments}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Assessments Created</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{totals.total.toFixed(1)}</p>
-          <p className="text-sm text-gray-600">Total Units Used</p>
-          <p className="text-xs text-gray-500 mt-1">{actionCounts.total} total actions</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{totals.total.toFixed(1)}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Total Units Used</p>
+          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.total} total actions</p>
         </div>
       </div>
 
@@ -385,8 +385,8 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Team Comparison Bar Chart */}
         {teamComparisonData.length > 0 && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <h4 className="text-md font-semibold text-gray-900 mb-4">Usage by Team</h4>
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <h4 className="text-md font-semibold text-gray-900 dark:text-slate-50 mb-4">Usage by Team</h4>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamComparisonData} layout="vertical">
@@ -419,8 +419,8 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
         {/* Unit Distribution Pie Chart */}
         {unitDistributionData.length > 0 && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-            <h4 className="text-md font-semibold text-gray-900 mb-4">Unit Type Distribution</h4>
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <h4 className="text-md font-semibold text-gray-900 dark:text-slate-50 mb-4">Unit Type Distribution</h4>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -458,7 +458,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-sm text-gray-600">{item.name}</span>
+                  <span className="text-sm text-gray-600 dark:text-slate-400">{item.name}</span>
                 </div>
               ))}
             </div>
@@ -468,19 +468,19 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Top Performing Teams */}
       {topTeams.length > 0 && (
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <h4 className="text-md font-semibold text-gray-900 mb-4">Top Performing Teams</h4>
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <h4 className="text-md font-semibold text-gray-900 dark:text-slate-50 mb-4">Top Performing Teams</h4>
           <div className="space-y-3">
             {topTeams.map((team, index) => (
               <div
                 key={team.name}
-                className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-white to-brand-blue/[0.02] p-3 ring-1 ring-gray-100"
+                className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-white to-brand-blue/[0.02] p-3 ring-1 ring-gray-100 dark:ring-slate-700/60"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-bold text-white">
                   {index + 1}
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900">{team.name}</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-50">{team.name}</p>
                   <div className="flex gap-4 mt-1">
                     <span className="text-xs text-blue-600">RS: {Math.round(team.RS)}</span>
                     <span className="text-xs text-green-600">AS: {team.AS.toFixed(1)}</span>
@@ -491,8 +491,8 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-gray-900">{team.total.toFixed(1)}</p>
-                  <p className="text-xs text-gray-500">total units</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-slate-50">{team.total.toFixed(1)}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-500">total units</p>
                 </div>
               </div>
             ))}
@@ -502,10 +502,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Empty State */}
       {(!teamsUsage?.teams || teamsUsage.teams.length === 0) && (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-          <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No Usage Data</h3>
-          <p className="text-gray-600">
+        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
+          <BarChart3 className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-300 mb-2">No Usage Data</h3>
+          <p className="text-gray-600 dark:text-slate-400">
             No team usage data available for the selected period.
           </p>
         </div>

@@ -13,6 +13,7 @@ import TenantUnitPool from '@/components/usage/TenantUnitPool';
 import MyConsumptionHistory from '@/components/usage/MyConsumptionHistory';
 import { BarChart3, Sparkles } from 'lucide-react';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function UsagePage() {
   const { user, isLoading, isBillingManager, isStandardUser } = useAuth();
@@ -37,8 +38,11 @@ export default function UsagePage() {
       : "Monitor and manage your organization's unit consumption in real time.";
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8 space-y-6">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
+        <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Usage' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -65,6 +69,7 @@ export default function UsagePage() {
         ) : (
           <TenantUnitPool compact={false} showHistory={true} />
         )}
+      </div>
       </div>
     </main>
   );

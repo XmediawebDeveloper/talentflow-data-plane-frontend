@@ -106,6 +106,38 @@ export interface UserPermissions {
   // Dashboard & Support (Default for all)
   can_view_dashboard?: boolean;
   can_view_support?: boolean;
+
+  // ---------------------------------------------------------------------------
+  // Legacy / granular permission aliases used by older UI surfaces. Optional so
+  // backend payloads omitting them still type-check; renderers fall back to the
+  // canonical fields above when these are absent.
+  // ---------------------------------------------------------------------------
+  /** Legacy compound: equivalent to can_create/update/delete_jd. */
+  can_manage_jd?: boolean;
+  /** Granular per-section resume view (resume-database vs my-resumes etc.). */
+  can_view_resumes_granular?: boolean;
+  /** Granular per-section analytics view. */
+  can_view_analytics_granular?: boolean;
+  /** Legacy compound: equivalent to can_update_settings. */
+  can_manage_settings?: boolean;
+  /** Legacy: delete-settings permission, retained for older role catalogues. */
+  can_delete_settings?: boolean;
+  /** Legacy compound: equivalent to can_create/update/delete_users. */
+  can_manage_users?: boolean;
+  /** Granular billing-section view permissions. */
+  can_view_billing_granular?: boolean;
+  /** Legacy compound: equivalent to can_update_billing. */
+  can_manage_billing?: boolean;
+  /** Granular invoice-section view permissions. */
+  can_view_invoices_granular?: boolean;
+  /** Invoice CRUD (admin-only). */
+  can_create_invoices?: boolean;
+  can_update_invoices?: boolean;
+  can_delete_invoices?: boolean;
+  /** Granular usage-section view permissions. */
+  can_view_usage_granular?: boolean;
+  /** Legacy compound: equivalent to can_view/update_usage. */
+  can_manage_usage?: boolean;
 }
 
 export interface ApiUser {

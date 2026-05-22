@@ -2,6 +2,7 @@
 
 import { BarChart3, Search, Filter, Download, Clock, User, FileText, Target, Video, Settings, Calendar } from 'lucide-react';
 import { useState } from 'react';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 const mockActivityLogs = [
   { id: '1', user: 'John Admin', action: 'Created job posting', details: 'Senior Frontend Developer', timestamp: '2 min ago', category: 'jobs' },
@@ -26,14 +27,14 @@ const categoryIcons: Record<string, React.ReactNode> = {
 };
 
 const categoryColors: Record<string, string> = {
-  jobs: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
-  scoring: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
-  interview: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
-  assessment: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-  settings: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
-  view: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-  upload: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
-  team: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15',
+  jobs: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30',
+  scoring: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30',
+  interview: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 dark:bg-cyan-500/15 dark:ring-cyan-400/30',
+  assessment: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 dark:bg-orange-500/15 dark:ring-orange-400/30 dark:text-orange-300',
+  settings: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700',
+  view: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 dark:bg-orange-500/15 dark:ring-orange-400/30 dark:text-orange-300',
+  upload: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30',
+  team: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30',
 };
 
 export default function ActivityLogsPage() {
@@ -53,20 +54,23 @@ export default function ActivityLogsPage() {
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Activity Logs' }]} />
+
         {/* Header */}
         <div className="mb-5 sm:mb-6 lg:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+              <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30 flex items-center justify-center flex-shrink-0">
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Activity Logs</h1>
-                <p className="text-xs sm:text-sm text-gray-600">Track all activities across your organization</p>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
               </div>
             </div>
-            <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors self-end sm:self-auto">
+            <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors self-end sm:self-auto">
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export Logs</span>
               <span className="sm:hidden">Export</span>
@@ -77,19 +81,19 @@ export default function ActivityLogsPage() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-5 sm:mb-6">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search activities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
+              className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm bg-white dark:bg-slate-800 text-black dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
             />
           </div>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="h-10 px-3 sm:px-4 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
+            className="h-10 px-3 sm:px-4 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -100,10 +104,10 @@ export default function ActivityLogsPage() {
         </div>
 
         {/* Activity Timeline */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="divide-y divide-gray-100">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="p-3 sm:p-4 hover:bg-brand-blue/[0.04] transition-colors">
+              <div key={log.id} className="p-3 sm:p-4 hover:bg-brand-blue/[0.04] dark:hover:bg-brand-blue/10 transition-colors">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${categoryColors[log.category]}`}>
                     {categoryIcons[log.category]}
@@ -111,12 +115,12 @@ export default function ActivityLogsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{log.action}</p>
-                        <p className="text-xs sm:text-sm text-gray-500 truncate">{log.details}</p>
+                        <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{log.action}</p>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">{log.timestamp}</p>
-                        <p className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">{log.user}</p>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
                   </div>
@@ -128,11 +132,12 @@ export default function ActivityLogsPage() {
 
         {filteredLogs.length === 0 && (
           <div className="text-center py-12">
-            <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No activities found</h3>
-            <p className="text-sm text-gray-500">Try adjusting your search or filters.</p>
+            <BarChart3 className="w-12 h-12 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No activities found</h3>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Try adjusting your search or filters.</p>
           </div>
         )}
+      </div>
       </div>
     </main>
   );

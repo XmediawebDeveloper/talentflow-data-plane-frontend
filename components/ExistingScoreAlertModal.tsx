@@ -47,7 +47,7 @@ const getMatchStatusColor = (status: string) => {
     case 'no_match':
       return 'bg-red-100 text-red-800 ring-1 ring-red-200';
     default:
-      return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+      return 'bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 ring-1 ring-gray-200 dark:ring-slate-700';
   }
 };
 
@@ -72,8 +72,8 @@ export function ExistingScoreAlertModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02]">
-        <DialogHeader>
+      <DialogContent className="max-w-lg rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-brand-orange-deep text-base sm:text-lg font-semibold">
             <div className="h-9 w-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-brand-orange" />
@@ -84,8 +84,8 @@ export function ExistingScoreAlertModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-4">
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="py-4 overflow-y-auto flex-1">
+          <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
             {allAlreadyScored ? (
               isSingleResume ? (
                 <>
@@ -107,7 +107,7 @@ export function ExistingScoreAlertModal({
           </p>
 
           {/* Existing Scores List */}
-          <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200 ring-1 ring-black/[0.02] divide-y divide-gray-100">
+          <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] divide-y divide-gray-100 dark:divide-slate-700/60">
             {existingScores.map((score) => (
               <div
                 key={score.score_id}
@@ -116,7 +116,7 @@ export function ExistingScoreAlertModal({
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-400" />
+                    <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className="font-medium text-sm">{score.candidate_name || 'Unknown'}</span>
                   </div>
                   <span
@@ -127,7 +127,7 @@ export function ExistingScoreAlertModal({
                     {formatMatchStatus(score.match_status)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between mt-1.5 text-xs text-gray-500">
+                <div className="flex items-center justify-between mt-1.5 text-xs text-gray-500 dark:text-slate-500">
                   <div className="flex items-center gap-1">
                     <Target className="w-3 h-3" />
                     <span>Score: {score.overall_score}%</span>
@@ -139,25 +139,25 @@ export function ExistingScoreAlertModal({
                     </div>
                   )}
                 </div>
-                <div className="text-xs text-gray-400 mt-1">{score.candidate_email}</div>
+                <div className="text-xs text-gray-400 dark:text-slate-500 mt-1">{score.candidate_email}</div>
               </div>
             ))}
           </div>
 
           {/* Summary */}
           {!isSingleResume && newCount > 0 && (
-            <p className="text-sm text-gray-500 mt-3">
+            <p className="text-sm text-gray-500 dark:text-slate-500 mt-3">
               <span className="font-medium text-brand-cyan">{newCount}</span> resume(s) have not been
               scored yet.
             </p>
           )}
         </div>
 
-        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 shrink-0">
           <Button
             variant="outline"
             onClick={onClose}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg"
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg"
           >
             <X className="w-4 h-4" />
             {allAlreadyScored ? 'Close' : 'Cancel'}

@@ -36,45 +36,45 @@ export default function ResumePreviewModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-5xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-5xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5 text-brand-blue" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Resume Preview</h2>
-              <p className="text-gray-600 text-sm">{candidateName}</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Resume Preview</h2>
+              <p className="text-gray-600 dark:text-slate-400 text-sm">{candidateName}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors"
+            className="text-gray-500 dark:text-slate-500 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors"
            aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Toolbar */}
-        <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={handleZoomOut}
               disabled={zoomLevel <= 50}
-              className="p-2 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Zoom Out" title="Zoom Out"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <span className="text-sm text-gray-700 min-w-[60px] text-center">
+            <span className="text-sm text-gray-700 dark:text-slate-300 min-w-[60px] text-center">
               {zoomLevel}%
             </span>
             <button
               onClick={handleZoomIn}
               disabled={zoomLevel >= 150}
-              className="p-2 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Zoom In" title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
@@ -83,7 +83,7 @@ export default function ResumePreviewModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
               Print
@@ -100,8 +100,8 @@ export default function ResumePreviewModal({
 
         {/* Resume Preview Content */}
         <div className="flex-1 overflow-y-auto bg-gray-200 p-6">
-          <div 
-            className="bg-white shadow-lg mx-auto"
+          <div
+            className="bg-white dark:bg-slate-900 shadow-lg mx-auto"
             style={{ 
               width: `${zoomLevel}%`,
               maxWidth: '850px',
@@ -114,8 +114,8 @@ export default function ResumePreviewModal({
             <div className="p-12">
               {/* Header */}
               <div className="border-b-2 border-gray-800 pb-4 mb-6">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{candidateName}</h1>
-                <div className="flex items-center gap-4 text-sm text-gray-600">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50 mb-2">{candidateName}</h1>
+                <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
                   <span>{candidateEmail}</span>
                   <span>•</span>
                   <span>+1 (555) 123-4567</span>
@@ -126,8 +126,8 @@ export default function ResumePreviewModal({
 
               {/* Professional Summary */}
               <div className="mb-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-2 uppercase tracking-wide">Professional Summary</h2>
-                <p className="text-sm text-gray-700 leading-relaxed">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-2 uppercase tracking-wide">Professional Summary</h2>
+                <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed">
                   Experienced software engineer with 8+ years of expertise in full-stack development, cloud architecture, and team leadership. 
                   Proven track record of delivering scalable solutions and driving technical excellence across multiple domains. 
                   Passionate about clean code, best practices, and continuous learning.
@@ -136,17 +136,17 @@ export default function ResumePreviewModal({
 
               {/* Work Experience */}
               <div className="mb-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-3 uppercase tracking-wide">Work Experience</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Work Experience</h2>
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-start justify-between mb-1">
                       <div>
-                        <h3 className="font-bold text-gray-900">Senior Software Engineer</h3>
-                        <p className="text-sm text-gray-700">Tech Corp Inc. • San Francisco, CA</p>
+                        <h3 className="font-bold text-gray-900 dark:text-slate-50">Senior Software Engineer</h3>
+                        <p className="text-sm text-gray-700 dark:text-slate-300">Tech Corp Inc. • San Francisco, CA</p>
                       </div>
-                      <span className="text-sm text-gray-600">Jan 2020 - Present</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Jan 2020 - Present</span>
                     </div>
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 ml-2">
+                    <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 space-y-1 ml-2">
                       <li>Led development of microservices architecture serving 10M+ users</li>
                       <li>Improved system performance by 40% through optimization initiatives</li>
                       <li>Mentored team of 5 junior developers in best practices and code review</li>
@@ -157,12 +157,12 @@ export default function ResumePreviewModal({
                   <div>
                     <div className="flex items-start justify-between mb-1">
                       <div>
-                        <h3 className="font-bold text-gray-900">Software Engineer</h3>
-                        <p className="text-sm text-gray-700">StartupXYZ • Remote</p>
+                        <h3 className="font-bold text-gray-900 dark:text-slate-50">Software Engineer</h3>
+                        <p className="text-sm text-gray-700 dark:text-slate-300">StartupXYZ • Remote</p>
                       </div>
-                      <span className="text-sm text-gray-600">Mar 2018 - Dec 2019</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Mar 2018 - Dec 2019</span>
                     </div>
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 ml-2">
+                    <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 space-y-1 ml-2">
                       <li>Built SaaS platform from ground up using React and Node.js</li>
                       <li>Optimized database queries reducing load time by 60%</li>
                       <li>Developed RESTful APIs consumed by web and mobile applications</li>
@@ -172,12 +172,12 @@ export default function ResumePreviewModal({
                   <div>
                     <div className="flex items-start justify-between mb-1">
                       <div>
-                        <h3 className="font-bold text-gray-900">Junior Developer</h3>
-                        <p className="text-sm text-gray-700">Digital Agency Co. • New York, NY</p>
+                        <h3 className="font-bold text-gray-900 dark:text-slate-50">Junior Developer</h3>
+                        <p className="text-sm text-gray-700 dark:text-slate-300">Digital Agency Co. • New York, NY</p>
                       </div>
-                      <span className="text-sm text-gray-600">Jun 2016 - Feb 2018</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Jun 2016 - Feb 2018</span>
                     </div>
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 ml-2">
+                    <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 space-y-1 ml-2">
                       <li>Developed responsive web applications for Fortune 500 clients</li>
                       <li>Collaborated with design team to implement pixel-perfect UI</li>
                       <li>Maintained legacy codebases and implemented new features</li>
@@ -188,23 +188,23 @@ export default function ResumePreviewModal({
 
               {/* Education */}
               <div className="mb-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-3 uppercase tracking-wide">Education</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Education</h2>
                 <div>
                   <div className="flex items-start justify-between mb-1">
                     <div>
-                      <h3 className="font-bold text-gray-900">Bachelor of Science in Computer Science</h3>
-                      <p className="text-sm text-gray-700">University of California, Berkeley</p>
+                      <h3 className="font-bold text-gray-900 dark:text-slate-50">Bachelor of Science in Computer Science</h3>
+                      <p className="text-sm text-gray-700 dark:text-slate-300">University of California, Berkeley</p>
                     </div>
-                    <span className="text-sm text-gray-600">2012 - 2016</span>
+                    <span className="text-sm text-gray-600 dark:text-slate-400">2012 - 2016</span>
                   </div>
-                  <p className="text-sm text-gray-700">GPA: 3.8/4.0 • Magna Cum Laude</p>
+                  <p className="text-sm text-gray-700 dark:text-slate-300">GPA: 3.8/4.0 • Magna Cum Laude</p>
                 </div>
               </div>
 
               {/* Skills */}
               <div className="mb-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-3 uppercase tracking-wide">Technical Skills</h2>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-700">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Technical Skills</h2>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-700 dark:text-slate-300">
                   <div><strong>Languages:</strong> JavaScript, TypeScript, Python, Java</div>
                   <div><strong>Frontend:</strong> React, Next.js, Vue.js, Tailwind CSS</div>
                   <div><strong>Backend:</strong> Node.js, Express, Django, Spring Boot</div>
@@ -216,23 +216,23 @@ export default function ResumePreviewModal({
 
               {/* Certifications */}
               <div className="mb-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-3 uppercase tracking-wide">Certifications</h2>
-                <ul className="space-y-1 text-sm text-gray-700">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Certifications</h2>
+                <ul className="space-y-1 text-sm text-gray-700 dark:text-slate-300">
                   <li>
                     <strong>AWS Certified Solutions Architect - Professional</strong>
-                    <span className="text-gray-600 ml-2">• Amazon Web Services • Nov 2023</span>
+                    <span className="text-gray-600 dark:text-slate-400 ml-2">• Amazon Web Services • Nov 2023</span>
                   </li>
                   <li>
                     <strong>Certified Kubernetes Administrator (CKA)</strong>
-                    <span className="text-gray-600 ml-2">• CNCF • Jun 2022</span>
+                    <span className="text-gray-600 dark:text-slate-400 ml-2">• CNCF • Jun 2022</span>
                   </li>
                 </ul>
               </div>
 
               {/* Languages */}
               <div>
-                <h2 className="text-lg font-bold text-gray-900 mb-3 uppercase tracking-wide">Languages</h2>
-                <p className="text-sm text-gray-700">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Languages</h2>
+                <p className="text-sm text-gray-700 dark:text-slate-300">
                   English (Native) • Spanish (Professional Working Proficiency) • French (Elementary)
                 </p>
               </div>

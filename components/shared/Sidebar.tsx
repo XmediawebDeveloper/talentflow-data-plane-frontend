@@ -1,52 +1,11 @@
 'use client';
 
-import {
-  LayoutDashboard,
-  Building2,
-  CreditCard,
-  Settings,
-  BarChart3,
-  HelpCircle,
-  FileText,
-  Target,
-  Sparkles,
-  ClipboardList,
-  Video,
-  Users,
-  Database,
-  UserCog,
-  Shield,
-  Key,
-  Palette,
-  Link as LinkIcon,
-  Lock,
-  Receipt,
-  Wallet,
-  RefreshCw,
-  AlertTriangle,
-  Activity,
-  TrendingUp,
-  ChevronDown,
-  ChevronRight,
-  Briefcase,
-  Layers,
-  GraduationCap,
-  Clock,
-  Factory,
-  History,
-  ScrollText,
-  MessageCircle,
-  Headphones,
-  Inbox,
-  ShieldCheck
-} from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
-import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { buildMenuSections, type NavSection } from '@/lib/navigation/menuSections';
 
 interface SidebarProps {
   user?: User;
@@ -63,25 +22,6 @@ const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/usage-quotas',
   '/support-tickets',
 ];
-
-interface NavItem {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  href?: string;
-  permission?: string;           // Single permission check (legacy)
-  permissions?: string[];        // Multiple permissions check (show if ANY match)
-  adminOnly?: boolean;
-  internalUserOnly?: boolean;    // Show only to non-admin users (for internal help desk)
-  planFeature?: PlanFeatureKey;  // Plan-level feature gate
-}
-
-interface NavSection {
-  id: string;
-  label: string;
-  items: NavItem[];
-  adminOnly?: boolean;
-}
 
 export default function Sidebar({ user, tenant, subscriptionExpired, accountSuspended, onClose }: SidebarProps) {
   const pathname = usePathname();
@@ -101,7 +41,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   }, [pathname]);
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
-    'organization', 'user-management-section', 'masters', 'subscription', 'settings', 'reports', 'audits'
+    'organization', 'user-management-section', 'subscription', 'settings', 'reports', 'audits'
   ]);
   const [forceRender, setForceRender] = useState(0);
 
@@ -174,132 +114,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
     return hasAny;
   };
 
-  // Define menu sections with grouped items
-  const allSections: NavSection[] = [
-    // ADMINISTRATION
-    {
-      id: 'administration',
-      label: 'ADMINISTRATION',
-      items: [
-        { id: 'dashboard', label: isTenantAdmin ? 'Admin Dashboard' : 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-      ]
-    },
-
-    // RECRUITMENT
-    {
-      id: 'recruitment',
-      label: 'RECRUITMENT',
-      items: [
-        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'], planFeature: 'resume_scoring' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'], planFeature: 'ai_talent_match' },
-      ]
-    },
-
-    // RESUME MANAGEMENT
-    {
-      id: 'resume-management',
-      label: 'RESUME MANAGEMENT',
-      items: [
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'], planFeature: 'resume_upload' },
-        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'], planFeature: 'resume_upload' },
-      ]
-    },
-
-    // EVALUATION
-    {
-      id: 'evaluation',
-      label: 'EVALUATION',
-      items: [
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewAIInterviews', 'canRunAiInterviews'], planFeature: 'ai_interview' },
-        { id: 'hr-question-bank', label: 'HR Question Bank', icon: ClipboardList, href: '/recruitment/hr-question-bank', permissions: ['canViewHRQuestionBank', 'canCreateHRQuestionBank', 'canUpdateHRQuestionBank', 'canDeleteHRQuestionBank'], planFeature: 'assessment' },
-      ]
-    },
-
-    // USER MANAGEMENT
-    {
-      id: 'user-management-section',
-      label: 'USER MANAGEMENT',
-      items: [
-        { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
-        { id: 'usage-history', label: 'Usage History', icon: History, href: '/organization/usage-history', adminOnly: true },
-        { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canViewTeams', planFeature: 'teams' },
-        { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
-      ]
-    },
-
-    // SUBSCRIPTION & BILLING - RBAC03: Billing Manager access
-    {
-      id: 'subscription',
-      label: 'SUBSCRIPTION & BILLING',
-      items: [
-        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewCurrentPlan' },
-        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'canViewUsage' },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewPaymentMethods' },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewBillingHistory' },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewRefundHistory' },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewDisputeHistory' },
-        { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', permission: 'canViewUsage' },
-      ]
-    },
-
-    // MASTERS - Settings permission required
-    {
-      id: 'masters',
-      label: 'MASTERS',
-      items: [
-        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', permission: 'canManageSettings' },
-        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', permission: 'canManageSettings' },
-        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', permission: 'canManageSettings' },
-      ]
-    },
-
-    // ORGANIZATION
-    {
-      id: 'organization',
-      label: 'ORGANIZATION',
-      items: [
-        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
-      ]
-    },
-
-    // SETTINGS - Permission-based access
-    {
-      id: 'settings',
-      label: 'SETTINGS',
-      items: [
-        { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewRoles' },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canViewApiManagement', planFeature: 'api_access' },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
-        // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canViewSecuritySettings' },
-        { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', permission: 'canManageSettings' },
-      ]
-    },
-
-    // AUDITS & TRAIL - Tenant Admin Only
-    {
-      id: 'audits',
-      label: 'AUDITS & TRAIL',
-      items: [
-        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', adminOnly: true },
-        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', adminOnly: true },
-      ]
-    },
-
-    // SUPPORT
-    {
-      id: 'support',
-      label: 'SUPPORT',
-      items: [
-        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets', permission: 'canViewSupport' },
-        { id: 'help-desk', label: 'Help Desk', icon: Headphones, href: '/help-desk', internalUserOnly: true },
-      ]
-    },
-  ];
+  // Menu section data comes from the shared config so the Sidebar and the
+  // Dashboard menu grid stay in sync — see lib/navigation/menuSections.ts.
+  const allSections: NavSection[] = buildMenuSections(isTenantAdmin);
 
   // Filter sections and items based on permissions
   const filterSections = (sections: NavSection[]): NavSection[] => {

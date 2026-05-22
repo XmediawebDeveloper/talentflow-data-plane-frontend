@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, Info, XCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, XCircle, Loader2, X } from 'lucide-react';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -55,27 +55,37 @@ export default function ConfirmationDialog({
   const { icon: Icon, iconColor, iconBg, confirmButton } = config[type];
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        {/* Icon */}
-        <div className="flex justify-center pt-8 pb-4">
-          <div className={`${iconBg} rounded-full p-3`}>
-            <Icon className={`w-8 h-8 ${iconColor}`} />
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="px-8 pb-6">
-          <h2 className="text-center text-base sm:text-lg font-semibold text-gray-900 mb-3">{title}</h2>
-          <p className="text-center text-gray-600 text-sm leading-relaxed">{message}</p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col-reverse sm:flex-row gap-3 px-6 sm:px-8 pb-6 sm:pb-8">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col">
+        {/* Header */}
+        <div className="px-6 sm:px-8 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">{title}</h2>
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 hover:text-gray-700 dark:hover:text-slate-300 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 sm:px-8 py-5 flex-1 overflow-y-auto">
+          <div className="flex justify-center mb-4">
+            <div className={`${iconBg} rounded-full p-3`}>
+              <Icon className={`w-8 h-8 ${iconColor}`} />
+            </div>
+          </div>
+          <p className="text-center text-gray-600 dark:text-slate-400 text-sm leading-relaxed">{message}</p>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-950 flex flex-col-reverse sm:flex-row gap-3 shrink-0">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>

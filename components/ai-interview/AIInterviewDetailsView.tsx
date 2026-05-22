@@ -21,6 +21,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -434,24 +435,27 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   }
 
   return (
-    <div className="flex-1 bg-slate-50 overflow-y-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: 'Interview Details' },
+            ]}
+          />
       {/* Loading overlay for candidate fetch */}
       {candidateLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
       )}
-      {/* Header (sticky on lg+, scrolls on mobile to avoid covering content) */}
-      <div className="bg-brand-blue lg:sticky lg:top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
-        <div className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-3.5">
-          <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5 flex-wrap">
-            <button
-              onClick={onBack}
-              aria-label="Back"
-              className="w-9 h-9 sm:w-10 sm:h-10 bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 rounded-lg flex items-center justify-center text-white transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-            </button>
+      {/* Header */}
+      <div className="bg-brand-blue rounded-xl shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 mb-4">
+        <div className="py-2.5 sm:py-3 lg:py-3.5 px-3 sm:px-4 lg:px-5">
+          <div className="flex items-center justify-end gap-2 mb-2 sm:mb-2.5 flex-wrap">
             {totalCount != null && totalCount > 0 && (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
@@ -598,8 +602,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       </div>
 
       {/* Tab bar (scrolls with content; horizontally scrollable on small screens) */}
-      <div className="bg-white border-b border-gray-100 z-10">
-        <div className="px-3 sm:px-5 lg:px-8">
+      <div className="border-b border-gray-100 z-10 mb-4">
+        <div>
           <div className="flex gap-1 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide -mb-px">
             {([
               { key: 'overview', label: 'Interview Details' },
@@ -627,7 +631,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       </div>
 
       {/* Content area */}
-      <div className="px-3 sm:px-5 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="py-4 sm:py-6 space-y-4 sm:space-y-6">
 
           {/* JD staleness banner — shows when the linked JD was edited after
               this interview config was created. Computed by the single-config
@@ -1679,6 +1683,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </div>
+    </main>
   );
 }

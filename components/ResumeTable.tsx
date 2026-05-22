@@ -1,6 +1,6 @@
 'use client'
 
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
@@ -312,15 +312,15 @@ export default function ResumeTable({
     <div className="flex-1">
       {/* FIX-008: Desktop Table View - hidden on mobile */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full min-w-[1100px]">
+        <table className="w-full min-w-[1200px] table-auto">
         <thead className="bg-slate-50 sticky top-0">
           <tr>
             {/* Drag handle column */}
-            <th className="w-8 px-2 py-3">
+            <th className="w-8 px-2 py-3 align-middle">
               <span className="sr-only">Drag</span>
             </th>
             {!hideCheckboxes && (
-              <th className="w-12 px-4 py-3">
+              <th className="w-12 px-4 py-3 align-middle">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -332,34 +332,34 @@ export default function ResumeTable({
                 />
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Candidate Name
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Email
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Phone
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Skills
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Experience
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Source
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Upload Date
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Uploaded By
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Files
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Actions
             </th>
           </tr>
@@ -376,7 +376,7 @@ export default function ResumeTable({
               onViewDetails={onViewDetails}
             >
               {!hideCheckboxes && (
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedResumes.includes(resume.id)}
@@ -385,7 +385,7 @@ export default function ResumeTable({
                   />
                 </td>
               )}
-              <td className="px-4 py-3">
+              <td className="px-4 py-3 align-middle whitespace-nowrap">
                 <div className="flex items-center">
                   <div>
                     <div className="flex items-center gap-2">
@@ -414,19 +414,19 @@ export default function ResumeTable({
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-3 text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
                 {resume.email && resume.email !== 'No email'
                   ? (highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-3 text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
                 {resume.phone && resume.phone !== 'No phone'
                   ? (highlightQuery ? highlightText(resume.phone, highlightQuery) : resume.phone)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3 align-middle min-w-[220px]">
                 <div className="flex flex-wrap gap-1">
                   {resume.skills.slice(0, 4).map((skill, i) => (
                     <span
@@ -443,8 +443,8 @@ export default function ResumeTable({
                   )}
                 </div>
               </td>
-              <td className="px-4 py-3 text-sm text-gray-700">{resume.experience}</td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">{resume.experience}</td>
+              <td className="px-4 py-3 align-middle whitespace-nowrap">
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ring-1 ${
                     resume.source === 'Manual'
@@ -460,13 +460,13 @@ export default function ResumeTable({
                   {resume.source}
                 </span>
               </td>
-              <td className="px-4 py-3 text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
                 {formatISTDate(resume.uploadDate)}
               </td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3 align-middle whitespace-nowrap">
                 <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
               </td>
-              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+              <td className="px-4 py-3 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleShowVersionHistory(resume)}
                   disabled={isLoadingVersions}
@@ -485,7 +485,7 @@ export default function ResumeTable({
                   </span>
                 </button>
               </td>
-              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+              <td className="px-4 py-3 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   {selectionMode ? (
                     <button
@@ -780,19 +780,31 @@ export default function ResumeTable({
       {/* Edit Details Modal */}
       {showEditModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                  <Edit3 className="w-5 h-5 text-white" />
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    <Edit3 className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-gray-900">Edit Candidate Details</h2>
                 </div>
-                <h2 className="text-gray-900">Edit Candidate Details</h2>
+                <p className="text-sm text-gray-600">
+                  Update information for {selectedResumeForAction.name}
+                </p>
               </div>
-              <p className="text-sm text-gray-600">
-                Update information for {selectedResumeForAction.name}
-              </p>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-700 mb-2">Full Name</label>
@@ -851,27 +863,27 @@ export default function ResumeTable({
                   />
                 </div>
               </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    toast.success('Candidate details updated successfully');
-                    setShowEditModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-                >
-                  Save Changes
-                </button>
-              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('Candidate details updated successfully');
+                  setShowEditModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
@@ -880,19 +892,31 @@ export default function ResumeTable({
       {/* Share Resume Modal */}
       {showShareModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
-                  <Share2 className="w-5 h-5 text-white" />
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                    <Share2 className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-gray-900">Share Resume</h2>
                 </div>
-                <h2 className="text-gray-900">Share Resume</h2>
+                <p className="text-sm text-gray-600">
+                  Share {selectedResumeForAction.name}'s resume with team members
+                </p>
               </div>
-              <p className="text-sm text-gray-600">
-                Share {selectedResumeForAction.name}'s resume with team members
-              </p>
+              <button
+                onClick={() => {
+                  setShowShareModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="mb-6">
                 <label className="block text-sm text-gray-700 mb-2">Email addresses (comma separated)</label>
                 <input
@@ -909,28 +933,28 @@ export default function ResumeTable({
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowShareModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    toast.success('Resume shared successfully');
-                    setShowShareModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
-                >
-                  <Mail className="w-4 h-4" />
-                  Share
-                </button>
-              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
+              <button
+                onClick={() => {
+                  setShowShareModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('Resume shared successfully');
+                  setShowShareModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
+              >
+                <Mail className="w-4 h-4" />
+                Share
+              </button>
             </div>
           </div>
         </div>
@@ -939,19 +963,31 @@ export default function ResumeTable({
       {/* Add Tags Modal */}
       {showAddTagsModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
-                  <Tag className="w-5 h-5 text-white" />
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
+                    <Tag className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-gray-900">Add Tags</h2>
                 </div>
-                <h2 className="text-gray-900">Add Tags</h2>
+                <p className="text-sm text-gray-600">
+                  Add tags to {selectedResumeForAction.name}'s resume
+                </p>
               </div>
-              <p className="text-sm text-gray-600">
-                Add tags to {selectedResumeForAction.name}'s resume
-              </p>
+              <button
+                onClick={() => {
+                  setShowAddTagsModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="mb-6">
                 <label className="block text-sm text-gray-700 mb-2">Tags</label>
                 <input
@@ -974,28 +1010,28 @@ export default function ResumeTable({
                   ))}
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowAddTagsModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    toast.success('Tags added successfully');
-                    setShowAddTagsModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
-                >
-                  <Tag className="w-4 h-4" />
-                  Add Tags
-                </button>
-              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
+              <button
+                onClick={() => {
+                  setShowAddTagsModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('Tags added successfully');
+                  setShowAddTagsModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
+              >
+                <Tag className="w-4 h-4" />
+                Add Tags
+              </button>
             </div>
           </div>
         </div>
@@ -1004,20 +1040,32 @@ export default function ResumeTable({
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-brand-orange rounded-xl flex items-center justify-center shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
-                  <Archive className="w-5 h-5 text-white" />
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-brand-orange rounded-xl flex items-center justify-center shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+                    <Archive className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-gray-900">Archive Resume</h2>
                 </div>
-                <h2 className="text-gray-900">Archive Resume</h2>
+                <p className="text-sm text-gray-600">
+                  Archive {selectedResumeForAction.name}'s resume?
+                </p>
               </div>
-              <p className="text-sm text-gray-600">
-                Archive {selectedResumeForAction.name}'s resume?
-              </p>
+              <button
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="p-6">
-              <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-4 mb-6">
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-4">
                 <p className="text-sm text-gray-800">
                   <strong>What happens when you archive?</strong>
                 </p>
@@ -1028,38 +1076,38 @@ export default function ResumeTable({
                   <li>Can be restored anytime</li>
                 </ul>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowArchiveModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    if (onArchive) {
-                      onArchive(selectedResumeForAction.id);
-                    } else {
-                      // Fallback: call API directly
-                      try {
-                        await resumeService.archive(selectedResumeForAction.id, true);
-                        toast.success('Resume archived successfully');
-                      } catch (error) {
-                        toast.error('Failed to archive resume');
-                      }
+            </div>
+            <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
+              <button
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (onArchive) {
+                    onArchive(selectedResumeForAction.id);
+                  } else {
+                    // Fallback: call API directly
+                    try {
+                      await resumeService.archive(selectedResumeForAction.id, true);
+                      toast.success('Resume archived successfully');
+                    } catch (error) {
+                      toast.error('Failed to archive resume');
                     }
-                    setShowArchiveModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
-                >
-                  <Archive className="w-4 h-4" />
-                  Archive
-                </button>
-              </div>
+                  }
+                  setShowArchiveModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+              >
+                <Archive className="w-4 h-4" />
+                Archive
+              </button>
             </div>
           </div>
         </div>

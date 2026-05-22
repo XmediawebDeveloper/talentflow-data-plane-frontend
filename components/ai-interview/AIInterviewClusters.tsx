@@ -13,6 +13,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
   normalizePriority as sharedNormalizePriority,
@@ -2055,8 +2056,17 @@ export default function AIInterviewClusters() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
-        <div className="w-full">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb
+              className="mb-4 md:mb-6"
+              items={[
+                { label: 'Dashboard', href: '/dashboard' },
+                { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                { label: 'Clusters' },
+              ]}
+            />
           {/* Header */}
           <div className="mb-6">
             {/* Step indicator */}

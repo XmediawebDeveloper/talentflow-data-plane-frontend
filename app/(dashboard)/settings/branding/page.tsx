@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Palette, Upload, Save, Eye, Check, Loader2, X, ShieldCheck, ShieldAlert, RefreshCw, Sparkles, Image as ImageIcon, Globe, Layers } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/settingsService';
@@ -139,18 +140,21 @@ export default function BrandingPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
+      <main className="flex-1 py-4 md:py-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="font-medium text-gray-600">Loading branding settings...</p>
+          <p className="font-medium text-gray-600 dark:text-slate-400">Loading branding settings...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Branding & White Label' }]} />
+
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -183,25 +187,25 @@ export default function BrandingPage() {
           </div>
         </section>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
               <ImageIcon className="h-5 w-5 text-brand-blue" />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Logo</h2>
-              <p className="text-xs text-gray-500">Visual identity used across the portal.</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Logo</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-500">Visual identity used across the portal.</p>
             </div>
           </div>
           <div className="p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 flex-shrink-0 relative overflow-hidden">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-slate-700 flex-shrink-0 relative overflow-hidden">
               {branding.logo_url ? (
                 <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain rounded-xl" />
               ) : isUploadingLogo ? (
-                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 animate-spin" />
+                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 dark:text-slate-500 animate-spin" />
               ) : (
-                <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
+                <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 dark:text-slate-500" />
               )}
             </div>
             <div className="text-center sm:text-left">
@@ -216,7 +220,7 @@ export default function BrandingPage() {
                 <button
                   onClick={() => logoInputRef.current?.click()}
                   disabled={isUploadingLogo || !canManage}
-                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
                   {isUploadingLogo ? (
                     <><Loader2 className="w-3.5 h-3.5 animate-spin" />Uploading...</>
@@ -227,78 +231,78 @@ export default function BrandingPage() {
                 {branding.logo_url && canManage && (
                   <button
                     onClick={() => setBranding(prev => ({ ...prev, logo_url: '' }))}
-                    className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
                     aria-label="Remove logo" title="Remove logo"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
             </div>
           </div>
           </div>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue-2/15 shadow-sm shadow-brand-blue/10">
               <Palette className="h-5 w-5 text-brand-blue-2" />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Brand Colors</h2>
-              <p className="text-xs text-gray-500">Primary and secondary color used throughout your portal.</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Brand Colors</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-500">Primary and secondary color used throughout your portal.</p>
             </div>
           </div>
           <div className="p-5 sm:p-6">
-          <p className="text-xs sm:text-sm text-gray-700 mb-2 sm:mb-3">Color Presets</p>
+          <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Color Presets</p>
           <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 sm:mb-6">
             {colorPresets.map((preset) => (
               <button
                 key={preset.name}
                 onClick={() => setBranding({ ...branding, primary_color: preset.primary, secondary_color: preset.secondary })}
-                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 rounded-xl bg-white hover:border-brand-blue/30 hover:bg-brand-cyan/[0.04] transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-cyan/[0.04] transition-colors"
               >
                 <div className="flex flex-shrink-0">
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full" style={{ backgroundColor: preset.primary }} />
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full -ml-1.5 sm:-ml-2" style={{ backgroundColor: preset.secondary }} />
                 </div>
-                <span className="text-xs sm:text-sm text-gray-700">{preset.name}</span>
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">{preset.name}</span>
               </button>
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Primary Color</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Primary Color</label>
               <div className="flex items-center gap-2 sm:gap-3">
                 <input
                   type="color"
                   value={branding.primary_color}
                   onChange={(e) => setBranding({ ...branding, primary_color: e.target.value })}
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg cursor-pointer border border-gray-200 flex-shrink-0"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg cursor-pointer border border-gray-200 dark:border-slate-700 flex-shrink-0"
                 />
                 <input
                   type="text"
                   value={branding.primary_color}
                   onChange={(e) => setBranding({ ...branding, primary_color: e.target.value })}
-                  className="flex-1 rounded-xl border border-gray-200 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Secondary Color</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Secondary Color</label>
               <div className="flex items-center gap-2 sm:gap-3">
                 <input
                   type="color"
                   value={branding.secondary_color}
                   onChange={(e) => setBranding({ ...branding, secondary_color: e.target.value })}
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg cursor-pointer border border-gray-200 flex-shrink-0"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg cursor-pointer border border-gray-200 dark:border-slate-700 flex-shrink-0"
                 />
                 <input
                   type="text"
                   value={branding.secondary_color}
                   onChange={(e) => setBranding({ ...branding, secondary_color: e.target.value })}
-                  className="flex-1 rounded-xl border border-gray-200 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 />
               </div>
             </div>
@@ -306,14 +310,14 @@ export default function BrandingPage() {
           </div>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
               <Globe className="h-5 w-5 text-brand-teal" />
             </span>
             <div className="flex-1">
-              <h2 className="text-base font-semibold text-gray-900">Custom Domain</h2>
-              <p className="text-xs text-gray-500">Use your own domain for the candidate portal.</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Custom Domain</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-500">Use your own domain for the candidate portal.</p>
             </div>
             {domainVerified && branding.custom_domain && (
               <span className="flex items-center gap-1.5 text-xs font-medium text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/15 px-2.5 py-1 rounded-full">
@@ -327,7 +331,7 @@ export default function BrandingPage() {
             )}
           </div>
           <div className="p-5 sm:p-6">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Domain URL</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Domain URL</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -339,7 +343,7 @@ export default function BrandingPage() {
                   setCloudflareProxied(false);
                 }}
                 placeholder="careers.yourcompany.com"
-                className="flex-1 rounded-xl border border-gray-200 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue placeholder-gray-400"
+                className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue placeholder-gray-400"
               />
               <button
                 onClick={handleVerifyDomain}
@@ -359,17 +363,17 @@ export default function BrandingPage() {
             {/* DNS Instructions */}
             <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5">
               <p className="text-xs font-semibold text-brand-blue mb-2">DNS Setup Instructions:</p>
-              <div className="space-y-1 text-xs text-gray-600 font-mono">
+              <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400 font-mono">
                 <div className="flex gap-3">
-                  <span className="text-gray-400 w-12">Type</span>
-                  <span className="font-semibold text-gray-900">CNAME</span>
+                  <span className="text-gray-400 dark:text-slate-500 w-12">Type</span>
+                  <span className="font-semibold text-gray-900 dark:text-slate-50">CNAME</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gray-400 w-12">Name</span>
-                  <span className="font-semibold text-gray-900">{branding.custom_domain || 'careers'}</span>
+                  <span className="text-gray-400 dark:text-slate-500 w-12">Name</span>
+                  <span className="font-semibold text-gray-900 dark:text-slate-50">{branding.custom_domain || 'careers'}</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gray-400 w-12">Value</span>
+                  <span className="text-gray-400 dark:text-slate-500 w-12">Value</span>
                   <span className="font-semibold text-brand-blue">{cnameTarget || 'loading...'}</span>
                 </div>
               </div>
@@ -408,14 +412,14 @@ export default function BrandingPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+        <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
               <Layers className="h-5 w-5 text-brand-orange-deep" />
             </span>
             <div className="flex-1">
-              <h2 className="text-base font-semibold text-gray-900">Preview</h2>
-              <p className="text-xs text-gray-500">See your candidate-facing portal at a glance.</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Preview</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-500">See your candidate-facing portal at a glance.</p>
             </div>
             <button
               onClick={() => setShowPreviewModal(true)}
@@ -435,40 +439,41 @@ export default function BrandingPage() {
               >
                 <span className="text-white text-xl sm:text-2xl font-bold">{branding.company_name?.[0] || 'T'}</span>
               </div>
-              <p className="font-semibold text-sm sm:text-base text-gray-900">{branding.company_name || 'TalentFlow'}</p>
-              <p className="text-xs sm:text-sm text-gray-600">Your branded career portal</p>
+              <p className="font-semibold text-sm sm:text-base text-gray-900 dark:text-slate-50">{branding.company_name || 'TalentFlow'}</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Your branded career portal</p>
             </div>
           </div>
           </div>
         </div>
       </div>
+      </div>
 
       {/* Full Preview Modal */}
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">Branded Career Portal Preview</h3>
-                <p className="text-xs text-gray-500 mt-0.5">How candidates will see your portal</p>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Branded Career Portal Preview</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">How candidates will see your portal</p>
               </div>
               <button
                 onClick={() => setShowPreviewModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                aria-label="Close">
-                <X className="w-4 h-4 text-gray-500" />
+                <X className="w-4 h-4 text-gray-500 dark:text-slate-500" />
               </button>
             </div>
 
             {/* Simulated browser chrome */}
-            <div className="bg-gray-100 px-4 py-2 flex items-center gap-2 border-b border-gray-200 flex-shrink-0">
+            <div className="bg-gray-100 dark:bg-slate-800 px-4 py-2 flex items-center gap-2 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-red-400" />
                 <div className="w-3 h-3 rounded-full bg-yellow-400" />
                 <div className="w-3 h-3 rounded-full bg-green-400" />
               </div>
-              <div className="flex-1 bg-white rounded-md px-3 py-1 text-xs text-gray-500 border border-gray-200">
+              <div className="flex-1 bg-white dark:bg-slate-900 rounded-md px-3 py-1 text-xs text-gray-500 dark:text-slate-500 border border-gray-200 dark:border-slate-700">
                 {branding.custom_domain && domainVerified
                   ? `https://${branding.custom_domain}/careers`
                   : 'https://careers.talentflow.com'}
@@ -478,7 +483,7 @@ export default function BrandingPage() {
             {/* Portal preview content */}
             <div className="overflow-y-auto flex-1">
               {/* Nav bar */}
-              <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100" style={{ backgroundColor: branding.primary_color }}>
+              <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-slate-700/60" style={{ backgroundColor: branding.primary_color }}>
                 <div className="flex items-center gap-3">
                   {branding.logo_url ? (
                     <img src={branding.logo_url} alt="Logo" className="h-8 w-auto object-contain" />
@@ -499,15 +504,15 @@ export default function BrandingPage() {
 
               {/* Hero */}
               <div className="px-6 py-10 text-center" style={{ background: `linear-gradient(135deg, ${branding.primary_color}15, ${branding.secondary_color}15)` }}>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Join Our Team</h1>
-                <p className="text-sm text-gray-600 max-w-md mx-auto">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50 mb-2">Join Our Team</h1>
+                <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
                   We're looking for talented people to help us build the future. Explore open roles below.
                 </p>
                 <div className="mt-5 flex justify-center gap-3">
                   <div className="px-5 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: branding.primary_color }}>
                     Browse Jobs
                   </div>
-                  <div className="px-5 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-300 bg-white">
+                  <div className="px-5 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900">
                     Learn More
                   </div>
                 </div>
@@ -515,19 +520,19 @@ export default function BrandingPage() {
 
               {/* Job listings */}
               <div className="px-6 pb-8">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Open Positions</h2>
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">Open Positions</h2>
                 {[
                   { title: 'Senior Frontend Engineer', dept: 'Engineering', loc: 'Remote', type: 'Full-time' },
                   { title: 'Product Designer', dept: 'Design', loc: 'Hybrid', type: 'Full-time' },
                   { title: 'Sales Development Rep', dept: 'Sales', loc: 'On-site', type: 'Full-time' },
                 ].map((job, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 mb-2 border border-gray-200 rounded-lg bg-white hover:border-gray-300 transition-colors">
+                  <div key={i} className="flex items-center justify-between p-4 mb-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 hover:border-gray-300 transition-colors">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{job.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{job.dept} · {job.loc}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{job.title}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{job.dept} · {job.loc}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{job.type}</span>
+                      <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{job.type}</span>
                       <div className="text-xs font-medium px-3 py-1 rounded-lg text-white" style={{ backgroundColor: branding.primary_color }}>
                         Apply
                       </div>
@@ -537,8 +542,8 @@ export default function BrandingPage() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t border-gray-100 text-center">
-                <p className="text-xs text-gray-400">{branding.email_footer || 'Powered by TalentFlow'}</p>
+              <div className="px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 text-center">
+                <p className="text-xs text-gray-400 dark:text-slate-500">{branding.email_footer || 'Powered by TalentFlow'}</p>
               </div>
             </div>
           </div>

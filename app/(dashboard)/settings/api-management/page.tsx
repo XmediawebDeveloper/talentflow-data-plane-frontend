@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Key, Plus, Copy, Eye, EyeOff, Trash2, RefreshCw, Clock, Loader2, X, Sparkles, BookOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { apiKeysApi, ApiKey, ApiKeyCreateResponse } from '@/lib/services/settingsService';
@@ -124,10 +125,10 @@ export default function ApiManagementPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 flex items-center justify-center">
-        <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8 flex flex-col items-center gap-4">
+      <main className="flex-1 overflow-x-hidden bg-slate-50 flex items-center justify-center">
+        <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8 flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="font-semibold text-gray-600">Loading API keys...</p>
+          <p className="font-semibold text-gray-600 dark:text-slate-400">Loading API keys...</p>
         </div>
       </main>
     );
@@ -135,10 +136,13 @@ export default function ApiManagementPage() {
 
   return (
     <FeatureGate feature="api_access">
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />
+
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+        <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -149,8 +153,8 @@ export default function ApiManagementPage() {
                   <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Developer access
                 </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900">API Management</h1>
-                <p className="mt-2 max-w-2xl text-sm text-gray-600 sm:text-base">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
+                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">API Management</h1>
+                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
               </div>
             </div>
             {canManage && (
@@ -168,12 +172,12 @@ export default function ApiManagementPage() {
         {/* API Keys List */}
         <div className="space-y-4">
           {apiKeys.length === 0 ? (
-            <div className="rounded-xl border border-gray-100 bg-white p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Key className="w-6 h-6 text-brand-blue" />
               </span>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No API Keys</h3>
-              <p className="text-gray-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No API Keys</h3>
+              <p className="text-gray-500 dark:text-slate-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
               {canManage && (
                 <button
                   onClick={() => setShowCreateModal(true)}
@@ -188,7 +192,7 @@ export default function ApiManagementPage() {
             apiKeys.map((apiKey) => (
               <div
                 key={apiKey.id}
-                className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:shadow-md sm:p-6"
+                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition hover:shadow-md sm:p-6"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -196,7 +200,7 @@ export default function ApiManagementPage() {
                       <span className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                         <Key className="w-4 h-4" />
                       </span>
-                      <h3 className="font-semibold text-gray-900">{apiKey.name}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-slate-50">{apiKey.name}</h3>
                       <span className="px-2 py-0.5 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-semibold">
                         {apiKey.status}
                       </span>
@@ -207,13 +211,13 @@ export default function ApiManagementPage() {
                       </code>
                       <button
                         onClick={() => copyKey(apiKey.key_prefix)}
-                        className="p-1.5 rounded-lg text-gray-500 transition hover:bg-brand-blue/5 hover:text-brand-blue"
+                        className="p-1.5 rounded-lg text-gray-500 dark:text-slate-500 transition hover:bg-brand-blue/5 hover:text-brand-blue"
                         aria-label="Copy key prefix" title="Copy key prefix"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-slate-500">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4 text-brand-blue/70" />
                         Created: {formatISTDate(apiKey.created_at)}
@@ -229,7 +233,7 @@ export default function ApiManagementPage() {
                       <button
                         onClick={() => regenerateKey(apiKey.id)}
                         disabled={regeneratingId === apiKey.id}
-                        className="p-2 rounded-lg text-gray-500 transition hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-50"
+                        className="p-2 rounded-lg text-gray-500 dark:text-slate-500 transition hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-50"
                         aria-label="Regenerate key" title="Regenerate key"
                       >
                         <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
@@ -255,14 +259,14 @@ export default function ApiManagementPage() {
         </div>
 
         {/* API Documentation Link */}
-        <div className="mt-8 rounded-xl border border-gray-100 bg-white p-6 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="mt-8 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="flex items-start gap-4">
             <span className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <BookOpen className="w-5 h-5 text-brand-blue" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">API Documentation</h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">API Documentation</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                 Learn how to integrate TalentFlow into your applications. View our comprehensive API documentation for endpoints, authentication, and examples.
               </p>
               <button className="mt-3 text-sm font-semibold text-brand-blue hover:text-brand-blue-2">
@@ -272,25 +276,26 @@ export default function ApiManagementPage() {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Create API Key Modal — only renders if user has Manage permission */}
       {showCreateModal && canManage && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-xl bg-white shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.03] border border-gray-100 max-w-md w-full overflow-hidden">
+          <div className="rounded-xl bg-white dark:bg-slate-900 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.03] dark:ring-white/[0.02] border border-gray-100 dark:border-slate-700/60 max-w-md w-full overflow-hidden">
             {/* Modal Header */}
-            <div className="relative overflow-hidden bg-slate-50 border-b border-gray-100 px-6 py-5">
+            <div className="relative overflow-hidden bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5">
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Key className="w-5 h-5 text-brand-blue" />
                   </span>
-                  <h2 className="text-base font-semibold text-gray-900">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">
                     {newlyCreatedKey ? 'API Key Created' : 'Create API Key'}
                   </h2>
                 </div>
                 <button
                   onClick={closeCreateModal}
-                  className="p-1.5 rounded-lg bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-brand-blue/5 hover:text-brand-blue transition"
+                  className="p-1.5 rounded-lg bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700 hover:bg-brand-blue/5 hover:text-brand-blue transition"
                  aria-label="Close">
                   <X className="w-4 h-4" />
                 </button>
@@ -306,7 +311,7 @@ export default function ApiManagementPage() {
                   </p>
                 </div>
                 <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                     Your API Key
                   </label>
                   <div className="flex items-center gap-2">
@@ -315,7 +320,7 @@ export default function ApiManagementPage() {
                     </code>
                     <button
                       onClick={() => copyKey(newlyCreatedKey)}
-                      className="p-2 rounded-lg text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue transition flex-shrink-0"
+                      className="p-2 rounded-lg text-gray-500 dark:text-slate-500 hover:bg-brand-blue/5 hover:text-brand-blue transition flex-shrink-0"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -331,7 +336,7 @@ export default function ApiManagementPage() {
             ) : (
               <div>
                 <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Key Name
                   </label>
                   <input
@@ -339,17 +344,17 @@ export default function ApiManagementPage() {
                     value={newKeyName}
                     onChange={(e) => setNewKeyName(e.target.value)}
                     placeholder="e.g., Production API Key"
-                    className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Expiry (optional)
                   </label>
                   <select
                     value={newKeyExpiry || ''}
                     onChange={(e) => setNewKeyExpiry(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   >
                     <option value="">Never expires</option>
                     <option value="30">30 days</option>
@@ -361,7 +366,7 @@ export default function ApiManagementPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={closeCreateModal}
-                    className="flex-1 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition"
+                    className="flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition"
                   >
                     Cancel
                   </button>

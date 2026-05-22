@@ -67,7 +67,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+        <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-200 bg-gradient-to-r from-brand-blue/5 to-white">
           <div className="min-w-0">
             <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload History</h2>
             <p className="text-xs sm:text-sm text-gray-600">
@@ -86,8 +86,8 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-gray-50">
           {filteredRecords.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-10 sm:py-16">
-              <div className="w-14 h-14 sm:w-20 sm:h-20 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-                <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
+              <div className="w-14 h-14 sm:w-20 sm:h-20 bg-brand-blue/10 rounded-full flex items-center justify-center mb-3 sm:mb-4">
+                <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
               </div>
               <h3 className="text-base sm:text-xl text-gray-900 mb-1.5 sm:mb-2">No Upload History</h3>
               <p className="text-xs sm:text-sm text-gray-500 text-center max-w-md px-4">
@@ -104,14 +104,14 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                   <div
                     key={record.id}
                     onClick={() => setSelectedRecord(record)}
-                    className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer"
+                    className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 hover:border-brand-blue/30 hover:shadow-lg transition-all cursor-pointer"
                   >
                     {/* Header Row */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 sm:mb-5 gap-3 sm:gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2.5 sm:gap-3 mb-1.5 sm:mb-2">
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                           </div>
                           <div className="min-w-0">
                             <h3 className="text-sm sm:text-base text-gray-900 mb-0.5 sm:mb-1 truncate">{record.fileName}</h3>
@@ -124,7 +124,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
                       <div className="flex items-center gap-3 sm:gap-4 ml-10 sm:ml-0">
                         {hasIssues && (
-                          <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-yellow-100 text-yellow-700 text-[10px] sm:text-xs rounded-full border border-yellow-200">
+                          <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-brand-blue/10 text-brand-blue text-[10px] sm:text-xs rounded-full border border-brand-blue/20">
                             <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                             Needs Review
                           </span>
@@ -132,8 +132,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                         <div className="text-right">
                           <div className={`text-xl sm:text-3xl mb-0.5 sm:mb-1 ${
                             successRate === 100 ? 'text-green-600' :
-                            successRate >= 90 ? 'text-blue-600' :
-                            successRate >= 70 ? 'text-yellow-600' :
+                            successRate >= 70 ? 'text-brand-blue' :
                             'text-red-600'
                           }`}>
                             {successRate}%
@@ -158,14 +157,14 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
 
                       {/* Pending */}
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                      <div className="bg-gradient-to-br from-brand-blue/5 to-brand-blue/10 border border-brand-blue/20 rounded-lg p-2.5 sm:p-3 lg:p-4">
                         <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
                             <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
                           <span className="text-[10px] sm:text-xs text-gray-700 truncate">Pending</span>
                         </div>
-                        <div className="text-lg sm:text-xl lg:text-2xl text-blue-700">{record.pending}</div>
+                        <div className="text-lg sm:text-xl lg:text-2xl text-brand-blue">{record.pending}</div>
                       </div>
 
                       {/* Error */}
@@ -180,25 +179,25 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
 
                       {/* Duplicate */}
-                      <div className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border border-yellow-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                      <div className="bg-gradient-to-br from-brand-cyan/5 to-brand-cyan/10 border border-brand-cyan/20 rounded-lg p-2.5 sm:p-3 lg:p-4">
                         <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                             <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
                           <span className="text-[10px] sm:text-xs text-gray-700 truncate">Duplicate</span>
                         </div>
-                        <div className="text-lg sm:text-xl lg:text-2xl text-yellow-700">{record.duplicated}</div>
+                        <div className="text-lg sm:text-xl lg:text-2xl text-brand-cyan">{record.duplicated}</div>
                       </div>
 
                       {/* Versioned */}
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                      <div className="bg-gradient-to-br from-brand-blue-2/5 to-brand-blue-2/10 border border-brand-blue-2/20 rounded-lg p-2.5 sm:p-3 lg:p-4">
                         <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0">
                             <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
                           <span className="text-[10px] sm:text-xs text-gray-700 truncate">Versioned</span>
                         </div>
-                        <div className="text-lg sm:text-xl lg:text-2xl text-purple-700">{record.versioned}</div>
+                        <div className="text-lg sm:text-xl lg:text-2xl text-brand-blue-2">{record.versioned}</div>
                       </div>
 
                       {/* Total Files */}
@@ -223,8 +222,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                         <div
                           className={`h-full transition-all ${
                             successRate === 100 ? 'bg-green-500' :
-                            successRate >= 90 ? 'bg-blue-500' :
-                            successRate >= 70 ? 'bg-yellow-500' :
+                            successRate >= 70 ? 'bg-brand-blue' :
                             'bg-red-500'
                           }`}
                           style={{ width: `${successRate}%` }}
@@ -253,7 +251,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
             </p>
             <button
               onClick={onClose}
-              className="px-4 sm:px-6 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm sm:text-base"
+              className="px-4 sm:px-6 py-2 sm:py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors shadow-sm text-sm sm:text-base"
             >
               Close
             </button>

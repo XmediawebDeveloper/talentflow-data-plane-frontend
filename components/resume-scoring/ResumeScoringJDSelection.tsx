@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function ResumeScoringJDSelection() {
   const router = useRouter();
@@ -44,8 +45,17 @@ export default function ResumeScoringJDSelection() {
   };
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+              { label: 'Select Job Description' },
+            ]}
+          />
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -213,7 +223,8 @@ export default function ResumeScoringJDSelection() {
             })}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import notificationService, { Notification } from '@/lib/services/notificationService';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -150,7 +151,9 @@ export default function NotificationsPage() {
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Notifications' }]} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
@@ -335,6 +338,7 @@ export default function NotificationsPage() {
             </button>
           </div>
         )}
+      </div>
       </div>
       </div>
     </main>

@@ -37,7 +37,7 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-500 hover:text-gray-700 rounded-md hover:bg-white/50 flex-shrink-0"
+            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 rounded-md hover:bg-white/50 flex-shrink-0"
            aria-label="Close">
             <X className="w-5 h-5" />
           </button>
@@ -47,11 +47,11 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
         <div className="p-4 sm:p-6 space-y-4">
           {/* File Name */}
           {error.file_name && (
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <FileX className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+              <FileX className="w-5 h-5 text-gray-600 dark:text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-xs text-gray-500 mb-1">File Name</div>
-                <div className="text-sm text-gray-900 font-medium break-all">
+                <div className="text-xs text-gray-500 dark:text-slate-500 mb-1">File Name</div>
+                <div className="text-sm text-gray-900 dark:text-slate-50 font-medium break-all">
                   {error.file_name}
                 </div>
               </div>
@@ -60,7 +60,7 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
 
           {/* Error Message */}
           <div className="space-y-2">
-            <div className="text-sm font-medium text-gray-900">Error Details:</div>
+            <div className="text-sm font-medium text-gray-900 dark:text-slate-50">Error Details:</div>
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800">
                 {error.message}
@@ -71,9 +71,9 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
           {/* Suggestion */}
           {error.suggestion && (
             <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-900">Suggestion:</div>
+              <div className="text-sm font-medium text-gray-900 dark:text-slate-50">Suggestion:</div>
               <div className="p-4 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg">
-                <p className="text-sm text-gray-700">
+                <p className="text-sm text-gray-700 dark:text-slate-300">
                   {error.suggestion}
                 </p>
               </div>

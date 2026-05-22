@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   Users,
   Plus,
@@ -309,7 +310,7 @@ export default function TeamManagementPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
           <div className="w-full">
             <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
@@ -337,8 +338,10 @@ export default function TeamManagementPage() {
 
   return (
     <FeatureGate feature="teams">
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-        <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
           <div className="w-full">
             <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
               <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -389,14 +392,14 @@ export default function TeamManagementPage() {
               </div>
             </section>
 
-            <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('teams')}
                   className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                     activeTab === 'teams'
                       ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                      : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                      : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                   }`}
                 >
                   <Users className="w-4 h-4" />
@@ -408,7 +411,7 @@ export default function TeamManagementPage() {
                     className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                       activeTab === 'usage'
                         ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                        : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                     }`}
                   >
                     <BarChart3 className="w-4 h-4" />
@@ -421,7 +424,7 @@ export default function TeamManagementPage() {
                     className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                       activeTab === 'analytics'
                         ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                        : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                     }`}
                   >
                     <TrendingUp className="w-4 h-4" />
@@ -434,7 +437,7 @@ export default function TeamManagementPage() {
                     className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                       activeTab === 'history'
                         ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                        : 'text-gray-600 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                     }`}
                   >
                     <History className="w-4 h-4" />
@@ -445,11 +448,11 @@ export default function TeamManagementPage() {
             </div>
 
             {activeTab === 'usage' ? (
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-6">
+              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-6">
                 <TeamUsageAnalytics />
               </div>
             ) : activeTab === 'analytics' ? (
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-6">
+              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-6">
                 <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
               </div>
             ) : activeTab === 'history' ? (
@@ -458,14 +461,14 @@ export default function TeamManagementPage() {
               <>
                 <TeamStatsCards stats={stats} />
 
-                <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5 lg:p-6">
+                <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:p-6">
                   <div className="flex gap-3 sm:gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                       <Info className="w-5 h-5 text-brand-orange-deep" />
                     </div>
                     <div>
-                      <h3 className="mb-1 text-base font-semibold text-gray-900 sm:mb-2 lg:text-lg">Team Organization</h3>
-                      <p className="text-sm leading-relaxed text-gray-600">
+                      <h3 className="mb-1 text-base font-semibold text-gray-900 dark:text-slate-50 sm:mb-2 lg:text-lg">Team Organization</h3>
+                      <p className="text-sm leading-relaxed text-gray-600 dark:text-slate-400">
                         Teams help organize users by department, project, or function. Assign team leads to manage workflows and track performance metrics like active jobs and resume counts.
                       </p>
                     </div>
@@ -473,25 +476,25 @@ export default function TeamManagementPage() {
                 </div>
 
                 {teams.length > 0 && (
-                  <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-5">
+                  <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
                     <div className="flex flex-col gap-4 sm:flex-row">
                       <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                         <input
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           placeholder="Search teams by name or description..."
-                          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                          className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                         />
                       </div>
                       {teamLeads.length > 0 && (
                         <div className="relative">
-                          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                           <select
                             value={filterTeamLead}
                             onChange={(e) => setFilterTeamLead(e.target.value)}
-                            className="min-w-[220px] appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-8 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                            className="min-w-[220px] appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-8 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                           >
                             <option value="">All Team Leads</option>
                             {teamLeads.map((lead) => (
@@ -526,12 +529,12 @@ export default function TeamManagementPage() {
                   )}
 
                   {teams.length > 0 && filteredTeams.length === 0 && (
-                    <div className="col-span-full rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+                    <div className="col-span-full rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                         <Search className="h-6 w-6 text-brand-blue" />
                       </div>
-                      <h3 className="mb-2 text-lg font-semibold text-gray-900">No teams found</h3>
-                      <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+                      <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-slate-50">No teams found</h3>
+                      <p className="text-gray-600 dark:text-slate-400">Try adjusting your search or filter criteria.</p>
                       <button
                         onClick={() => {
                           setSearchQuery('');
@@ -546,15 +549,15 @@ export default function TeamManagementPage() {
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-gray-600">
+                  <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
                     </p>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                         disabled={currentPage === 1}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label="Previous page"
                       >
                         <ChevronLeft className="w-5 h-5" />
@@ -567,7 +570,7 @@ export default function TeamManagementPage() {
                             className={`h-10 w-10 rounded-xl font-medium transition-all ${
                               currentPage === page
                                 ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                                : 'text-gray-700 hover:bg-brand-blue/[0.04]'
+                                : 'text-gray-700 dark:text-slate-300 hover:bg-brand-blue/[0.04]'
                             }`}
                           >
                             {page}
@@ -577,7 +580,7 @@ export default function TeamManagementPage() {
                       <button
                         onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                         disabled={currentPage === totalPages}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label="Next page"
                       >
                         <ChevronRight className="w-5 h-5" />
@@ -588,6 +591,7 @@ export default function TeamManagementPage() {
               </>
             )}
           </div>
+        </div>
         </div>
 
         <TeamFormModal

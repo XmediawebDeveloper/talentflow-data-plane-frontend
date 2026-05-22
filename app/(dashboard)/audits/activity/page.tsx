@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Sparkles,
+  type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -33,6 +34,7 @@ import {
   type ErrorOrigin,
 } from '@/lib/types/auditSession';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -63,7 +65,7 @@ interface GroupedLogs {
   [date: string]: AuditLog[];
 }
 
-const actionIcons: Record<string, React.ElementType> = {
+const actionIcons: Record<string, LucideIcon> = {
   login: LogIn,
   logout: LogOut,
   create: Plus,
@@ -75,7 +77,7 @@ const actionIcons: Record<string, React.ElementType> = {
   default: Activity,
 };
 
-const entityIcons: Record<string, React.ElementType> = {
+const entityIcons: Record<string, LucideIcon> = {
   user: Users,
   job_description: Briefcase,
   resume: FileText,
@@ -155,7 +157,7 @@ export default function ActivityLogsPage() {
     return groups;
   }, {});
 
-  const getActionIcon = (action: string): React.ElementType => {
+  const getActionIcon = (action: string): LucideIcon => {
     if (action.includes('login')) return actionIcons.login;
     if (action.includes('logout')) return actionIcons.logout;
     if (action.includes('create') || action.includes('upload')) return actionIcons.create;
@@ -194,7 +196,9 @@ export default function ActivityLogsPage() {
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Activity Logs' }]} />
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -236,11 +240,11 @@ export default function ActivityLogsPage() {
         </section>
 
         {/* Timeline */}
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] overflow-hidden">
+        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
           {loading ? (
             <div className="p-12 text-center">
               <RefreshCw className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4" />
-              <p className="font-medium text-gray-600">Loading activity...</p>
+              <p className="font-medium text-gray-600 dark:text-slate-400">Loading activity...</p>
             </div>
           ) : error ? (
             <div className="p-12 text-center">
@@ -257,14 +261,14 @@ export default function ActivityLogsPage() {
               <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Activity className="w-6 h-6 text-brand-blue" />
               </span>
-              <p className="font-medium text-gray-600">No recent activity</p>
+              <p className="font-medium text-gray-600 dark:text-slate-400">No recent activity</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Object.entries(groupedLogs).map(([date, dayLogs]) => (
                 <div key={date}>
                   {/* Date Header */}
-                  <div className="sticky top-0 bg-gray-50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 z-10">
+                  <div className="sticky top-0 bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 dark:border-slate-700/60 z-10">
                     <h3 className="text-xs sm:text-sm font-semibold text-brand-blue">{date}</h3>
                   </div>
 
@@ -291,17 +295,17 @@ export default function ActivityLogsPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-4">
                               <div>
-                                <p className="text-sm text-gray-900">
+                                <p className="text-sm text-gray-900 dark:text-slate-50">
                                   <span className="font-medium">{log.user_name}</span>
                                   {log.actor_role && (
-                                    <span className="text-xs text-gray-400 ml-1 capitalize">({log.actor_role.replace(/_/g, ' ').toLowerCase()})</span>
+                                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-1 capitalize">({log.actor_role.replace(/_/g, ' ').toLowerCase()})</span>
                                   )}
                                   {' '}
-                                  <span className="text-gray-600">{log.action_label.toLowerCase()}</span>
+                                  <span className="text-gray-600 dark:text-slate-400">{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
                                     <>
                                       {' '}
-                                      <span className="inline-flex items-center gap-1 text-gray-600">
+                                      <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400">
                                         {EntityIcon && <EntityIcon className="w-3.5 h-3.5" />}
                                         {log.entity_type.replace(/_/g, ' ')}
                                       </span>
@@ -313,17 +317,17 @@ export default function ActivityLogsPage() {
                                 {log.details && Object.keys(log.details).length > 0 && (
                                   <div className="mt-1">
                                     {log.details.name && (
-                                      <p className="text-xs text-gray-500">
+                                      <p className="text-xs text-gray-500 dark:text-slate-500">
                                         Name: {log.details.name}
                                       </p>
                                     )}
                                     {log.details.email && (
-                                      <p className="text-xs text-gray-500">
+                                      <p className="text-xs text-gray-500 dark:text-slate-500">
                                         Email: {log.details.email}
                                       </p>
                                     )}
                                     {log.details.title && (
-                                      <p className="text-xs text-gray-500">
+                                      <p className="text-xs text-gray-500 dark:text-slate-500">
                                         Title: {log.details.title}
                                       </p>
                                     )}
@@ -332,7 +336,7 @@ export default function ActivityLogsPage() {
 
                                 {/* IP Address */}
                                 {log.ip_address && (
-                                  <p className="text-xs text-gray-400 mt-1 font-mono">
+                                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 font-mono">
                                     IP: {log.ip_address}
                                   </p>
                                 )}
@@ -341,7 +345,7 @@ export default function ActivityLogsPage() {
                                 {(log.total_session_duration != null || log.error_origin || log.refund_flag === 'YES') && (
                                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                                     {log.total_session_duration != null && (
-                                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                                         <Timer className="w-3 h-3" />
                                         {formatSessionDuration(log.total_session_duration)}
                                       </span>
@@ -363,8 +367,8 @@ export default function ActivityLogsPage() {
                               </div>
 
                               <div className="text-right flex-shrink-0">
-                                <p className="text-xs text-gray-500">{formatISTTime(log.created_at)}</p>
-                                <p className="text-xs text-gray-400">{getRelativeTime(log.created_at)}</p>
+                                <p className="text-xs text-gray-500 dark:text-slate-500">{formatISTTime(log.created_at)}</p>
+                                <p className="text-xs text-gray-400 dark:text-slate-500">{getRelativeTime(log.created_at)}</p>
                               </div>
                             </div>
                           </div>
@@ -383,12 +387,13 @@ export default function ActivityLogsPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => setLimit(l => l + 50)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-gray-200 px-6 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-6 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
             >
               Load More
             </button>
           </div>
         )}
+      </div>
       </div>
     </main>
   );

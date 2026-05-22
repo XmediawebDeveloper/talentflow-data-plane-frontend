@@ -36,8 +36,8 @@ export default function DowngradeWarningModal({
   const hasOverages = overages.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-      <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm p-4 sm:p-6">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-brand-orange/20 bg-gradient-to-r from-brand-orange/5 to-brand-orange-deep/5 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -45,10 +45,10 @@ export default function DowngradeWarningModal({
               <AlertTriangle className="w-5 h-5 text-brand-orange" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">
                 Downgrade Warning
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
                 {currentPlanName} → {targetPlanName}
               </p>
             </div>
@@ -58,7 +58,7 @@ export default function DowngradeWarningModal({
             disabled={isDowngrading}
             className="p-1.5 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
            aria-label="Close">
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
 
@@ -74,7 +74,7 @@ export default function DowngradeWarningModal({
                     <h3 className="text-sm sm:text-base font-semibold text-brand-orange-deep mb-1">
                       Current Usage Exceeds Target Plan Limits
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-700">
+                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                       Your current usage exceeds the limits of the <strong>{targetPlanName}</strong> plan.
                       You must reduce your usage before downgrading.
                     </p>
@@ -84,8 +84,8 @@ export default function DowngradeWarningModal({
 
               {/* Quota Overages */}
               <div className="space-y-3 mb-5">
-                <h4 className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                <h4 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-slate-400" />
                   Quota Overages
                 </h4>
 
@@ -93,8 +93,8 @@ export default function DowngradeWarningModal({
                   <div key={index} className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h5 className="text-sm sm:text-base font-semibold text-gray-900">{overage.quotaLabel}</h5>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                        <h5 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">{overage.quotaLabel}</h5>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1">
                           You need to reduce your usage to fit within the new plan limit
                         </p>
                       </div>
@@ -103,24 +103,24 @@ export default function DowngradeWarningModal({
 
                     <div className="grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
                       <div>
-                        <p className="text-gray-600">Current Usage</p>
-                        <p className="font-semibold text-gray-900 text-base sm:text-lg">
+                        <p className="text-gray-600 dark:text-slate-400">Current Usage</p>
+                        <p className="font-semibold text-gray-900 dark:text-slate-50 text-base sm:text-lg">
                           {overage.currentUsage.toLocaleString()}
-                          <span className="text-xs text-gray-600 ml-1">{overage.unit}</span>
+                          <span className="text-xs text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-600">New Plan Limit</p>
+                        <p className="text-gray-600 dark:text-slate-400">New Plan Limit</p>
                         <p className="font-semibold text-brand-blue text-base sm:text-lg">
                           {overage.newPlanLimit.toLocaleString()}
-                          <span className="text-xs text-gray-600 ml-1">{overage.unit}</span>
+                          <span className="text-xs text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Must Remove</p>
+                        <p className="text-gray-600 dark:text-slate-400">Must Remove</p>
                         <p className="font-semibold text-red-600 text-base sm:text-lg">
                           {overage.overage.toLocaleString()}
-                          <span className="text-xs text-gray-600 ml-1">{overage.unit}</span>
+                          <span className="text-xs text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>
                         </p>
                       </div>
                     </div>
@@ -155,7 +155,7 @@ export default function DowngradeWarningModal({
                 <h4 className="text-sm sm:text-base font-semibold text-brand-blue mb-2">
                   Action Required Before Downgrading
                 </h4>
-                <ol className="text-xs sm:text-sm text-gray-700 space-y-2 ml-4 list-decimal">
+                <ol className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 space-y-2 ml-4 list-decimal">
                   <li>
                     <strong>Delete excess resumes:</strong> Go to "My Resumes" and remove{' '}
                     {overages.find(o => o.quotaType === 'resume_storage')?.overage.toLocaleString() || 'excess'} resumes
@@ -179,7 +179,7 @@ export default function DowngradeWarningModal({
                     <h3 className="text-sm sm:text-base font-semibold text-brand-blue mb-1">
                       Confirm Downgrade
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-700">
+                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                       You are about to downgrade from <strong>{currentPlanName}</strong> to{' '}
                       <strong>{targetPlanName}</strong>. Please review the changes below.
                     </p>
@@ -187,17 +187,17 @@ export default function DowngradeWarningModal({
                 </div>
               </div>
 
-              <div className="space-y-3 text-xs sm:text-sm text-gray-700">
+              <div className="space-y-3 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                 <p className="flex items-start gap-2">
-                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-400 dark:text-slate-500">•</span>
                   Your billing will be adjusted to the lower plan rate
                 </p>
                 <p className="flex items-start gap-2">
-                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-400 dark:text-slate-500">•</span>
                   Your quota limits will be reduced to the new plan's limits
                 </p>
                 <p className="flex items-start gap-2">
-                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-400 dark:text-slate-500">•</span>
                   Changes will take effect at the end of your current billing period
                 </p>
               </div>
@@ -206,11 +206,11 @@ export default function DowngradeWarningModal({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex-shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <button
             onClick={onClose}
             disabled={isDowngrading}
-            className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

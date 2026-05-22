@@ -1,5 +1,6 @@
 'use client';
 
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Wallet, Plus, CreditCard, Trash2, Building2, X, Loader2, Sparkles, ArrowUpRight, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -299,55 +300,35 @@ export default function PaymentMethodsPage() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-      <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
-        {/* SaaS Hero Header */}
-        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Billing &amp; payments
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Wallet className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Payment Methods</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    Securely store and manage the cards used for subscription renewals and addon purchases.
-                  </p>
-                </div>
-              </div>
-            </div>
-            {canAdd && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                <Plus className="h-4 w-4" />
-                Add Payment Method
-                <ArrowUpRight className="h-4 w-4" />
-              </button>
-            )}
+    <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Payment Methods' }]} />
+
+        {/* Header — title + add button */}
+        {canAdd && (
+          <div className="flex items-center justify-end mb-4">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-sm font-medium text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors hover:bg-brand-blue-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Payment Method
+            </button>
           </div>
-        </section>
+        )}
 
         {/* Loading State */}
         {loading && <CardGridSkeleton count={3} />}
 
         {/* Empty State */}
         {!loading && paymentMethods.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <CreditCard className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">No payment methods</h3>
-            <p className="mt-1 text-sm text-gray-500">Add a payment method to manage your subscription</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No payment methods</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add a payment method to manage your subscription</p>
             {canAdd && (
               <button
                 onClick={() => setShowAddModal(true)}
@@ -366,10 +347,10 @@ export default function PaymentMethodsPage() {
             {paymentMethods.map((method) => (
               <div
                 key={method.id}
-                className={`rounded-2xl border bg-white p-5 shadow-sm ring-1 ring-black/[0.02] transition-all hover:shadow-md sm:p-6 ${
+                className={`rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md sm:p-6 ${
                   method.is_default
                     ? 'border-brand-blue/20 shadow-brand-blue/10 ring-brand-blue/10'
-                    : 'border-gray-100 shadow-brand-blue/5 hover:border-brand-cyan/25'
+                    : 'border-gray-100 dark:border-slate-700/60 shadow-brand-blue/5 hover:border-brand-cyan/25'
                 }`}
               >
                 <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -379,7 +360,7 @@ export default function PaymentMethodsPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-gray-900">
+                        <p className="font-semibold text-gray-900 dark:text-slate-50">
                           {method.card_type} •••• {method.card_last_four}
                         </p>
                         {method.is_default && (
@@ -389,7 +370,7 @@ export default function PaymentMethodsPage() {
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">
                         {method.cardholder_name} · Expires {String(method.expiry_month).padStart(2, '0')}/{method.expiry_year}
                       </p>
                     </div>
@@ -398,7 +379,7 @@ export default function PaymentMethodsPage() {
                     {canEdit && !method.is_default && (
                       <button
                         onClick={() => setAsDefault(method.id)}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
                       >
                         Set as Default
                       </button>
@@ -425,25 +406,26 @@ export default function PaymentMethodsPage() {
         )}
 
         {/* Secure Payments Info */}
-        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] sm:p-6">
+        <div className="mt-8 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-6">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
               <ShieldCheck className="h-5 w-5 text-brand-teal" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">Secure Payments</h3>
-              <p className="mt-1 text-sm text-gray-600">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Secure Payments</h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
                 All payment information is securely processed and stored. We use industry-standard encryption to protect your data.
               </p>
             </div>
           </div>
         </div>
       </div>
+      </div>
 
       {/* Add Payment Method Modal — only renders if user has Add permission */}
       {showAddModal && canAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
             {/* Modal Header */}
             <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
               <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
@@ -471,11 +453,11 @@ export default function PaymentMethodsPage() {
             <div className="max-h-[calc(90vh-184px)] space-y-5 overflow-y-auto p-5 sm:p-6">
               {/* Card Information */}
               <div className="space-y-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Card Information</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Card Information</h3>
 
                 {/* Cardholder Name */}
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                     Cardholder Name <span className="text-brand-orange">*</span>
                   </span>
                   <input
@@ -483,8 +465,8 @@ export default function PaymentMethodsPage() {
                     value={formData.cardholderName}
                     onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
                     placeholder="Name as it appears on the card"
-                    className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                      formErrors.cardholderName ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                    className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      formErrors.cardholderName ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                     }`}
                   />
                   {formErrors.cardholderName && (
@@ -494,20 +476,20 @@ export default function PaymentMethodsPage() {
 
                 {/* Card Number */}
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                     Card Number <span className="text-brand-orange">*</span>
                   </span>
-                  <div className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5 transition-all focus-within:ring-4 ${
-                    formErrors.cardNumber ? 'border-red-300 focus-within:border-red-300 focus-within:ring-red-100' : 'border-gray-200 focus-within:border-brand-blue/30 focus-within:ring-brand-blue/10'
+                  <div className={`flex items-center gap-2 rounded-xl border bg-white dark:bg-slate-900 px-3 py-2.5 transition-all focus-within:ring-4 ${
+                    formErrors.cardNumber ? 'border-red-300 focus-within:border-red-300 focus-within:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus-within:border-brand-blue/30 focus-within:ring-brand-blue/10'
                   }`}>
-                    <CreditCard className="h-4 w-4 text-gray-400" />
+                    <CreditCard className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                     <input
                       type="text"
                       value={formData.cardNumber}
                       onChange={(e) => setFormData({ ...formData, cardNumber: formatCardNumber(e.target.value) })}
                       placeholder="•••• •••• •••• ••••"
                       maxLength={19}
-                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                      className="flex-1 bg-transparent text-sm text-gray-900 dark:text-slate-50 outline-none placeholder:text-gray-400"
                     />
                   </div>
                   {formErrors.cardNumber && (
@@ -518,7 +500,7 @@ export default function PaymentMethodsPage() {
                 {/* Expiry and CVV */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                       Month <span className="text-brand-orange">*</span>
                     </span>
                     <input
@@ -527,8 +509,8 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })}
                       placeholder="MM"
                       maxLength={2}
-                      className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                        formErrors.expiryMonth ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                        formErrors.expiryMonth ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.expiryMonth && (
@@ -536,7 +518,7 @@ export default function PaymentMethodsPage() {
                     )}
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                       Year <span className="text-brand-orange">*</span>
                     </span>
                     <input
@@ -545,8 +527,8 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="YYYY"
                       maxLength={4}
-                      className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                        formErrors.expiryYear ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                        formErrors.expiryYear ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.expiryYear && (
@@ -554,7 +536,7 @@ export default function PaymentMethodsPage() {
                     )}
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                       CVV <span className="text-brand-orange">*</span>
                     </span>
                     <input
@@ -563,8 +545,8 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="•••"
                       maxLength={4}
-                      className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                        formErrors.cvv ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                        formErrors.cvv ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.cvv && (
@@ -575,52 +557,52 @@ export default function PaymentMethodsPage() {
               </div>
 
               {/* Billing Address (Optional) */}
-              <div className="space-y-4 border-t border-gray-100 pt-5">
+              <div className="space-y-4 border-t border-gray-100 dark:border-slate-700/60 pt-5">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-brand-blue" />
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Billing Address (Optional)</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Billing Address (Optional)</h3>
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Street Address</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Street Address</span>
                   <input
                     type="text"
                     value={formData.billingAddress}
                     onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
                     placeholder="Street and number"
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </label>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">City</span>
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">City</span>
                     <input
                       type="text"
                       value={formData.billingCity}
                       onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
                       placeholder="City"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700">ZIP Code</span>
+                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">ZIP Code</span>
                     <input
                       type="text"
                       value={formData.billingZip}
                       onChange={(e) => setFormData({ ...formData, billingZip: e.target.value })}
                       placeholder="Postal code"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     />
                   </label>
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Country</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Country</span>
                   <select
                     value={formData.billingCountry}
                     onChange={(e) => setFormData({ ...formData, billingCountry: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   >
                     <option value="">Select Country</option>
                     <option value="US">United States</option>
@@ -642,7 +624,7 @@ export default function PaymentMethodsPage() {
                 className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all ${
                   formData.setAsDefault
                     ? 'border-brand-blue/25 bg-brand-blue/[0.04]'
-                    : 'border-gray-200 bg-white hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
+                    : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
                 }`}
               >
                 <input
@@ -650,17 +632,17 @@ export default function PaymentMethodsPage() {
                   id="setAsDefault"
                   checked={formData.setAsDefault}
                   onChange={(e) => setFormData({ ...formData, setAsDefault: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/30"
+                  className="h-4 w-4 rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/30"
                 />
-                <span className="text-sm font-medium text-gray-700">Set as default payment method</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Set as default payment method</span>
               </label>
             </div>
 
             {/* Modal Footer */}
-            <div className="flex flex-col items-stretch justify-end gap-2 border-t border-gray-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
+            <div className="flex flex-col items-stretch justify-end gap-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-5 py-4 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
               <button
                 onClick={() => { setShowAddModal(false); resetForm(); }}
-                className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+                className="inline-flex items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
