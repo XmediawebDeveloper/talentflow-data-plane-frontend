@@ -554,7 +554,7 @@ export default function PricingPage() {
               max_jobs: q.MAX_JOBS,
               total_resume_storage: typeof q.STORAGE_GB === 'number' ? q.STORAGE_GB : undefined,
             };
-            for (const feature of trial.features || []) {
+            for (const feature of Array.isArray(trial.features) ? trial.features : []) {
               if (feature.quota_key && feature.quota_limit !== null) {
                 switch (feature.quota_key) {
                   case 'RU': result.RU = feature.quota_limit ?? undefined; break;
@@ -580,7 +580,7 @@ export default function PricingPage() {
             icon: Sparkles,
             gradient: 'from-emerald-500 to-teal-600',
             popular: false,
-            features: (freeTrial.features || []).map(f => f.feature_name),
+            features: (Array.isArray(freeTrial.features) ? freeTrial.features : []).map(f => f.feature_name),
             trialDays: freeTrial.trial_days,
             quotas: buildTrialQuotas(freeTrial),
             planSlug: 'free-trial',

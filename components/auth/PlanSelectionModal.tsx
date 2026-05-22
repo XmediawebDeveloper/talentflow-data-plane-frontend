@@ -164,7 +164,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
               if (!monthly?.is_active && !annual?.is_active) return null;
               if (!monthly?.is_public && !annual?.is_public) return null;
 
-              const featureNames = (basePlan.features || [])
+              const featureNames = (Array.isArray(basePlan.features) ? basePlan.features : [])
                 .filter((f: any) => f?.is_enabled)
                 .map((f: any) => {
                   if (typeof f === 'string') return f;
@@ -276,7 +276,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
       max_seats: typeof q.MAX_SEATS === 'number' ? q.MAX_SEATS : undefined,
       max_jobs: typeof q.MAX_JOBS === 'number' ? q.MAX_JOBS : undefined,
     };
-    for (const feature of trial.features || []) {
+    for (const feature of Array.isArray(trial.features) ? trial.features : []) {
       if (feature.quota_key && feature.quota_limit !== null) {
         switch (feature.quota_key) {
           case 'RU': result.RU = feature.quota_limit ?? undefined; break;
@@ -296,7 +296,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
     monthlyPrice: 0,
     yearlyPrice: 0,
     currency: 'INR',
-    features: (freeTrial.features || []).map(f => f.feature_name),
+    features: (Array.isArray(freeTrial.features) ? freeTrial.features : []).map(f => f.feature_name),
     trialDays: freeTrial.trial_days,
     quotas: buildTrialQuotas(freeTrial),
     planSlug: 'free-trial',
