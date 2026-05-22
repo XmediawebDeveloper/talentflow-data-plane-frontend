@@ -5195,11 +5195,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     <div className="max-w-[80%]">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
-                        {msg.isFollowup && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm">
-                            Follow
-                          </span>
-                        )}
                       </div>
                       <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
                         <p className="text-sm leading-relaxed">{msg.content}</p>
@@ -5252,11 +5247,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <div className="max-w-[80%]">
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
-                    {isCurrentFollowup && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm">
-                        Follow
-                      </span>
-                    )}
                   </div>
                   <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
                     <div className="flex items-center gap-1 mb-1.5">

@@ -1925,26 +1925,17 @@ export function AssessmentInterface({
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
-          {/* Review Mode Banner */}
+          {/* Review Mode Banner — informational only; Submit & Confirm at the
+              bottom of the question card is the sole submission path. */}
           {allQuestionsAnswered && (
-            <div className="mb-3 sm:mb-4 bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="font-medium text-green-800 text-sm sm:text-base">All questions answered!</p>
-                  <p className="text-xs sm:text-sm text-green-600">You can review and edit your answers before submitting.</p>
-                </div>
+            <div className="mb-3 sm:mb-4 bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
               </div>
-              <Button
-                variant="primary"
-                onClick={() => setShowCompleteConfirm(true)}
-                className="w-full sm:w-auto"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Submit Assessment
-              </Button>
+              <div>
+                <p className="font-medium text-green-800 text-sm sm:text-base">All questions answered!</p>
+                <p className="text-xs sm:text-sm text-green-600">You can review and edit your answers before submitting.</p>
+              </div>
             </div>
           )}
 
