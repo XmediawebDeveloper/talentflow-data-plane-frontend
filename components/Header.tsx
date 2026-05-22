@@ -1,4 +1,4 @@
-import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -1096,37 +1096,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     </div>
                   </div>
                 )}
-
-                {/* Quick Stats */}
-                <div className="px-5 py-3 border-b border-gray-100 shrink-0">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Permissions</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
-                      user.permissions.can_manage_users ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
-                    }`}>
-                      <Users className="w-3.5 h-3.5" />
-                      <span>Manage Users</span>
-                    </div>
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
-                      user.permissions.can_view_analytics ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
-                    }`}>
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      <span>Analytics</span>
-                    </div>
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
-                      user.permissions.can_manage_settings ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
-                    }`}>
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>Settings</span>
-                    </div>
-                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${
-                      user.is_tenant_admin ? 'bg-brand-teal/10 text-brand-teal' : 'bg-gray-50 text-gray-400'
-                    }`}>
-                      <Shield className="w-3.5 h-3.5" />
-                      <span>Admin Access</span>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Menu Items — shows ~3, rest accessible via scroll */}
                 <div className="py-2 max-h-[200px] overflow-y-auto">
