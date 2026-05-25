@@ -2113,13 +2113,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               // frozen timer value captured when the candidate stopped speaking.
               const frozenTime = frozenResponseTimeRef.current;
               frozenResponseTimeRef.current = null; // consume — don't reuse for next message
-              setMessages(prev => [...prev, {
+              const _userMsg: Message = {
                 id: crypto.randomUUID(),
                 role: "user",
                 content: transcriptText,
                 responseTimeSeconds: frozenTime ?? undefined,
                 timestamp: nowIST(),
-              }]);
+              };
+              if (data.for_previous_question) {
+                // ASYNC/DECOUPLED flow: this answer was transcribed in the
+                // background and arrives AFTER Linda's next question is already
+                // on screen. Insert it BEFORE the most recent assistant message
+                // so it appears under the question it actually answered, rather
+                // than out of order at the bottom of the chat.
+                setMessages(prev => {
+                  const updated = [...prev];
+                  let insertAt = updated.length;
+                  for (let i = updated.length - 1; i >= 0; i--) {
+                    if (updated[i].role === "assistant") { insertAt = i; break; }
+                  }
+                  updated.splice(insertAt, 0, _userMsg);
+                  return updated;
+                });
+              } else {
+                setMessages(prev => [...prev, _userMsg]);
+              }
             }
             currentAiTextRef.current = "";
             setCurrentAiText("");

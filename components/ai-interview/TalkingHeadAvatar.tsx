@@ -45,6 +45,37 @@ interface Props {
   onFallback?: () => void;
 }
 
+/**
+ * Download the avatar GLB ourselves, with retries, before handing it to
+ * TalkingHead.
+ *
+ * On flaky networks/CDNs the model intermittently fails to download with
+ * `net::ERR_QUIC_PROTOCOL_ERROR` (HTTP/3). After the first QUIC failure the
+ * browser marks the origin as not-HTTP/3 and drops to HTTP/2, so a retry
+ * almost always succeeds. We return a local `blob:` URL so TalkingHead's own
+ * loader never re-hits the flaky transport. Throws if every attempt fails —
+ * the caller then falls back to the original URL (current behaviour), so this
+ * can only help, never regress.
+ */
+async function fetchAvatarWithRetry(url: string, attempts = 3): Promise<string> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return URL.createObjectURL(await res.blob());
+    } catch (e) {
+      lastErr = e;
+      console.warn(
+        `[TalkingHead] avatar download attempt ${i + 1}/${attempts} failed (will retry over HTTP/2):`,
+        e
+      );
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
   function TalkingHeadAvatar({ avatarUrl, className, style, onReady, onFallback }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -175,12 +206,31 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             console.warn("[TalkingHead] AudioContext pre-injection failed:", e);
           }
 
-          await Promise.race([
-            head.showAvatar({ url: avatarUrl, body: "F", lipsyncLang: "en" }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("showAvatar timeout after 20 s")), 20000)
-            ),
-          ]);
+          // QUIC/HTTP3 resilience: pre-fetch the GLB ourselves (with retries
+          // that fall back to HTTP/2 after a QUIC error) and pass TalkingHead a
+          // local blob URL so its loader never re-hits the flaky transport.
+          // Falls back to the original URL if every attempt fails, so this can
+          // only help — worst case is the previous behaviour.
+          let _avatarSrc = avatarUrl;
+          try {
+            _avatarSrc = await fetchAvatarWithRetry(avatarUrl);
+          } catch (e) {
+            console.warn("[TalkingHead] avatar pre-fetch failed — using direct URL:", e);
+          }
+
+          try {
+            await Promise.race([
+              head.showAvatar({ url: _avatarSrc, body: "F", lipsyncLang: "en" }),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("showAvatar timeout after 20 s")), 20000)
+              ),
+            ]);
+          } finally {
+            // Free the blob once TalkingHead has parsed the model.
+            if (_avatarSrc.startsWith("blob:")) {
+              try { URL.revokeObjectURL(_avatarSrc); } catch {}
+            }
+          }
 
           if (!mounted) return;
 
