@@ -3,6 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   Users,
+  UserCheck,
   Plus,
   Info,
   BarChart3,
@@ -72,6 +73,16 @@ export default function TeamManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeamLead, setFilterTeamLead] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
+  // Drill-in pattern: 'cards' shows only the 3 stat tiles; clicking one expands
+  // into a focused list view. Each card maps to its own listView so the panel
+  // reflects what was clicked. Mirrors /recruitment/job-openings and
+  // /organization/role-management.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [listView, setListView] = useState<'teams-all' | 'members' | 'teams-by-size'>('teams-all');
+  const openListView = (card: 'total' | 'members' | 'avg') => {
+    setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : 'teams-by-size');
+    setPageView('list');
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -134,14 +145,46 @@ export default function TeamManagementPage() {
       result = result.filter((team) => team.team_lead?.id === filterTeamLead);
     }
 
+    // Avg Members/Team view sorts by size descending so the heaviest teams come first.
+    if (listView === 'teams-by-size') {
+      result = [...result].sort((a, b) => (b.member_count || 0) - (a.member_count || 0));
+    }
+
     return result;
-  }, [teams, searchQuery, filterTeamLead]);
+  }, [teams, searchQuery, filterTeamLead, listView]);
 
   const totalPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
   const paginatedTeams = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredTeams.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredTeams, currentPage]);
+
+  // Team Members view: flatten members across all teams, tag each with their team.
+  // Search filters by member name/email or the team they belong to.
+  const flattenedMembers = useMemo(() => {
+    const rows = teams.flatMap((team) =>
+      (team.members || []).map((m) => ({
+        id: `${team.id}:${m.id}`,
+        memberId: m.id,
+        name: m.name,
+        email: m.email,
+        initials: m.initials,
+        avatar_url: m.avatar_url,
+        role: m.role,
+        teamId: team.id,
+        teamName: team.name,
+        isLead: team.team_lead?.id === m.id,
+      })),
+    );
+    if (!searchQuery) return rows;
+    const q = searchQuery.toLowerCase();
+    return rows.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        r.email.toLowerCase().includes(q) ||
+        r.teamName.toLowerCase().includes(q),
+    );
+  }, [teams, searchQuery]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -459,7 +502,37 @@ export default function TeamManagementPage() {
               <TeamHistory />
             ) : (
               <>
-                <TeamStatsCards stats={stats} />
+                <TeamStatsCards
+                  stats={stats}
+                  onCardClick={openListView}
+                  activeCard={
+                    pageView === 'list'
+                      ? listView === 'teams-all'
+                        ? 'total'
+                        : listView === 'members'
+                          ? 'members'
+                          : 'avg'
+                      : null
+                  }
+                />
+
+                {pageView === 'list' && (
+                <>
+                {/* Back to overview — header tally adapts to the active view */}
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => { setPageView('cards'); setListView('teams-all'); setSearchQuery(''); setFilterTeamLead(''); }}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to overview
+                  </button>
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                    {listView === 'members'
+                      ? `${flattenedMembers.length} ${flattenedMembers.length === 1 ? 'member' : 'members'}`
+                      : `${filteredTeams.length} ${filteredTeams.length === 1 ? 'team' : 'teams'}`}
+                  </span>
+                </div>
 
                 <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:p-6">
                   <div className="flex gap-3 sm:gap-4">
@@ -467,9 +540,19 @@ export default function TeamManagementPage() {
                       <Info className="w-5 h-5 text-brand-orange-deep" />
                     </div>
                     <div>
-                      <h3 className="mb-1 text-base font-semibold text-gray-900 dark:text-slate-50 sm:mb-2 lg:text-lg">Team Organization</h3>
+                      <h3 className="mb-1 text-base font-semibold text-gray-900 dark:text-slate-50 sm:mb-2 lg:text-lg">
+                        {listView === 'members'
+                          ? 'Team Members'
+                          : listView === 'teams-by-size'
+                            ? 'Teams by Size'
+                            : 'Team Organization'}
+                      </h3>
                       <p className="text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-                        Teams help organize users by department, project, or function. Assign team leads to manage workflows and track performance metrics like active jobs and resume counts.
+                        {listView === 'members'
+                          ? 'Every user assigned to a team, along with the team they belong to and whether they lead it.'
+                          : listView === 'teams-by-size'
+                            ? `Teams sorted by member count. Organization average is ${stats.avg_members_per_team.toFixed(1)} members per team.`
+                            : 'Teams help organize users by department, project, or function. Assign team leads to manage workflows and track performance metrics like active jobs and resume counts.'}
                       </p>
                     </div>
                   </div>
@@ -484,11 +567,11 @@ export default function TeamManagementPage() {
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search teams by name or description..."
+                          placeholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
                           className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                         />
                       </div>
-                      {teamLeads.length > 0 && (
+                      {listView !== 'members' && teamLeads.length > 0 && (
                         <div className="relative">
                           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                           <select
@@ -509,6 +592,7 @@ export default function TeamManagementPage() {
                   </div>
                 )}
 
+                {listView !== 'members' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                   {paginatedTeams.map((team) => (
                     <TeamCard
@@ -547,8 +631,71 @@ export default function TeamManagementPage() {
                     </div>
                   )}
                 </div>
+                )}
 
-                {totalPages > 1 && (
+                {/* Team Members view — flat list of every assigned member across all teams. */}
+                {listView === 'members' && (
+                  <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                    {flattenedMembers.length === 0 ? (
+                      <div className="px-6 py-16 text-center">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
+                          <UserCheck className="h-6 w-6 text-brand-cyan" />
+                        </div>
+                        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px]">
+                          <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                            <tr className="text-left">
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Member</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Team</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Lead</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                            {flattenedMembers.map((row) => (
+                              <tr key={row.id} className="transition-colors hover:bg-brand-cyan/[0.04]">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-sm font-semibold text-brand-blue">
+                                      {row.initials || row.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
+                                      <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{row.teamName}</td>
+                                <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
+                                  {row.role ? (
+                                    <span className="capitalize">{row.role.replace(/_/g, ' ').toLowerCase()}</span>
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-slate-500">—</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  {row.isLead ? (
+                                    <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                      Team Lead
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {listView !== 'members' && totalPages > 1 && (
                   <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-gray-600 dark:text-slate-400">
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
@@ -587,6 +734,8 @@ export default function TeamManagementPage() {
                       </button>
                     </div>
                   </div>
+                )}
+                </>
                 )}
               </>
             )}

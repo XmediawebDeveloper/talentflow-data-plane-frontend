@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Users, BarChart3, ChevronDown, ChevronRight,
+  Users, BarChart3, ChevronDown, ChevronLeft, ChevronRight,
   Loader2, Download, Calendar, FileText, ClipboardCheck, Upload,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -479,11 +479,17 @@ function TeamRow({
 
 // ─── Summary stat card ────────────────────────────────────────────────────────
 
-function StatCard({ label, value, dot, loading }: {
+function StatCard({ label, value, dot, loading, onClick, active }: {
   label: string; value: number; dot: string; loading: boolean;
+  // When supplied, the card renders as a button — drives the cards → list drill-in.
+  onClick?: () => void;
+  active?: boolean;
 }) {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm px-5 py-4 flex items-center gap-4">
+  const className = `bg-white dark:bg-slate-900 rounded-xl border shadow-sm px-5 py-4 flex items-center gap-4 text-left w-full ${
+    onClick ? 'transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : ''
+  } ${active ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`;
+  const content = (
+    <>
       <span className={`w-3 h-3 rounded-full shrink-0 ${dot}`} />
       <div>
         <p className="text-xs text-gray-500 dark:text-slate-500">{label}</p>
@@ -491,8 +497,12 @@ function StatCard({ label, value, dot, loading }: {
           ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
           : <p className="text-xl font-bold text-gray-900 dark:text-slate-50">{value}</p>}
       </div>
-    </div>
+    </>
   );
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={className}>{content}</button>;
+  }
+  return <div className={className}>{content}</div>;
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -568,6 +578,14 @@ export default function TeamUsageAnalytics() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingUsers, setExportingUsers] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  // Drill-in: 'cards' shows only the 5 summary tiles; clicking a card opens the
+  // team usage table below. activeCard highlights which tile was clicked.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [activeCard, setActiveCard] = useState<'rs' | 'as' | 'aiu' | 'ru' | 'all' | null>(null);
+  const openList = (card: 'rs' | 'as' | 'aiu' | 'ru' | 'all') => {
+    setActiveCard(card);
+    setPageView('list');
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -682,11 +700,27 @@ export default function TeamUsageAnalytics() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-5 gap-3 mb-6">
-        <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} />
-        <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} />
-        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-green-500"  loading={loading} />
-        <StatCard label="Resume Uploads"  value={totals.ru}  dot="bg-orange-500" loading={loading} />
-        <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} />
+        <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} onClick={() => openList('rs')}  active={pageView === 'list' && activeCard === 'rs'} />
+        <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} onClick={() => openList('as')}  active={pageView === 'list' && activeCard === 'as'} />
+        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-green-500"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />
+        <StatCard label="Resume Uploads"  value={totals.ru}  dot="bg-orange-500" loading={loading} onClick={() => openList('ru')}  active={pageView === 'list' && activeCard === 'ru'} />
+        <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} onClick={() => openList('all')} active={pageView === 'list' && activeCard === 'all'} />
+      </div>
+
+      {pageView === 'list' && (
+      <>
+      {/* Back to overview */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <button
+          onClick={() => { setPageView('cards'); setActiveCard(null); }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to overview
+        </button>
+        <span className="text-xs text-gray-500 dark:text-slate-400">
+          {teams.length} {teams.length === 1 ? 'team' : 'teams'}
+        </span>
       </div>
 
       {/* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, expand) */}
@@ -744,6 +778,8 @@ export default function TeamUsageAnalytics() {
       <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
         Click a team to see its members · Click a member to see their full consumption history
       </p>
+      </>
+      )}
     </div>
   );
 }

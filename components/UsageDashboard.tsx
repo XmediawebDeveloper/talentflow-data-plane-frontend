@@ -768,7 +768,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   };
 
   return (
-    <div className="flex-1 bg-white dark:bg-slate-950">
+    <main className="flex-1 bg-white dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />
@@ -1724,6 +1724,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }

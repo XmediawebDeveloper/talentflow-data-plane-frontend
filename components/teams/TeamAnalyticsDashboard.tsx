@@ -12,6 +12,7 @@ import {
   Calendar,
   AlertCircle,
   Download,
+  ChevronLeft,
 } from 'lucide-react';
 import {
   exportToCSV,
@@ -59,6 +60,11 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamsUsage, setTeamsUsage] = useState<AllTeamsUsageSummary | null>(null);
+  // Drill-in: 'cards' shows only the 7 summary tiles; clicking one expands the
+  // charts + tables below. activeCard highlights which tile was clicked.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [activeCard, setActiveCard] = useState<string | null>(null);
+  const openList = (card: string) => { setActiveCard(card); setPageView('list'); };
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
   });
@@ -303,82 +309,53 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         </div>
       </div>
 
-      {/* Summary Cards - Unit Consumption */}
+      {/* Summary Cards - Unit Consumption — clicking any card drills into the
+          charts/tables below (cards → list drill-in, matching /recruitment/job-openings). */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
-              <FileText className="w-5 h-5 text-brand-blue" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{Math.round(totals.RS)}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Resume Scoring</p>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.RS} actions</p>
-        </div>
+        {([
+          { key: 'RS',        label: 'Resume Scoring',      value: Math.round(totals.RS),        sub: `${actionCounts.RS} actions`,    Icon: FileText,        iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue',     shadow: 'shadow-brand-blue/5' },
+          { key: 'AS',        label: 'Assessment',          value: totals.AS.toFixed(1),         sub: `${actionCounts.AS} actions`,    Icon: ClipboardCheck,  iconBg: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',     iconColor: 'text-brand-teal',     shadow: 'shadow-brand-teal/5' },
+          { key: 'AIU',       label: 'AI Interview',        value: Math.round(totals.AIU),       sub: `${actionCounts.AIU} actions`,   Icon: Users,           iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',     iconColor: 'text-brand-cyan',     shadow: 'shadow-brand-cyan/5' },
+          { key: 'RU',        label: 'Resume Upload',       value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-orange-100',                                  iconColor: 'text-orange-600',     shadow: 'shadow-brand-orange/5' },
+          { key: 'JDS',       label: 'JDs Created',         value: creationCounts.jds,           sub: '',                              Icon: Briefcase,       iconBg: 'bg-indigo-100',                                  iconColor: 'text-indigo-600',     shadow: 'shadow-brand-blue/5' },
+          { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-teal-100',                                    iconColor: 'text-teal-600',       shadow: 'shadow-brand-teal/5' },
+          { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-gray-800',                                    iconColor: 'text-white',          shadow: 'shadow-brand-blue/5' },
+        ] as const).map(({ key, label, value, sub, Icon, iconBg, iconColor, shadow }) => {
+          const isActive = pageView === 'list' && activeCard === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => openList(key)}
+              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm ${shadow} ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${isActive ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconBg}`}>
+                  <Icon className={`w-5 h-5 ${iconColor}`} />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{value}</p>
+              <p className="text-sm text-gray-600 dark:text-slate-400">{label}</p>
+              {sub && <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{sub}</p>}
+            </button>
+          );
+        })}
+      </div>
 
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
-              <ClipboardCheck className="w-5 h-5 text-brand-teal" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{totals.AS.toFixed(1)}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Assessment</p>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.AS} actions</p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
-              <Users className="w-5 h-5 text-brand-cyan" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{Math.round(totals.AIU)}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">AI Interview</p>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.AIU} actions</p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Upload className="w-5 h-5 text-orange-600" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{Math.round(totals.RU)}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Resume Upload</p>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.RU} actions</p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-              <Briefcase className="w-5 h-5 text-indigo-600" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{creationCounts.jds}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">JDs Created</p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
-              <ClipboardCheck className="w-5 h-5 text-teal-600" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{creationCounts.assessments}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Assessments Created</p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{totals.total.toFixed(1)}</p>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Total Units Used</p>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{actionCounts.total} total actions</p>
-        </div>
+      {pageView === 'list' && (
+      <>
+      {/* Back to overview */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={() => { setPageView('cards'); setActiveCard(null); }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to overview
+        </button>
+        <span className="text-xs text-gray-500 dark:text-slate-400">
+          {teamsUsage?.teams?.length ?? 0} {(teamsUsage?.teams?.length ?? 0) === 1 ? 'team' : 'teams'}
+        </span>
       </div>
 
       {/* Charts Row */}
@@ -509,6 +486,8 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             No team usage data available for the selected period.
           </p>
         </div>
+      )}
+      </>
       )}
     </div>
   );

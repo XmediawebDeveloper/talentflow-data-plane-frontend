@@ -35,6 +35,7 @@ import {
 } from '@/lib/types/auditSession';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import AuditTrailPage from '@/app/(dashboard)/audits/trail/page';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -98,7 +99,10 @@ const actionColors: Record<string, string> = {
   default: 'bg-gradient-to-br from-brand-blue/70 to-brand-blue-2/70',
 };
 
+type ActivityTab = 'activity' | 'audit';
+
 export default function ActivityLogsPage() {
+  const [activeTab, setActiveTab] = useState<ActivityTab>('audit');
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,28 +222,88 @@ export default function ActivityLogsPage() {
                 <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">A real-time view of recent system activity across your organization.</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-              <select
-                value={limit}
-                onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="flex-1 sm:flex-none h-10 px-3 sm:px-4 text-sm rounded-xl bg-white/10 ring-1 ring-white/20 text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:text-gray-900"
-              >
-                <option value="25">Last 25</option>
-                <option value="50">Last 50</option>
-                <option value="100">Last 100</option>
-              </select>
-              <button
-                onClick={fetchRecentActivity}
-                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:px-4 rounded-xl bg-white text-brand-blue text-sm font-medium shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </button>
-            </div>
+            {activeTab === 'activity' && (
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                <select
+                  value={limit}
+                  onChange={(e) => setLimit(parseInt(e.target.value))}
+                  className="flex-1 sm:flex-none h-10 px-3 sm:px-4 text-sm rounded-xl bg-white/10 ring-1 ring-white/20 text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:text-gray-900"
+                >
+                  <option value="25">Last 25</option>
+                  <option value="50">Last 50</option>
+                  <option value="100">Last 100</option>
+                </select>
+                <button
+                  onClick={fetchRecentActivity}
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:px-4 rounded-xl bg-white text-brand-blue text-sm font-medium shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
+        {/* Tab navigation */}
+        <section className="mb-5">
+          <div className="border-b border-gray-200 dark:border-slate-700">
+            <nav className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px" aria-label="Activity tabs">
+              {([
+                { id: 'audit', label: 'Audit Log' },
+                { id: 'activity', label: 'Activity Log' },
+              ] as { id: ActivityTab; label: string }[]).map((tab) => {
+                const isActive = tab.id === activeTab;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                      isActive
+                        ? 'border-brand-blue text-brand-blue'
+                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:border-brand-blue/40'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </section>
+
+        {/* Audit Log tab — embeds the Audit Trail page; strips its breadcrumb,
+            hero banner, outer chrome, and shadow wrapper so the content lines
+            up seamlessly. */}
+        {activeTab === 'audit' && (
+          <section
+            className="mb-5
+              [&_[data-slot=breadcrumb]]:hidden
+              [&>main]:flex-none
+              [&>main]:overflow-visible
+              [&>main]:bg-transparent
+              [&>main>div]:max-w-none
+              [&>main>div]:!px-0
+              [&>main>div]:!mx-0
+              [&>main>div>div]:!bg-transparent
+              [&>main>div>div]:!rounded-none
+              [&>main>div>div]:!shadow-none
+              [&>main>div>div]:!ring-0
+              [&>main>div>div]:!border-0
+              [&>main>div>div]:!p-0
+              [&>main>div>div]:!my-0
+              [&>main>div>div>section:first-of-type]:!hidden"
+          >
+            <AuditTrailPage />
+          </section>
+        )}
+
         {/* Timeline */}
+        {activeTab === 'activity' && (
+        <>
+
         <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
           {loading ? (
             <div className="p-12 text-center">
@@ -387,11 +451,13 @@ export default function ActivityLogsPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => setLimit(l => l + 50)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-6 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-6 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md"
             >
               Load More
             </button>
           </div>
+        )}
+        </>
         )}
       </div>
       </div>
