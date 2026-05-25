@@ -116,6 +116,17 @@ export interface PerQuestionDetail {
    *  Surfaced under the main card so reviewers can verify whether
    *  Linda actually probed deeper. */
   followUps?: PerQuestionFollowUp[];
+  /** Set when this slot ITSELF was reframed as a follow-up (Option A,
+   *  bundled): the candidate volunteered a P2/P3 planned skill in an
+   *  earlier answer, so the slot's single main question doubled as a
+   *  follow-up rather than firing a separate turn. Drives an inline
+   *  "Reframed as follow-up — volunteered X in QN" note on the main card.
+   *  Distinct from `followUps` (separate sub-question turns). */
+  bundledFollowUp?: {
+    reason?: string;
+    focus_skill?: string;
+    source_qnum?: number;
+  };
 }
 
 export interface DashboardData {

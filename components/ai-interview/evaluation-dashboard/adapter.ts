@@ -1132,6 +1132,21 @@ function buildPerQuestionDetailsFromHistory(
     // and doesn't match parent_question_number on older sessions.
     const followUps = followUpsByParentQn.get(origQ);
 
+    // Bundled follow-up (Option A): this slot's single main question doubled
+    // as a follow-up because a planned P2/P3 skill was volunteered earlier.
+    // The note metadata lives on the main entry itself (not in followUps).
+    const _bundledReason = String((q as any)?.followup_reason || '').trim();
+    const bundledFollowUp = ((q as any)?.followup_bundled && _bundledReason)
+      ? {
+          reason: _bundledReason || undefined,
+          focus_skill: String((q as any)?.followup_focus_skill || '').trim() || undefined,
+          source_qnum: (typeof (q as any)?.followup_source_qnum === 'number'
+            && (q as any).followup_source_qnum > 0)
+            ? (q as any).followup_source_qnum
+            : undefined,
+        }
+      : undefined;
+
     return {
       qNum: displayQ,
       section,
@@ -1140,6 +1155,7 @@ function buildPerQuestionDetailsFromHistory(
       skills,
       questionScore,
       followUps: followUps && followUps.length > 0 ? followUps : undefined,
+      bundledFollowUp,
     };
   });
 }

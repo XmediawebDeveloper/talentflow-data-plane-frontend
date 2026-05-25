@@ -447,10 +447,31 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 Score: {q.questionScore.toFixed(1)}/10
               </span>
             )}
+            {q.bundledFollowUp && (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200"
+                title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
+              >
+                Follow-up
+              </span>
+            )}
           </div>
           <div className="text-sm font-semibold text-gray-900 leading-relaxed">
             {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
           </div>
+          {q.bundledFollowUp && (() => {
+            const focus = q.bundledFollowUp.focus_skill || 'this skill';
+            const srcRef = q.bundledFollowUp.source_qnum
+              ? `Q${q.bundledFollowUp.source_qnum}'s answer`
+              : 'an earlier answer';
+            return (
+              <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                Reframed as a follow-up — the candidate volunteered{' '}
+                <span className="font-semibold">{focus}</span> in {srcRef}, so Linda
+                probed it at this planned slot instead of asking it fresh.
+              </div>
+            );
+          })()}
         </div>
 
         {/* 2. Candidate's answer */}
