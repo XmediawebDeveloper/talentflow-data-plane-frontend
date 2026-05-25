@@ -38,10 +38,15 @@ interface Props {
   className?: string;
   style?: React.CSSProperties;
   onReady?: () => void;
+  /** Fired when the 3D avatar fails to initialise (WebGL error, GLB load
+   *  failure, showAvatar timeout). Audio playback still works via the internal
+   *  Web Audio fallback — this lets the parent swap in a static avatar image so
+   *  the candidate sees a proper face instead of a blank canvas. */
+  onFallback?: () => void;
 }
 
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
-  function TalkingHeadAvatar({ avatarUrl, className, style, onReady }, ref) {
+  function TalkingHeadAvatar({ avatarUrl, className, style, onReady, onFallback }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const headRef      = useRef<any>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -512,6 +517,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           console.error("[TalkingHead] Failed to load avatar:", err);
           if (mounted) {
             setStatus("error");
+            // Tell the parent to swap in a static avatar image — the 3D head
+            // failed but audio still plays via the Web Audio fallback.
+            onFallback?.();
             // Still signal ready so the WebSocket connects even without the avatar
             onReady?.();
           }

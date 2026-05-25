@@ -497,12 +497,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // suspended after streamStart returns early), start the mic after a short delay.
   const audioEndFallbackRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Fix #1 (avatar-decoupled playback_complete): a DEDICATED wall-clock timer
+  // whose ONLY job is to deliver `playback_complete` to the backend, derived
+  // purely from the known audio duration. Independent of the 3D avatar
+  // (TalkingHead), the playback-tracker AudioContext, and the mic/UI state
+  // guards on the bundled safety-net. The backend gates its per-question
+  // silence clock on playback_complete; when the avatar fails to initialise or
+  // the AudioContext stays suspended, the tracker/onended path never fires and
+  // the guarded safety-net can be skipped — so the backend burns its full 30s
+  // timeout PER QUESTION ("playback_complete timeout — proceeding anyway",
+  // making the whole interview feel frozen). This timer guarantees the signal
+  // arrives on time regardless. Sending it is idempotent on the backend, so
+  // overlapping with the tracker/safety-net paths is harmless.
+  const playbackCompleteSignalRef = useRef<NodeJS.Timeout | null>(null);
+
   // Webcam ref for hand detection
   const webcamRef = useRef<WebcamRef>(null);
   const [webcamReady, setWebcamReady] = useState(false);
 
   // Avatar ready state — WebSocket connects only after avatar is loaded
   const [avatarReady, setAvatarReady] = useState(false);
+  // Fix #2: true when the 3D avatar (TalkingHead) fails to initialise OR is
+  // taking too long to load. When set, we render a static Linda image over the
+  // (blank) 3D canvas so the candidate sees a proper face. Audio still plays via
+  // TalkingHead's internal Web Audio fallback, and playback_complete is
+  // delivered by the avatar-decoupled timer from fix #1 — so the interview runs
+  // at full speed with only the visual downgraded.
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   // Video recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -2472,6 +2493,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         pendingBuffersRef.current = 0;
         audioEndReceivedRef.current = false;
         if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+        // Fix #1: cancel the dedicated playback_complete signal — this turn's
+        // generation was interrupted, so its stale wall-clock signal must not
+        // fire during the next turn.
+        if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
         if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
         stopRecordingSilentRef.current();
         // Pause the per-question timer — do NOT null the displayed value.
@@ -2508,6 +2533,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Using a fixed 3 s caused the fallback to fire MID-SPEECH for any Linda
         // response longer than ~2 s, opening the mic while she was still talking.
         const _fallbackDelayMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
+
+        // ── Fix #1: avatar-decoupled playback_complete delivery ────────────
+        // Fire ONLY the backend signal on a clean wall-clock timer based on the
+        // known audio duration. No avatar/tracker dependency, no isRecording
+        // guard, no bundled side-effects — so the backend's silence clock
+        // always starts on time even when TalkingHead never loads. Conservative
+        // delay (audioMs + 1200ms) so it never fires BEFORE the audio actually
+        // finishes (which would start the silence clock early and shorten the
+        // candidate's answer window). Idempotent on the backend.
+        if (playbackCompleteSignalRef.current) clearTimeout(playbackCompleteSignalRef.current);
+        const _signalDelayMs = Math.max(2000, currentTurnAudioMsRef.current + 1200);
+        playbackCompleteSignalRef.current = setTimeout(() => {
+          playbackCompleteSignalRef.current = null;
+          sendPlaybackComplete();
+        }, _signalDelayMs);
+
         if (audioEndFallbackRef.current) clearTimeout(audioEndFallbackRef.current);
         audioEndFallbackRef.current = setTimeout(() => {
           audioEndFallbackRef.current = null;
@@ -4219,6 +4260,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fix #2: visual fallback. If the 3D avatar hasn't signalled ready within 12s
+  // (it normally loads in 2-5s), assume it's failed/hung on this device and show
+  // the static Linda image so the candidate isn't staring at a blank canvas.
+  // The TalkingHead onFallback callback also sets this immediately on a hard
+  // error; this timer covers the silent-hang case where no error is thrown.
+  useEffect(() => {
+    if (avatarReady || avatarFailed) return;
+    const t = setTimeout(() => {
+      if (!avatarReady) {
+        console.warn('[InterviewUI] 3D avatar slow/failed to load — showing static Linda fallback');
+        setAvatarFailed(true);
+      }
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [avatarReady, avatarFailed]);
+
   useEffect(() => {
     if (!avatarReady || hasConnectedRef.current) return;
     hasConnectedRef.current = true;
@@ -4237,6 +4294,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
       if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+      if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
       if (checkpointTimerRef.current) { clearInterval(checkpointTimerRef.current); checkpointTimerRef.current = null; }
       wsRef.current?.close(3001, 'Component unmounted');
       try { audioContextRef.current?.close(); } catch {}
@@ -4901,9 +4959,50 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 ref={talkingHeadRef}
                 avatarUrl="/models/rpm-recruiter.glb"
                 onReady={() => setAvatarReady(true)}
+                onFallback={() => setAvatarFailed(true)}
                 className="w-full h-full rounded-none"
               />
             </div>
+
+            {/* Fix #2: static avatar fallback. Shown when the 3D avatar fails or
+                is too slow to load. Audio still plays (Web Audio fallback) and
+                the interview runs at full speed; only the visual is downgraded
+                to a static Linda image with a speaking/listening indicator so
+                the candidate sees a proper face instead of a blank canvas. */}
+            {avatarFailed && (
+              <div className="absolute inset-0 overflow-hidden flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800">
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className={`relative w-44 h-44 rounded-full overflow-hidden border-4 transition-colors duration-300 ${
+                      isAiSpeaking ? 'border-purple-400/70' : 'border-white/20'
+                    }`}
+                    style={isAiSpeaking ? { boxShadow: '0 0 40px 6px rgba(147,51,234,0.35)' } : undefined}
+                  >
+                    <img
+                      src="/linda-avatar.webp"
+                      alt="Linda — AI Interviewer"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/linda-3.png'; }}
+                    />
+                  </div>
+                  <div className="mt-4 text-white/90 text-lg font-semibold">Linda</div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-white/60">
+                    {isAiSpeaking ? (
+                      <>
+                        <span className="flex gap-0.5 items-end h-3">
+                          <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '40%' }} />
+                          <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '90%', animationDelay: '0.15s' }} />
+                          <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '60%', animationDelay: '0.3s' }} />
+                        </span>
+                        <span>Speaking…</span>
+                      </>
+                    ) : (
+                      <span>{isRecording ? 'Listening…' : 'AI Interviewer'}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Speaking glow */}
             {isAiSpeaking && (

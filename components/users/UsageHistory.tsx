@@ -1,6 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import OrganizationTabs from '@/components/organization/OrganizationTabs';
 
 /**
  * UsageHistory Component
@@ -1413,7 +1414,8 @@ export default function UsageHistory() {
   return (
     <div className="flex-1 bg-slate-50">
       <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
+        <OrganizationTabs />
       {/* ── Page Header ── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />

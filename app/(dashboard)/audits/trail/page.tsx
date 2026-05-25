@@ -225,7 +225,7 @@ export default function AuditTrailPage() {
   const [entityFilter, setEntityFilter] = useState('');
   const [dateRange, setDateRange] = useState('30');
   const [errorOriginFilter, setErrorOriginFilter] = useState<'' | ErrorOrigin>('');
-  // user_id selected from the Active Users popup; applied client-side to filteredLogs.
+  // user_id selected from the Active Users popup; sent to the API as user_id.
   const [userFilter, setUserFilter] = useState('');
   // Which stats card popup is open (Active Users / Action Types / Entity Types).
   const [statsPopup, setStatsPopup] = useState<'users' | 'actions' | 'entities' | null>(null);
@@ -236,6 +236,18 @@ export default function AuditTrailPage() {
   const [pageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Reset every active filter back to "show everything". The date range is kept
+  // because the Total Actions count is computed over that window — clearing the
+  // rest makes the list show exactly that many records.
+  const clearAllFilters = () => {
+    setActionFilter('');
+    setEntityFilter('');
+    setUserFilter('');
+    setErrorOriginFilter('');
+    setSearchQuery('');
+    setPage(1);
+  };
 
   // Detail modal
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
@@ -271,35 +283,7 @@ export default function AuditTrailPage() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
-  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter });
-
-  // Valid backend enum values (actions the API accepts as filters)
-  const validBackendActions = [
-    'login', 'logout', 'login_failed', 'activate_login', 'password_change', 'password_reset',
-    'user_create', 'user_update', 'user_delete', 'user_activate', 'user_deactivate', 'user_invite', 'user_role_change',
-    'role_create', 'role_update', 'role_delete', 'permission_update',
-    'jd_create', 'jd_update', 'jd_delete', 'jd_publish', 'jd_archive',
-    'resume_upload', 'resume_bulk_uploaded', 'resume_update', 'resume_delete', 'resume_version', 'resume_move',
-    'duplicate_detected', 'duplicate_resolved',
-    'resume_upload_failed', 'resume_move_failed', 'search_failed',
-    'folder_create', 'folder_update', 'folder_delete',
-    'folder_create_failed', 'folder_update_failed', 'folder_delete_failed',
-    'scoring_submit', 'scoring_complete', 'scoring_failed', 'bulk_score', 'ai_match_run', 'ai_match_failed',
-    'assessment_create', 'assessment_update', 'assessment_delete', 'assessment_publish', 'assessment_invite', 'assessment_start', 'assessment_complete', 'assessment_exit', 'assessment_error',
-    'ai_interview_create', 'ai_interview_invite', 'ai_interview_start', 'ai_interview_complete', 'ai_interview_exit', 'ai_interview_error',
-    'master_create', 'master_update', 'master_delete',
-    'settings_update', 'company_settings_update',
-    'subscription_activation', 'subscription_upgrade', 'subscription_downgrade', 'subscription_cancel', 'payment_method_add', 'payment_method_remove',
-    'tenant_signup', 'plan_selection', 'payment_confirmation', 'resource_provisioning', 'activation_failure',
-    'addon_purchase', 'seats_purchase', 'unit_consume', 'usage_recorded',
-    'embedding_generated', 'embedding_failed', 'embedding_updated',
-    'export_excel', 'export_pdf', 'export_csv',
-    'session_start', 'session_complete', 'session_interrupted',
-  ];
-
-  const validBackendEntities = [
-    'user', 'user_invitation', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'user_role_assignment', 'permission', 'master_data', 'settings', 'subscription', 'session', 'scoring_batch',
-  ];
+  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter });
 
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
@@ -312,12 +296,18 @@ export default function AuditTrailPage() {
         page_size: pageSize.toString(),
       });
 
-      // Only send filter to API if it's a valid backend enum value
-      if (actionFilter && validBackendActions.includes(actionFilter)) {
+      // The backend accepts any AuditAction value and any free-form entity_type
+      // string, so forward the selected filters directly. The user filter is
+      // applied server-side too (the stats popup only knows the recent page
+      // otherwise, which made it look broken).
+      if (actionFilter) {
         params.append('action', actionFilter);
       }
-      if (entityFilter && validBackendEntities.includes(entityFilter)) {
+      if (entityFilter) {
         params.append('entity_type', entityFilter);
+      }
+      if (userFilter) {
+        params.append('user_id', userFilter);
       }
       if (errorOriginFilter) {
         params.append('error_origin', errorOriginFilter);
@@ -368,7 +358,7 @@ export default function AuditTrailPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, actionFilter, entityFilter, dateRange, errorOriginFilter]);
+  }, [page, pageSize, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -469,14 +459,15 @@ export default function AuditTrailPage() {
       prev.actionFilter !== actionFilter ||
       prev.entityFilter !== entityFilter ||
       prev.dateRange !== dateRange ||
-      prev.errorOriginFilter !== errorOriginFilter;
+      prev.errorOriginFilter !== errorOriginFilter ||
+      prev.userFilter !== userFilter;
 
     if (filtersChanged && hasFetched.current) {
-      prevFilters.current = { page, actionFilter, entityFilter, dateRange, errorOriginFilter };
+      prevFilters.current = { page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter };
       fetchAuditLogs();
       fetchStats();
     }
-  }, [page, actionFilter, entityFilter, dateRange, errorOriginFilter]);
+  }, [page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter]);
 
   // Fetch AI generation audit data when an assessment-related log is selected
   useEffect(() => {
@@ -614,8 +605,9 @@ export default function AuditTrailPage() {
       const exportPageSize = Math.min(total || 1000, 1000);
       const params = new URLSearchParams({ page: '1', page_size: exportPageSize.toString() });
 
-      if (actionFilter && validBackendActions.includes(actionFilter)) params.append('action', actionFilter);
-      if (entityFilter && validBackendEntities.includes(entityFilter)) params.append('entity_type', entityFilter);
+      if (actionFilter) params.append('action', actionFilter);
+      if (entityFilter) params.append('entity_type', entityFilter);
+      if (userFilter) params.append('user_id', userFilter);
       if (errorOriginFilter) params.append('error_origin', errorOriginFilter);
 
       if (exportDateMode === 'preset' && exportPresetDays) {
@@ -750,11 +742,10 @@ export default function AuditTrailPage() {
   };
 
   const filteredLogs = auditLogs.filter(log => {
-    // Error origin filter
+    // Error origin filter (applied client-side; the list endpoint ignores it)
     if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
 
-    // User filter (selected from Active Users popup)
-    if (userFilter && log.user_id !== userFilter) return false;
+    // Action / entity / user filters are applied server-side via fetchAuditLogs.
 
     // Then filter by search query
     if (!searchQuery) return true;
@@ -849,7 +840,7 @@ export default function AuditTrailPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5">
               <button
                 type="button"
-                onClick={() => { setStatsPopup(null); openListView(); }}
+                onClick={() => { setStatsPopup(null); clearAllFilters(); openListView(); }}
                 className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' && !statsPopup ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
               >
                 <div className="flex items-start justify-between">
@@ -937,7 +928,7 @@ export default function AuditTrailPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (statsPopup === 'users') setUserFilter('');
+                          if (statsPopup === 'users') { setUserFilter(''); setPage(1); }
                           if (statsPopup === 'actions') { setActionFilter(''); setPage(1); }
                           if (statsPopup === 'entities') { setEntityFilter(''); setPage(1); }
                         }}
@@ -968,6 +959,7 @@ export default function AuditTrailPage() {
                             type="button"
                             onClick={() => {
                               setUserFilter(isActive ? '' : u.user_id);
+                              setPage(1);
                               setStatsPopup(null);
                               openListView();
                             }}

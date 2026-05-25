@@ -9,7 +9,6 @@ import {
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   Search,
   Plus,
@@ -32,8 +31,6 @@ import {
   UserX,
   Sparkles,
   Info,
-  History,
-  MessageCircle,
   ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -52,6 +49,7 @@ import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
+import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 
@@ -479,7 +477,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1
 
 export default function UserManagement() {
   const router = useRouter();
-  const { user: currentUser, refreshUser, isTenantAdmin, hasPermission: hasAuthPermission } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1844,19 +1842,14 @@ export default function UserManagement() {
     return true;
   };
 
-  // Quick links to the other user-management areas — surfaced on this page instead of the sidebar
-  const userMgmtLinks = [
-    { id: 'usage-history', label: 'Usage History', icon: History, href: '/organization/usage-history', visible: isTenantAdmin },
-    { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', visible: isTenantAdmin },
-    { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', visible: (isTenantAdmin || hasAuthPermission('canViewTeams')) && hasPlanFeature('teams') },
-    { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat', visible: true },
-  ].filter(link => link.visible);
-
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl shadow-2xl">
-      <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
+
+      {/* Shared organization tab bar — Users is the first tab */}
+      <OrganizationTabs />
 
       {/* Header */}
       <div className="mb-6 sm:mb-8">
@@ -1917,27 +1910,6 @@ export default function UserManagement() {
           </div>
         )}
       </div>
-
-      {/* User-management areas — quick links (moved here from the sidebar) */}
-      {userMgmtLinks.length > 0 && (
-        <div className="mb-4 sm:mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          {userMgmtLinks.map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.id}
-                href={link.href}
-                className="group flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 shadow-sm transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/40 hover:shadow-md"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-100 group-hover:text-brand-blue">{link.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
 
       {/* Stats Cards — clickable; clicking drills into the users list filtered by status */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">

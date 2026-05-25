@@ -1,6 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useState, useRef, useEffect } from 'react';
 import {
   Search,
@@ -407,6 +408,7 @@ export default function TeamChatPage() {
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl flex flex-col flex-1 min-h-0">
       <div className="shrink-0">
         <PageBreadcrumb className="mb-4" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
+        <OrganizationTabs />
       </div>
       <div className="flex flex-1 min-h-0 gap-3 md:gap-4">
         {/* Left Sidebar - Channels List */}
