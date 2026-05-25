@@ -201,7 +201,7 @@ export default function ActivityLogsPage() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs' }]} />
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
@@ -284,17 +284,17 @@ export default function ActivityLogsPage() {
               [&>main]:flex-none
               [&>main]:overflow-visible
               [&>main]:bg-transparent
-              [&>main>div]:max-w-none
-              [&>main>div]:!px-0
-              [&>main>div]:!mx-0
-              [&>main>div>div]:!bg-transparent
-              [&>main>div>div]:!rounded-none
-              [&>main>div>div]:!shadow-none
-              [&>main>div>div]:!ring-0
-              [&>main>div>div]:!border-0
-              [&>main>div>div]:!p-0
-              [&>main>div>div]:!my-0
-              [&>main>div>div>section:first-of-type]:!hidden"
+              [&>main>div:not(.fixed)]:max-w-none
+              [&>main>div:not(.fixed)]:!px-0
+              [&>main>div:not(.fixed)]:!mx-0
+              [&>main>div:not(.fixed)>div]:!bg-transparent
+              [&>main>div:not(.fixed)>div]:!rounded-none
+              [&>main>div:not(.fixed)>div]:!shadow-none
+              [&>main>div:not(.fixed)>div]:!ring-0
+              [&>main>div:not(.fixed)>div]:!border-0
+              [&>main>div:not(.fixed)>div]:!p-0
+              [&>main>div:not(.fixed)>div]:!my-0
+              [&>main>div:not(.fixed)>div>section:first-of-type]:!hidden"
           >
             <AuditTrailPage />
           </section>

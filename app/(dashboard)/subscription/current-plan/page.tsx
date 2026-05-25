@@ -1928,16 +1928,16 @@ function CurrentPlanContent() {
               [&>main]:flex-none
               [&>main]:overflow-visible
               [&>main]:bg-transparent
-              [&>main>div]:max-w-none
-              [&>main>div]:!px-0
-              [&>main>div]:!mx-0
-              [&>main>div>div]:!bg-transparent
-              [&>main>div>div]:!rounded-none
-              [&>main>div>div]:!shadow-none
-              [&>main>div>div]:!ring-0
-              [&>main>div>div]:!border-0
-              [&>main>div>div]:!p-0
-              [&>main>div>div]:!my-0"
+              [&>main>div:not(.fixed)]:max-w-none
+              [&>main>div:not(.fixed)]:!px-0
+              [&>main>div:not(.fixed)]:!mx-0
+              [&>main>div:not(.fixed)>div]:!bg-transparent
+              [&>main>div:not(.fixed)>div]:!rounded-none
+              [&>main>div:not(.fixed)>div]:!shadow-none
+              [&>main>div:not(.fixed)>div]:!ring-0
+              [&>main>div:not(.fixed)>div]:!border-0
+              [&>main>div:not(.fixed)>div]:!p-0
+              [&>main>div:not(.fixed)>div]:!my-0"
           >
             {activeSection === 'usage-quotas' && <UsageQuotasPage />}
             {activeSection === 'payment-methods' && <PaymentMethodsPage />}
