@@ -6,6 +6,7 @@ import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
@@ -854,7 +855,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       if (col.id === 'phone') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <div className="text-sm text-gray-600">{result.phone || '-'}</div>
+                            <div className="flex flex-col gap-0.5 text-sm text-gray-600">
+                              {(() => {
+                                const numbers = splitPhoneNumbers(result.phone, 2);
+                                return numbers.length > 0
+                                  ? numbers.map((num, i) => <span key={i}>{num}</span>)
+                                  : <span>-</span>;
+                              })()}
+                            </div>
                           </td>
                         );
                       }
@@ -1190,9 +1198,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       </div>
                     )}
                     {enabledColumns.find(c => c.id === 'phone') && result.phone && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                        <Phone className="w-3 h-3" />
-                        {result.phone}
+                      <div className="flex items-start gap-1.5 text-xs text-gray-600">
+                        <Phone className="w-3 h-3 mt-0.5 shrink-0" />
+                        <div className="flex flex-col gap-0.5">
+                          {splitPhoneNumbers(result.phone, 2).map((num, i) => <span key={i}>{num}</span>)}
+                        </div>
                       </div>
                     )}
                     {enabledColumns.find(c => c.id === 'techScore') && (() => {

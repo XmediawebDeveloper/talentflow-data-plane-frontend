@@ -8,6 +8,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
+import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
@@ -808,9 +809,16 @@ export default function ScoredResumesTable({
                   if (col.id === 'phone') {
                     return (
                       <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <Phone className="w-3.5 h-3.5" />
-                          {resume.phone}
+                        <div className="flex items-start gap-1 text-sm text-gray-600">
+                          <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <div className="flex flex-col gap-0.5">
+                            {(() => {
+                              const numbers = splitPhoneNumbers(resume.phone, 2);
+                              return numbers.length > 0
+                                ? numbers.map((num, i) => <span key={i}>{num}</span>)
+                                : <span>-</span>;
+                            })()}
+                          </div>
                         </div>
                       </td>
                     );
@@ -1061,9 +1069,11 @@ export default function ScoredResumesTable({
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'phone') && (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Phone className="w-4 h-4" />
-                  {resume.phone}
+                <div className="flex items-start gap-2 text-gray-600">
+                  <Phone className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    {splitPhoneNumbers(resume.phone, 2).map((num, i) => <span key={i}>{num}</span>)}
+                  </div>
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'experience') && resume.experience && (

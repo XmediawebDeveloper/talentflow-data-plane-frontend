@@ -1,6 +1,7 @@
 import { ArrowLeft, Search, Filter, Download, Mail, Phone, MapPin, Briefcase, GraduationCap, Calendar, Star, TrendingUp, Users, CheckCircle2, Clock, XCircle, ChevronDown, MoreVertical, Eye, MessageSquare, AlertTriangle, Target } from 'lucide-react';
 import { useState } from 'react';
 import ResumeAnalysis from './ResumeAnalysis';
+import SkillsList from '@/components/ui/SkillsList';
 
 interface Applicant {
   id: string;
@@ -352,19 +353,11 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
                       {/* Skills */}
                       <div className="flex flex-wrap gap-2 mt-3">
-                        {applicant.skills.slice(0, 4).map((skill, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {applicant.skills.length > 4 && (
-                          <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md text-xs">
-                            +{applicant.skills.length - 4} more
-                          </span>
-                        )}
+                        <SkillsList
+                          skills={applicant.skills}
+                          chipClassName="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs"
+                          moreClassName="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors cursor-pointer"
+                        />
                       </div>
                     </div>
 
