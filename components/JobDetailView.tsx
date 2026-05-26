@@ -9,6 +9,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDVersion, JDUsageStatus } from '@/lib/services/jdService';
+import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import SkillsList from '@/components/ui/SkillsList';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
@@ -2614,16 +2616,25 @@ function AIMatchTabContent({
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.email || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.phone || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">
+                        {(() => {
+                          const numbers = splitPhoneNumbers(candidate.phone, 2);
+                          if (numbers.length === 0) return '—';
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              {numbers.map((num, i) => <span key={i}>{num}</span>)}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.location || '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
-                          {candidate.skills.slice(0, 4).map((skill, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">{skill}</span>
-                          ))}
-                          {candidate.skills.length > 4 && (
-                            <span className="px-2 py-0.5 text-xs text-blue-600">+{candidate.skills.length - 4} more</span>
-                          )}
+                          <SkillsList
+                            skills={candidate.skills}
+                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200"
+                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer"
+                          />
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.experience || '—'}</td>

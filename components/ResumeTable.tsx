@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import SkillsList from '@/components/ui/SkillsList';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -29,9 +31,10 @@ interface DraggableResumeRowProps {
   children: React.ReactNode;
   className?: string;
   onViewDetails?: (resume: Resume) => void;
+  draggable?: boolean;
 }
 
-function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails }: DraggableResumeRowProps) {
+function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails, draggable = true }: DraggableResumeRowProps) {
   const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: RESUME_DRAG_TYPE,
     item: () => ({
@@ -46,16 +49,18 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
 
   return (
     <tr
-      ref={preview as unknown as React.Ref<HTMLTableRowElement>}
+      ref={draggable ? (preview as unknown as React.Ref<HTMLTableRowElement>) : undefined}
       className={`${className} ${isDragging ? 'opacity-50' : ''} ${onViewDetails ? 'cursor-pointer' : ''}`}
       onClick={onViewDetails ? () => onViewDetails(resume) : undefined}
     >
       {/* Drag handle */}
-      <td className="w-8 px-2 py-3">
-        <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
-          <GripVertical className="w-4 h-4 text-gray-400" />
-        </div>
-      </td>
+      {draggable && (
+        <td className="w-8 px-2 py-3">
+          <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
+            <GripVertical className="w-4 h-4 text-gray-400" />
+          </div>
+        </td>
+      )}
       {children}
     </tr>
   );
@@ -85,6 +90,7 @@ interface ResumeTableProps {
   canShare?: boolean;
   canTag?: boolean;
   canDownload?: boolean;
+  draggable?: boolean;
 }
 
 // Helper function to highlight matching text
@@ -137,6 +143,7 @@ export default function ResumeTable({
   canShare = false,
   canTag = false,
   canDownload = true,
+  draggable = true,
 }: ResumeTableProps) {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -316,9 +323,11 @@ export default function ResumeTable({
         <thead className="bg-slate-50 sticky top-0">
           <tr>
             {/* Drag handle column */}
-            <th className="w-8 px-2 py-3 align-middle">
-              <span className="sr-only">Drag</span>
-            </th>
+            {draggable && (
+              <th className="w-8 px-2 py-3 align-middle">
+                <span className="sr-only">Drag</span>
+              </th>
+            )}
             {!hideCheckboxes && (
               <th className="w-12 px-4 py-3 align-middle">
                 <input
@@ -334,6 +343,9 @@ export default function ResumeTable({
             )}
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Candidate Name
+            </th>
+            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+              Role
             </th>
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Email
@@ -370,6 +382,7 @@ export default function ResumeTable({
               key={resume.id}
               resume={resume}
               selectedResumes={selectedResumes}
+              draggable={draggable}
               className={`hover:bg-brand-blue/5 transition-colors ${
                 selectedResumes.includes(resume.id) ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20' : ''
               }`}
@@ -408,11 +421,14 @@ export default function ResumeTable({
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title}
-                    </div>
                   </div>
                 </div>
+              </td>
+              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+                {resume.title
+                  ? (highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title)
+                  : <span className="text-gray-400">-</span>
+                }
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
                 {resume.email && resume.email !== 'No email'
@@ -421,26 +437,30 @@ export default function ResumeTable({
                 }
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
-                {resume.phone && resume.phone !== 'No phone'
-                  ? (highlightQuery ? highlightText(resume.phone, highlightQuery) : resume.phone)
-                  : <span className="text-gray-400">-</span>
-                }
+                {(() => {
+                  // Show each number on its own line; cap at two when a resume
+                  // carries multiple numbers in a single field.
+                  const numbers = splitPhoneNumbers(resume.phone, 2);
+                  if (numbers.length === 0) {
+                    return <span className="text-gray-400">-</span>;
+                  }
+                  return (
+                    <div className="flex flex-col gap-0.5">
+                      {numbers.map((num, i) => (
+                        <span key={i}>
+                          {highlightQuery ? highlightText(num, highlightQuery) : num}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </td>
               <td className="px-4 py-3 align-middle min-w-[220px]">
                 <div className="flex flex-wrap gap-1">
-                  {resume.skills.slice(0, 4).map((skill, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
-                    >
-                      {highlightQuery ? highlightText(skill, highlightQuery) : skill}
-                    </span>
-                  ))}
-                  {resume.skills.length > 4 && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-brand-blue font-medium">
-                      +{resume.skills.length - 4} more
-                    </span>
-                  )}
+                  <SkillsList
+                    skills={resume.skills}
+                    highlight={(s) => (highlightQuery ? highlightText(s, highlightQuery) : s)}
+                  />
                 </div>
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">{resume.experience}</td>
@@ -699,14 +719,11 @@ export default function ResumeTable({
               )}
               {resume.skills && resume.skills.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {resume.skills.slice(0, 3).map((skill, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20">
-                      {skill}
-                    </span>
-                  ))}
-                  {resume.skills.length > 3 && (
-                    <span className="px-2 py-0.5 text-gray-500 text-xs">+{resume.skills.length - 3}</span>
-                  )}
+                  <SkillsList
+                    skills={resume.skills}
+                    chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
+                    moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                  />
                 </div>
               )}
             </div>
