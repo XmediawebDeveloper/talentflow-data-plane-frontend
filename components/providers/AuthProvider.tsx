@@ -6,7 +6,6 @@ import { authService, clearTokens } from '@/lib/services';
 import { handleUnauthorized } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
-import { useRouter } from 'next/navigation';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
@@ -268,7 +267,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
 
   const isAuthenticated = !!user;
 
@@ -749,11 +747,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] Permission version cache cleared on logout');
     }
 
-    if (loginUrl.startsWith('http')) {
-      window.location.href = loginUrl;
-    } else {
-      router.push(loginUrl);
-    }
+    // Always hard-navigate (full reload) rather than a soft router.push. A soft
+    // client-side transition keeps the document alive, and password managers then
+    // re-autofill the login inputs without firing React onChange — leaving the
+    // controlled email/password state empty and causing the next login to POST an
+    // empty email (backend 422). A full reload re-mounts the form cleanly, matching
+    // the working first-load behaviour. (On *.BASE_DOMAIN subdomains loginUrl is an
+    // absolute https:// URL; on custom/vanity domains it's a relative "/login" —
+    // both are handled correctly by window.location.href.)
+    window.location.href = loginUrl;
   };
 
   const updateUser = (userData: User) => {

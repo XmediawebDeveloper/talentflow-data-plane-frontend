@@ -65,6 +65,14 @@ export interface PerQuestionSkill {
    *  to planned skills the candidate never demonstrated. UI should
    *  render a "Skipped" or "IDK" badge instead of the numeric score. */
   is_skipped?: boolean;
+  /** True when NO evaluator score exists for this skill (no matching
+   *  evaluations[] row, the candidate did answer, and there is no positive
+   *  question-level fallback). Per the scoring spec the backend never
+   *  fabricates a 0.0 for an unevaluated skill — it skips it. The frontend
+   *  must do the same: unscored skills are EXCLUDED from the weighted
+   *  question score and rendered as "Not evaluated" rather than a misleading
+   *  0.0 that fails the candidate as if they said nothing. */
+  is_unscored?: boolean;
 }
 
 export interface PerQuestionFollowUp {
@@ -109,6 +117,11 @@ export interface PerQuestionDetail {
   answer: string;
   skills: PerQuestionSkill[];
   questionScore: number;                 // 0-10, weighted average
+  /** True when EVERY skill on this question is unscored (no evaluator rows
+   *  and no question-level score). Such a question is "Not evaluated" and is
+   *  EXCLUDED from the section average — counting it as 0.0 would unfairly
+   *  tank the section. Mirrors the backend's "never fabricate a 0.0" rule. */
+  isUnscored?: boolean;
   /** Follow-up Q&As that fired within this main question's slot. Each
    *  follow-up shares the parent's `qNum`. Empty/undefined when the
    *  candidate answered the main question well enough not to warrant

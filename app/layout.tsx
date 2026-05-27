@@ -22,7 +22,14 @@ import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvide
 import { Inter } from 'next/font/google'
 
 const inter = Inter({
-  subsets: ['latin']
+  subsets: ['latin'],
+  display: 'swap',
+  // Disable the automatic <link rel="preload"> for the font. With a heavy
+  // hydration cost (three.js / mediapipe / radix), the font isn't consumed
+  // within Chrome's post-load window, so the preload is flagged as wasted.
+  // The font still loads on-demand via @font-face; `swap` shows a fallback
+  // until it arrives. See: "preloaded ... but not used within a few seconds".
+  preload: false,
 })
 export const metadata: Metadata = {
   title: "TalentFlow - Recruitment Dashboard",

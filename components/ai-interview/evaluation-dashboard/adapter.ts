@@ -836,7 +836,7 @@ function buildPerQuestionDetailsFromHistory(
     skill: string,
     qLevelFallback: number | null,
     isSkipped: boolean,
-  ): { score: number; note: string; is_fallback: boolean; is_skipped: boolean } => {
+  ): { score: number; note: string; is_fallback: boolean; is_skipped: boolean; is_unscored: boolean } => {
     const sl = skill.toLowerCase().trim();
     const rows = evalsByQ[qn] || [];
     const readScore = (r: any): number => {
@@ -851,20 +851,20 @@ function buildPerQuestionDetailsFromHistory(
     for (const r of rows) {
       const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
       if (topic === sl) {
-        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false };
+        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
       }
     }
     for (const r of rows) {
       const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
       if (topic && (topic.includes(sl) || sl.includes(topic))) {
-        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false };
+        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
       }
     }
     // Skipped/IDK: suppress fallback. Show 0 with the is_skipped flag
     // so the UI can render a "Skipped" badge — better than a misleading
     // 5.0 inherited from the evaluator's "Behavioural" mis-score.
     if (isSkipped) {
-      return { score: 0, note: '', is_fallback: false, is_skipped: true };
+      return { score: 0, note: '', is_fallback: false, is_skipped: true, is_unscored: false };
     }
     // Fallback: question-level score (so a real answer doesn't show 0
     // just because the evaluator graded a different topic name). Only
@@ -876,9 +876,15 @@ function buildPerQuestionDetailsFromHistory(
         note: '',
         is_fallback: true,
         is_skipped: false,
+        is_unscored: false,
       };
     }
-    return { score: 0, note: '', is_fallback: false, is_skipped: false };
+    // No evaluator row, not skipped, no positive question-level score: this
+    // skill was simply NOT evaluated. Per the scoring spec the backend never
+    // fabricates a 0.0 here (transcript_evaluation_service.py:3209-3214) — we
+    // mustn't either. Flag is_unscored so the weighted average EXCLUDES it and
+    // the UI renders "Not evaluated" instead of a candidate-tanking 0.0.
+    return { score: 0, note: '', is_fallback: false, is_skipped: false, is_unscored: true };
   };
 
   const sectionFromRT = (rt: any): PerQuestionDetail['section'] => {
@@ -1101,7 +1107,7 @@ function buildPerQuestionDetailsFromHistory(
     const skills: PerQuestionSkill[] = skillNames.map(skillName => {
       const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] || 'Medium';
       const weight = PRIORITY_WEIGHT[priority];
-      const { score, note, is_fallback, is_skipped } = scoreForSkill(
+      const { score, note, is_fallback, is_skipped, is_unscored } = scoreForSkill(
         origQ, skillName, entryScore, isSkippedRow,
       );
       return {
@@ -1112,19 +1118,29 @@ function buildPerQuestionDetailsFromHistory(
         note,
         is_fallback,
         is_skipped,
+        is_unscored,
       };
     });
     skills.sort((a, b) => b.weight - a.weight || b.score - a.score);
 
-    // Weighted question score = Σ(score × weight) / Σ(weight). Prefer the
-    // backend's stored entry.score when present so forced-to-zero overrides
-    // (garbage-answer rule, etc.) survive into the display.
-    const sumW = skills.reduce((s, k) => s + k.weight, 0);
-    const sumWS = skills.reduce((s, k) => s + k.score * k.weight, 0);
+    // Weighted question score = Σ(score × weight) / Σ(weight) — the spec's
+    // exact formula, computed from the SAME per-skill scores shown on the
+    // card so the displayed arithmetic is always self-consistent (this is
+    // what fixes the "44.0 ÷ 11 = 2.40" mismatch: the question score must be
+    // the weighted average of the rows the recruiter sees, not a separately
+    // sourced entry.score). Unscored skills (no evaluator row) are EXCLUDED
+    // from numerator and denominator — never fabricated as 0 — matching the
+    // backend rule in transcript_evaluation_service.py:3209-3214.
+    const scoredSkills = skills.filter(k => !k.is_unscored);
+    const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
+    const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
     const weighted = sumW > 0 ? sumWS / sumW : 0;
-    const questionScore = entryScore !== null
-      ? Math.round(entryScore * 10) / 10
-      : Math.round(weighted * 10) / 10;
+    const questionScore = Math.round(weighted * 10) / 10;
+    // Whole question is "Not evaluated" only when it had skills but NONE were
+    // scored (e.g. evaluator produced no rows for this turn). Such a question
+    // is excluded from the section average by the dashboard rather than
+    // dragging it down as a 0.0.
+    const isUnscored = skills.length > 0 && scoredSkills.length === 0;
 
     // Attach explicit follow-ups for this main Q. Looked up by the raw
     // history question_number (origQ) since follow-up entries store the
@@ -1154,6 +1170,7 @@ function buildPerQuestionDetailsFromHistory(
       answer: String(q?.answer || ''),
       skills,
       questionScore,
+      isUnscored,
       followUps: followUps && followUps.length > 0 ? followUps : undefined,
       bundledFollowUp,
     };

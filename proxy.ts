@@ -36,6 +36,24 @@ const protectedRoutes = [
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
+// Subdomains that are platform infrastructure, NOT tenant orgs. These must
+// never be validated against the tenant DB or redirected to root — doing so
+// turned a looping infra host (e.g. "api-eu-west-2-demo") into a validate-
+// subdomain + redirect storm. Matches exact names plus the "api-*"/"internal-*"
+// families (regional API hosts like api-eu-west-2-demo, api-us-east-1-prod).
+const RESERVED_SUBDOMAINS = new Set([
+  'www', 'app', 'api', 'admin', 'static', 'cdn', 'assets',
+  'mail', 'smtp', 'ftp', 'ns', 'ns1', 'ns2',
+  'health', 'status', 'monitoring', 'internal',
+]);
+
+function isReservedSubdomain(sub: string): boolean {
+  const s = (sub || '').toLowerCase();
+  if (RESERVED_SUBDOMAINS.has(s)) return true;
+  // Regional / environment API hosts and internal services.
+  return /^(api|internal)([-.]|$)/.test(s);
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -57,7 +75,15 @@ export async function proxy(request: NextRequest) {
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || isIPAddress;
   if (!isIPAddress && isOnBaseDomain && hostname !== BASE_DOMAIN && hostname.endsWith(`.${BASE_DOMAIN}`)) {
     const candidateSubdomain = hostname.slice(0, hostname.length - BASE_DOMAIN.length - 1);
-    if (!['www', 'app'].includes(candidateSubdomain)) {
+    // Reserved / infrastructure subdomains are NOT tenant orgs. Treating them
+    // as tenants sent each request through validate-subdomain → 404 → redirect
+    // to root. When an infra/API host (e.g. "api-eu-west-2-demo") hits the app
+    // on a loop, that produced a STORM: one outbound validate-subdomain fetch
+    // (3s timeout) + a redirect PER REQUEST, hammering both the Next server and
+    // the backend ("[MIDDLEWARE] Unknown subdomain ... redirecting to root"
+    // repeating endlessly). Skip tenant extraction for these so they never
+    // validate or redirect — they just fall through to normal root routing.
+    if (!isReservedSubdomain(candidateSubdomain)) {
       tenantSubdomain = candidateSubdomain;
       isRealSubdomain = true;
     }

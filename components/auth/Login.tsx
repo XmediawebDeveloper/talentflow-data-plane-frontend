@@ -58,6 +58,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // Live DOM handles for the credential inputs. Browser password managers can
+  // autofill these after a soft client-side navigation (e.g. returning to /login
+  // after logout) WITHOUT firing React's onChange, leaving the controlled state
+  // empty even though the fields look filled. We read .value at submit time as a
+  // fallback so we never POST an empty email/password.
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
   // Subdomain (tenant) detection
   const [subdomain, setSubdomain] = useState<string | null>(null);
 
@@ -202,7 +210,9 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     // Save or clear email based on "Remember me" checkbox
     try {
       if (rememberMe) {
-        localStorage.setItem('rememberedEmail', email);
+        // Use the authoritative email from the login response rather than the
+        // `email` state, which may lag behind an autofilled value (see handleSubmit).
+        localStorage.setItem('rememberedEmail', response.user.email);
         localStorage.setItem('rememberMe', 'true');
       } else {
         localStorage.removeItem('rememberedEmail');
@@ -248,10 +258,25 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Prefer React state, but fall back to the live DOM value in case the field
+    // was autofilled without firing onChange (see emailInputRef comment above).
+    const emailValue = (email || emailInputRef.current?.value || '').toLowerCase().trim();
+    const passwordValue = password || passwordInputRef.current?.value || '';
+
+    if (!emailValue || !passwordValue) {
+      setError('Please enter your email and password.');
+      return;
+    }
+
+    // Keep state in sync so the rest of the UI reflects the resolved values.
+    if (emailValue !== email) setEmail(emailValue);
+    if (passwordValue !== password) setPassword(passwordValue);
+
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email: email.toLowerCase().trim(), password, subdomain: subdomain || undefined });
+      const response = await authService.login({ email: emailValue, password: passwordValue, subdomain: subdomain || undefined });
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response)) {
@@ -854,14 +879,29 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
+                {/*
+                  Defence in depth against credential leakage in the URL:
+                  - method="POST" — if anything ever bypasses handleSubmit's preventDefault,
+                    the browser will submit via POST (body), not GET (query string), so
+                    email/password cannot be appended to the address bar.
+                  - action="#" — pins the native action to the current page anchor rather
+                    than re-navigating to /login with serialised fields.
+                  - noValidate — disables the browser's HTML5 validation popups so our own
+                    handler is the single source of truth and can't be short-circuited.
+                */}
+                <form onSubmit={handleSubmit} method="POST" action="#" noValidate>
               {/* Email */}
               <div style={inputGroupStyle}>
                 <label style={labelStyle}>Email Address</label>
                 <div style={inputContainerStyle}>
                   <Mail style={{ ...inputIconStyle, width: 20, height: 20 }} />
                   <input
+                    ref={emailInputRef}
                     type="email"
+                    // No `name` attribute — if a native form submit ever slipped past
+                    // handleSubmit's preventDefault, a named field would get serialised
+                    // into the URL (?email=…). `autoComplete` still works without it.
+                    autoComplete="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
@@ -877,7 +917,12 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 <div style={inputContainerStyle}>
                   <Lock style={{ ...inputIconStyle, width: 20, height: 20 }} />
                   <input
+                    ref={passwordInputRef}
                     type={showPassword ? 'text' : 'password'}
+                    // No `name` attribute — see email input above. Critical for passwords:
+                    // a serialised ?password=… in the URL would land in browser history,
+                    // server access logs, and the Referer header on any outbound link.
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"

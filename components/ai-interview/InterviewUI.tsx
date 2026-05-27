@@ -60,8 +60,13 @@ interface Message {
   responseTimeSeconds?: number;
   /** IST timestamp string (e.g. "2:34 PM") captured when the message was created */
   timestamp?: string;
-  /** True if this assistant message is a follow-up question (bundles a previously-volunteered skill or fires as in-slot validation). Renders a 'Follow' chip. */
+  /** True if this assistant message is a follow-up question (bundles a previously-volunteered skill or fires as in-slot validation). NOT rendered in the live chat — the "Follow-up" chip + inline note live ONLY on the post-interview Question Analysis (EvaluationDashboardV2) page. Kept on the Message type because saveAiMessage still stamps it from `question_meta` for round-trip parity. */
   isFollowup?: boolean;
+  /** The interview question number this message belongs to. Assistant bubbles are
+   *  tagged with the question being asked; user answers (especially late, background-
+   *  transcribed ones in the decoupled flow) carry the number of the question they
+   *  answered so they can be attached to the right bubble instead of appended at the bottom. */
+  questionNumber?: number;
 }
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
@@ -88,13 +93,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState("");
+  // Sync ref mirror of currentTranscript — the live (Deepgram cumulative)
+  // transcript the candidate sees. Read by commitLiveTranscriptAsAnswer at
+  // end_turn to show the FULL answer instantly (the browser Web Speech API is
+  // disabled, so webSpeechFinalizedRef is always empty).
+  const currentTranscriptRef = useRef("");
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [textInput, setTextInput] = useState("");
   /** True while Linda is currently streaming a question that the backend
    *  flagged as a follow-up (`question_meta` with is_followup=true).
-   *  Renders a 'Follow' chip on the live bubble and is stamped onto the
-   *  finalized Message so the history bubble shows it too. */
+   *  NOT shown in the live chat (no chip, no note) — the Follow-up chip and
+   *  inline "Reframed as a follow-up" note live ONLY on the post-interview
+   *  Question Analysis page. The ref is still tracked so saveAiMessage can
+   *  stamp `isFollowup` onto the saved Message for transcript/eval parity. */
   const [isCurrentFollowup, setIsCurrentFollowup] = useState(false);
   const isCurrentFollowupRef = useRef(false);
 
@@ -372,6 +384,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     onTimerChange?.({ remainingSeconds, questionTimerSeconds, questionTimerExpired, questionNumber, totalQuestions });
   }, [remainingSeconds, questionTimerSeconds, questionTimerExpired, questionNumber, totalQuestions]);
   useEffect(() => { questionNumberRef.current = questionNumber; }, [questionNumber]);
+  useEffect(() => { currentTranscriptRef.current = currentTranscript; }, [currentTranscript]);
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
 
@@ -523,6 +536,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // TalkingHead's internal Web Audio fallback, and playback_complete is
   // delivered by the avatar-decoupled timer from fix #1 — so the interview runs
   // at full speed with only the visual downgraded.
+  // NOTE (2026-05-26): the earlier proactive lite-mode trip based on
+  // hardwareConcurrency was REVERTED — per product spec the 3D avatar must
+  // load for ALL systems. The fallback now triggers ONLY on a real failure
+  // path (the existing onFallback + watchdog at :~4512). For single-core
+  // perf the real fix is GLB compression (Meshopt/Draco + KTX2 textures),
+  // not preemptively skipping the 3D render.
   const [avatarFailed, setAvatarFailed] = useState(false);
 
   // Video recording refs
@@ -1521,6 +1540,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         content: text,
         timestamp: nowIST(),
         isFollowup: wasFollowup,
+        // Tag with the question being asked so a late background-transcribed
+        // answer (decoupled flow) can be attached right after its own bubble.
+        questionNumber: questionNumberRef.current ?? undefined,
       }]);
       // Reset for the next turn — backend will re-set if the next question
       // is also a follow-up.
@@ -1789,6 +1811,44 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
     webSpeechFinalizedRef.current = "";
   }, []);
+
+  // Question number of the most recent answer we committed PROVISIONALLY from
+  // the browser's live transcript (decoupled timed mode). The backend's later
+  // raw-Whisper + enhanced `transcript` events upgrade this bubble's text in
+  // place instead of appending a duplicate. Cleared once upgraded.
+  const provisionalAnswerQnRef = useRef<number | null>(null);
+
+  // Commit the browser live transcript as the answer bubble IMMEDIATELY on
+  // end_turn, so the candidate sees their answer instantly instead of waiting
+  // ~20-30s for the backend's background Whisper pass. The accurate Whisper
+  // text (then the autocorrected text) replaces it in place when it arrives.
+  // Timed/decoupled mode only — in flexible mode the synchronous pipeline owns
+  // the transcript, so we leave it to the backend `transcript` event.
+  const commitLiveTranscriptAsAnswer = useCallback((liveText: string) => {
+    if (isFlexibleMode || isNewFlexibleMode) return;
+    const text = (liveText || "").trim();
+    if (!text || !isTranscriptMeaningful(text)) return;
+    const qn = questionNumberRef.current ?? undefined;
+    const frozenTime = frozenResponseTimeRef.current;
+    frozenResponseTimeRef.current = null; // consume — backend upgrade preserves it
+    provisionalAnswerQnRef.current = qn ?? null;
+    setMessages(prev => {
+      // Don't double-commit if this question already has an answer bubble.
+      if (qn != null && prev.some(m => m.role === "user" && m.questionNumber === qn)) {
+        return prev;
+      }
+      return [...prev, {
+        id: crypto.randomUUID(),
+        role: "user" as const,
+        content: text,
+        responseTimeSeconds: frozenTime ?? undefined,
+        timestamp: nowIST(),
+        questionNumber: qn,
+      }];
+    });
+    setCurrentTranscript("");
+    currentTranscriptRef.current = ""; // clear so the next answer starts fresh
+  }, [isFlexibleMode, isNewFlexibleMode]);
 
   // ── Real-time viseme loop ────────────────────────────────────────────────────
   // Driven by a Web Audio AnalyserNode tapped into the playback graph.
@@ -2080,6 +2140,42 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
+      case "live_transcript": {
+        // Deepgram Flux live (AI_ASR_PROVIDER=deepgram): interim transcripts
+        // stream in word-by-word AS the candidate speaks. Drive the live "You"
+        // bubble directly from these partials. The final canonical transcript
+        // still arrives via the "transcript" (is_final) message, which clears
+        // this bubble and commits the chat message.
+        const liveText = (data.text ?? "").trim();
+        // Echo guard: ignore partials that arrive while Linda is talking or
+        // during the post-playback echo window — those are her TTS bleeding
+        // back through the mic, not the candidate.
+        if (isAiSpeakingRef.current) break;
+        if (Date.now() < playbackEchoGuardUntilRef.current) break;
+        // Only show the live "speaking…" bubble while the candidate is ACTUALLY
+        // recording an answer. After end_turn (isRecording=false) the Deepgram
+        // stream re-emits the just-finished answer's final transcript one more
+        // time — without this guard it reappeared as a live bubble even though
+        // the answer was already committed as a "You" message (the duplicate).
+        if (!isRecordingRef.current) break;
+        if (liveText.length > 0) {
+          setCurrentTranscript(liveText);
+          currentTranscriptRef.current = liveText; // zero-lag for end_turn commit
+          // Bridge to VAD: real speech detected — mark speechDetected so the
+          // "Are you there?" no-response timer doesn't fire mid-answer.
+          if (!speechDetectedRef.current) {
+            speechDetectedRef.current = true;
+            speechDetectedAtRef.current = Date.now();
+            postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES;
+            questionTimerAwaitingSpeechRef.current = false;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              try { wsRef.current?.send(JSON.stringify({ type: 'speech_started' })); } catch {}
+            }
+          }
+        }
+        break;
+      }
       case "transcript":
         console.log('[INTERVIEW-DEBUG] transcript received from Whisper', {
           is_final: data.is_final,
@@ -2095,19 +2191,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // Clear live bubble only now — it atomically transitions to a chat message.
             // Never clear before this point: keeps transcript visible during processing gap.
             setCurrentTranscript("");
+            // The decoupled/background flow tags late transcripts with the
+            // question they answered. `qn` is that number (or null for the
+            // synchronous flow, where the answer is always the most recent one).
+            const qn: number | null =
+              data.for_previous_question && typeof data.question_number === "number"
+                ? data.question_number
+                : null;
             if (data.is_enhanced) {
-              // Enhanced transcript from LLM correction — update the last user message.
-              // Preserve responseTimeSeconds that was stamped when the raw transcript arrived.
-              setMessages(prev => {
-                const updated = [...prev];
-                for (let i = updated.length - 1; i >= 0; i--) {
-                  if (updated[i].role === "user") {
-                    updated[i] = { ...updated[i], content: transcriptText };
-                    break;
-                  }
-                }
-                return updated;
-              });
+              // RAW-IN-CHAT POLICY (2026-05-26): the live chat must show the
+              // EXACT raw Whisper transcript (matching the backend
+              // [ASR] FINAL / [BGTranscribe] FINAL logs), NOT the LLM autocorrect
+              // rewrite. The enhancer substitutes domain words it can't verify
+              // (observed: "Chase"→"AWS", "redoubt"→"frontend", "type down"→
+              // "Python"), so replacing the bubble with it showed the candidate
+              // words they never said. The enhanced text is still computed and
+              // stored server-side (question_history) and used for scoring — see
+              // message_handler.py _transcribe_and_record_async / _process_llm.
+              // We just never surface it in the live chat. The raw transcript
+              // message (always sent first) is already on screen, so this
+              // enhanced follow-up is intentionally a display no-op.
+              console.debug('[Transcript] Ignoring is_enhanced rewrite for display (raw-in-chat policy)');
             } else {
               // Raw Whisper transcript — add as new user message, stamping the
               // frozen timer value captured when the candidate stopped speaking.
@@ -2119,25 +2223,85 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 content: transcriptText,
                 responseTimeSeconds: frozenTime ?? undefined,
                 timestamp: nowIST(),
+                questionNumber: qn ?? undefined,
               };
-              if (data.for_previous_question) {
-                // ASYNC/DECOUPLED flow: this answer was transcribed in the
-                // background and arrives AFTER Linda's next question is already
-                // on screen. Insert it BEFORE the most recent assistant message
-                // so it appears under the question it actually answered, rather
-                // than out of order at the bottom of the chat.
-                setMessages(prev => {
-                  const updated = [...prev];
-                  let insertAt = updated.length;
+              // A PROVISIONAL bubble may already be on screen from the live
+              // browser transcript (commitLiveTranscriptAsAnswer). targetQn is
+              // the question this Whisper text belongs to: qn for the decoupled
+              // flow, else the pending provisional's question number.
+              const provQn = provisionalAnswerQnRef.current;
+              const targetQn = qn !== null ? qn : provQn;
+              setMessages(prev => {
+                const updated = [...prev];
+                // ── DEDUP GUARD (2026-05-26) ──────────────────────────────
+                // A long-answer pipeline hang/timeout (run_pipeline HARD
+                // TIMEOUT at 180s, or leftover audio bleeding into the next
+                // turn's ASR) can re-fire the SAME transcript against the NEXT
+                // slot, so a Q1 answer reappears under Q2 (session e2509090).
+                // Drop a final transcript whose normalized text already exists
+                // under a DIFFERENT question. Scoped to >= 8 words so a
+                // candidate legitimately repeating a SHORT answer ("I don't
+                // know", "yes") still renders under each question. The
+                // same-question bubble is exempt (questionNumber === targetQn)
+                // so the provisional→final upgrade in step 1 still works.
+                const _normalize = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+                const _normNew = _normalize(transcriptText);
+                if (_normNew.split(' ').filter(Boolean).length >= 8) {
+                  const _dupElsewhere = updated.some(m =>
+                    m.role === "user" &&
+                    (targetQn == null || m.questionNumber !== targetQn) &&
+                    _normalize(m.content) === _normNew
+                  );
+                  if (_dupElsewhere) {
+                    console.warn('[Transcript] Dropping duplicate answer already shown for another question (long-answer re-fire guard)');
+                    return prev;
+                  }
+                }
+                // 1. Upgrade the existing answer bubble for this question (the
+                //    provisional live transcript) in place — no duplicate.
+                if (targetQn != null) {
                   for (let i = updated.length - 1; i >= 0; i--) {
-                    if (updated[i].role === "assistant") { insertAt = i; break; }
+                    if (updated[i].role === "user" && updated[i].questionNumber === targetQn) {
+                      updated[i] = { ...updated[i], content: transcriptText };
+                      return updated;
+                    }
+                  }
+                }
+                // 2. Decoupled flow with no provisional bubble: insert right
+                //    after the matching question bubble (fallback: before the
+                //    most recent assistant message) so ordering stays sane.
+                if (data.for_previous_question) {
+                  let insertAt = -1;
+                  if (qn !== null) {
+                    for (let i = 0; i < updated.length; i++) {
+                      if (updated[i].role === "assistant" && updated[i].questionNumber === qn) {
+                        insertAt = i + 1;
+                        while (
+                          insertAt < updated.length &&
+                          updated[insertAt].role === "user" &&
+                          updated[insertAt].questionNumber === qn
+                        ) {
+                          insertAt++;
+                        }
+                        break;
+                      }
+                    }
+                  }
+                  if (insertAt === -1) {
+                    insertAt = updated.length;
+                    for (let i = updated.length - 1; i >= 0; i--) {
+                      if (updated[i].role === "assistant") { insertAt = i; break; }
+                    }
                   }
                   updated.splice(insertAt, 0, _userMsg);
                   return updated;
-                });
-              } else {
-                setMessages(prev => [...prev, _userMsg]);
-              }
+                }
+                // 3. Synchronous flow — append at the bottom.
+                updated.push(_userMsg);
+                return updated;
+              });
+              // Provisional has been reconciled with the real transcript.
+              if (provQn != null) provisionalAnswerQnRef.current = null;
             }
             currentAiTextRef.current = "";
             setCurrentAiText("");
@@ -2171,8 +2335,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "question_meta":
         // Backend signals that the upcoming question is a follow-up (bundles
         // a previously-volunteered skill, or fires as an in-slot validation
-        // turn). Set the chip flag BEFORE the first llm_token arrives so the
-        // live bubble renders the 'Follow' badge from the first character.
+        // turn). The flag is tracked so it gets stamped onto the saved
+        // Message (for transcript/eval round-trip), but the LIVE CHAT does
+        // NOT render any chip or inline note — the Follow-up indicator and
+        // "Reframed as a follow-up…" note are post-interview-only and live
+        // on the Question Analysis (EvaluationDashboardV2) page.
         console.log(`[WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}`);
         if (data.is_followup) {
           isCurrentFollowupRef.current = true;
@@ -2701,6 +2868,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         //  is_follow_up=false                        → new question; start fresh countdown
         const incomingQNum = data.question_number ?? null;
         const sameQuestion = incomingQNum !== null && incomingQNum === questionNumberRef.current;
+        // NEW MAIN QUESTION: clear any leftover live transcript from the prior
+        // answer. On long answers in decoupled mode the candidate's speech can
+        // spill past end_turn into the next question's mic window and fire a
+        // phantom turn — without this clear, the PREVIOUS answer's live text
+        // got rendered/committed under the new question too (observed: Q2's
+        // answer appearing under Q3). Only the transient live "You" bubble is
+        // cleared; the already-committed answer bubble is untouched. Skipped for
+        // follow-ups/clarifications (same question — the live text is still theirs).
+        if (incomingQNum !== null && incomingQNum !== questionNumberRef.current && !data.is_follow_up) {
+          setCurrentTranscript("");
+          currentTranscriptRef.current = "";
+        }
         if (sameQuestion && data.is_follow_up === true) {
           // Follow-up / clarification: do NOT restart the timer. The main
           // question's 2-min slot is shared between Linda's follow-up and
@@ -3313,6 +3492,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     silenceStartRef.current = null;
     speechDetectedRef.current = false;
     speechDetectedAtRef.current = null;
+    // Capture the live (Deepgram cumulative) transcript the candidate sees, so
+    // we can show their full answer INSTANTLY (timed/decoupled mode) instead of
+    // waiting ~20-60s for the background Whisper pass.
+    const _liveAnswerText = currentTranscriptRef.current;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -3339,6 +3522,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       sendLiveTranscriptBatch(remainingFinalized, "candidate_stop");
       liveBatchSentCharsRef.current = webSpeechFinalizedRef.current.length;
     }
+
+    // Show the candidate's answer INSTANTLY from the live browser transcript
+    // (timed/decoupled mode). The backend's background Whisper text — then the
+    // autocorrected text — upgrade this bubble in place via the `transcript`
+    // event. This does NOT delay the next question (that's the backend path).
+    commitLiveTranscriptAsAnswer(_liveAnswerText);
 
     // Voice verification: compare this turn's audio with enrolled baseline
     if (voiceVerification?.hasBaseline() && voiceVerifBufferRef.current.length > 0) {
@@ -3401,7 +3590,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         wsRef.current.send(JSON.stringify({ type: "end_turn" }));
       }
     }, 100);
-  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, voiceVerification, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch]);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, voiceVerification, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, commitLiveTranscriptAsAnswer]);
 
   // Stop recording silently — used for timer expiry, face block, mute.
   // If candidate was mid-answer (speech detected), sends end_turn so their
@@ -3417,6 +3606,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechDetectedRef.current = false;
     speechDetectedAtRef.current = null;
     postSpeechNoiseCountRef.current = 0;
+    // Capture the live (Deepgram cumulative) transcript to show the answer instantly.
+    const _liveAnswerText = currentTranscriptRef.current;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -3430,6 +3621,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Candidate was mid-answer: capture timer snapshot, keep transcript visible,
       // and send end_turn so Whisper processes their audio (never silently discard).
       frozenResponseTimeRef.current = questionTimerSecondsRef.current;
+      // Show the answer instantly from the live transcript (timed mode); backend
+      // upgrades it in place later. After frozenResponseTimeRef is set so the
+      // bubble carries the correct response-time badge.
+      commitLiveTranscriptAsAnswer(_liveAnswerText);
       voiceVerifBufferRef.current = [];
       setTimeout(() => {
         mediaStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -3466,7 +3661,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     mediaStreamRef.current?.getTracks().forEach(t => t.stop());
     processorRef.current?.disconnect();
     processorRef.current = null;
-  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch]);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, commitLiveTranscriptAsAnswer]);
 
   // Mute toggle — fully stops/restarts recording + Web Speech Recognition.
   // Disabling track.enabled alone doesn't mute the browser's SpeechRecognition API
@@ -4493,30 +4688,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
 
     const executeHardPause = () => {
-      // This is the OLD immediate-pause behavior, now run ONLY after the
-      // grace period expires. Triggers: full stop of Linda's TTS, mic
-      // muted, backend notified to pause silence watchers / timers.
-      pausedAtMs = Date.now();
-      frozenGlobalSecondsRef.current = remainingSeconds;
-      frozenQuestionSecondsRef.current = questionTimerSecondsRef.current;
+      // KEEP-RUNNING POLICY (2026-05-26): fullscreen exit must NOT pause or
+      // freeze the interview — it now behaves like a tab switch (see
+      // handleVisibilityChange below): the timer keeps ticking and Linda keeps
+      // going; time spent outside fullscreen is the candidate's penalty.
+      //
+      // The OLD code froze the timers + stopped TTS + sent session_pause here,
+      // but the BACKEND ignores session_pause(reason=fullscreen_exit) ("non-stop"
+      // rule, ai_interview_ws.py). That desynced the two sides: the backend kept
+      // ticking, expired the window, advanced, and emitted a fresh full-window
+      // question_timer_started that reset the visible timer to the start ("timer
+      // starts from 1st"). Removing the freeze keeps the frontend in lockstep
+      // with the backend's wall-clock truth. After the grace window we only
+      // ESCALATE the proctoring record — no freeze, no TTS stop, no session_pause.
       candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'session_paused',
-        severity: 'low',
-        details: { reason: 'fullscreen_exit', paused_at: new Date().toISOString() },
+        event_type: 'fullscreen_exit',
+        severity: 'minor',
+        details: { reason: 'grace_expired', escalated_at: new Date().toISOString() },
       }).catch(() => { /* best-effort */ });
-      try { talkingHeadRef.current?.streamStop(); } catch { /* ignore */ }
-      isPlayingRef.current = false;
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        try { wsRef.current.send(JSON.stringify({ type: 'session_pause', reason: 'fullscreen_exit' })); } catch { /* best-effort */ }
-      }
-      if (preExitMuteState === null) {
-        preExitMuteState = isMutedRef.current;
-      }
-      // User spec: NEVER auto-mute on fullscreen-exit grace expiry.
-      // The recording-blocked overlay still appears during pause, but the
-      // mic state itself is preserved so the candidate doesn't lose their
-      // turn when they return to fullscreen.
-      console.log('[INTERVIEW-DEBUG] Fullscreen-exit grace expired — mic state preserved (no force-mute)');
+      console.log('[INTERVIEW-DEBUG] Fullscreen-exit grace expired — interview continues (keep-running policy, no freeze)');
     };
 
     const handleFullscreenChange = async () => {
@@ -4627,8 +4817,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         frozenGlobalSecondsRef.current = null;
         frozenQuestionSecondsRef.current = null;
-        // Unfreeze the backend — it can resume whatever flow it was in.
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // Only resume the backend if we actually hard-paused it. Under the
+        // keep-running policy fullscreen exit never pauses (pauseDurationMs
+        // stays null), so there is nothing to resume — sending session_resume
+        // would make the backend needlessly rebuild the question-timer task and
+        // could double-arm the auto-skip.
+        if (pauseDurationMs !== null && wsRef.current?.readyState === WebSocket.OPEN) {
           try { wsRef.current.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
         }
         // Restore whatever the candidate had before they exited fullscreen.
@@ -5305,6 +5499,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   </div>
                 ) : (
                   /* ── AI question — violet/purple ── */
+                  /* No Follow-up chip / inline note here — those are post-
+                     interview-only and live on the Question Analysis page. */
                   <div className="flex gap-2">
                     <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
                       <span className="text-white text-[8px] font-bold">L</span>
@@ -5355,7 +5551,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               </div>
             )}
 
-            {/* Live AI text (streaming) — violet (matches AI bubble) */}
+            {/* Live AI text (streaming) — violet (matches AI bubble).
+                No Follow-up chip / inline note here — those are post-
+                interview-only and live on the Question Analysis page. */}
             {currentAiText && (
               <div className="flex gap-2">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>

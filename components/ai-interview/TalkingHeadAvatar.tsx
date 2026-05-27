@@ -563,6 +563,59 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           rafId = requestAnimationFrame(enforce);
           console.log("[TalkingHead] Avatar ready — straight pose, eyes locked, native lip sync");
 
+          // ── FPS watchdog (2026-05-26) ────────────────────────────────────
+          // Single-core / low-power candidate machines can finish loading the
+          // avatar but then stutter or trigger Chrome's "Page Unresponsive"
+          // because the 60fps render loop (morph blends + skinning + lighting)
+          // is too heavy. Sample frame intervals for the first ~2s after the
+          // avatar reports ready; if the average FPS is below a viable
+          // interactive threshold, trip onFallback() so the parent swaps in the
+          // static-image fallback. Audio playback (the only thing the interview
+          // strictly needs) continues unaffected through the same TalkingHead
+          // instance. Universal safety net — never fires on a capable machine;
+          // saves the interview on the worst ones.
+          (() => {
+            const SAMPLE_MS = 2000;       // measurement window after ready
+            const WARMUP_FRAMES = 5;      // drop the first few frames (post-load jank)
+            const MIN_AVG_FPS = 20;       // below this we consider the device unviable for 3D
+            const watchdogStart = performance.now();
+            const frameIntervals: number[] = [];
+            let lastTick = watchdogStart;
+            const tick = () => {
+              if (!mounted) return;
+              const now = performance.now();
+              frameIntervals.push(now - lastTick);
+              lastTick = now;
+              if (now - watchdogStart < SAMPLE_MS) {
+                requestAnimationFrame(tick);
+                return;
+              }
+              // Window closed — evaluate.
+              const samples = frameIntervals.slice(WARMUP_FRAMES);
+              if (samples.length < 2) {
+                // Couldn't collect ≥2 intervals in 2s → average frame >1s →
+                // device is catastrophically slow; definitely degrade.
+                console.warn(
+                  `[TalkingHead][FPS-watchdog] only ${samples.length} sample(s) in ${SAMPLE_MS}ms — degrading`
+                );
+                onFallback?.();
+                return;
+              }
+              const meanDt = samples.reduce((s, x) => s + x, 0) / samples.length;
+              const avgFps = 1000 / meanDt;
+              console.log(
+                `[TalkingHead][FPS-watchdog] avg=${avgFps.toFixed(1)}fps samples=${samples.length} (threshold=${MIN_AVG_FPS}fps)`
+              );
+              if (avgFps < MIN_AVG_FPS) {
+                console.warn(
+                  `[TalkingHead][FPS-watchdog] ${avgFps.toFixed(1)}fps < ${MIN_AVG_FPS}fps — degrading to static fallback`
+                );
+                onFallback?.();
+              }
+            };
+            requestAnimationFrame(tick);
+          })();
+
         } catch (err) {
           console.error("[TalkingHead] Failed to load avatar:", err);
           if (mounted) {

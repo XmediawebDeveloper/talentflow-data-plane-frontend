@@ -152,6 +152,7 @@ function DraggableClusterSkill({
   category,
   onRemove,
   isReadOnly = false,
+  removalLocked = false,
   chipClass,
   isAiDerived = false,
 }: {
@@ -160,6 +161,9 @@ function DraggableClusterSkill({
   category: 'mth' | 'nth';
   onRemove: (skillName: string, clusterId: string) => void;
   isReadOnly?: boolean;
+  /** True when the section is at its minimum skill count — the remove (X)
+   * button is rendered disabled so the recruiter can't delete below the floor. */
+  removalLocked?: boolean;
   /** Tailwind classes for the chip's background/border/text — used by
    * ClusterRow to color-code Skill / Command badges. */
   chipClass?: string;
@@ -188,8 +192,10 @@ function DraggableClusterSkill({
       <span className="font-medium">{skillName}</span>
       {!isReadOnly && (
         <button
-          onClick={(e) => { e.stopPropagation(); onRemove(skillName, clusterId); }}
-          className="ml-0.5 opacity-50 hover:opacity-100 transition-all hover:text-red-500 hover:scale-110"
+          onClick={(e) => { e.stopPropagation(); if (removalLocked) return; onRemove(skillName, clusterId); }}
+          disabled={removalLocked}
+          title={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
+          className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-red-500 hover:scale-110'}`}
          aria-label="Close">
           <X className="w-3 h-3" />
         </button>
@@ -211,6 +217,7 @@ function ClusterRow({
   onMoveSkill,
   onRemoveSkill,
   isReadOnly = false,
+  removalLocked = false,
   skillTypeLookup,
   mainSkillSet,
 }: {
@@ -225,6 +232,9 @@ function ClusterRow({
   onMoveSkill: (skillName: string, fromClusterId: string, toClusterId: string) => void;
   onRemoveSkill: (skillName: string, clusterId: string) => void;
   isReadOnly?: boolean;
+  /** True when this section is at its minimum skill count — disables the
+   * skill-chip remove (X) and the "Remove Cluster" button. */
+  removalLocked?: boolean;
   /** Lowercased skill name → 'Skill' | 'Command', so the cluster card can
    * group its badges by type and render a sub-header per group instead of
    * one flat list. */
@@ -425,6 +435,7 @@ function ClusterRow({
                             category={category}
                             onRemove={onRemoveSkill}
                             isReadOnly={isReadOnly}
+                            removalLocked={removalLocked}
                             chipClass={chipClass}
                             isAiDerived={isAiDerivedSkill(s)}
                           />
@@ -440,12 +451,14 @@ function ClusterRow({
             {!isReadOnly && <p className="text-[9px] text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
           </div>
 
-          {/* Remove cluster button — hidden when read-only */}
+          {/* Remove cluster button — hidden when read-only, disabled at floor */}
           {!isReadOnly && (
             <div className="flex justify-end pt-1">
               <button
-                onClick={() => onRemove(cluster.id)}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                onClick={() => { if (removalLocked) return; onRemove(cluster.id); }}
+                disabled={removalLocked}
+                title={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
+                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${removalLocked ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
               >
                 <Trash2 className="w-3 h-3" />
                 Remove Cluster
@@ -475,6 +488,7 @@ function CategorySection({
   onAddCluster,
   maxClusters,
   isReadOnly = false,
+  removalLocked = false,
   skills = [],
   onAddSkill,
   onRemoveSkillFromPool,
@@ -496,6 +510,9 @@ function CategorySection({
   onAddCluster: (category: 'mth' | 'nth') => void;
   maxClusters: number;
   isReadOnly?: boolean;
+  /** True when this section is at its minimum skill count — disables every
+   * remove control (pool-skill X, cluster-skill X, "Remove Cluster"). */
+  removalLocked?: boolean;
   skills?: SkillEntry[];
   onAddSkill?: (skillName: string) => void;
   onRemoveSkillFromPool?: (skillName: string) => void;
@@ -603,9 +620,10 @@ function CategorySection({
               {!isReadOnly && (
                 <button
                   type="button"
-                  onClick={() => onRemoveSkillFromPool?.(entry.name)}
-                  className="ml-0.5 opacity-50 hover:opacity-100 hover:text-red-500 transition-all hover:scale-110"
-                  aria-label="Remove" title="Remove"
+                  onClick={() => { if (removalLocked) return; onRemoveSkillFromPool?.(entry.name); }}
+                  disabled={removalLocked}
+                  className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-red-500 hover:scale-110'}`}
+                  aria-label="Remove" title={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove'}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -678,6 +696,7 @@ function CategorySection({
               onMoveSkill={(skillName, fromId, toId) => onMoveSkill(category, skillName, fromId, toId)}
               onRemoveSkill={onRemoveSkill}
               isReadOnly={isReadOnly}
+              removalLocked={removalLocked}
               skillTypeLookup={skillTypeLookup}
               mainSkillSet={mainSkillSet}
             />
@@ -1000,6 +1019,24 @@ export default function AIInterviewClusters() {
   }, []);
 
   const removeCluster = useCallback((category: 'mth' | 'nth', id: string) => {
+    // Floor validation: deleting a whole cluster strips every skill it holds, so
+    // it can drop the section below its minimum just like a per-skill removal.
+    // Enforce the same floor here (Fixed/timed mode only) — 15 for MHS alone,
+    // 10/5 for MHS+NHS, 8/4 for MHS+NHS+HR (HR is never skill-validated).
+    if (isFixed) {
+      const clusters = category === 'mth' ? mthClusters : nthClusters;
+      const questionCount = category === 'mth'
+        ? (timedAllocation.mthQuestions ?? 0)
+        : (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
+      const projectedUnique = new Set(
+        clusters.flatMap(c => c.id === id ? [] : c.skills.map(s => s.toLowerCase()))
+      ).size;
+      if (questionCount > 0 && projectedUnique < questionCount) {
+        const label = category === 'mth' ? 'Must-To-Have' : 'Nice-To-Have';
+        toast.error(`Cannot delete — ${label} needs at least ${questionCount} unique skill(s) for ${questionCount} question(s).`);
+        return;
+      }
+    }
     const setter = category === 'mth' ? setMthClusters : setNthClusters;
     setter(prev => prev.filter(c => c.id !== id));
     setExpandedIds(prev => {
@@ -1007,7 +1044,7 @@ export default function AIInterviewClusters() {
       next.delete(id);
       return next;
     });
-  }, []);
+  }, [mthClusters, nthClusters, isFixed, timedAllocation, nthEnabled]);
 
   const reorderClusters = useCallback((category: 'mth' | 'nth', fromIndex: number, toIndex: number) => {
     const setter = category === 'mth' ? setMthClusters : setNthClusters;
@@ -1149,6 +1186,28 @@ export default function AIInterviewClusters() {
     }
   }, [mthClusters, nthClusters, isFixed, timedAllocation, nthEnabled]);
 
+  // Per-section "removal locked" flag. A section is locked once its unique
+  // skill count is at (or below) its floor — at that point removing ANY skill
+  // would drop it under the minimum, and since this page no longer lets you
+  // add skills back (add is done on the Configure page), we hard-disable the
+  // remove controls rather than letting the user delete into an invalid state.
+  // Floor = the section's timed-mode question budget: 15 for MHS alone,
+  // 10/5 for MHS+NHS, 8/4 for MHS+NHS+HR. HR is never skill-validated.
+  const isSectionRemovalLocked = (category: 'mth' | 'nth'): boolean => {
+    if (!isFixed) return false; // flexible mode has no fixed question budget → no floor
+    const clusters = category === 'mth' ? mthClusters : nthClusters;
+    const floor = category === 'mth'
+      ? (timedAllocation.mthQuestions ?? 0)
+      : (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
+    if (floor <= 0) return false;
+    const uniqueCount = new Set(
+      clusters.flatMap(c => c.skills.map(s => s.toLowerCase()))
+    ).size;
+    return uniqueCount <= floor;
+  };
+  const mthRemovalLocked = isSectionRemovalLocked('mth');
+  const nthRemovalLocked = isSectionRemovalLocked('nth');
+
   /* ── AI Generate ── */
   const handleGenerateClusters = async (opts: { forceExpand?: boolean } = {}) => {
     const { forceExpand = false } = opts;
@@ -1281,17 +1340,22 @@ export default function AIInterviewClusters() {
 
         if (mthShort || nthShort || mthRecover || nthRecover) {
           console.log('[CLUSTER-DEBUG] → Taking EXPAND path (applyRefine=true, allowMerge=false)');
-          // Target = Q × 2 — matches backend CLUSTER_CAPACITY_FLOOR_FACTOR (2)
-          // so the resulting skill pool lands inside the "within" capacity
-          // band (floor=2Q, ceiling=3Q) rather than "below" (which would
-          // trigger another expansion round or leave the distributor with
-          // too few primaries to fill every Q without duplicates).
-          // Floor enforced at backend `expand-skills` (line ~1330 in
-          // ai_interview.py) tops up via deterministic placeholders if the
-          // LLM under-delivers, so this target is a hard guarantee — not
-          // a soft hint.
-          const mthTarget = Math.max(mthQ * 2, mthExpandInput.length + 1);
-          const nthTarget = Math.max(nthQ * 2, nthExpandInput.length + 1);
+          // Target = Q (1 skill-per-question FLOOR). Respect recruiter input:
+          // the backend early-returns WITHOUT expanding when input >= target
+          // (ai_interview.py:1231), so a recruiter who already typed >= Q skills
+          // is left untouched. Expansion now only fills genuinely under-skilled
+          // buckets (input < Q) up to 1 skill/question.
+          //
+          // Previously this was max(Q*2, input+1), which over-expanded two ways:
+          //   (a) the Q*2 term set a 2-skill/Q floor, and
+          //   (b) the `input + 1` term forced target > input, so the backend's
+          //       "already enough" early-return could NEVER fire — expansion
+          //       always grew the pool.
+          // Net effect (logged): 15 MTH skills / 8 Q ballooned to 31 (refine
+          // "exceeds" ceiling=24), and 8 NTH skills / 4 Q grew to 10. With a
+          // bare Q target, 15 >= 8 and 8 >= 4, so both pass through unchanged.
+          const mthTarget = mthQ;
+          const nthTarget = nthQ;
           // Pass the other bucket's already-typed skills so the LLM does
           // not pull them into THIS bucket (e.g. Git typed in NTH must not
           // be absorbed into MTH expansion).
@@ -1663,10 +1727,73 @@ export default function AIInterviewClusters() {
             };
           }
 
+          // ── Compute the AI skill→question distribution ONCE, here at
+          // generation time, and persist it to si.skill_distribution. This is
+          // the SINGLE source of truth the distribution preview (this page),
+          // the post-publish "View Skill Clusters" popover, the details page,
+          // AND the runtime all read. Previously this ran only at finalize, so
+          // the generation-time preview showed a DIVERGENT local distribute()
+          // layout — the create-vs-publish mismatch recruiters reported.
+          // saveAndNavigate(finalize) now REUSES whatever we save here.
+          if (isFixed) {
+            try {
+              const _mthQs = timedAllocation.mthQuestions ?? 0;
+              const _nthQs = (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
+              if (_mthQs > 0 || _nthQs > 0) {
+                const _mthExclude = new Set(
+                  newNthClusters.flatMap(c => c.skills ?? [])
+                    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                    .map(s => s.toLowerCase()),
+                );
+                const _nthExclude = new Set(
+                  newMthClusters.flatMap(c => c.skills ?? [])
+                    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                    .map(s => s.toLowerCase()),
+                );
+                const _mthJdPool = Array.from(new Set([
+                  ...newMthClusters.flatMap(c => c.skills),
+                  ...mthSkills.map(s => s.name),
+                  ...(((config as any).jd_must_have_skills as string[] | undefined) || []),
+                ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !_mthExclude.has(s.toLowerCase()))));
+                const _nthJdPool = Array.from(new Set([
+                  ...newNthClusters.flatMap(c => c.skills),
+                  ...nthSkills.map(s => s.name),
+                  ...(((config as any).jd_nice_to_have_skills as string[] | undefined) || []),
+                ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !_nthExclude.has(s.toLowerCase()))));
+                const dist = await aiInterviewService.distributeSkills({
+                  mthClusters: newMthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })),
+                  nthClusters: nthEnabled ? newNthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })) : [],
+                  mthQuestions: _mthQs,
+                  nthQuestions: _nthQs,
+                  jdTitle: config.jd_title,
+                  jdDescription: (config as any).jd_description,
+                  mthJdSkillPool: _mthJdPool,
+                  nthJdSkillPool: nthEnabled ? _nthJdPool : [],
+                });
+                si.skill_distribution = {
+                  mth_questions: dist.mth_questions || [],
+                  nth_questions: dist.nth_questions || [],
+                  generated_at: new Date().toISOString(),
+                };
+              }
+            } catch (distErr) {
+              // Non-fatal — clusters still persist; finalize will compute the
+              // distribution as a fallback if none was saved here.
+              console.warn('[Clusters] AI skill distribution at generation failed; deferring to publish', distErr);
+            }
+          }
+
           await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
           });
+          // Reflect the persisted si (incl. skill_distribution) into local
+          // config state so the distribution preview re-renders from the SAVED
+          // AI distribution immediately — no page reload, and it now matches
+          // exactly what the post-publish view will show.
+          setConfig(prev => prev
+            ? ({ ...prev, special_instructions: JSON.stringify(si), rounds_config: rounds } as AIInterviewResponse)
+            : prev);
         } catch {
           // Non-fatal — clusters are visible in UI; user can still save manually
         }
@@ -1821,11 +1948,21 @@ export default function AIInterviewClusters() {
       if (isFlexible) {
         si.flexible_finalized = finalize ? true : isFinalized;
       }
-      // AI-driven skill→question mapping (only on finalize). Replaces the local
-      // JS distribute() formula that capped secondaries at 2/Q and silently
-      // dropped extra skills. Server guarantees every input skill appears at
-      // least once (primary or secondary) — see /distribute-skills rule #5.
-      if (finalize && isFixed) {
+      // AI-driven skill→question mapping. Replaces the local JS distribute()
+      // formula that capped secondaries at 2/Q and silently dropped extra
+      // skills. Server guarantees every input skill appears at least once
+      // (primary or secondary) — see /distribute-skills rule #5.
+      //
+      // REUSE the distribution already computed + saved at cluster-generation
+      // time (handleGenerateClusters). Recomputing here would call the
+      // non-deterministic LLM AGAIN and produce a DIFFERENT layout than the
+      // generation-time preview the recruiter already saw — that is the exact
+      // create-vs-publish mismatch. Only compute here as a fallback when no
+      // distribution was saved (e.g. generation-time call failed).
+      const _hasSavedSD = !!(si as any)?.skill_distribution
+        && Array.isArray((si as any).skill_distribution.mth_questions)
+        && (si as any).skill_distribution.mth_questions.length > 0;
+      if (finalize && isFixed && !_hasSavedSD) {
         try {
           const mthQs = timedAllocation.mthQuestions ?? 0;
           const nthQs = (nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0);
@@ -2450,8 +2587,62 @@ export default function AIInterviewClusters() {
                         ...nthSkills.map(s => s.name),
                         ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                       ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
-                      const mthDist = distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
-                      const nthDist = nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : [];
+                      // 2026-05-26 fix: this stealth-dot popover MUST mirror the
+                      // SAVED skill_distribution (what Linda actually asks at runtime
+                      // AND what the post-publish "View Skill Clusters" popover shows),
+                      // NOT a fresh local distribute() recompute. The local algorithm
+                      // produces a DIFFERENT layout than the backend AI distribution
+                      // saved to si.skill_distribution — that's the exact create-vs-
+                      // publish mismatch recruiters reported. Read saved data first;
+                      // fall back to local distribute() only when nothing has been
+                      // saved yet (fresh draft). Mirrors AIInterviewDetailsView.tsx.
+                      const savedSD = (() => {
+                        try {
+                          const raw = (config as any)?.special_instructions;
+                          if (!raw) return null;
+                          const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                          return s?.skill_distribution || null;
+                        } catch { return null; }
+                      })();
+                      // skill→priority map so each secondary chip shows its OWN
+                      // priority (saved secondary_skills are flat strings).
+                      const skillPriorityMap = new Map<string, number>();
+                      for (const c of [...mthClusters, ...nthClusters]) {
+                        const pri = c.priority ?? 1;
+                        for (const s of (c.skills ?? [])) {
+                          if (typeof s === 'string' && s.trim()) {
+                            const k = s.toLowerCase().trim();
+                            if (!skillPriorityMap.has(k)) skillPriorityMap.set(k, pri);
+                          }
+                        }
+                      }
+                      const sdToRow = (q: any, idx: number): DistRow => {
+                        const primary = String(q?.primary_skill || '').trim();
+                        const primaryPri = Number(q?.cluster_priority)
+                          || skillPriorityMap.get(primary.toLowerCase())
+                          || 1;
+                        const secs = Array.isArray(q?.secondary_skills)
+                          ? q.secondary_skills
+                              .filter((s: any) => typeof s === 'string' && s.trim())
+                              .map((s: string) => ({
+                                name: s.trim(),
+                                priority: skillPriorityMap.get(s.trim().toLowerCase()) ?? primaryPri,
+                              }))
+                          : [];
+                        return {
+                          q: Number(q?.question_number) || (idx + 1),
+                          primary,
+                          secondaries: secs,
+                          cluster: String(q?.cluster_name || ''),
+                          priority: primaryPri,
+                        };
+                      };
+                      const mthDist: DistRow[] = (savedSD?.mth_questions?.length)
+                        ? savedSD.mth_questions.map(sdToRow)
+                        : distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
+                      const nthDist: DistRow[] = (savedSD?.nth_questions?.length)
+                        ? savedSD.nth_questions.map(sdToRow)
+                        : (nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : []);
                       const totalQ = mthDist.length + nthDist.length;
                       const totalSkillsCovered = new Set([
                         ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
@@ -2781,6 +2972,7 @@ export default function AIInterviewClusters() {
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
                 isReadOnly={isFlexible && isFinalized}
+                removalLocked={mthRemovalLocked}
                 skills={mthDisplaySkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
@@ -2813,6 +3005,7 @@ export default function AIInterviewClusters() {
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
                   isReadOnly={isFlexible && isFinalized}
+                  removalLocked={nthRemovalLocked}
                   skills={nthDisplaySkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}

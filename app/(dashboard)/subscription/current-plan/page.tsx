@@ -218,6 +218,14 @@ interface QueuedUpgrade {
   new_plan_name: string;
   payment_amount?: number;
   payment_currency?: string;
+  // Pricing breakdown (base plan + optional dedicated-DB fee + GST). The
+  // dedicated-DB fee is only present when the tenant chose dedicated database.
+  base_amount?: number;
+  db_isolation_fee?: number;
+  subtotal?: number;
+  gst_rate?: number;
+  gst_amount?: number;
+  breakdown?: PricingBreakdown;
   billing_interval?: string;
   isolation_type?: string;
   status: string;
@@ -310,6 +318,81 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
   };
   const symbol = currencySymbols[currency] || currency + ' ';
   return `${symbol}${amount.toLocaleString()}`;
+};
+
+
+// Pricing breakdown shared by the queued-upgrade apply/cancel popups + list.
+interface PricingBreakdown {
+  base_amount?: number;
+  db_isolation_fee?: number;
+  subtotal?: number;
+  gst_rate?: number;
+  gst_amount?: number;
+  total_amount?: number;
+  currency?: string;
+}
+
+// Resolve a breakdown from a queued upgrade, tolerating either the nested
+// `breakdown` object or flat top-level fields, and falling back to payment_amount.
+const resolveBreakdown = (u: QueuedUpgrade): PricingBreakdown => {
+  const bd = u.breakdown || {};
+  return {
+    base_amount: bd.base_amount ?? u.base_amount,
+    db_isolation_fee: bd.db_isolation_fee ?? u.db_isolation_fee,
+    subtotal: bd.subtotal ?? u.subtotal,
+    gst_rate: bd.gst_rate ?? u.gst_rate ?? 18,
+    gst_amount: bd.gst_amount ?? u.gst_amount,
+    total_amount: bd.total_amount ?? u.payment_amount,
+    currency: bd.currency ?? u.payment_currency ?? 'INR',
+  };
+};
+
+// Renders the full amount breakdown (base + optional dedicated-DB fee + GST +
+// total). The dedicated-database row only shows when a fee actually applies.
+// Falls back to a single total line for older records with no breakdown.
+const QueuedAmountBreakdown = ({ upgrade }: { upgrade: QueuedUpgrade }) => {
+  const bd = resolveBreakdown(upgrade);
+  const cur = bd.currency || 'INR';
+  const hasBreakdown = bd.base_amount != null || bd.gst_amount != null;
+  if (!hasBreakdown) {
+    return (
+      <div className="flex justify-between">
+        <span className="text-gray-500 dark:text-slate-500">Amount Paid:</span>
+        <span className="font-medium text-gray-900 dark:text-slate-50">
+          {formatCurrency(bd.total_amount, cur)}
+        </span>
+      </div>
+    );
+  }
+  const showDb = (bd.db_isolation_fee ?? 0) > 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between">
+        <span className="text-gray-500 dark:text-slate-500">Base plan:</span>
+        <span className="text-gray-900 dark:text-slate-50">{formatCurrency(bd.base_amount, cur)}</span>
+      </div>
+      {showDb && (
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-slate-500">Dedicated database:</span>
+          <span className="text-gray-900 dark:text-slate-50">{formatCurrency(bd.db_isolation_fee, cur)}</span>
+        </div>
+      )}
+      {showDb && bd.subtotal != null && (
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-slate-500">Subtotal:</span>
+          <span className="text-gray-900 dark:text-slate-50">{formatCurrency(bd.subtotal, cur)}</span>
+        </div>
+      )}
+      <div className="flex justify-between">
+        <span className="text-gray-500 dark:text-slate-500">GST ({bd.gst_rate ?? 18}%):</span>
+        <span className="text-gray-900 dark:text-slate-50">{formatCurrency(bd.gst_amount, cur)}</span>
+      </div>
+      <div className="flex justify-between border-t border-gray-200 dark:border-slate-700 pt-1 mt-1">
+        <span className="font-semibold text-gray-700 dark:text-slate-300">Total:</span>
+        <span className="font-semibold text-gray-900 dark:text-slate-50">{formatCurrency(bd.total_amount, cur)}</span>
+      </div>
+    </div>
+  );
 };
 
 
@@ -2462,7 +2545,9 @@ function CurrentPlanContent() {
               </h2>
               {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
                 <p className="text-xs sm:text-sm text-amber-600 text-center mt-2">
-                  You have a pending plan change queued. Cancel it above or apply it now to select a different plan.
+                  You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
+                    ? 'Cancel it above or apply it now to select a different plan.'
+                    : 'Apply it now to select a different plan.'}
                 </p>
               )}
 
@@ -3387,11 +3472,8 @@ function CurrentPlanContent() {
                     <span className="text-gray-500 dark:text-slate-500">To:</span>
                     <span className="ml-1 font-medium text-green-600">{selectedQueuedUpgrade.new_plan_name}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-slate-500">Amount Paid:</span>
-                    <span className="ml-1 font-medium text-gray-900 dark:text-slate-50">
-                      {formatCurrency(selectedQueuedUpgrade.payment_amount, selectedQueuedUpgrade.payment_currency)}
-                    </span>
+                  <div className="col-span-2">
+                    <QueuedAmountBreakdown upgrade={selectedQueuedUpgrade} />
                   </div>
                   <div>
                     <span className="text-gray-500 dark:text-slate-500">Billing:</span>
@@ -3527,13 +3609,8 @@ function CurrentPlanContent() {
                     <span className="text-gray-500 dark:text-slate-500">New Plan:</span>
                     <span className="font-medium text-gray-900 dark:text-slate-50">{selectedQueuedUpgrade.new_plan_name}</span>
                   </div>
-                  {selectedQueuedUpgrade.payment_amount !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-slate-500">Amount Paid:</span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">
-                        {formatCurrency(selectedQueuedUpgrade.payment_amount, selectedQueuedUpgrade.payment_currency || 'INR')}
-                      </span>
-                    </div>
+                  {(selectedQueuedUpgrade.payment_amount !== undefined || selectedQueuedUpgrade.breakdown) && (
+                    <QueuedAmountBreakdown upgrade={selectedQueuedUpgrade} />
                   )}
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-slate-500">Scheduled for:</span>

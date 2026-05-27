@@ -406,11 +406,17 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   const mhQs = delivered.filter(q => q.section === 'mth');
   const nhQs = delivered.filter(q => q.section === 'nth');
   const hrQs = delivered.filter(q => q.section === 'hr');
-  const mhScore = mhQs.length > 0
-    ? Math.round((mhQs.reduce((s, q) => s + q.questionScore, 0) / mhQs.length) * 10) / 10
+  // Section score = average of question scores (spec Step 4). Questions that
+  // were never evaluated (isUnscored: no evaluator rows at all) are EXCLUDED
+  // — counting them as 0.0 would tank the section as if the candidate said
+  // nothing. Mirrors the backend "never fabricate a 0.0" rule.
+  const mhScored = mhQs.filter(q => !q.isUnscored);
+  const nhScored = nhQs.filter(q => !q.isUnscored);
+  const mhScore = mhScored.length > 0
+    ? Math.round((mhScored.reduce((s, q) => s + q.questionScore, 0) / mhScored.length) * 10) / 10
     : 0;
-  const nhScore = nhQs.length > 0
-    ? Math.round((nhQs.reduce((s, q) => s + q.questionScore, 0) / nhQs.length) * 10) / 10
+  const nhScore = nhScored.length > 0
+    ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhScored.length) * 10) / 10
     : 0;
   const mhPass = mhScore >= 7.0;
 
@@ -418,8 +424,12 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   // below stays readable).
   const renderQCard = (q: typeof delivered[number], idx: number) => {
     const answer = (q.answer && q.answer.trim()) || '';
-    const sumW = q.skills.reduce((s, k) => s + k.weight, 0);
-    const sumWS = q.skills.reduce((s, k) => s + k.score * k.weight, 0);
+    // Footer arithmetic must use the SAME scored skills the question score was
+    // derived from (unscored skills are excluded), so "Σ ÷ Σ = score" is
+    // always internally consistent.
+    const scoredSkills = q.skills.filter(k => !k.is_unscored);
+    const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
+    const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
     // HR is not scored per spec — suppress score badge + per-skill score
     // calc footer for HR cards so the recruiter doesn't mistake "0.0/10"
     // for a performance signal on a behavioral question.
@@ -438,6 +448,13 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             {isHr ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
                 HR · Not Scored
+              </span>
+            ) : q.isUnscored ? (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
+                title="No evaluator scores were produced for this question — excluded from the section average rather than counted as 0.0."
+              >
+                Not Evaluated
               </span>
             ) : (
               <span
@@ -512,6 +529,17 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                           {priorityLabel(s.priority)}
                         </span>
                       </div>
+                      {s.is_unscored ? (
+                        // Skill was not evaluated — show a neutral marker, no
+                        // numeric score/weight math (it's excluded from the
+                        // question score per the spec's "no fabricated 0.0").
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-300"
+                          title="No evaluator score for this skill — excluded from the question score (not counted as 0.0)."
+                        >
+                          Not evaluated
+                        </span>
+                      ) : (
                       <div className="flex items-center gap-4 text-xs font-mono">
                         <span title="LLM score for this skill">
                           <span className="text-gray-400">Score </span>
@@ -545,14 +573,19 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                           <span className="text-indigo-700 font-semibold">{contribution}</span>
                         </span>
                       </div>
+                      )}
                     </div>
                   );
                 })}
-                {sumW > 0 && (
+                {sumW > 0 ? (
                   <div className="text-[11px] font-mono text-gray-500 pl-2 pt-1">
                     Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
                   </div>
-                )}
+                ) : q.isUnscored ? (
+                  <div className="text-[11px] text-gray-400 italic pl-2 pt-1">
+                    Not evaluated — excluded from the section average.
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
