@@ -919,6 +919,7 @@ export default function ResumeDatabasePage() {
         <ResumeTable
           resumes={paginatedResumes}
           selectedResumes={selectedResumes}
+          draggable={false}
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}

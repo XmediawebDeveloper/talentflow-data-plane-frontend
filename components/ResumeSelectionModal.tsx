@@ -7,6 +7,7 @@ import UploadModal from './UploadModal';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
+import SkillsList from '@/components/ui/SkillsList';
 
 interface VersionSelection {
   resumeId: string;
@@ -1206,19 +1207,11 @@ export default function ResumeSelectionModal({
                           <div className="col-span-2">
                             {resume.skills && resume.skills.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
-                                {resume.skills.slice(0, 2).map((skill, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
-                                  >
-                                    {skill}
-                                  </span>
-                                ))}
-                                {resume.skills.length > 2 && (
-                                  <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded text-xs">
-                                    +{resume.skills.length - 2}
-                                  </span>
-                                )}
+                                <SkillsList
+                                  skills={resume.skills}
+                                  chipClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
+                                  moreClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded text-xs hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                />
                               </div>
                             ) : (
                               <span className="text-xs text-gray-500 dark:text-slate-500">No skills listed</span>
@@ -1275,19 +1268,11 @@ export default function ResumeSelectionModal({
                               )}
                               {resume.skills && resume.skills.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-2">
-                                  {resume.skills.slice(0, 3).map((skill, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
-                                    >
-                                      {skill}
-                                    </span>
-                                  ))}
-                                  {resume.skills.length > 3 && (
-                                    <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded text-xs">
-                                      +{resume.skills.length - 3}
-                                    </span>
-                                  )}
+                                  <SkillsList
+                                    skills={resume.skills}
+                                    chipClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
+                                    moreClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded text-xs hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                  />
                                 </div>
                               )}
                             </div>

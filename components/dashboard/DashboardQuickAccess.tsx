@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ArrowUpRight, Rocket, LayoutGrid } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
@@ -163,8 +163,9 @@ export default function DashboardQuickAccess() {
 
   // These sections live in the header profile dropdown — hide them from the
   // dashboard Quick Access tiles to avoid duplication.
+  // 'user-management-section' (Users) was moved out of the header dropdown into
+  // Quick Access, so it is intentionally NOT hidden here.
   const HIDDEN_SECTIONS = new Set([
-    'user-management-section',
     'subscription',
     'organization',
     'settings',
@@ -189,33 +190,8 @@ export default function DashboardQuickAccess() {
   );
 
   const totalItems = sections.reduce((acc, s) => acc + s.items.length, 0);
-  const [activeTab, setActiveTab] = useState<string>('all');
 
   if (totalItems === 0) return null;
-
-  const tabs: Array<{ id: string; label: string; count: number; style: SectionStyle }> = [
-    {
-      id: 'all',
-      label: 'All',
-      count: totalItems,
-      style: {
-        shortLabel: 'All',
-        longLabel: 'All',
-        tabActive: 'bg-slate-900 text-white shadow-sm shadow-slate-900/20',
-        iconChip: 'bg-slate-100 text-slate-700 ring-slate-200',
-        dot: 'bg-slate-500',
-      },
-    },
-    ...sections.map((s) => ({
-      id: s.id,
-      label: styleFor(s.id).shortLabel,
-      count: s.items.length,
-      style: styleFor(s.id),
-    })),
-  ];
-
-  // Items shown: every section if "all" is active, otherwise just the chosen section.
-  const visibleSections = activeTab === 'all' ? sections : sections.filter((s) => s.id === activeTab);
 
   return (
     <section
@@ -234,49 +210,10 @@ export default function DashboardQuickAccess() {
         </span>
       </header>
 
-      {/* Tab bar — single line, scrolls horizontally if needed */}
-      <div className="bg-white px-3 pb-3 pt-0 sm:px-4 md:px-8">
-        <div
-          role="tablist"
-          aria-label="Quick access categories"
-          className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide"
-        >
-          {tabs.map((tab) => {
-            const isActive = tab.id === activeTab;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.id)}
-                className={
-                  isActive
-                    ? `inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1 text-xs font-semibold transition-colors ${tab.style.tabActive}`
-                    : 'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900'
-                }
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'invisible' : tab.style.dot}`} />
-                <span>{tab.label}</span>
-                <span
-                  className={
-                    isActive
-                      ? 'inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-white/20 px-1 text-[9px] font-semibold tabular-nums'
-                      : 'inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-slate-100 px-1 text-[9px] font-semibold text-slate-500 tabular-nums'
-                  }
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tiles — single continuous grid for all tabs to keep DOM structure stable across tab switches */}
-      <div className="min-h-[200px] px-3 py-4 sm:min-h-[320px] sm:px-4 sm:py-5 md:px-8 md:py-6">
+      {/* Tiles — single continuous grid across all categories */}
+      <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {visibleSections.flatMap((section) =>
+          {sections.flatMap((section) =>
             section.items.map((item) => (
               <li key={item.id}>
                 <TileCard item={item} sectionId={section.id} />

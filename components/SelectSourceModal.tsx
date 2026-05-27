@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
+import SkillsList from '@/components/ui/SkillsList';
 import UploadModal from './UploadModal';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
@@ -1152,12 +1153,11 @@ export default function SelectSourceModal({
                                 </div>
                                 {resume.skills && resume.skills.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-1.5">
-                                    {resume.skills.slice(0, 3).map((skill, idx) => (
-                                      <span key={idx} className="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-[10px]">{skill}</span>
-                                    ))}
-                                    {resume.skills.length > 3 && (
-                                      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-[10px]">+{resume.skills.length - 3}</span>
-                                    )}
+                                    <SkillsList
+                                      skills={resume.skills}
+                                      chipClassName="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-[10px]"
+                                      moreClassName="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-[10px] hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                    />
                                   </div>
                                 )}
                               </div>
@@ -1271,19 +1271,11 @@ export default function SelectSourceModal({
                           <div className="col-span-2">
                             {resume.skills && resume.skills.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
-                                {resume.skills.slice(0, 3).map((skill, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
-                                  >
-                                    {skill}
-                                  </span>
-                                ))}
-                                {resume.skills.length > 3 && (
-                                  <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-xs">
-                                    +{resume.skills.length - 3}
-                                  </span>
-                                )}
+                                <SkillsList
+                                  skills={resume.skills}
+                                  chipClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
+                                  moreClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-xs hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                />
                               </div>
                             ) : (
                               <span className="text-xs text-gray-400 dark:text-slate-500">No skills listed</span>

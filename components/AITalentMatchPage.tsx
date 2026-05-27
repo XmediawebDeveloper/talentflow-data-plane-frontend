@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
@@ -1263,26 +1265,23 @@ export default function AITalentMatchPage({
                     {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                   </td>
                   <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                    {candidate.phone ? candidate.phone : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                    {(() => {
+                      const numbers = splitPhoneNumbers(candidate.phone, 2);
+                      return numbers.length > 0
+                        ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
+                        : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                     {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                   </td>
                   <td className="px-4 py-3 align-middle min-w-[220px]">
                     <div className="flex flex-wrap gap-1">
-                      {candidate.skills && candidate.skills.slice(0, 4).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                      {candidate.skills && candidate.skills.length > 4 && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-brand-blue whitespace-nowrap">
-                          +{candidate.skills.length - 4} more
-                        </span>
-                      )}
+                      <SkillsList
+                        skills={candidate.skills}
+                        chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
+                        moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                      />
                     </div>
                   </td>
                   <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">{candidate.experience}</td>
@@ -2419,26 +2418,23 @@ export default function AITalentMatchPage({
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
-                      {candidate.phone ? candidate.phone : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                      {(() => {
+                        const numbers = splitPhoneNumbers(candidate.phone, 2);
+                        return numbers.length > 0
+                          ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
+                          : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {candidate.skills && candidate.skills.slice(0, 4).map((skill, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {candidate.skills && candidate.skills.length > 4 && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-brand-blue">
-                            +{candidate.skills.length - 4} more
-                          </span>
-                        )}
+                        <SkillsList
+                          skills={candidate.skills}
+                          chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
+                          moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                        />
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">{candidate.experience}</td>

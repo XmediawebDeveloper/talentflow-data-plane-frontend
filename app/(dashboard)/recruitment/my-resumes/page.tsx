@@ -7,6 +7,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
+import SkillsList from '@/components/ui/SkillsList';
 import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -216,23 +217,11 @@ function DraggableCardResumeRow({
       <div className="flex flex-wrap gap-1.5 max-w-[200px]">
         {resume.skills && resume.skills.length > 0 ? (
           <>
-            {resume.skills.slice(0, 3).map((skill, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-blue/10 text-brand-blue border border-brand-blue/20 truncate max-w-[90px]"
-                title={skill}
-              >
-                {skill}
-              </span>
-            ))}
-            {resume.skills.length > 3 && (
-              <span
-                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
-                title={resume.skills.slice(3).join(', ')}
-              >
-                +{resume.skills.length - 3}
-              </span>
-            )}
+            <SkillsList
+              skills={resume.skills}
+              chipClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-blue/10 text-brand-blue border border-brand-blue/20 truncate max-w-[90px]"
+              moreClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
+            />
           </>
         ) : (
           <span className="text-xs text-gray-400 italic">No skills</span>
@@ -2896,12 +2885,11 @@ export default function MyResumesPage() {
                                 )}
                                 {resume.skills && resume.skills.length > 0 && (
                                   <div className="flex flex-wrap gap-1">
-                                    {resume.skills.slice(0, 3).map((skill, i) => (
-                                      <span key={i} className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs border border-brand-blue/20">{skill}</span>
-                                    ))}
-                                    {resume.skills.length > 3 && (
-                                      <span className="px-2 py-0.5 text-gray-500 text-xs">+{resume.skills.length - 3}</span>
-                                    )}
+                                    <SkillsList
+                                      skills={resume.skills}
+                                      chipClassName="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs border border-brand-blue/20"
+                                      moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                                    />
                                   </div>
                                 )}
                               </div>
