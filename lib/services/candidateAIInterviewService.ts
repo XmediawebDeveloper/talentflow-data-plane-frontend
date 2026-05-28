@@ -155,9 +155,18 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
-  async uploadScreenRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
+  async uploadScreenRecording(
+    token: string,
+    blob: Blob,
+    segmentIndex = 0,
+  ): Promise<{ message: string; path: string }> {
+    // segmentIndex 0 → backend opens file 'wb' (overwrite, full recording).
+    // segmentIndex > 0 → backend opens 'ab' (append clusters only).
+    // Lets the client clear its in-memory chunk buffer after each upload
+    // instead of growing it for the whole interview.
     const formData = new FormData();
     formData.append('file', blob, 'screen.webm');
+    formData.append('segment_index', String(segmentIndex));
     const uploadUrl = `${API_BASE_URL}/candidate/ai-interview/${token}/upload-screen-recording`;
     const response = await fetch(uploadUrl, { method: 'POST', body: formData });
     if (!response.ok) {

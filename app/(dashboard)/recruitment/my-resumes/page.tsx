@@ -1110,6 +1110,23 @@ export default function MyResumesPage() {
         return resume?.folderId;
       }).filter(Boolean);
 
+      // Remember where each resume was before archiving so Unarchive can
+      // restore it to the same folder. Backend has no previous_folder_id
+      // column, so we stash it in localStorage keyed by resume id.
+      try {
+        const stash = JSON.parse(localStorage.getItem('archivedResumePrevFolder') || '{}');
+        resumeIds.forEach((id) => {
+          const r = resumes.find((x) => x.id === id);
+          if (r?.folderId && r.folderId !== archivedFolder.id) {
+            stash[id] = r.folderId;
+          }
+        });
+        localStorage.setItem('archivedResumePrevFolder', JSON.stringify(stash));
+      } catch {
+        // localStorage unavailable / quota — silently fall through; unarchive
+        // will just default to Root for these ids.
+      }
+
       // Archive and move each resume
       await Promise.all(resumeIds.map(async (id) => {
         await resumeService.archive(id, true);
@@ -1143,9 +1160,10 @@ export default function MyResumesPage() {
     }
   };
 
-  // Handle unarchive resumes - clears is_archived and restores into the user's root folder
-  // (we don't track where the resume lived before archiving, so root is the safest default;
-  // the recruiter can then use "Move to Folder" to relocate it).
+  // Handle unarchive resumes - clears is_archived and restores each resume
+  // to the folder it lived in before archiving (stashed in localStorage by
+  // handleArchiveResumes). Falls back to Root for resumes with no stash
+  // entry (archived before this fix, or stash cleared).
   const handleUnarchiveResumes = async (resumeIds: string[]) => {
     try {
       const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
@@ -1155,20 +1173,49 @@ export default function MyResumesPage() {
       }
       const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
 
-      await Promise.all(resumeIds.map(async (id) => {
+      let stash: Record<string, string> = {};
+      try {
+        stash = JSON.parse(localStorage.getItem('archivedResumePrevFolder') || '{}');
+      } catch {
+        stash = {};
+      }
+      const validFolderIds = new Set(folders.map(f => f.id));
+      const targetFolderFor = (id: string): string => {
+        const prev = stash[id];
+        if (prev && validFolderIds.has(prev) && prev !== archivedFolder?.id) return prev;
+        return rootFolder.id;
+      };
+
+      const restorations = resumeIds.map(id => ({ id, target: targetFolderFor(id) }));
+
+      await Promise.all(restorations.map(async ({ id, target }) => {
         await resumeService.archive(id, false);
-        await resumeService.move(id, rootFolder.id);
+        await resumeService.move(id, target);
       }));
 
+      // Drop the consumed stash entries so they don't grow unbounded.
+      try {
+        resumeIds.forEach(id => { delete stash[id]; });
+        localStorage.setItem('archivedResumePrevFolder', JSON.stringify(stash));
+      } catch {
+        // ignore — best-effort cleanup
+      }
+
+      const targetById = new Map(restorations.map(r => [r.id, r.target]));
       setResumes(prev => prev.map(r =>
         resumeIds.includes(r.id)
-          ? { ...r, isArchived: false, archivedAt: undefined, folderId: rootFolder.id }
+          ? { ...r, isArchived: false, archivedAt: undefined, folderId: targetById.get(r.id) || rootFolder.id }
           : r
       ));
 
+      // Folder counts: bump each restored folder, decrement Archived Resumes
+      const restoredCounts = new Map<string, number>();
+      restorations.forEach(({ target }) => {
+        restoredCounts.set(target, (restoredCounts.get(target) || 0) + 1);
+      });
       setFolders(prev => prev.map(f => {
-        if (f.id === rootFolder.id) {
-          return { ...f, count: f.count + resumeIds.length };
+        if (restoredCounts.has(f.id)) {
+          return { ...f, count: f.count + (restoredCounts.get(f.id) || 0) };
         }
         if (archivedFolder && f.id === archivedFolder.id) {
           return { ...f, count: Math.max(0, f.count - resumeIds.length) };
@@ -1179,11 +1226,18 @@ export default function MyResumesPage() {
       setSelectedResumes([]);
       // Refetch the current folder view — the displayed list (`filteredResumes`)
       // is the server-returned page for the selected folder, so the
-      // just-unarchived row won't disappear until we re-query. Without this,
-      // the row sits there until the user hits refresh.
+      // just-unarchived row won't disappear until we re-query.
       isFetchingRef.current = false;
       fetchData(appliedSearchQuery, filters, selectedFolder, true);
-      toast.success(`${resumeIds.length} resume(s) unarchived and moved to Root`);
+
+      const restoredToOriginal = restorations.filter(r => r.target !== rootFolder.id).length;
+      toast.success(
+        restoredToOriginal === resumeIds.length
+          ? `${resumeIds.length} resume(s) unarchived and restored to their original folder`
+          : restoredToOriginal === 0
+            ? `${resumeIds.length} resume(s) unarchived (moved to Root — original folder not remembered)`
+            : `${resumeIds.length} resume(s) unarchived (${restoredToOriginal} restored, ${resumeIds.length - restoredToOriginal} to Root)`
+      );
     } catch (error) {
       toast.error('Failed to unarchive resumes');
     }

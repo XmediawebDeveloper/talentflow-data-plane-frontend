@@ -96,6 +96,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Screen recording
   const screenRecorderRef = useRef<MediaRecorder | null>(null);
   const screenChunksRef = useRef<Blob[]>([]);
+  // Incremented after each successful upload. segment 0 = first upload
+  // (backend opens 'wb'); 1..N = appended segments (backend opens 'ab').
+  // Lets us clear screenChunksRef after each upload so memory stays flat.
+  const screenSegmentIndexRef = useRef<number>(0);
   const screenStreamRef = useRef<MediaStream | null>(null);
   // Audio mixing for screen recording (tab audio + mic)
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
@@ -318,10 +322,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     const doUpload = async () => {
       const chunks = screenChunksRef.current;
       if (chunks.length === 0) return;
+      screenChunksRef.current = [];
+      // Final segment: if periodic checkpoints already ran, this carries the
+      // trailing clusters since the last checkpoint and the backend appends
+      // it. If no checkpoint ran (very short interview), this is segment 0
+      // and the backend overwrites with the full recording.
+      const segmentIndex = screenSegmentIndexRef.current;
       const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
       const blob = new Blob(chunks, { type: mimeType });
       try {
-        await candidateAIInterviewService.uploadScreenRecording(token, blob);
+        await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex);
+        screenSegmentIndexRef.current = segmentIndex + 1;
       } catch (e) {
         console.warn('[ScreenRecording] Upload failed:', e);
       } finally {
@@ -626,6 +637,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         videoBitsPerSecond: 300_000, // 300 Kbps — sufficient for screen capture
       });
       screenChunksRef.current = [];
+      screenSegmentIndexRef.current = 0;
       sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
       sr.start(5000);
       screenRecorderRef.current = sr;
@@ -659,16 +671,32 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             try { recorder.requestData(); } catch { finish(); return; }
             setTimeout(finish, 1500); // safety net for throttled tabs
           });
+          // Atomically snapshot the buffered chunks and clear the ref so
+          // subsequent ondataavailable pushes go into a fresh array.
+          // Single-threaded JS guarantees no chunk push can race between
+          // these two synchronous statements.
           const chunks = screenChunksRef.current;
           if (chunks.length === 0) return;
+          screenChunksRef.current = [];
+          const segmentIndex = screenSegmentIndexRef.current;
           const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
-          const blob = new Blob(chunks.slice(), { type: mimeType });
-          if (blob.size < 1024) return; // skip header-only payloads
+          const blob = new Blob(chunks, { type: mimeType });
+          if (blob.size < 1024) {
+            // Header-only / empty payload — push chunks back so the next
+            // checkpoint can include them, and skip this upload.
+            screenChunksRef.current = chunks.concat(screenChunksRef.current);
+            return;
+          }
           try {
-            await candidateAIInterviewService.uploadScreenRecording(token, blob);
-            console.log(`[ScreenRecording] Checkpoint uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+            await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex);
+            screenSegmentIndexRef.current = segmentIndex + 1;
+            console.log(`[ScreenRecording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
           } catch (err: any) {
-            console.warn(`[ScreenRecording] Checkpoint upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
+            // Upload failed — put the chunks back at the front of the buffer
+            // so the next checkpoint retries them. Keeps the segment index
+            // unchanged so the backend still gets segment N before N+1.
+            screenChunksRef.current = chunks.concat(screenChunksRef.current);
+            console.warn(`[ScreenRecording] Segment ${segmentIndex} upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
           }
         } finally {
           screenCheckpointInProgressRef.current = false;

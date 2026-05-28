@@ -4379,16 +4379,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         Promise.all([flushProctoring, uploadRecording()])
           .catch(() => {})
           .finally(() => { onInterviewComplete?.(); });
+      } else if (event.code === 4003) {
+        // Server rejected the (re)connect — interview is already finalized
+        // (e.g. recruiter ended it, or grace-period reaper fired). Retrying
+        // will keep hitting the same reject. Show a final message instead of
+        // burning the reconnect budget.
+        setStatus("Interview has ended. " + (event.reason || ""));
+        uploadRecording().catch(() => {});
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
         // Unexpected disconnection (tab switch, network glitch) — auto-reconnect
         flushProctoringEventsRef.current?.().catch(() => {});
         stopRecordingSilentRef.current();
-        if (reconnectAttemptsRef.current < 5) {
+        if (reconnectAttemptsRef.current < 10) {
           reconnectAttemptsRef.current++;
-          // Exponential backoff: 2s, 3s, 5s, 8s, 13s
-          const delays = [2000, 3000, 5000, 8000, 13000];
+          // Exponential backoff: 2s, 3s, 5s, 8s, 13s, 20s, 30s, 30s, 30s, 30s
+          // Total budget ~3 min — matches the 5-min server grace window so the
+          // candidate has multiple recovery chances before the reaper fires.
+          const delays = [2000, 3000, 5000, 8000, 13000, 20000, 30000, 30000, 30000, 30000];
           const delay = delays[Math.min(reconnectAttemptsRef.current - 1, delays.length - 1)];
-          setStatus(`Connection lost — reconnecting in ${Math.round(delay / 1000)}s... (attempt ${reconnectAttemptsRef.current}/5)`);
+          setStatus(`Connection lost — reconnecting in ${Math.round(delay / 1000)}s... (attempt ${reconnectAttemptsRef.current}/10)`);
           setTimeout(() => {
             if (!isUnmountedRef.current && !isClosingRef.current) {
               connectRef.current();

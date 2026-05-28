@@ -1,4 +1,4 @@
-import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -482,17 +482,18 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
   const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
-  const roleLabels = {
+  const roleLabels: Record<string, string> = {
     tenant_admin: 'Owner',
+    admin: 'Admin',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
+    billing_manager: 'Billing Manager',
+    standard_user: 'Member',
   };
 
-  const roleBadgeColors = {
-    tenant_admin: 'bg-brand-blue text-white',
-    recruiter: 'bg-brand-blue/10 text-brand-blue',
-    viewer: 'bg-gray-100 text-gray-600',
-  };
+  const prettyRole = (r?: string) =>
+    (r && roleLabels[r]) ||
+    (r ? r.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '');
 
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
@@ -1031,17 +1032,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           </button>
         </Tooltip>
 
-        {/* FIX-010: Settings with Tooltip - Hidden on mobile */}
-        <Tooltip content="Settings" position="bottom">
-          <button
-            onClick={() => router.push('/settings/general-settings')}
-            className="hidden sm:block p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-            aria-label="Settings"
-          >
-            <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-        </Tooltip>
-
         <div className="hidden sm:block h-6 sm:h-8 w-px bg-gray-200 mx-1 sm:mx-2" />
 
         <div className="relative">
@@ -1057,7 +1047,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </div>
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-[10px] lg:text-xs text-gray-500">{roleLabels[user.role]}</div>
+              <div className="text-[10px] lg:text-xs text-gray-500">{prettyRole(user.role)}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1080,7 +1070,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <p className="text-white/80 text-sm truncate">{user.email}</p>
                       <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
                         <Shield className="w-3 h-3" />
-                        {roleLabels[user.role]}
+                        {prettyRole(user.role)}
                       </span>
                     </div>
                   </div>
@@ -1185,23 +1175,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <div>
                         <p className="font-medium text-gray-900">Audit Trail</p>
                         <p className="text-xs text-gray-500">Detailed system audit logs</p>
-                      </div>
-                    </button>
-                  )}
-                  {hasQuotaPermission && (
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        router.push('/subscription/usage-quotas');
-                      }}
-                      className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-brand-blue/5 transition-colors flex items-center gap-3 group"
-                    >
-                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                        <Zap className="w-4 h-4 text-brand-blue" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Usage & Billing</p>
-                        <p className="text-xs text-gray-500">View usage and manage subscription</p>
                       </div>
                     </button>
                   )}

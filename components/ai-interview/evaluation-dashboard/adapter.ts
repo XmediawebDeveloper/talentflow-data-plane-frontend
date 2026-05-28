@@ -542,6 +542,64 @@ function priorityLabelToLevel(raw: any): Level {
  *  We reverse skill_question_map into per-question rows so the UI can render
  *  the Σ(score × weight) / Σ(weights) calculation row-by-row.
  */
+/** Extract the bundled follow-up note from a question_history row, if present.
+ *  The metadata (`followup_bundled` + `followup_reason` + `followup_focus_skill`
+ *  + `followup_source_qnum`) is stamped by the backend when a planned P2/P3 slot
+ *  was reframed as a follow-up because the candidate volunteered the skill
+ *  earlier. Shared by ALL row-builders (history / conversation / groups) so the
+ *  note can NEVER silently disappear just because the source-selection heuristic
+ *  picked a different builder — it's keyed off the saved row, not the builder.
+ *  See [[project_question_analysis_builder_selection]]. */
+function bundledFollowUpFromRow(row: any): PerQuestionDetail['bundledFollowUp'] {
+  const reason = String(row?.followup_reason || '').trim();
+  if (!row?.followup_bundled || !reason) return undefined;
+  const srcQ = row?.followup_source_qnum;
+  return {
+    reason: reason || undefined,
+    focus_skill: String(row?.followup_focus_skill || '').trim() || undefined,
+    source_qnum: typeof srcQ === 'number' && srcQ > 0 ? srcQ : undefined,
+  };
+}
+
+/** Index question_history rows by normalized (trimmed, lowercased) question
+ *  text. Lets the conversation / groups builders recover the authoritative
+ *  per-row metadata (round_type section + bundled-followup note) for a turn
+ *  they sourced from elsewhere. First write wins on duplicate text. */
+function indexHistoryByText(questionHistory: any[]): Map<string, any> {
+  const m = new Map<string, any>();
+  for (const h of questionHistory || []) {
+    const txt = String(h?.question || '').trim().toLowerCase();
+    if (txt && !m.has(txt)) m.set(txt, h);
+  }
+  return m;
+}
+
+/** True when an assistant transcript turn is NOT a real interview question:
+ *  Linda's greeting, a silence nudge ("Are you there?"), a bare filler
+ *  transition ("Let's move on to the next question."), or a closing message.
+ *  Used by the source-selection heuristic so these noise turns don't inflate
+ *  the transcript Q-count and wrongly out-vote a complete question_history. */
+function isNoiseAssistantTurn(content: string): boolean {
+  const t = (content || '').toLowerCase().trim();
+  if (!t) return true;
+  // Greeting / combined intro turn ("Hi there! I'm Linda ...").
+  if (/\bi['’]?\s*m\s+linda\b/.test(t) || /\bi\s+am\s+linda\b/.test(t)) return true;
+  // Silence nudges / attention probes.
+  if (
+    t.startsWith('are you there') || t.startsWith('are you still there') ||
+    t.startsWith('can you hear me') || /^(?:are you|still) with me\b/.test(t) ||
+    (t.includes('take your time') && t.includes('share whatever'))
+  ) return true;
+  // Bare filler transition with no actual question.
+  if (/^let['’]?s move on to the next question\.?$/.test(t)) return true;
+  // Closing.
+  if (
+    t.includes('thank you for completing the interview') ||
+    t.includes('thank you for your time today')
+  ) return true;
+  return false;
+}
+
 function buildPerQuestionDetails(
   eval_: any,
   clusterPriorityBySkill: Record<string, Level> = {},
@@ -571,11 +629,33 @@ function buildPerQuestionDetails(
     q => Array.isArray(q?.assigned_skills) && q.assigned_skills.length > 0
   );
 
-  // Approximate Q count from conversation_transcript: count assistant
-  // messages (each one is a Linda turn = one Q). Filter system messages.
+  // Approximate the count of REAL questions in conversation_transcript: count
+  // assistant turns, but EXCLUDE the greeting / silence-nudge / filler /
+  // closing turns the same way buildPerQuestionDetailsFromConversation does.
+  // The old count included that noise, which inflated the transcript total
+  // (e.g. 21 assistant turns for a 15-question interview) and wrongly made
+  // the conversation source out-vote a COMPLETE question_history — losing the
+  // round_type sectioning (NTH questions vanished), the assigned-skills
+  // snapshot, the per-skill scores, AND the bundled follow-up note (only the
+  // history builder carries those).
   const convoQApprox = (conversationTranscript || []).filter(
-    m => m?.role === 'assistant' && typeof m?.content === 'string' && m.content.trim()
+    m => m?.role === 'assistant' && typeof m?.content === 'string' &&
+         m.content.trim() && !isNoiseAssistantTurn(m.content)
   ).length;
+
+  // question_history is the richest source when it carries the slot-plan
+  // snapshot (assigned_skills + round_type + bundled-followup metadata +
+  // per-skill scores). Prefer it unless the transcript shows the backend
+  // genuinely UNDER-recorded — i.e. it has materially more real questions
+  // than history rows (the kanimozhi case: 31 chat turns vs 7 history rows
+  // because the skip-flow dropped add_question_history_entry calls). The 0.8
+  // ratio tolerates a turn or two of slack (an unrecorded availability Q, a
+  // filler row) without flipping a complete history to the lossy convo path.
+  const historyIsComplete =
+    hasAssignedSnapshot && historyCount >= convoQApprox * 0.8;
+  if (historyIsComplete) {
+    return buildPerQuestionDetailsFromHistory(eval_, clusterPriorityBySkill, clusterCanonicalNameBySkill);
+  }
 
   // Pick the richest source.
   if (convoQApprox > Math.max(groupsCount, historyCount)) {
@@ -710,6 +790,9 @@ function buildPerQuestionDetailsFromGroups(
       questionScore: typeof matched?.score === 'number'
         ? Math.round(matched.score * 10) / 10
         : 0,
+      // Recover the bundled-followup note from the matched history row so it
+      // survives even when this (groups) builder is the one selected.
+      bundledFollowUp: bundledFollowUpFromRow(matched),
     });
 
     // Follow-ups inherit the parent's skill set when their own entry
@@ -743,6 +826,7 @@ function buildPerQuestionDetailsFromGroups(
         questionScore: typeof fuMatched?.score === 'number'
           ? Math.round(fuMatched.score * 10) / 10
           : 0,
+        bundledFollowUp: bundledFollowUpFromRow(fuMatched),
       });
     }
     void _isGreeting; // greeting filter intentionally NOT applied here —
@@ -1151,17 +1235,7 @@ function buildPerQuestionDetailsFromHistory(
     // Bundled follow-up (Option A): this slot's single main question doubled
     // as a follow-up because a planned P2/P3 skill was volunteered earlier.
     // The note metadata lives on the main entry itself (not in followUps).
-    const _bundledReason = String((q as any)?.followup_reason || '').trim();
-    const bundledFollowUp = ((q as any)?.followup_bundled && _bundledReason)
-      ? {
-          reason: _bundledReason || undefined,
-          focus_skill: String((q as any)?.followup_focus_skill || '').trim() || undefined,
-          source_qnum: (typeof (q as any)?.followup_source_qnum === 'number'
-            && (q as any).followup_source_qnum > 0)
-            ? (q as any).followup_source_qnum
-            : undefined,
-        }
-      : undefined;
+    const bundledFollowUp = bundledFollowUpFromRow(q);
 
     return {
       qNum: displayQ,
@@ -1240,6 +1314,13 @@ function buildPerQuestionDetailsFromConversation(
       : [];
     if (assigned.length > 0) skillsByText.set(txt, assigned);
   }
+  // Full history rows by text — recovers the bundled-followup note for a turn
+  // even when this (conversation) builder is the one selected. Without this
+  // lookup the note only ever appears via the history builder, so any
+  // selection flip drops it. See [[project_question_analysis_builder_selection]].
+  const historyByText = indexHistoryByText(questionHistory);
+  const bundledForQuestion = (qText: string): PerQuestionDetail['bundledFollowUp'] =>
+    bundledFollowUpFromRow(historyByText.get(qText.trim().toLowerCase()));
   const sectionFromRT = (rt: string): PerQuestionDetail['section'] => {
     const r = (rt || '').toLowerCase();
     if (r === 'nice_to_have_skills') return 'nth';
@@ -1489,6 +1570,7 @@ function buildPerQuestionDetailsFromConversation(
           answer: '',
           skills,
           questionScore: score,
+          bundledFollowUp: bundledForQuestion(pending.question),
         });
       }
       pending = { question: String(m.content) };
@@ -1501,6 +1583,7 @@ function buildPerQuestionDetailsFromConversation(
         answer: String(m.content),
         skills,
         questionScore: score,
+        bundledFollowUp: bundledForQuestion(pending.question),
       });
       pending = null;
     }
@@ -1516,6 +1599,7 @@ function buildPerQuestionDetailsFromConversation(
       answer: '',
       skills,
       questionScore: score,
+      bundledFollowUp: bundledForQuestion(pending.question),
     });
   }
 

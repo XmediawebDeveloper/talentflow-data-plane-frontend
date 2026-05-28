@@ -819,6 +819,22 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return () => { cancelled = true; clearInterval(poll); };
   }, [evaluationPending, liveSession.id]);
 
+  // Live elapsed counter for the evaluation wait. The post-interview
+  // multi-agent eval genuinely runs ~1-3 min (sequential gpt-4o-mini agents);
+  // a static "15-30 seconds" spinner made a working eval look frozen. Showing
+  // a ticking timer reassures the recruiter it's progressing. Resets to 0
+  // whenever the pending state clears (eval done or not pending).
+  const [evalElapsedSec, setEvalElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!evaluationPending) { setEvalElapsedSec(0); return; }
+    const start = Date.now();
+    const tick = setInterval(
+      () => setEvalElapsedSec(Math.floor((Date.now() - start) / 1000)),
+      1000,
+    );
+    return () => clearInterval(tick);
+  }, [evaluationPending]);
+
   // Flexible/conversational mode is read from the authoritative source:
   // special_instructions.interview_mode ('flexible' = conversational, 'fixed' = timed).
   // The old heuristic (presence of capability_score_reasoning) was unreliable because
@@ -1013,7 +1029,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   );
 
   // Spinner shown while batch evaluation is being generated after interview completes.
-  const renderEvaluationSpinner = () => (
+  const renderEvaluationSpinner = () => {
+    const mm = Math.floor(evalElapsedSec / 60);
+    const ss = String(evalElapsedSec % 60).padStart(2, '0');
+    return (
     <div className="flex flex-col items-center justify-center py-24">
       <div className="relative mb-6">
         <div className="w-16 h-16 rounded-full border-4 border-brand-blue/20" />
@@ -1021,15 +1040,19 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
       </div>
       <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="text-sm text-gray-500 max-w-xs text-center">
-        The AI is analyzing the interview transcript and computing scores.
-        This usually takes 15–30 seconds.
+        The AI is scoring every answer, analyzing sentiment, and verifying the
+        results. This typically takes 1–3 minutes — you can keep this page open;
+        it refreshes automatically when ready.
       </p>
       <div className="flex items-center gap-2 mt-4">
         <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
-        <span className="text-xs text-brand-blue font-medium">Processing...</span>
+        <span className="text-xs text-brand-blue font-medium tabular-nums">
+          Processing… {mm}:{ss}
+        </span>
       </div>
     </div>
-  );
+    );
+  };
 
   const getPlaceholderMessage = (tabKey?: string) => {
     // While evaluation is being generated, all tabs show the spinner
@@ -1120,7 +1143,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         {evaluationPending && (
           <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-blue/5 border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-xl text-sm text-brand-blue shadow-sm shadow-brand-blue/5">
             <Loader2 className="w-4 h-4 text-brand-blue animate-spin flex-shrink-0" />
-            Generating evaluation results — this usually takes 15–30 seconds...
+            <span className="tabular-nums">
+              Generating evaluation results — typically 1–3 minutes
+              {evalElapsedSec > 0 && ` (${Math.floor(evalElapsedSec / 60)}:${String(evalElapsedSec % 60).padStart(2, '0')})`}
+              …
+            </span>
           </div>
         )}
 

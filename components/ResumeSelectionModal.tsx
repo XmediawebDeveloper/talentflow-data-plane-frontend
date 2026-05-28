@@ -169,9 +169,11 @@ export default function ResumeSelectionModal({
 
       // Handle duplicate error (409)
       if (error.status === 409 || error.response?.status === 409) {
-        // Parse the existing resume details from error response
+        // Parse the existing resume details from error response.
+        // FastAPI wraps everything in `detail`, so look there first; tolerate
+        // the older flat shape too.
         const errorData = error.response?.data || error.data || {};
-        const existingResume = errorData.existing_resume;
+        const existingResume = errorData?.detail?.existing_resume || errorData?.existing_resume;
 
         if (existingResume) {
           // Show duplicate detection modal
@@ -256,6 +258,52 @@ export default function ResumeSelectionModal({
     fileName: u.file_name,
   });
 
+  // Convert an axios 409 from /resumes/upload into the structured shape
+  // UploadModal expects (so it can open DuplicateResumeDetectedModal instead
+  // of surfacing axios's raw "Request failed with status code 409" message).
+  const parseDuplicateError = (err: any, file: File, folderId?: string) => {
+    const status = err?.status ?? err?.response?.status;
+    if (status !== 409) return null;
+    const detail = err?.response?.data?.detail ?? err?.data?.detail ?? err?.response?.data ?? err?.data;
+    const existing = detail?.existing_resume;
+    if (!existing) {
+      return { success: false as const, error: 'This resume already exists in your Internal Resume Database.' };
+    }
+    const isExactDuplicate = detail?.is_exact_duplicate ?? true;
+    const contentDifferences = detail?.content_differences || [];
+    return {
+      success: false as const,
+      error: `A resume for ${existing.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
+      existingResume: {
+        id: existing.id,
+        candidateName: existing.candidate_name || existing.file_name || 'Unknown',
+        email: existing.email || '',
+        currentTitle: existing.current_title || '',
+        folderName: existing.folder_name || '',
+        uploadedAt: existing.upload_date || '',
+        version: existing.version || 1,
+      },
+      duplicateData: {
+        file,
+        existingResume: {
+          id: existing.id,
+          candidate_name: existing.candidate_name || existing.file_name || 'Unknown',
+          email: existing.email || '',
+          folder_name: existing.folder_name,
+          folder_path: existing.folder_path || 'My Resumes',
+          upload_date: existing.upload_date || '',
+          file_size: existing.file_size || 0,
+          file_name: existing.file_name || '',
+          version: existing.version || 1,
+          version_count: existing.version_count || existing.version || 1,
+        },
+        contentDifferences,
+        isDuplicate: isExactDuplicate,
+        targetFolderId: folderId,
+      },
+    };
+  };
+
   // Handler passed to UploadModal. Owns the upload pipeline for both single
   // and bulk uploads, then auto-selects every successfully uploaded resume so
   // the user can immediately proceed to score without re-checking boxes.
@@ -272,7 +320,7 @@ export default function ResumeSelectionModal({
       const newIds: string[] = [];
       const newResumes: Resume[] = [];
       let firstSuccess: any = null;
-      let firstError: string | null = null;
+      let firstFailure: { reason: any; file: File } | null = null;
 
       results.forEach((r, idx) => {
         if (r.status === 'fulfilled') {
@@ -282,8 +330,8 @@ export default function ResumeSelectionModal({
           newIds.push(u.id);
           if (!firstSuccess) firstSuccess = u;
           if (onResumeUploaded) onResumeUploaded(newResume);
-        } else if (!firstError) {
-          firstError = r.reason?.message || r.reason?.toString() || 'Upload failed';
+        } else if (!firstFailure) {
+          firstFailure = { reason: r.reason, file: files[idx] };
         }
       });
 
@@ -310,8 +358,17 @@ export default function ResumeSelectionModal({
           candidateName: firstSuccess.candidate_name,
         };
       }
-      return { success: false, error: firstError || 'Upload failed' };
+
+      if (firstFailure) {
+        const dup = parseDuplicateError(firstFailure.reason, firstFailure.file, folderId);
+        if (dup) return dup;
+        const msg = firstFailure.reason?.message || 'Upload failed';
+        return { success: false, error: msg };
+      }
+      return { success: false, error: 'Upload failed' };
     } catch (error: any) {
+      const dup = parseDuplicateError(error, files[0], folderId);
+      if (dup) return dup;
       const msg = error?.message || 'Upload failed';
       setUploadError(msg);
       return { success: false, error: msg };

@@ -438,11 +438,19 @@ export default function SelectSourceModal({
         );
         await fetchData();
         const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
-        return {
-          success: true,
-          resumeId: firstSuccess?.value?.id,
-          candidateName: firstSuccess?.value?.candidate_name
-        };
+        if (firstSuccess) {
+          return {
+            success: true,
+            resumeId: firstSuccess.value?.id,
+            candidateName: firstSuccess.value?.candidate_name,
+          };
+        }
+        // All files rejected — re-throw the first rejection so the catch
+        // below maps 409 → DuplicateResumeDetectedModal payload instead of
+        // surfacing axios's raw "Request failed with status code 409".
+        const firstRejection = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+        if (firstRejection) throw firstRejection.reason;
+        return { success: false, error: 'Upload failed' };
       }
 
       const response = await resumeService.upload(files[0], folderId);

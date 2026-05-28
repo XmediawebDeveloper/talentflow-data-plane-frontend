@@ -4,6 +4,10 @@ import { useState, useCallback } from 'react';
 
 const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
 const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
+// Bypass switch — when true, openCheckout returns a fake success without
+// opening the Razorpay modal. Backend must also have RAZORPAY_BYPASS_ENABLED=true.
+const RAZORPAY_BYPASS_ENABLED =
+  process.env.NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED === 'true';
 
 interface CheckoutParams {
   orderId: string;
@@ -57,6 +61,28 @@ export function useRazorpay(): UseRazorpayReturn {
 
   const openCheckout = useCallback(
     async (params: CheckoutParams): Promise<RazorpayResponse> => {
+      // ─── BYPASS MODE ───
+      // Skip the Razorpay modal entirely and resolve with a synthetic
+      // success response. Backend verify_payment_signature returns true
+      // when its own RAZORPAY_BYPASS_ENABLED flag is on.
+      if (RAZORPAY_BYPASS_ENABLED) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[Razorpay] BYPASS MODE — skipping checkout modal, returning fake success.'
+        );
+        setIsProcessing(true);
+        const rand = () =>
+          Math.random().toString(36).slice(2, 16) + Date.now().toString(36);
+        // brief tick so callers see a non-instant resolve (matches modal UX)
+        await new Promise((r) => setTimeout(r, 400));
+        setIsProcessing(false);
+        return {
+          razorpay_payment_id: `bypass_pay_${rand()}`,
+          razorpay_order_id: params.orderId,
+          razorpay_signature: `bypass_sig_${rand()}`,
+        };
+      }
+
       // Load SDK on demand — no global <Script> tag required
       const loaded = await loadRazorpayScript();
       if (!loaded || !window.Razorpay) {
