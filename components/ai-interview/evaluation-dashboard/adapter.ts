@@ -554,10 +554,14 @@ function bundledFollowUpFromRow(row: any): PerQuestionDetail['bundledFollowUp'] 
   const reason = String(row?.followup_reason || '').trim();
   if (!row?.followup_bundled || !reason) return undefined;
   const srcQ = row?.followup_source_qnum;
+  const prior = String(row?.followup_prior_level || '').trim().toLowerCase();
+  const excerpt = String(row?.followup_source_excerpt || '').trim();
   return {
     reason: reason || undefined,
     focus_skill: String(row?.followup_focus_skill || '').trim() || undefined,
     source_qnum: typeof srcQ === 'number' && srcQ > 0 ? srcQ : undefined,
+    prior_level: prior || undefined,
+    source_excerpt: excerpt || undefined,
   };
 }
 
@@ -582,8 +586,18 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
 function isNoiseAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return true;
-  // Greeting / combined intro turn ("Hi there! I'm Linda ...").
-  if (/\bi['’]?\s*m\s+linda\b/.test(t) || /\bi\s+am\s+linda\b/.test(t)) return true;
+  // Greeting turn — but ONLY when it's a pure greeting with no question
+  // attached. The combined greeting+Q1 ("Hi! I'm Linda — let's start. Can
+  // you walk me through your React experience?") IS a real interview turn
+  // and must NOT be filtered out, or the convoQApprox count drops below the
+  // history count and the builder-selection heuristic incorrectly routes
+  // away from the COMPLETE history builder. Mirror of the `_isGreeting`
+  // gating inside buildPerQuestionDetailsFromHistory (2026-05-28).
+  if (/\bi['’]?\s*m\s+linda\b/.test(t) || /\bi\s+am\s+linda\b/.test(t)) {
+    const hasQuestion = t.includes('?');
+    const wordCount = t.split(/\s+/).filter(Boolean).length;
+    if (!hasQuestion && wordCount <= 12) return true;
+  }
   // Silence nudges / attention probes.
   if (
     t.startsWith('are you there') || t.startsWith('are you still there') ||
@@ -988,16 +1002,32 @@ function buildPerQuestionDetailsFromHistory(
   //   then appears 2-5 times in the UI with only the first being the real
   //   ask. Collapse later skip rows that share question text + round_type
   //   with an earlier row in the same section.
-  // Greeting filter: Linda's opening turn combines a brief intro with the
-  // Q1 prompt — "Hi! I'm Linda, your AI interviewer..." — and the backend
-  // tags it with MHS Q1's assigned skills. Per recruiter spec the greeting
-  // should not occupy a graded slot — detect by text pattern (covers
-  // "I'm Linda" / "I am Linda" in any case) rather than by question_number
-  // because the reconnect-recovery path can stamp the greeting with an
-  // inflated question_number.
+  // Greeting filter: Linda's opening turn often contains "I'm Linda" intro
+  // text. The PURE greeting ("Hi! I'm Linda, your AI interviewer. Let's
+  // begin.") has no question mark and should be dropped. But the COMBINED
+  // greeting+Q1 ("Hi! I'm Linda — let's start. Can you tell me about your
+  // React experience?") DOES carry the actual Q1 and must NOT be dropped —
+  // dropping it makes Q1 disappear from Question Analysis entirely.
+  //
+  // 2026-05-28 fix: gate on "no question mark" AND "no substantive content
+  // beyond the greeting". The original blanket drop ("i'm linda" anywhere
+  // → discard") was hiding Q1 whenever Linda's first turn combined intro
+  // and question. Restoring Q1 requires being more discriminating about
+  // what counts as a "pure greeting" turn.
   const _isGreeting = (q: any): boolean => {
     const txt = String(q?.question || '').toLowerCase();
-    return /\bi['’]?\s*m\s+linda\b/.test(txt) || /\bi\s+am\s+linda\b/.test(txt);
+    const hasLindaIntro =
+      /\bi['’]?\s*m\s+linda\b/.test(txt) || /\bi\s+am\s+linda\b/.test(txt);
+    if (!hasLindaIntro) return false;
+    // If the turn carries an actual question (question mark present), it is
+    // the combined greeting+Q1 — keep it so Q1 isn't dropped.
+    if (txt.includes('?')) return false;
+    // If the turn is long enough to plausibly contain a question without
+    // punctuation (e.g. "Tell me about your React experience"), keep it.
+    // 12 words is generous — pure greetings are well under this.
+    const wordCount = txt.split(/\s+/).filter(Boolean).length;
+    if (wordCount > 12) return false;
+    return true;
   };
   // Stamp each history row with its chronological position BEFORE filtering
   // so dropped rows (greeting / duplicates) don't shift the surviving rows'

@@ -139,6 +139,15 @@ export interface PerQuestionDetail {
     reason?: string;
     focus_skill?: string;
     source_qnum?: number;
+    /** Coverage band of the focus skill at slot-decision time ("low" /
+     *  "medium"). Shown in the inline note so the reviewer can see WHY the
+     *  slot probed rather than auto-skipping (covered) or asking fresh
+     *  (not_started). Optional — older interviews lack this field. */
+    prior_level?: string;
+    /** Short excerpt (~80 chars) from the earlier answer that volunteered
+     *  the focus skill, with the skill term in context. Lets the reviewer
+     *  verify the volunteering at a glance without scrolling back. */
+    source_excerpt?: string;
   };
 }
 

@@ -478,14 +478,34 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
           {q.bundledFollowUp && (() => {
             const focus = q.bundledFollowUp.focus_skill || 'this skill';
-            const srcRef = q.bundledFollowUp.source_qnum
-              ? `Q${q.bundledFollowUp.source_qnum}'s answer`
-              : 'an earlier answer';
+            const srcQ = q.bundledFollowUp.source_qnum;
+            const srcRef = srcQ ? `Q${srcQ}'s answer` : 'an earlier answer';
+            const prior = q.bundledFollowUp.prior_level;
+            const excerpt = q.bundledFollowUp.source_excerpt;
+            // Phrase the coverage band in plain English so reviewers don't
+            // have to know our internal "low / medium" labels.
+            const priorPhrase =
+              prior === 'low'
+                ? 'briefly (low coverage)'
+                : prior === 'medium'
+                ? 'with some detail (medium coverage)'
+                : prior === 'covered'
+                ? 'in depth (high coverage)'
+                : '';
             return (
-              <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                Reframed as a follow-up — the candidate volunteered{' '}
-                <span className="font-semibold">{focus}</span> in {srcRef}, so Linda
-                probed it at this planned slot instead of asking it fresh.
+              <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                <div>
+                  Reframed as a follow-up — the candidate volunteered{' '}
+                  <span className="font-semibold">{focus}</span>{' '}
+                  {priorPhrase && <>{priorPhrase} </>}
+                  in {srcRef}, so Linda probed it at this planned slot instead
+                  of asking it fresh.
+                </div>
+                {excerpt && (
+                  <div className="mt-1 italic text-amber-800/90">
+                    From {srcRef}: “{excerpt}”
+                  </div>
+                )}
               </div>
             );
           })()}

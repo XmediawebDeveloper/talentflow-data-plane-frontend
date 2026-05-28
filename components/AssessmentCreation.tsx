@@ -232,7 +232,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         const hasLanguages = job.supported_languages && job.supported_languages.length > 0;
         let codingLanguages: string[] = hasLanguages ? job.supported_languages! : [];
 
-        // Inline language detection for URL-based selection
+        // Inline language detection for URL-based selection.
+        // NOTE: C++, C#, .NET cannot use `\b...\b` because `+`, `#`, `.` are
+        // non-word characters — the trailing `\b` never matches. Use explicit
+        // non-letter boundaries instead.
         const detectLanguages = (skills: string[]): string[] => {
           const skillsText = skills.join(' ').toLowerCase();
           const detected = new Set<string>();
@@ -240,8 +243,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           if (/\b(python|django|flask|fastapi|pandas)\b/i.test(skillsText)) detected.add('Python');
           if (/\b(javascript|node|react|angular|vue|express)\b/i.test(skillsText)) detected.add('JavaScript');
           if (/\b(typescript)\b/i.test(skillsText)) detected.add('TypeScript');
-          if (/\b(c#|csharp|\.net|dotnet|asp\.net)\b/i.test(skillsText)) detected.add('C#');
-          if (/\b(c\+\+|cpp)\b/i.test(skillsText)) detected.add('C++');
+          if (/(^|[^a-z0-9#])c#(?![a-z0-9#])/i.test(skillsText) ||
+              /\b(csharp|dotnet)\b/i.test(skillsText) ||
+              /(^|[^a-z0-9.])\.net(?![a-z0-9])/i.test(skillsText) ||
+              /(^|[^a-z0-9.])asp\.net(?![a-z0-9])/i.test(skillsText)) detected.add('C#');
+          if (/(^|[^a-z0-9+])c\+\+(?![a-z0-9+])/i.test(skillsText) ||
+              /\bcpp\b/i.test(skillsText)) detected.add('C++');
           if (/\b(golang|go\s*lang)\b/i.test(skillsText)) detected.add('Go');
           if (/\b(ruby|rails)\b/i.test(skillsText)) detected.add('Ruby');
           if (/\b(php|laravel)\b/i.test(skillsText)) detected.add('PHP');
@@ -261,9 +268,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           return patterns.some(p => p.test(text));
         };
 
+        // Include title + description so a JD like "Junior C++ Developer"
+        // is detected even when its structured skills list omits the language.
+        const detectionInput: string[] = [
+          ...((job.skills as string[]) || []),
+          job.title || '',
+          job.description || '',
+        ];
+
         // Detect languages from skills if JD requires coding but no languages specified
-        if (jdRequiresCoding && !hasLanguages && job.skills && job.skills.length > 0) {
-          const detectedLangs = detectLanguages(job.skills);
+        if (jdRequiresCoding && !hasLanguages && detectionInput.length > 0) {
+          const detectedLangs = detectLanguages(detectionInput);
           if (detectedLangs.length > 0) {
             codingLanguages = detectedLangs;
           }
@@ -271,8 +286,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         // Check for dynamic detection from skills
         let shouldEnableCoding = jdRequiresCoding;
-        if (!jdRequiresCoding && job.skills && job.skills.length > 0) {
-          const detectedLangs = detectLanguages(job.skills);
+        if (!jdRequiresCoding && detectionInput.length > 0) {
+          const detectedLangs = detectLanguages(detectionInput);
           if (detectedLangs.length > 0 && checkCodingRole(job)) {
             shouldEnableCoding = true;
             codingLanguages = detectedLangs;
@@ -862,13 +877,27 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     // ============ C# / .NET ============
     // ASP.NET, .NET Core, Entity Framework, Blazor, LINQ
-    if (/\b(c#|csharp|c\s*sharp|\.net|dotnet|asp\.?net|entity\s*framework|blazor|linq|xamarin|maui|unity3d|wcf|wpf|winforms)\b/i.test(skillsText)) {
+    // NOTE: `c#`, `.net`, `asp.net` cannot use `\b...\b` — `#` and `.` are
+    // non-word chars, so the trailing `\b` never matches. Use explicit
+    // non-letter boundaries for these tokens.
+    if (
+      /(^|[^a-z0-9#])c#(?![a-z0-9#])/i.test(skillsText) ||
+      /\b(csharp|c\s*sharp|dotnet|entity\s*framework|blazor|linq|xamarin|maui|unity3d|wcf|wpf|winforms)\b/i.test(skillsText) ||
+      /(^|[^a-z0-9.])\.net(?![a-z0-9])/i.test(skillsText) ||
+      /(^|[^a-z0-9.])asp\.?net(?![a-z0-9])/i.test(skillsText)
+    ) {
       detectedLanguages.add('C#');
     }
 
     // ============ C++ ============
     // STL, Qt, Boost, embedded systems
-    if (/\b(c\+\+|cpp|stl|boost|qt\s*(framework)?|cmake|embedded\s*c\+\+|opencv)\b/i.test(skillsText)) {
+    // NOTE: `c++` cannot use `\b...\b` — `+` is a non-word char, so the
+    // trailing `\b` never matches. Use explicit non-letter boundaries.
+    if (
+      /(^|[^a-z0-9+])c\+\+(?![a-z0-9+])/i.test(skillsText) ||
+      /(^|[^a-z0-9+])embedded\s*c\+\+(?![a-z0-9+])/i.test(skillsText) ||
+      /\b(cpp|stl|boost|qt\s*(framework)?|cmake|opencv)\b/i.test(skillsText)
+    ) {
       detectedLanguages.add('C++');
     }
 
@@ -988,21 +1017,30 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     // Start with JD-specified languages
     let codingLanguages: string[] = hasLanguages ? job.supported_languages! : [];
 
-    // If JD requires coding but no languages specified, try to detect from skills
-    if (jdRequiresCoding && !hasLanguages && job.skills && job.skills.length > 0) {
-      const detectedLanguages = detectProgrammingLanguagesFromSkills(job.skills);
+    // Include title + description so JDs like "Junior C++ Developer" are
+    // detected even when the structured skills array omits the language
+    // (the AI extractor frequently doesn't promote languages into skills).
+    const detectionInput: string[] = [
+      ...((job.skills as string[]) || []),
+      job.title || '',
+      job.description || '',
+    ];
+
+    // If JD requires coding but no languages specified, try to detect from text
+    if (jdRequiresCoding && !hasLanguages && detectionInput.length > 0) {
+      const detectedLanguages = detectProgrammingLanguagesFromSkills(detectionInput);
       if (detectedLanguages.length > 0) {
         codingLanguages = detectedLanguages;
-        console.log('[TalentFlow] JD requires coding - detected languages from skills:', detectedLanguages);
+        console.log('[TalentFlow] JD requires coding - detected languages:', detectedLanguages);
       }
     }
 
     // DYNAMIC DETECTION: If JD doesn't have coding_required set but has programming skills
     let shouldEnableCoding = jdRequiresCoding;  // Enable if JD says coding is required
 
-    // Fallback: Dynamic detection from skills if JD doesn't have coding_required set
-    if (!jdRequiresCoding && job.skills && job.skills.length > 0) {
-      const detectedLanguages = detectProgrammingLanguagesFromSkills(job.skills);
+    // Fallback: dynamic detection from skills/title/description when coding_required isn't set
+    if (!jdRequiresCoding && detectionInput.length > 0) {
+      const detectedLanguages = detectProgrammingLanguagesFromSkills(detectionInput);
 
       // If we detected programming languages AND it's a coding-related role, enable coding
       if (detectedLanguages.length > 0 && isCodingRole(job)) {
@@ -1793,10 +1831,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             // but the skill-based detection on selection
                             // would still auto-enable the coding round.
                             let codingDetected = job.coding_required === true;
-                            if (!codingDetected && job.skills && job.skills.length > 0) {
-                              const detected = detectProgrammingLanguagesFromSkills(job.skills);
-                              if (detected.length > 0 && isCodingRole(job)) {
-                                codingDetected = true;
+                            if (!codingDetected) {
+                              const cardDetectionInput: string[] = [
+                                ...((job.skills as string[]) || []),
+                                job.title || '',
+                                job.description || '',
+                              ];
+                              if (cardDetectionInput.length > 0) {
+                                const detected = detectProgrammingLanguagesFromSkills(cardDetectionInput);
+                                if (detected.length > 0 && isCodingRole(job)) {
+                                  codingDetected = true;
+                                }
                               }
                             }
                             return codingDetected ? (

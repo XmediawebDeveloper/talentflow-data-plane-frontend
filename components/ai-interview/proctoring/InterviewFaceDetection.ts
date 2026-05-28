@@ -223,6 +223,18 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
     };
 
     // Processing loop — sends video frames to MediaPipe at low FPS
+    //
+    // Phase 1 perf (2026-05-28): the previous implementation woke the main
+    // thread via requestAnimationFrame at 60 Hz just to check whether the
+    // 1.5 s face-detect or 2 s gaze-check window had elapsed. On candidates
+    // like ABISHEK (50+ proctor violations / 25 min, constant head/face
+    // movement) this loop was burning ~60 main-thread wake-ups/sec on top
+    // of the actual MediaPipe `.send()` calls. Switched to a self-scheduling
+    // setTimeout @ 250 ms (4 Hz) — still well under the 1.5 s / 2 s detection
+    // cadence, but ~15× fewer main-thread wake-ups. Detection accuracy is
+    // unchanged because MediaPipe `.send()` fires on the same timestamp
+    // gates. `cancelAnimationFrame` in cleanup is replaced with the timer
+    // clear.
     const startProcessingLoop = () => {
       if (processingRef.current) return; // Already running
       processingRef.current = true;
@@ -230,21 +242,26 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
       let lastGazeTime = 0;
       const FACE_DETECT_INTERVAL = 1500; // check every 1.5 s (was 3 s) for faster detection
       const GAZE_CHECK_INTERVAL = 2000;
+      const POLL_INTERVAL_MS = 250; // 4 Hz wake-up; cheap timestamp check
       let retryCount = 0;
 
-      const processFrame = async (timestamp: number) => {
+      const processFrame = async () => {
         if (!processingRef.current || !mounted) return;
+        const timestamp = performance.now();
 
         if (!videoRef.current) {
           retryCount++;
-          if (retryCount < 30) animationFrameRef.current = requestAnimationFrame(processFrame);
-          else processingRef.current = false;
+          if (retryCount < 30) {
+            animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
+          } else {
+            processingRef.current = false;
+          }
           return;
         }
 
         const video = videoRef.current;
         if (video.readyState < 2 || video.videoWidth === 0) {
-          animationFrameRef.current = requestAnimationFrame(processFrame);
+          animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
           return;
         }
 
@@ -258,11 +275,11 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
           try { await faceMeshRef.current.send({ image: video }); } catch {}
         }
 
-        animationFrameRef.current = requestAnimationFrame(processFrame);
+        animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
       };
 
-      animationFrameRef.current = requestAnimationFrame(processFrame);
-      console.log("[INTERVIEW_FACE_DETECTION] Processing loop started");
+      animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
+      console.log("[INTERVIEW_FACE_DETECTION] Processing loop started (250 ms poll, ≥1.5 s detect)");
     };
 
     initialize();
@@ -270,8 +287,12 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
     return () => {
       mounted = false;
       processingRef.current = false;
+      // Phase 1 perf: scheduler switched from requestAnimationFrame to
+      // setTimeout (see startProcessingLoop), so clearTimeout is the
+      // correct cancel call. cancelAnimationFrame on a timer id is a
+      // no-op, leaving the scheduled callback to run after unmount.
       if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+        clearTimeout(animationFrameRef.current);
         animationFrameRef.current = null;
       }
       faceDetectorRef.current?.close();

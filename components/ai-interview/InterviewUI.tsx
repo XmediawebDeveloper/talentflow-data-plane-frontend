@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
@@ -85,7 +85,160 @@ function nowIST(): string {
 // "Please help! This is a big problem!", "Transcription by ESO — …",
 // looping n-gram repetitions, etc.
 
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 1 perf helpers (2026-05-28)
+//
+// Background: InterviewUI is a single ~6000-line component. Every setState
+// in here reconciles the whole tree, including the messages list (which
+// grows over the interview) and Linda's live AI bubble. During an AI turn
+// the parent fires setState many times per second (token reveal at 80 ms,
+// silence/timer ticks, WS audio/JSON events). The fix below isolates the
+// two heaviest leaf renders into memoized child components so a parent
+// re-render no longer reconciles them when their own props are unchanged.
+// No business-logic, audio, WS, or scoring code is touched.
+// ─────────────────────────────────────────────────────────────────────────
+
+const formatTimeMMSS = (seconds: number): string => {
+  const safe = Math.max(0, Math.floor(seconds || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Dev-only render counter. No-op in production. Logs once per render
+// per component so we can verify the memoization actually held.
+function useRenderCount(name: string): void {
+  const countRef = useRef(0);
+  countRef.current += 1;
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.debug(`[render] ${name} #${countRef.current}`);
+  }
+}
+
+// ── MessageRow ──────────────────────────────────────────────────────────
+// Single chat bubble. Memoized on the immutable `msg` reference. When
+// `setMessages([...prev, newMsg])` runs, only the newly-appended msg has a
+// new reference; all existing msgs keep the same identity → React.memo's
+// default shallow compare skips their render. Before this extraction every
+// token-reveal tick (12.5 Hz) re-rendered every prior message bubble.
+interface MessageRowProps {
+  msg: Message;
+}
+
+const MessageRow = (({ msg }: MessageRowProps) => {
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.debug(`[render] MessageRow id=${msg.id}`);
+  }
+  if (msg.role === 'system') {
+    return (
+      <div className="flex justify-center">
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <p className="text-amber-700 text-xs">{msg.content}</p>
+        </div>
+      </div>
+    );
+  }
+  if (msg.role === 'user') {
+    return (
+      <div className="flex gap-2 flex-row-reverse">
+        <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+          <span className="text-white text-[8px] font-bold">You</span>
+        </div>
+        <div className="max-w-[80%]">
+          <div className="flex items-center justify-end gap-2 mb-0.5">
+            <span className="text-[10px] font-semibold text-emerald-600">Your Response</span>
+            {msg.responseTimeSeconds != null && (
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold tabular-nums ${
+                msg.responseTimeSeconds <= 30
+                  ? 'bg-red-100 text-red-600 border border-red-200'
+                  : msg.responseTimeSeconds <= 60
+                  ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              }`}>
+                <Clock className="w-2.5 h-2.5" />
+                {formatTimeMMSS(msg.responseTimeSeconds)} left
+              </span>
+            )}
+          </div>
+          <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
+            <p className="text-sm leading-relaxed">{msg.content}</p>
+          </div>
+          {msg.timestamp && (
+            <p className="text-[10px] text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+  // assistant
+  return (
+    <div className="flex gap-2">
+      <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
+        <span className="text-white text-[8px] font-bold">L</span>
+      </div>
+      <div className="max-w-[80%]">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
+        </div>
+        <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+          <p className="text-sm leading-relaxed">{msg.content}</p>
+        </div>
+        {msg.timestamp && (
+          <p className="text-[10px] text-gray-400 mt-0.5">{msg.timestamp}</p>
+        )}
+      </div>
+    </div>
+  );
+});
+const MessageRowMemo = memo(MessageRow);
+
+// ── LiveAIBubble ────────────────────────────────────────────────────────
+// Linda's streaming-text bubble (token-reveal at 80 ms). Lifted out of the
+// parent JSX so the bubble can re-render on its own without forcing the
+// surrounding messages list / chrome to reconcile. React.memo on the
+// single `text` prop — when token reveal pushes a new substring, only
+// this component renders.
+interface LiveAIBubbleProps {
+  text: string;
+}
+
+const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.debug('[render] LiveAIBubble');
+  }
+  return (
+    <div className="flex gap-2">
+      <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
+        <span className="text-white text-[8px] font-bold">L</span>
+      </div>
+      <div className="max-w-[80%]">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
+        </div>
+        <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-1 mb-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <p className="text-sm leading-relaxed">{text}</p>
+        </div>
+      </div>
+    </div>
+  );
+});
+const LiveAIBubbleMemo = memo(LiveAIBubble);
+
 export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange }: InterviewUIProps) {
+  // Phase 1 perf diagnostic — dev-only render counter. Watch the browser
+  // console during a live interview: if [render] InterviewUI ticks faster
+  // than MessageRow / LiveAIBubble (it should be the OPPOSITE post-fix),
+  // the memo barriers aren't holding and a closer look is warranted.
+  useRenderCount('InterviewUI');
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -271,7 +424,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [showRepeatRequest, setShowRepeatRequest] = useState(false);
 
   // Figma UI state
-  const [waveHeights, setWaveHeights] = useState<number[]>(Array(30).fill(4));
+  // Note (2026-05-28): `waveHeights` state previously fired setState every
+  // 120 ms while Linda was speaking, but the value was never consumed in
+  // any JSX. Dead state removed — saves ~8 full-tree re-renders/sec during
+  // every AI turn. The 120 ms interval effect is gone too (see below).
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -404,17 +560,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const candidatePlaybackEndedRef = useRef(false);
   const [candidatePlaybackEnded, setCandidatePlaybackEnded] = useState(false);
 
-  // Waveform animation — driven by isAiSpeaking
-  useEffect(() => {
-    if (!isAiSpeaking) {
-      setWaveHeights(Array(30).fill(4));
-      return;
-    }
-    const interval = setInterval(() => {
-      setWaveHeights(Array.from({ length: 30 }, () => Math.random() * 32 + 3));
-    }, 120);
-    return () => clearInterval(interval);
-  }, [isAiSpeaking]);
+  // Waveform animation interval removed (2026-05-28). The state was never
+  // rendered anywhere; the interval was forcing ~8 full-tree React re-renders
+  // per second during every AI turn. If a future visual waveform is needed,
+  // implement it inside an isolated React.memo component with its own local
+  // state so parent reconciliation isn't triggered on each amplitude tick.
 
   // "Now Speak" banner — visible for the ENTIRE candidate-turn window.
   //
@@ -470,11 +620,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
   }, [isAiSpeaking]);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  // Use module-level helper so this isn't re-created each parent render.
+  // (Phase 1 perf — see formatTimeMMSS declaration near the top of file.)
+  const formatTime = formatTimeMMSS;
 
   // No-response detection state
   const [showMicPopup, setShowMicPopup] = useState(false);
@@ -1650,7 +1798,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // fully revealed. The loop keeps running so we remain ready for
       // streamed additions, and `saveAiMessage` (called by finalizePlayback
       // at true end-of-audio) is the single owner of end-of-bubble cleanup.
-    }, 80);
+      //
+      // Phase 1 perf (2026-05-28): cadence raised 80 ms → 200 ms. Reveal
+      // pacing is anchored to the AudioContext clock (Phase B), not the
+      // poll cadence — slowing the interval just makes the loop catch up
+      // in larger character batches per tick. Visually imperceptible, but
+      // drops the LiveAIBubble re-render rate from 12.5 Hz → 5 Hz, which
+      // matters for low-end candidates running heavy MediaPipe proctoring
+      // alongside Linda's speech.
+    }, 200);
   }, []);
 
   const stopRevealingTokens = useCallback(() => {
@@ -5466,68 +5622,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               </div>
             )}
 
+            {/* Each row extracted to <MessageRowMemo> so parent renders
+                (token reveal, timer ticks, WS handlers) don't reconcile
+                prior bubbles. React.memo + stable msg refs skip them. */}
             {messages.map(msg => (
-              <div key={msg.id}>
-                {msg.role === 'system' ? (
-                  <div className="flex justify-center">
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                      <p className="text-amber-700 text-xs">{msg.content}</p>
-                    </div>
-                  </div>
-                ) : msg.role === 'user' ? (
-                  /* ── Candidate response — teal/emerald ── */
-                  <div className="flex gap-2 flex-row-reverse">
-                    <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <span className="text-white text-[8px] font-bold">You</span>
-                    </div>
-                    <div className="max-w-[80%]">
-                      {/* Label row: "Your Response" + frozen timer badge */}
-                      <div className="flex items-center justify-end gap-2 mb-0.5">
-                        <span className="text-[10px] font-semibold text-emerald-600">Your Response</span>
-                        {msg.responseTimeSeconds != null && (
-                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold tabular-nums ${
-                            msg.responseTimeSeconds <= 30
-                              ? 'bg-red-100 text-red-600 border border-red-200'
-                              : msg.responseTimeSeconds <= 60
-                              ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                              : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                          }`}>
-                            <Clock className="w-2.5 h-2.5" />
-                            {formatTime(msg.responseTimeSeconds)} left
-                          </span>
-                        )}
-                      </div>
-                      <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
-                      </div>
-                      {msg.timestamp && (
-                        <p className="text-[10px] text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  /* ── AI question — violet/purple ── */
-                  /* No Follow-up chip / inline note here — those are post-
-                     interview-only and live on the Question Analysis page. */
-                  <div className="flex gap-2">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
-                      <span className="text-white text-[8px] font-bold">L</span>
-                    </div>
-                    <div className="max-w-[80%]">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
-                      </div>
-                      <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
-                      </div>
-                      {msg.timestamp && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">{msg.timestamp}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <MessageRowMemo key={msg.id} msg={msg} />
             ))}
 
             {/* Live speech indicator — teal (matches candidate bubble).
@@ -5561,28 +5660,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             )}
 
             {/* Live AI text (streaming) — violet (matches AI bubble).
-                No Follow-up chip / inline note here — those are post-
-                interview-only and live on the Question Analysis page. */}
-            {currentAiText && (
-              <div className="flex gap-2">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
-                  <span className="text-white text-[8px] font-bold">L</span>
-                </div>
-                <div className="max-w-[80%]">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
-                  </div>
-                  <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                    <div className="flex items-center gap-1 mb-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <p className="text-sm leading-relaxed">{currentAiText}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+                Extracted into <LiveAIBubbleMemo> so the 80 ms token-reveal
+                ticks only reconcile this bubble, not the full chat tree. */}
+            {currentAiText && <LiveAIBubbleMemo text={currentAiText} />}
 
             {/* Thinking dots — violet (matches AI bubble) */}
             {isProcessing && !currentAiText && (
