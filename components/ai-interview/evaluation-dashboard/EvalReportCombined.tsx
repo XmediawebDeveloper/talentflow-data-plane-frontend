@@ -115,39 +115,197 @@ export function EvalReportCombined({
     },
   ];
 
-  // ── PDF export — renders the on-screen report to a single PDF ──────────
+  // ── PDF export ─────────────────────────────────────────────────────────
+  // IMPORTANT: we do NOT screenshot the on-screen React tree. This app uses
+  // Tailwind v4, whose colors are emitted as oklch(); the html2canvas bundled
+  // in html2pdf.js cannot parse oklch() and throws, so capturing the live DOM
+  // silently fails. Instead we build a dedicated print document using ONLY
+  // inline hex/rgb colors — which also yields a cleaner, purpose-built report
+  // than a screenshot of the web UI (no charts, tighter typography).
   const exportPDF = async () => {
-    if (!reportRef.current) return;
     setExporting(true);
+    const root = document.createElement('div');
     try {
       const html2pdf = (await import('html2pdf.js')).default;
+      root.style.cssText =
+        'width:760px;padding:32px;font-family:Arial,Helvetica,sans-serif;color:#111827;background:#ffffff;';
+      root.innerHTML = buildPrintHtml();
+      // Off-screen but rendered so html2canvas can measure it.
+      root.style.position = 'fixed';
+      root.style.left = '-10000px';
+      root.style.top = '0';
+      document.body.appendChild(root);
       const base = `eval_report_${candidate.name || 'candidate'}_${evalId}`.replace(/\s+/g, '_');
       await html2pdf().set({
-        margin: [8, 8, 8, 8],
+        margin: [10, 10, 12, 10],
         filename: `${base}.pdf`,
         image: { type: 'jpeg', quality: 0.96 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] },
-      } as any).from(reportRef.current).save();
+      } as any).from(root).save();
+    } catch (err) {
+      console.error('[EvalReport] PDF export failed:', err);
+      // Surface the failure instead of a silent no-op.
+      // eslint-disable-next-line no-alert
+      window.alert('Could not generate the PDF. Please try again — if it keeps failing, check the browser console for details.');
     } finally {
+      if (root.parentNode) root.parentNode.removeChild(root);
       setExporting(false);
     }
   };
 
+  // Build the print-only HTML (inline hex colors — Tailwind/oklch never reaches
+  // html2canvas). Mirrors the on-screen report sections minus the radar chart.
+  const buildPrintHtml = (): string => {
+    const C = {
+      ink: '#111827', sub: '#6b7280', faint: '#9ca3af', line: '#e5e7eb', bg: '#f9fafb',
+      indigo: '#4f46e5', indigoDk: '#4338ca', indigoBg: '#eef2ff',
+      green: '#10b981', greenDk: '#047857', greenBg: '#ecfdf5',
+      red: '#ef4444', redDk: '#b91c1c', redBg: '#fef2f2',
+      amber: '#f59e0b', amberDk: '#b45309', amberBg: '#fffbeb',
+    };
+    const pass = isPassed;
+    const verdictColor = pass ? C.green : C.red;
+    const verdictBg = pass ? C.greenBg : C.redBg;
+    const esc = escapeHtml;
+    const scColor = (s: number) => (s >= 8 ? C.green : s >= 7 ? C.amber : C.red);
+    const card = (title: string, inner: string) =>
+      `<div style="border:1px solid ${C.line};border-radius:10px;margin-bottom:14px;overflow:hidden;page-break-inside:avoid;">
+        <div style="background:${C.bg};border-bottom:1px solid ${C.line};padding:8px 14px;font-size:13px;font-weight:700;color:${C.ink};">${esc(title)}</div>
+        <div style="padding:14px;">${inner}</div>
+      </div>`;
+    const bar = (s: number, color: string) =>
+      `<div style="height:8px;background:${C.line};border-radius:6px;overflow:hidden;">
+        <div style="height:8px;width:${Math.max(0, Math.min(100, (s / 10) * 100))}%;background:${color};border-radius:6px;"></div>
+      </div>`;
+
+    const metaRows = [
+      ['Candidate', candidate.name], ['Position', candidate.role], ['Email', candidate.email || '—'],
+      ['Interview Date', interview.date || '—'], ['Mode', interview.mode || '—'], ['Duration', interview.duration || '—'],
+    ].map(([l, v]) =>
+      `<td style="padding:6px 10px;vertical-align:top;width:33%;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:${C.faint};">${esc(l)}</div>
+        <div style="font-size:13px;font-weight:600;color:${C.ink};">${esc(v)}</div>
+      </td>`);
+    const metaTable =
+      `<table style="width:100%;border-collapse:collapse;"><tr>${metaRows.slice(0, 3).join('')}</tr><tr>${metaRows.slice(3).join('')}</tr></table>
+       <div style="display:flex;justify-content:space-between;font-size:10px;color:${C.faint};margin-top:10px;border-top:1px solid ${C.line};padding-top:8px;">
+         <span>Evaluation ID: #${esc(evalId)}</span><span>Generated ${esc(reportGenerated)}</span></div>`;
+
+    const scoreRow = (label: string, val: number, color: string, badge: string, badgeBg: string, badgeFg: string) =>
+      `<tr>
+        <td style="padding:8px 6px;font-size:12px;font-weight:600;color:${C.ink};width:38%;">${esc(label)}</td>
+        <td style="padding:8px 6px;font-size:18px;font-weight:700;color:${color};width:14%;">${val.toFixed(2)}</td>
+        <td style="padding:8px 6px;width:33%;">${bar(val, color)}</td>
+        <td style="padding:8px 6px;width:15%;text-align:right;"><span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:${badgeBg};color:${badgeFg};">${esc(badge)}</span></td>
+      </tr>`;
+    const scoreTable =
+      `<table style="width:100%;border-collapse:collapse;">
+        ${sectionsPresent.mustHave ? scoreRow('Must-Have Section Score', scores.mustHave, C.green, pass ? 'PASS' : 'FAIL', pass ? C.greenBg : C.redBg, pass ? C.greenDk : C.redDk) : ''}
+        ${sectionsPresent.niceToHave ? scoreRow('Nice-to-Have Section Score', scores.niceToHave, C.indigo, 'Info Only', C.amberBg, C.amberDk) : ''}
+        ${scoreRow('Overall Average Score', scores.final / 10, C.indigoDk, 'Reference', C.bg, C.sub)}
+      </table>`;
+
+    const skillRows = (skills: typeof flatMustHave, accent: string) => skills.map(s =>
+      `<tr style="border-bottom:1px solid ${C.line};">
+        <td style="padding:6px 4px;font-size:12px;font-weight:600;color:${C.ink};">${esc(s.name)}</td>
+        <td style="padding:6px 4px;"><span style="font-size:9px;font-weight:700;color:#fff;background:${accent};padding:2px 6px;border-radius:4px;">${s.tag}</span></td>
+        <td style="padding:6px 4px;font-size:11px;color:${C.sub};">w:${s.weight}</td>
+        <td style="padding:6px 4px;width:30%;">${bar(s.score, scColor(s.score))}</td>
+        <td style="padding:6px 4px;font-size:13px;font-weight:700;text-align:right;color:${scColor(s.score)};">${s.score.toFixed(1)}</td>
+      </tr>`).join('');
+    const skillsBlock =
+      (sectionsPresent.mustHave && flatMustHave.length
+        ? `<div style="font-size:12px;font-weight:700;margin:0 0 6px;">Must-Have Skills (${flatMustHave.length})</div>
+           <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">${skillRows(flatMustHave, C.indigo)}</table>` : '')
+      + (sectionsPresent.niceToHave && flatNiceToHave.length
+        ? `<div style="font-size:12px;font-weight:700;margin:0 0 6px;">Nice-to-Have Skills (${flatNiceToHave.length})</div>
+           <table style="width:100%;border-collapse:collapse;">${skillRows(flatNiceToHave, C.amber)}</table>` : '')
+      || `<div style="font-size:12px;color:${C.faint};font-style:italic;">No skills evaluated.</div>`;
+
+    const qRows = perQuestionDetails.map((q, i) => {
+      const isHR = q.section === 'hr';
+      const lbl = q.section === 'mth' ? 'Must-Have' : q.section === 'nth' ? 'Nice-to-Have' : 'HR';
+      const mid = isHR ? q.question : (q.skills.map(s => s.name).join(', ') || q.question);
+      return `<tr style="background:${i % 2 ? C.bg : '#fff'};">
+        <td style="padding:6px;font-size:11px;font-weight:700;color:${C.indigo};">Q${q.qNum}</td>
+        <td style="padding:6px;font-size:10px;color:${C.sub};">${esc(lbl)}</td>
+        <td style="padding:6px;font-size:11px;color:${C.sub};">${esc(mid.slice(0, 90))}</td>
+        <td style="padding:6px;font-size:12px;font-weight:700;text-align:right;color:${isHR ? C.faint : scColor(q.questionScore)};">${isHR ? '—' : q.questionScore.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+    const qBlock = perQuestionDetails.length
+      ? `<table style="width:100%;border-collapse:collapse;">${qRows}</table>`
+      : `<div style="font-size:12px;color:${C.faint};font-style:italic;">No question-level data.</div>`;
+
+    const recBullets = pass
+      ? ['<b>Proceed to next round:</b> strong technical competency across must-have skills',
+         '<b>Technical interview:</b> deeper assessment of core architecture & design',
+         '<b>Cultural fit:</b> schedule a behavioral interview']
+      : ['<b>Do not proceed:</b> did not meet minimum must-have requirements',
+         '<b>Skills gap:</b> significant development needed in core areas',
+         '<b>Alternative path:</b> consider junior roles or additional training'];
+    const recBlock =
+      `<div style="font-size:12px;font-weight:700;color:${pass ? C.greenDk : C.redDk};margin-bottom:6px;">${pass ? '✓ Recommended Actions' : '⚠ Recommended Actions'}</div>
+       <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:${C.ink};">${recBullets.map(b => `<li>${b}</li>`).join('')}</ul>`;
+
+    const summary =
+      `${esc(candidate.name)} completed an AI-powered technical interview for the ${esc(candidate.role)} position on ${esc(interview.date || 'the scheduled date')}. ` +
+      `The evaluation covered <b>${totalQuestions} question${totalQuestions !== 1 ? 's' : ''}</b> across <b>${totalSkills} skill${totalSkills !== 1 ? 's' : ''}</b>. ` +
+      (sectionsPresent.mustHave
+        ? `The Must-Have Section Score of <b>${scores.mustHave.toFixed(2)}/10</b> ${pass ? `exceeds` : `falls below`} the ${MHS_THRESHOLD.toFixed(1)} threshold. `
+        : '') +
+      `The assessment recommends <b>${pass ? 'proceeding' : 'not proceeding'}</b> with a match score of <b>${confidence}%</b>.`;
+
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${C.indigo};padding-bottom:14px;margin-bottom:16px;">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:${C.ink};">AI Interview Evaluation Report</div>
+          <div style="font-size:13px;color:${C.sub};margin-top:2px;">${esc(candidate.name)} · ${esc(candidate.role)}</div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:${C.faint};">#${esc(evalId)}<br/>${esc(reportGenerated)}</div>
+      </div>
+      <div style="background:${verdictBg};border:1px solid ${verdictColor};border-radius:10px;padding:16px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;page-break-inside:avoid;">
+        <div>
+          <div style="font-size:20px;font-weight:800;color:${verdictColor};">${esc(finalResultLabel)} — ${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'}</div>
+          <div style="font-size:12px;color:${C.ink};margin-top:4px;">Must-Have ${scores.mustHave.toFixed(2)} / Threshold ${MHS_THRESHOLD.toFixed(1)}</div>
+        </div>
+        <div style="text-align:center;"><div style="font-size:26px;font-weight:800;color:${verdictColor};">${confidence}%</div><div style="font-size:11px;color:${C.sub};font-weight:600;">Match Score</div></div>
+      </div>
+      ${card('Candidate & Interview', metaTable)}
+      ${card('Section Score Breakdown', scoreTable)}
+      ${card('Executive Summary', `<div style="font-size:12px;line-height:1.7;color:${C.ink};">${summary}</div>`)}
+      ${card('Skills Assessment Summary', skillsBlock)}
+      ${card('Question-by-Question Performance', qBlock)}
+      ${card('Recommendations & Next Steps', recBlock)}
+      <div style="background:${C.indigoBg};border:1px solid ${C.indigo}33;border-radius:10px;padding:14px;font-size:10px;line-height:1.6;color:${C.indigoDk};page-break-inside:avoid;">
+        <b>Methodology:</b> AI-powered automated assessment. Must-Have Score = avg of Must-Have question scores (Pass ≥ ${MHS_THRESHOLD.toFixed(1)}). Question Score = Σ(Skill×Weight)/ΣWeights (P1=10, P2=7, P3=4).<br/><br/>
+        <b>Confidentiality:</b> This report contains proprietary information for authorized hiring personnel only.
+      </div>`;
+  };
+
   return (
     <div className="space-y-4">
-      {/* ── Action bar (not part of the PDF) ─────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="text-sm text-gray-500">
-          Combined evaluation report · {totalQuestions} question{totalQuestions !== 1 ? 's' : ''} · {totalSkills} skill{totalSkills !== 1 ? 's' : ''}
+      {/* ── Report header band (not part of the PDF) ─────────────────── */}
+      <div className="flex items-center justify-between gap-4 flex-wrap rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white font-bold text-lg flex items-center justify-center shadow-sm shrink-0">
+            AI
+          </div>
+          <div>
+            <div className="text-base font-bold text-gray-900 leading-tight">AI Interview Evaluation Report</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {totalQuestions} question{totalQuestions !== 1 ? 's' : ''} · {totalSkills} skill{totalSkills !== 1 ? 's' : ''} · ID #{evalId}
+            </div>
+          </div>
         </div>
         <button
           onClick={exportPDF}
           disabled={exporting}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-semibold shadow-sm transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-semibold shadow-sm shadow-indigo-600/25 transition-colors"
         >
-          <Download className="w-4 h-4" />
+          <Download className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} />
           {exporting ? 'Preparing PDF…' : 'Download Report (PDF)'}
         </button>
       </div>
