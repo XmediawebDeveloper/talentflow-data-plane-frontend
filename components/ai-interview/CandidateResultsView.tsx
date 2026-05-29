@@ -21,6 +21,7 @@ import CoverageTab from './tabs/CoverageTab';
 // import { OverviewSection } from './evaluation-dashboard/OverviewSection'; // replaced by OverviewSectionV2 (Vite design)
 import { OverviewSectionV2 } from './evaluation-dashboard/OverviewSectionV2';
 import { EvaluationReportV2 } from './evaluation-dashboard/EvaluationReportV2';
+import { EvalReportCombined } from './evaluation-dashboard/EvalReportCombined';
 // EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
 // import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
 import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
@@ -37,7 +38,7 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
+type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -999,6 +1000,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
       ? [
+          { key: 'eval'               as TabKey, label: 'Eval',               icon: <Sparkles className="w-4 h-4" /> },
           { key: 'eval_report'        as TabKey, label: 'Evaluation Report',  icon: <FileText className="w-4 h-4" /> },
           { key: 'skill_breakdown'    as TabKey, label: 'Skill Breakdown',    icon: <Brain    className="w-4 h-4" /> },
           { key: 'question_analysis'  as TabKey, label: 'Question Analysis',  icon: <Target   className="w-4 h-4" /> },
@@ -2833,6 +2835,49 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             )}
 
             {/* Evaluation Report Tab — Vite design (V2). Wired to live DashboardData. */}
+            {/* Eval Tab — combined Overview + Evaluation Report (deduped) + PDF export */}
+            {!evaluationPending && activeTab === 'eval' && (() => {
+              const placeholderMsg = getPlaceholderMessage('eval');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
+                special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
+              });
+              const responseTimes = (eval_.evaluations || [])
+                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
+                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
+              const avgResponseSeconds = responseTimes.length > 0
+                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
+                : null;
+              const aiConfidence = typeof eval_.ai_confidence === 'number'
+                ? eval_.ai_confidence
+                : typeof eval_.confidence === 'number' ? eval_.confidence : null;
+              return (
+                <EvalReportCombined
+                  data={data}
+                  aiConfidence={aiConfidence}
+                  candidateImage={identityPhotoUrl}
+                  avgResponseSeconds={avgResponseSeconds}
+                  evaluationId={liveSession.display_id || null}
+                />
+              );
+            })()}
+
             {!evaluationPending && activeTab === 'eval_report' && (() => {
               const placeholderMsg = getPlaceholderMessage('eval_report');
               if (placeholderMsg) return renderPlaceholder(placeholderMsg);
