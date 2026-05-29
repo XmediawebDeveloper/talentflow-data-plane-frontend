@@ -140,6 +140,7 @@ interface PendingScoringData {
   jobTitle: string;
   resumeIds: string[];
   resumeNames: string[];
+  source?: 'Internal DB' | 'My Resumes';
   alreadyScoredItems?: AlreadyScoredItem[];
 }
 
@@ -290,14 +291,14 @@ export default function ResumeScoringPage({
   }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
 
   // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
-  const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[]) => {
+  const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[], source: 'Internal DB' | 'My Resumes' = 'Internal DB') => {
     const progressItems: ScoringProgressItem[] = items.map((item: any) => ({
       id: item.resumeId || '',
       resumeId: item.resumeId || '',
       candidateName: item.candidateName || 'Unknown',
       jobTitle: jobTitle,
       jobId: jobId,
-      source: 'Internal DB' as const,
+      source: source,
       status: item.status === 'completed'
         ? 'Scored successfully' as const
         : item.status === 'already_scored'
@@ -593,7 +594,7 @@ export default function ResumeScoringPage({
   useEffect(() => {
     if (!pendingScoringData) return;
 
-    const { jobId, jobTitle, resumeIds, resumeNames, alreadyScoredItems = [] } = pendingScoringData;
+    const { jobId, jobTitle, resumeIds, resumeNames, alreadyScoredItems = [], source = 'Internal DB' } = pendingScoringData;
 
     // Prevent duplicate scoring - check if this job has already started
     if (scoringStartedRef.current.has(jobId)) {
@@ -627,7 +628,7 @@ export default function ResumeScoringPage({
 
     // Initialize progress modal immediately with items
     shownJobsRef.current.add(jobId);
-    showBulkProgressFromJob(jobId, jobTitle, allInitialItems);
+    showBulkProgressFromJob(jobId, jobTitle, allInitialItems, source);
 
     // Also start tracking in persistent context (survives page refresh)
     const progressItems = resumeIds.map((resumeId, index) => ({
@@ -636,12 +637,12 @@ export default function ResumeScoringPage({
       candidateName: resumeNames[index] || `Resume ${index + 1}`,
       jobTitle,
       jobId,
-      source: 'Internal DB' as const,
+      source: source,
     }));
     startScoringJob(jobId, jobTitle, progressItems);
 
     // Track item statuses for the modal (only new items to score)
-    const newItemStatuses: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[] =
+    const newItemStatuses: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; matchStatus?: string; errorMessage?: string }[] =
       resumeIds.map((resumeId, index) => ({
         resumeId,
         candidateName: resumeNames[index] || `Resume ${index + 1}`,
@@ -657,7 +658,7 @@ export default function ResumeScoringPage({
         candidateName: item.candidateName || 'Unknown',
         jobTitle: jobTitle,
         jobId: jobId,
-        source: 'Internal DB' as const,
+        source: source,
         status: item.status === 'completed'
           ? 'Scored successfully' as const
           : item.status === 'already_scored'
@@ -674,10 +675,12 @@ export default function ResumeScoringPage({
           : item.status === 'completed'
           ? new Date()
           : undefined,
-        matchResult: item.status === 'already_scored' && item.matchStatus
+        // Always derive the match result from the backend's authoritative
+        // match_status (AI-determined, with backend threshold fallback). Never
+        // recompute from the raw score on the frontend — those thresholds
+        // disagree with the backend and showed everything as "No Match".
+        matchResult: item.matchStatus
           ? convertMatchStatus(item.matchStatus)
-          : item.score != null
-          ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
           : undefined,
       }));
       setProgressData(progressItems);
@@ -713,6 +716,7 @@ export default function ResumeScoringPage({
                 if (item.status === 'completed' && newItemStatuses[idx].status !== 'completed') {
                   newItemStatuses[idx].status = 'completed';
                   newItemStatuses[idx].score = item.overall_score ?? 0;
+                  newItemStatuses[idx].matchStatus = item.match_status;
                   updateItemStatus(jobId, itemId, 'Scored successfully', {
                     score: item.overall_score ?? 0,
                     matchResult: convertMatchStatus(item.match_status),
@@ -817,6 +821,10 @@ export default function ResumeScoringPage({
       matchStatus: item.matchStatus || item.match_status,
     }));
 
+    // Source is tracked per-job in the persistent context (survives refresh);
+    // fall back to Internal DB only if the job predates source tracking.
+    const batchSource = getJobProgress(batchProgress.jobId)?.items?.[0]?.source ?? 'Internal DB';
+
     // Convert to BulkScoringProgressModal format
     const progressItems: ScoringProgressItem[] = items.map((item: any) => ({
       id: item.resumeId || '',
@@ -824,7 +832,7 @@ export default function ResumeScoringPage({
       candidateName: item.candidateName || 'Unknown',
       jobTitle: batchProgress.jobTitle,
       jobId: batchProgress.jobId,
-      source: 'Internal DB' as const,
+      source: batchSource,
       status: item.status === 'completed'
         ? 'Scored successfully' as const
         : item.status === 'already_scored'
@@ -2921,6 +2929,11 @@ export default function ResumeScoringPage({
             // Clear any previous error when attempting to score
             setSelectionError(null);
 
+            // Carry the actual source tab through to the progress modal so the
+            // Source column reflects where the resumes came from (was always
+            // hardcoded to "Internal DB").
+            const sourceLabel: 'Internal DB' | 'My Resumes' = source === 'my-resumes' ? 'My Resumes' : 'Internal DB';
+
             // Check for existing scores before proceeding
             try {
               toast.loading('Checking for existing scores...', { id: 'check-existing' });
@@ -2962,6 +2975,7 @@ export default function ResumeScoringPage({
                   jobTitle: selectedJobData.title,
                   resumeIds: newResumeIds,
                   resumeNames: newResumeNames,
+                  source: sourceLabel,
                   alreadyScoredItems,
                 };
                 sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
@@ -3016,6 +3030,7 @@ export default function ResumeScoringPage({
               jobTitle: selectedJobData.title,
               resumeIds: selectedIds,
               resumeNames: resumeNames,
+              source: sourceLabel,
             };
             sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
 

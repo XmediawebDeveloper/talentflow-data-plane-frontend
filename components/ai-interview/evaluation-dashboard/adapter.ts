@@ -2117,6 +2117,75 @@ export function buildDashboardData(params: {
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];
   })();
 
+  // ── Derive ALL scores from perQuestionDetails (single source of truth) ──
+  // Question Analysis is always correct because it aligns each question's
+  // skills/scores to the saved distribution plan. Overview, Eval Report,
+  // and Skill Breakdown used to pull from skill_scores_map / evaluations[]
+  // which don't align to the plan — causing the "Overview wrong, QA right"
+  // discrepancy. Rebuilding everything from perQuestionDetails guarantees
+  // all four tabs show identical numbers.
+
+  // 1. Per-skill score map — take the first non-skipped/non-unscored score
+  //    for each skill; fall back to the first occurrence if all are skipped.
+  const qaSkillScore = new Map<string, number>();
+  for (const qRow of perQuestionDetails) {
+    for (const sk of qRow.skills) {
+      const key = (sk.name || '').toLowerCase().trim();
+      if (!key) continue;
+      if (!qaSkillScore.has(key)) {
+        // Seed with whatever is here; will be upgraded by a good score below.
+        qaSkillScore.set(key, sk.is_unscored || sk.is_skipped ? 0 : (sk.score ?? 0));
+      } else if (!sk.is_unscored && !sk.is_skipped && sk.score > 0) {
+        // Overwrite with the first real score we encounter.
+        qaSkillScore.set(key, sk.score);
+      }
+    }
+  }
+
+  // 2. Rebuild cluster skill scores and cluster averages from QA map.
+  const rebuildClustersFromQA = (clusters: Cluster[]): Cluster[] =>
+    clusters.map(cluster => {
+      const updatedSkills: Skill[] = cluster.skills.map(sk => {
+        const qaScore = qaSkillScore.get((sk.name || '').toLowerCase().trim());
+        return typeof qaScore === 'number' ? { ...sk, score: qaScore } : sk;
+      });
+      const scoredSkills = updatedSkills.filter(sk => sk.score > 0);
+      const newClusterScore = scoredSkills.length > 0
+        ? Math.round(scoredSkills.reduce((sum, sk) => sum + sk.score, 0) / scoredSkills.length * 100) / 100
+        : 0;
+      return { ...cluster, skills: updatedSkills, clusterScore: newClusterScore };
+    });
+
+  const mustHaveClustersQA  = rebuildClustersFromQA(mustHaveClusters);
+  const niceToHaveClustersQA = rebuildClustersFromQA(niceToHaveClusters);
+
+  // 3. Section averages = simple average of non-unscored, non-zero question
+  //    scores in each section — mirrors the backend's section_question_avg.
+  const mthQARows = perQuestionDetails.filter(q => q.section === 'mth' && !q.isUnscored && q.questionScore > 0);
+  const nthQARows = perQuestionDetails.filter(q => q.section === 'nth' && !q.isUnscored && q.questionScore > 0);
+
+  const mustHaveAvgQA = mthQARows.length > 0
+    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 100) / 100
+    : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
+
+  const niceToHaveAvgQA = nthQARows.length > 0
+    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 100) / 100
+    : niceToHaveAvg;
+
+  // 4. Final score from QA-derived section averages.
+  const weightedSumQA =
+    mustHaveAvgQA   * (weights.mustHave   / 100) +
+    niceToHaveAvgQA * (weights.niceToHave / 100) +
+    hr              * (weights.hr         / 100);
+  const finalScoreQA = Math.round(weightedSumQA * 100) / 10;
+
+  // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
+  let finalResultQA: 'Pass' | 'Fail' | null = null;
+  if (backendFinal === 'pass') finalResultQA = 'Pass';
+  else if (backendFinal === 'fail') finalResultQA = 'Fail';
+  else if (mustHaveAvgQA > 0) finalResultQA = mustHaveAvgQA >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+  else finalResultQA = finalResult;
+
   return {
     candidate: {
       name: candidate.name,
@@ -2129,10 +2198,10 @@ export function buildDashboardData(params: {
       date: dateStr,
     },
     scores: {
-      mustHave: Math.round(mustHaveAvg * 100) / 100,
-      niceToHave: Math.round(niceToHaveAvg * 100) / 100,
-      hr: Math.round(hr * 100) / 100,
-      final: finalScore,
+      mustHave:   Math.round(mustHaveAvgQA  * 100) / 100,
+      niceToHave: Math.round(niceToHaveAvgQA * 100) / 100,
+      hr:         Math.round(hr             * 100) / 100,
+      final:      finalScoreQA,
     },
     weights: {
       mustHave: Math.round(weights.mustHave * 100) / 100,
@@ -2144,10 +2213,10 @@ export function buildDashboardData(params: {
     weaknesses,
     aiSummary,
     recommendation,
-    mustHaveClusters,
-    niceToHaveClusters,
+    mustHaveClusters:  mustHaveClustersQA,
+    niceToHaveClusters: niceToHaveClustersQA,
     interviewResponses: buildInterviewResponses(eval_),
-    finalResult,
+    finalResult: finalResultQA,
     mhsThreshold: MHS_THRESHOLD,
     questionScores,
     perQuestionDetails,

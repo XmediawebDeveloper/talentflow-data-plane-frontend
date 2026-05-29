@@ -2,7 +2,7 @@ import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, C
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
-import InviteToAssessmentModal from './InviteToAssessmentModal';
+import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -1198,9 +1198,10 @@ export default function ScoredResumesTable({
         />
       )}
 
-      {/* Invite to Assessment Modal */}
+      {/* Invite to Assessment Modal — opens the shared ShareAssessmentModal
+          used by the Assessment module (resolves the JD's assessment first). */}
       {showInviteModal && inviteCandidate && (
-        <InviteToAssessmentModal
+        <InviteShareModal
           candidate={inviteCandidate}
           jobId={jobId}
           jobTitle={jobTitle}

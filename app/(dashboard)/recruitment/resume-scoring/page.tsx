@@ -53,6 +53,7 @@ export default function ResumeScoringRoute() {
     jobTitle: string;
     resumeIds: string[];
     resumeNames: string[];
+    source?: 'Internal DB' | 'My Resumes';
     alreadyScoredItems?: Array<{
       resumeId: string;
       candidateName: string;

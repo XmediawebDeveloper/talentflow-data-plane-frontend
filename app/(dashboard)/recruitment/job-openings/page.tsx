@@ -119,6 +119,8 @@ export default function JobOpeningsPage() {
         department: jd.department,
         industry_type: jd.industry_type,
         experience: jd.experience_required || (jd.experience_min && jd.experience_max ? `${jd.experience_min}-${jd.experience_max}` : jd.experience_min ? `${jd.experience_min}+` : undefined),
+        experience_min: jd.experience_min,
+        experience_max: jd.experience_max,
         applicants: jd.applicants_count || 0,
         description: jd.description,
         skills: jd.skills || [],

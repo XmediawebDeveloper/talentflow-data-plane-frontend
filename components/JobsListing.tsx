@@ -187,16 +187,43 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       (creationMethodFilter === 'ai' && (job as any).creation_method === 'ai_generated') ||
       (creationMethodFilter === 'manual' && (job as any).creation_method === 'manual');
 
-    // Experience filter
+    // Experience filter — compare actual year ranges, not digit substrings.
+    // Each bucket is a [min, max] year span; a job matches if its own
+    // [min, max] span overlaps the bucket's span.
     let matchesExperience = true;
     if (experienceFilter !== 'all') {
-      const exp = job.experience?.toLowerCase() || '';
-      if (experienceFilter === 'entry') matchesExperience = exp.includes('0') || exp.includes('1') || exp.includes('entry');
-      else if (experienceFilter === 'junior') matchesExperience = exp.includes('2') || exp.includes('3') || exp.includes('4') || exp.includes('junior');
-      else if (experienceFilter === 'mid') matchesExperience = exp.includes('5') || exp.includes('6') || exp.includes('7') || exp.includes('mid');
-      else if (experienceFilter === 'senior') matchesExperience = exp.includes('8') || exp.includes('9') || exp.includes('10') || exp.includes('senior');
-      else if (experienceFilter === 'architect') matchesExperience = exp.includes('architect');
-      else if (experienceFilter === 'management') matchesExperience = exp.includes('management') || exp.includes('manager');
+      const buckets: Record<string, [number, number]> = {
+        entry: [0, 2],
+        junior: [2, 4],
+        mid: [5, 7],
+        senior: [8, 10],
+        architect: [10, Infinity],
+        management: [10, Infinity],
+      };
+      const bucket = buckets[experienceFilter];
+      if (bucket) {
+        // Derive the job's year span from numeric fields, falling back to
+        // parsing the experience string (e.g. "5-10", "10+", "3").
+        let jobMin = job.experience_min;
+        let jobMax = job.experience_max;
+        if (jobMin == null && jobMax == null) {
+          const exp = job.experience?.toLowerCase() || '';
+          const nums = exp.match(/\d+/g)?.map(Number) ?? [];
+          if (nums.length > 0) {
+            jobMin = nums[0];
+            jobMax = exp.includes('+') ? Infinity : (nums[1] ?? nums[0]);
+          }
+        }
+        if (jobMin == null && jobMax == null) {
+          // No experience data on the job — exclude when a specific level is selected.
+          matchesExperience = false;
+        } else {
+          const lo = jobMin ?? jobMax ?? 0;
+          const hi = jobMax ?? jobMin ?? Infinity;
+          // Ranges overlap when each starts at/before the other ends.
+          matchesExperience = lo <= bucket[1] && hi >= bucket[0];
+        }
+      }
     }
 
     // Date posted filter
