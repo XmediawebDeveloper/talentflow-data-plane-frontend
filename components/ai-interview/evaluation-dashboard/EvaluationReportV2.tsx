@@ -164,7 +164,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
         </div>
         <div className="divide-y divide-gray-100">
           {sectionsPresent.mustHave && (
-            <div className="grid grid-cols-[35%_15%_30%_20%] items-center bg-emerald-50/60 px-5 py-4 gap-2">
+            <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-emerald-50/60 px-5 py-4 gap-2">
               <div className="text-sm font-bold text-emerald-800">Must-Have Section Score</div>
               <div className="text-2xl font-bold text-emerald-500">{scores.mustHave.toFixed(2)}</div>
               <div className="pr-3">
@@ -185,7 +185,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
             </div>
           )}
           {sectionsPresent.niceToHave && (
-            <div className="grid grid-cols-[35%_15%_30%_20%] items-center px-5 py-4 gap-2">
+            <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center px-5 py-4 gap-2">
               <div className="text-sm font-semibold text-gray-900">Nice-to-Have Section Score</div>
               <div className="text-2xl font-bold text-indigo-500">{scores.niceToHave.toFixed(2)}</div>
               <div className="pr-3">
@@ -200,7 +200,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
               </div>
             </div>
           )}
-          <div className="grid grid-cols-[35%_15%_30%_20%] items-center bg-gray-50 px-5 py-4 gap-2">
+          <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
             <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
             <div className="text-2xl font-bold text-indigo-700">{(scores.final / 10).toFixed(2)}</div>
             <div className="pr-3">
@@ -229,7 +229,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 const sc = scoreColor(s.score);
                 const tagBg = s.tag === 'P1' ? 'bg-indigo-600' : s.tag === 'P2' ? 'bg-indigo-500' : 'bg-indigo-400';
                 return (
-                  <div key={`mh-${i}`} className="grid grid-cols-[30%_15%_15%_25%_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
+                  <div key={`mh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
                     <div>
                       <span className={`inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
@@ -260,7 +260,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 const sc = scoreColor(s.score);
                 const tagBg = s.tag === 'P1' ? 'bg-amber-500' : 'bg-amber-400';
                 return (
-                  <div key={`nh-${i}`} className="grid grid-cols-[30%_15%_15%_25%_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
+                  <div key={`nh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
                     <div>
                       <span className={`inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
@@ -313,7 +313,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
               return (
                 <div
                   key={i}
-                  className={`grid grid-cols-[15%_20%_50%_15%] items-center px-5 py-3 gap-3 ${
+                  className={`grid grid-cols-[15%_20%_minmax(0,1fr)_15%] items-center px-5 py-3 gap-3 ${
                     i % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                   }`}
                 >

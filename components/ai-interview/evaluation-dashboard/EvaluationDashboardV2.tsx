@@ -514,10 +514,38 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           <div className="text-xs font-medium text-gray-500 mb-1">
             Candidate's Answer
           </div>
-          <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
-            {answer || (
-              <span className="text-gray-400 italic">(no response)</span>
-            )}
+          <div className="text-sm whitespace-pre-wrap break-words">
+            {(() => {
+              // Distinguish an EXPLICIT skip (candidate pressed "Skip") from a
+              // NO-ANSWER turn (silence / timer / auto-advance with no reply).
+              // skip_source is authoritative ('candidate' = button); fall back
+              // to response_type for legacy sessions that predate skip_source.
+              const rt = (q.responseType || '').toLowerCase();
+              const src = (q.skipSource || '').toLowerCase();
+              const ansClean = (answer || '').trim();
+              const noRealAnswer =
+                !ansClean ||
+                ansClean.toLowerCase() === '[skipped]' ||
+                ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(rt);
+              if (!noRealAnswer) {
+                return <span className="text-gray-700">{answer}</span>;
+              }
+              if (src === 'candidate') {
+                return <span className="text-gray-500 italic">Skipped — candidate pressed “Skip”</span>;
+              }
+              if (src) {
+                // silence_skip / timer_expired / auto_* — no reply was given
+                return <span className="text-gray-400 italic">Not Answered — no response from the candidate</span>;
+              }
+              // Legacy session (no skip_source recorded) — use response_type.
+              if (rt === 'idk') {
+                return <span className="text-gray-400 italic">Not Answered — candidate said “I don't know”</span>;
+              }
+              if (rt === 'skipped') {
+                return <span className="text-gray-500 italic">Skipped</span>;
+              }
+              return <span className="text-gray-400 italic">Not Answered — no response from the candidate</span>;
+            })()}
           </div>
         </div>
 

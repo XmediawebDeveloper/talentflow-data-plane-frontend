@@ -896,7 +896,7 @@ function buildPerQuestionDetailsFromHistory(
     // dedicated IDK pipeline. auto_skipped_by_coverage is already
     // filtered earlier, but kept here for safety.
     if (
-      rt === 'skipped' || rt === 'timeout' || rt === 'idk' ||
+      rt === 'skipped' || rt === 'not_answered' || rt === 'timeout' || rt === 'idk' ||
       rt === 'low_coverage' || rt === 'auto_skipped_by_coverage'
     ) {
       return true;
@@ -1278,6 +1278,11 @@ function buildPerQuestionDetailsFromHistory(
       section,
       question: String(q?.question || ''),
       answer: String(q?.answer || ''),
+      // Carry the response type + skip source so the UI can distinguish
+      // "Skipped" (candidate pressed Skip → skip_source='candidate') from
+      // "Not Answered" (silence / timer / auto advance with no reply).
+      responseType: String(q?.response_type || '').toLowerCase(),
+      skipSource: String(q?.skip_source || '').toLowerCase(),
       skills,
       questionScore,
       isUnscored,
@@ -2174,17 +2179,25 @@ export function buildDashboardData(params: {
   const mustHaveClustersQA  = rebuildClustersFromQA(mustHaveClusters);
   const niceToHaveClustersQA = rebuildClustersFromQA(niceToHaveClusters);
 
-  // 3. Section averages = simple average of non-unscored, non-zero question
-  //    scores in each section — mirrors the backend's section_question_avg.
-  const mthQARows = perQuestionDetails.filter(q => q.section === 'mth' && !q.isUnscored && q.questionScore > 0);
-  const nthQARows = perQuestionDetails.filter(q => q.section === 'nth' && !q.isUnscored && q.questionScore > 0);
+  // 3. Section averages = simple average of every question that was evaluated
+  //    (not isUnscored). MUST match QuestionsView's per-section math exactly,
+  //    otherwise the headline numbers in Overview / Skill Breakdown / Eval
+  //    Report diverge from the per-Q badges the recruiter sees in Question
+  //    Analysis. The old `questionScore > 0` filter dropped answered questions
+  //    that scored a hard 0.0, inflating these tabs relative to Q Analysis.
+  const mthQARows = perQuestionDetails.filter(q => q.section === 'mth' && !q.isUnscored);
+  const nthQARows = perQuestionDetails.filter(q => q.section === 'nth' && !q.isUnscored);
 
+  // Round to 1 decimal — matches QuestionsView (mhScore/nhScore) so the
+  // headline numbers in Overview / Skill Breakdown / Eval Report agree with
+  // the per-section badge inside Question Analysis. Keeping 2-decimal here
+  // was producing rendered mismatches like 6.95 (Overview) vs 7.00 (Q Analysis).
   const mustHaveAvgQA = mthQARows.length > 0
-    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 100) / 100
+    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 10) / 10
     : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
 
   const niceToHaveAvgQA = nthQARows.length > 0
-    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 100) / 100
+    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 10) / 10
     : niceToHaveAvg;
 
   // 4. Final score from QA-derived section averages.

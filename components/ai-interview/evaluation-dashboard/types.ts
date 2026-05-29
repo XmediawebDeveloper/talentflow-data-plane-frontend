@@ -115,6 +115,14 @@ export interface PerQuestionDetail {
    *  Reviewers need this on the Question Analysis page to validate the AI-
    *  assigned score — without it, the score is a black box. */
   answer: string;
+  /** Backend response type for this turn: 'answered' | 'skipped' |
+   *  'not_answered' | 'idk' | 'timeout' | 'low_coverage' | ''.
+   *  Drives the "Skipped" vs "Not Answered" label distinction. */
+  responseType?: string;
+  /** Source of a skip/advance: 'candidate' = the candidate pressed the Skip
+   *  button (→ "Skipped"); anything else ('silence_skip' / 'timer_expired' /
+   *  'auto_*' / '') = no reply was given (→ "Not Answered"). */
+  skipSource?: string;
   skills: PerQuestionSkill[];
   questionScore: number;                 // 0-10, weighted average
   /** True when EVERY skill on this question is unscored (no evaluator rows

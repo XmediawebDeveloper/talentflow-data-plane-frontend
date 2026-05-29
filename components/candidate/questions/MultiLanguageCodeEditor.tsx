@@ -1012,7 +1012,7 @@ export function MultiLanguageCodeEditor({
             {/* Run Button */}
             <Button
               onClick={handleRunCode}
-              disabled={isRunning || isSubmitting || hasSubmitted}
+              disabled={isRunning || isSubmitting || hasSubmitted || isLocked}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isRunning ? (
@@ -1072,7 +1072,7 @@ export function MultiLanguageCodeEditor({
               <label className="text-xs text-gray-400 uppercase tracking-wide">
                 Program Input (stdin)
               </label>
-              {question.sample_input && customInput !== question.sample_input && (
+              {!isLocked && question.sample_input && customInput !== question.sample_input && (
                 <button
                   onClick={() => {
                     const nextInput = question.sample_input || '';
@@ -1097,7 +1097,10 @@ export function MultiLanguageCodeEditor({
             </div>
             <textarea
               value={customInput}
+              readOnly={isLocked}
+              disabled={isLocked}
               onChange={(e) => {
+                if (isLocked) return; // Cannot edit input after submission
                 const nextInput = e.target.value;
                 setCustomInput(nextInput);
                 setExecutionOutput(null);
@@ -1113,7 +1116,7 @@ export function MultiLanguageCodeEditor({
                 });
               }}
               placeholder="Enter the program input here, then click Run."
-              className="w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
             <p className="text-xs text-gray-400 mt-1">
               Provide the input your program should read, then run it to check the output.
