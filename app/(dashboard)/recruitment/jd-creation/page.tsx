@@ -305,51 +305,16 @@ function JDCreationContent() {
     router.push('/recruitment/job-openings');
   };
 
-  // Handle successful JD publish - redirect to assessments page if coming from assessments
-  const handleJDPublish = (publishedJD: any) => {
-    console.log('[JD-CREATION-PAGE] ==================== PUBLISH CALLBACK ====================');
-    console.log('[JD-CREATION-PAGE] fromAssessment state:', fromAssessment);
-    console.log('[JD-CREATION-PAGE] URL from param:', searchParams.get('from'));
-    console.log('[JD-CREATION-PAGE] sessionStorage:', typeof window !== 'undefined' ? sessionStorage.getItem('jd_return_to_assessments') : null);
-    console.log('[JD-CREATION-PAGE] publishedJD:', publishedJD);
-    console.log('[JD-CREATION-PAGE] publishedJD.id:', publishedJD?.id);
-    console.log('[JD-CREATION-PAGE] publishedJD.title:', publishedJD?.title);
-
-    // FORCE CHECK: Re-check all sources before redirecting
-    const shouldRedirect = fromAssessment ||
-                          searchParams.get('from') === 'assessment' ||
-                          (typeof window !== 'undefined' && sessionStorage.getItem('jd_return_to_assessments') === 'true');
-
-    console.log('[JD-CREATION-PAGE] shouldRedirect:', shouldRedirect);
-
-    if (shouldRedirect) {
-      if (publishedJD?.id) {
-        const redirectUrl = `/recruitment/assessments?create=true&jd_id=${publishedJD.id}&jd_title=${encodeURIComponent(publishedJD.title || 'New Job')}`;
-        console.log('[JD-CREATION-PAGE] ✅ ✅ ✅ REDIRECTING to:', redirectUrl);
-        console.log('[JD-CREATION-PAGE] Full URL will be:', window.location.origin + redirectUrl);
-
-        // Clear sessionStorage intent
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('jd_return_to_assessments');
-        }
-
-        // Use setTimeout to ensure the redirect happens after React finishes rendering
-        setTimeout(() => {
-          console.log('[JD-CREATION-PAGE] 🚀 🚀 🚀 EXECUTING NAVIGATION NOW...');
-          console.log('[JD-CREATION-PAGE] Calling router.push with:', redirectUrl);
-          router.push(redirectUrl);
-        }, 100);
-      } else {
-        console.error('[JD-CREATION-PAGE] ❌ ❌ ❌ Cannot redirect: publishedJD.id is missing!');
-      }
-    } else {
-      console.log('[JD-CREATION-PAGE] ⚠️ ⚠️ ⚠️ Not redirecting - not from assessment page');
-      console.log('[JD-CREATION-PAGE] All checks failed:');
-      console.log('[JD-CREATION-PAGE]   - fromAssessment state:', fromAssessment);
-      console.log('[JD-CREATION-PAGE]   - URL from param:', searchParams.get('from'));
-      console.log('[JD-CREATION-PAGE]   - sessionStorage:', typeof window !== 'undefined' ? sessionStorage.getItem('jd_return_to_assessments') : null);
+  // Handle successful JD publish.
+  // Per product decision: publishing a JD never auto-redirects to Assessment —
+  // the user stays on the JD success screen (View Job Details / Create another
+  // JD). We also clear the sticky `jd_return_to_assessments` intent so any
+  // leftover flag from a prior assessment-initiated session can't bounce a
+  // normal publish to the Assessments page.
+  const handleJDPublish = (_publishedJD: any) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('jd_return_to_assessments');
     }
-    console.log('[JD-CREATION-PAGE] ==========================================================');
   };
 
   // Memoize editingJD to prevent unnecessary re-renders and state resets in JDCreation

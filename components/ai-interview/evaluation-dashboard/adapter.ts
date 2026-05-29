@@ -1268,7 +1268,13 @@ function buildPerQuestionDetailsFromHistory(
     const bundledFollowUp = bundledFollowUpFromRow(q);
 
     return {
-      qNum: displayQ,
+      // Use origQ (backend question_number) not displayQ (historyIdx+1).
+      // displayQ shifts when any history entry is filtered before MHS Q1
+      // (e.g. a reconnect-ack at historyIdx=0), causing MHS Q1→slot2,
+      // Q2→slot3 … a full one-slot mis-mapping of plan skills.
+      // origQ is the backend's authoritative slot counter — stable regardless
+      // of how many rows were filtered from the raw history array.
+      qNum: origQ,
       section,
       question: String(q?.question || ''),
       answer: String(q?.answer || ''),
@@ -2039,14 +2045,17 @@ export function buildDashboardData(params: {
       section: 'mth' | 'nth',
       planRows: any[],
       rows: PerQuestionDetail[],
+      // Number of planned questions in all sections that come BEFORE this one
+      // (0 for MHS, sectionCap.mth for NHS). Converts the global origQ stored
+      // in row.qNum into the section-local slot number that matches the plan's
+      // `question_number` field. Without this offset, NHS rows (global qNums
+      // 9-12) never hit the planByQnum map (keys 1-4) and always fall through
+      // to the fragile array-index fallback.
+      sectionOffset: number = 0,
     ): PerQuestionDetail[] => {
       if (planRows.length === 0) return rows;
-      // Index plan rows by question_number so we pair by slot identity, not
-      // array position. Previously this used `planRows[idx]` which shifted
-      // every row whenever a history entry was dropped from the bucket
-      // (e.g. a rejected resume-ack or a slot-overflow guard rejection).
-      // Build a 1-based fallback for legacy snapshots missing
-      // `question_number` so the pairing still resolves.
+      // Index plan rows by their section-local question_number.
+      // Build a 1-based fallback for legacy snapshots missing question_number.
       const planByQnum = new Map<number, any>();
       planRows.forEach((pr, i) => {
         const qn = Number(pr?.question_number);
@@ -2054,12 +2063,14 @@ export function buildDashboardData(params: {
         planByQnum.set(key, pr);
       });
       return rows.map((row, idx) => {
-        // Prefer row.qNum (the global q_num saved by the backend); fall back
-        // to bucket index for legacy rows without it.
-        const lookupKey = (Number.isFinite(row.qNum as number) && (row.qNum as number) > 0)
-          ? (row.qNum as number)
+        // Compute section-local slot number: subtract the cumulative count of
+        // questions asked in earlier sections. Falls back to bucket index when
+        // qNum is absent (legacy rows predating origQ storage).
+        const globalQ = Number(row.qNum);
+        const slotNum = (Number.isFinite(globalQ) && globalQ > 0)
+          ? (globalQ - sectionOffset)
           : (idx + 1);
-        const planRow = planByQnum.get(lookupKey) ?? planRows[idx];
+        const planRow = planByQnum.get(slotNum) ?? planRows[idx];
         if (!planRow) return row;
         const planSkills = buildSkillsFromPlanRow(planRow);
         if (planSkills.length === 0) return row;
@@ -2095,8 +2106,12 @@ export function buildDashboardData(params: {
         return { ...row, skills: replacedSkills };
       });
     };
-    buckets.mth = applyPlanForSection('mth', planRowsBySection.mth, buckets.mth);
-    buckets.nth = applyPlanForSection('nth', planRowsBySection.nth, buckets.nth);
+    // MHS offset = 0 (starts at global Q1).
+    // NHS offset = planned MHS count so slot 9 → section-local 1, etc.
+    const mthOffset = 0;
+    const nthOffset = sectionCap.mth ?? 0;
+    buckets.mth = applyPlanForSection('mth', planRowsBySection.mth, buckets.mth, mthOffset);
+    buckets.nth = applyPlanForSection('nth', planRowsBySection.nth, buckets.nth, nthOffset);
     // HR rows keep their existing skills (HR is bank-text-based; no plan).
 
     // ── Renumber qNum to clean 1-based section-local index ──────────

@@ -366,7 +366,7 @@ export default function AIInterviewPreview() {
                   <Timer className="w-5 h-5 text-brand-cyan" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Fixed — {duration} min</p>
+                  <p className="text-sm font-semibold text-gray-900">Timed — {duration} min</p>
                   <p className="text-xs text-gray-500">Structured interview with timed rounds</p>
                 </div>
               </>

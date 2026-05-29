@@ -537,7 +537,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {interviewMode === 'flexible' ? (
                       <><Zap className="w-2.5 h-2.5" /> Flexible</>
                     ) : (
-                      <><Timer className="w-2.5 h-2.5" /> Fixed</>
+                      <><Timer className="w-2.5 h-2.5" /> Timed</>
                     )}
                   </span>
                   {enabledRounds.length > 0 && (
@@ -715,7 +715,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <Timer className="w-5 h-5 text-brand-orange-deep" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">Fixed — {duration} min</p>
+                        <p className="text-sm font-semibold text-gray-900">Timed — {duration} min</p>
                         <p className="text-xs text-gray-500">Structured interview with timed rounds</p>
                       </div>
                     </>
@@ -1615,7 +1615,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Interview Mode</span>
                       </div>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${interviewMode === 'fixed' ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'}`}>
-                        {interviewMode === 'fixed' ? `Fixed — ${config.duration_minutes} min` : 'Flexible'}
+                        {interviewMode === 'fixed' ? `Timed — ${config.duration_minutes} min` : 'Flexible'}
                       </span>
                     </div>
 

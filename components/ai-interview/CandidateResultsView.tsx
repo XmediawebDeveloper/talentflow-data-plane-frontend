@@ -1151,8 +1151,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           </div>
         )}
 
-        {/* Partial warning banner */}
-        {isPartial && (
+        {/* Partial warning banner — only when truly partial (not auto-completed) */}
+        {isPartial && !isCompleted && (
           <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             Interview disconnected — showing partial results
@@ -1184,6 +1184,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             '',
           ]);
           if (normal.has(rawReason.toLowerCase().split(':')[0].trim())) return null;
+          // If the session is fully completed (status=completed, evaluation present)
+          // a disconnect that happened at the very end is not worth surfacing —
+          // the interview finished with a full evaluation. Don't show an error
+          // banner that implies something went wrong.
+          if (isCompleted) return null;
 
           // Auto-close reasons we want to surface prominently.
           const lower = rawReason.toLowerCase();
