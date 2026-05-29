@@ -130,12 +130,10 @@ export function SkillsView({ data }: { data: DashboardData }) {
   const nhSkills = flatten(data.niceToHaveClusters);
   const allSkills = [...mhSkills, ...nhSkills];
 
-  const sectionAvg = (skills: typeof mhSkills): number =>
-    skills.length > 0
-      ? skills.reduce((sum, s) => sum + s.score, 0) / skills.length
-      : 0;
-  const mhAvg = sectionAvg(mhSkills);
-  const nhAvg = sectionAvg(nhSkills);
+  // Use the adapter's QA-derived section averages so Skill Breakdown shows
+  // the same numbers as Overview and Question Analysis.
+  const mhAvg = data.scores.mustHave;
+  const nhAvg = data.scores.niceToHave;
 
   const renderSkillCard = (
     s: typeof allSkills[number],
