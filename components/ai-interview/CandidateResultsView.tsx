@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles,
+  Download, Loader2, Sparkles, SkipForward,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -25,6 +25,7 @@ import { EvalReportCombined } from './evaluation-dashboard/EvalReportCombined';
 // EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
 // import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
 import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
+import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -2237,7 +2238,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     || c.startsWith('thank you for speaking')
                     || c.startsWith('it was great chatting');
                 };
-                const messages = (liveSession.conversation_transcript || interview.conversation_transcript || [])
+                const rawMessages = (liveSession.conversation_transcript || interview.conversation_transcript || []);
+                const messages = rawMessages
                   .filter((msg: any) => msg.role !== 'system' && msg.content?.trim() && !_isMetaAssistant(msg));
 
                 if (messages.length === 0) return renderPlaceholder('No transcript available');
@@ -2290,6 +2292,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   }
                   return '';
                 };
+
+                // Skip-status detection: a skipped question shows in the chat as
+                // a Linda bubble with NO candidate reply after it, so the viewer
+                // can't tell HOW it was skipped. Shared with the Question Analysis
+                // answer block via buildSkipReasoner (transcript-sequence first —
+                // reliable; skip_source enhancement). "answered" is decided by the
+                // caller (a real user reply follows it in the chat).
+                const _skipReason = buildSkipReasoner(rawMessages, _chatQh);
 
                 type Labeled = { msg: any; label: string; isFollowUp: boolean; qtype: QType };
                 const labeled: Labeled[] = [];
@@ -2405,6 +2415,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           const language: string | undefined = !isAssistant ? msg.language : undefined;
                           const hasCorrection = !isAssistant && rawContent && rawContent !== content;
                           const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
+                          // For a Linda question that was skipped, show WHY. A
+                          // question is "answered" when the NEXT chat message is a
+                          // real candidate reply; otherwise it was skipped and
+                          // _skipReason explains how. Only on assistant question
+                          // bubbles (never closing / clarification rephrases).
+                          const _nextMsg = labeled[idx + 1]?.msg;
+                          const _answered = !!_nextMsg && _nextMsg.role === 'user' && !!(_nextMsg.content || '').trim();
+                          const skipNote = isAssistant && qtype !== 'closing' && !isClarificationMsg(msg)
+                            ? _skipReason(content, _answered)
+                            : null;
 
                           return (
                             <div
@@ -2436,9 +2456,23 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 )}
 
                                 {isAssistant ? (
-                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-slate-100 text-gray-800 rounded-tl-sm ring-1 ring-slate-200/60">
-                                    {content}
-                                  </div>
+                                  <>
+                                    <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-slate-100 text-gray-800 rounded-tl-sm ring-1 ring-slate-200/60">
+                                      {content}
+                                    </div>
+                                    {skipNote && (
+                                      <div
+                                        className={`mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium ring-1 ${
+                                          skipNote.tone === 'amber'
+                                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                                            : 'bg-slate-50 text-slate-500 ring-slate-200'
+                                        }`}
+                                      >
+                                        <SkipForward className="w-3 h-3" />
+                                        {skipNote.text}
+                                      </div>
+                                    )}
+                                  </>
                                 ) : hasCorrection && diff ? (
                                   <>
                                     {/* Original (raw ASR) — shown FIRST */}
@@ -2785,6 +2819,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                   const isFu = r.type === 'Followup';
                                   const isDd = r.type === 'Deep Dive';
                                   const isSub = isFu || isDd;
+                                  // No transcript for this row → it was skipped;
+                                  // surface WHY (candidate "Next Question" vs the
+                                  // "Are you there?" silence flow vs timeout). The
+                                  // empty raw+corrected IS the "not answered" signal.
+                                  const _rowAnswered = !!(r.raw?.trim() || r.corrected?.trim());
+                                  const rowSkip = _skipReason(r.question, _rowAnswered);
                                   return (
                                     <tr key={idx} className={`align-top ${isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : 'bg-white'}`}>
                                       <td className="px-3 py-3 align-top text-xs text-gray-500">{r.sno}</td>
@@ -2806,12 +2846,18 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                       <td className="px-3 py-3 align-top text-brand-orange-deep leading-snug">
                                         {diff && diff.mode !== 'none'
                                           ? <DiffText parts={diff.raw} tone="raw" />
-                                          : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                          : rowSkip
+                                            ? <span className="text-gray-400">—</span>
+                                            : <span className="text-gray-700">{r.raw || '—'}</span>}
                                       </td>
                                       <td className="px-3 py-3 align-top text-gray-800 leading-snug">
                                         {diff && diff.mode !== 'none'
                                           ? <DiffText parts={diff.corrected} tone="corrected" />
-                                          : <span>{r.corrected || '—'}</span>}
+                                          : rowSkip
+                                            ? <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${rowSkip.tone === 'amber' ? 'text-amber-700' : 'text-slate-500'}`}>
+                                                <SkipForward className="w-3 h-3" />{rowSkip.text}
+                                              </span>
+                                            : <span>{r.corrected || '—'}</span>}
                                       </td>
                                       <td className="px-3 py-3 align-top text-xs text-gray-500">{r.language || 'English'}</td>
                                       <td className="px-3 py-3 align-top text-xs text-gray-500 whitespace-nowrap">{formatTs(r.timestamp)}</td>

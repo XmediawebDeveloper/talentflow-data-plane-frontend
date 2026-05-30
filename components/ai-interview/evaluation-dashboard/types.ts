@@ -157,6 +157,13 @@ export interface PerQuestionDetail {
      *  verify the volunteering at a glance without scrolling back. */
     source_excerpt?: string;
   };
+  /** When this question got NO real answer, HOW it was skipped — candidate
+   *  pressed "Next Question" vs went silent ("Are you there?") vs timed out.
+   *  Derived (adapter, via buildSkipReasoner) from the raw conversation
+   *  transcript + skip_source. Undefined when the question was answered.
+   *  Rendered in the Question Analysis answer block; mirrors the Transcript
+   *  tab so the two views agree. */
+  skipReason?: { text: string; tone: 'amber' | 'gray' };
 }
 
 export interface DashboardData {

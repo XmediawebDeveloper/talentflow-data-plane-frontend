@@ -90,11 +90,17 @@ export function EvalReportCombined({
   const radarData = radarBase.map(s => ({ skill: s.name, score: s.score, fullMark: 10 }));
 
   // ── Coverage per section ──────────────────────────────────────────────
+  // Use the SAME definition as the Cluster Coverage tab (CoverageV2) so the two
+  // views never disagree: "covered" = the skill was ASKED/probed (s.asked),
+  // NOT how the candidate scored. "demonstrated" = score ≥ 5 (Medium+). A skill
+  // can be covered (asked) but not demonstrated. (Previously this used
+  // score > 0, which gave 64% here vs 100% in the Cluster Coverage tab.)
   const coverage = (clusters: typeof mustHaveClusters) => {
     const total = clusters.reduce((n, c) => n + c.skills.length, 0);
-    const covered = clusters.reduce((n, c) => n + c.skills.filter(s => s.score > 0).length, 0);
+    const covered = clusters.reduce((n, c) => n + c.skills.filter(s => s.asked).length, 0);
+    const demonstrated = clusters.reduce((n, c) => n + c.skills.filter(s => s.score >= 5).length, 0);
     const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
-    return { total, covered, pct, clusters: clusters.length };
+    return { total, covered, demonstrated, pct, clusters: clusters.length };
   };
   const mhCov = coverage(mustHaveClusters);
   const nhCov = coverage(niceToHaveClusters);
@@ -432,16 +438,9 @@ export function EvalReportCombined({
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
-              <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
-              <div className="text-2xl font-bold text-indigo-700">{(scores.final / 10).toFixed(2)}</div>
-              <div className="pr-3">
-                <div className="h-3.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-700 rounded-full" style={{ width: `${scores.final}%` }} />
-                </div>
-              </div>
-              <div className="text-xs italic text-gray-500">Reference only</div>
-            </div>
+            {/* Overall Average Score row removed 2026-05-30 — Pass/Fail is
+                driven by the Must-Have section; the NTH-weighted overall was
+                confusing and not used for the decision. */}
           </div>
         </div>
 
@@ -516,7 +515,7 @@ export function EvalReportCombined({
                       style={{ width: `${mhCov.pct}%` }} />
                   </div>
                   <div className="text-xs text-gray-500">
-                    {mhCov.covered} of {mhCov.total} skills covered across {mhCov.clusters} cluster{mhCov.clusters !== 1 ? 's' : ''}
+                    {mhCov.covered} of {mhCov.total} skills asked · <span className="font-semibold text-gray-700">{mhCov.demonstrated} demonstrated</span> (score ≥ 5)
                   </div>
                 </div>
               )}
@@ -534,7 +533,7 @@ export function EvalReportCombined({
                       style={{ width: `${nhCov.pct}%` }} />
                   </div>
                   <div className="text-xs text-gray-500">
-                    {nhCov.covered} of {nhCov.total} skills covered across {nhCov.clusters} cluster{nhCov.clusters !== 1 ? 's' : ''}
+                    {nhCov.covered} of {nhCov.total} skills asked · <span className="font-semibold text-gray-700">{nhCov.demonstrated} demonstrated</span> (score ≥ 5)
                   </div>
                 </div>
               )}

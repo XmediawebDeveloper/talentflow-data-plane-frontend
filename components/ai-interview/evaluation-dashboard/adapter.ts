@@ -8,6 +8,7 @@ import type {
   DashboardData, Cluster, Skill, Level, Recommendation, InterviewResponse,
   PerQuestionDetail, PerQuestionSkill, PerQuestionFollowUp,
 } from './types';
+import { buildSkipReasoner } from './skipReason';
 
 interface ClusterConfigDef {
   id?: string;
@@ -2136,6 +2137,28 @@ export function buildDashboardData(params: {
 
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];
   })();
+
+  // ── Skip-reason annotation ──────────────────────────────────────────────
+  // For questions with no real answer, attach HOW it was skipped (candidate
+  // "Next Question" vs "Are you there?" silence vs timer) so the Question
+  // Analysis answer block can differentiate them, matching the Transcript tab.
+  // Same derivation (buildSkipReasoner): transcript-sequence first, skip_source
+  // as enhancement. "answered" is decided here from the row's answer text +
+  // responseType, mirroring EvaluationDashboardV2's noRealAnswer rule.
+  {
+    const _reasoner = buildSkipReasoner(conversation_transcript || [], (eval_?.question_history as any[]) || []);
+    for (const _row of perQuestionDetails) {
+      const _rt = (_row.responseType || '').toLowerCase();
+      const _ans = (_row.answer || '').trim();
+      const _noRealAnswer = !_ans
+        || _ans.toLowerCase() === '[skipped]'
+        || ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(_rt);
+      if (_noRealAnswer) {
+        const _reason = _reasoner(_row.question || '', false);
+        if (_reason) _row.skipReason = _reason;
+      }
+    }
+  }
 
   // ── Derive ALL scores from perQuestionDetails (single source of truth) ──
   // Question Analysis is always correct because it aligns each question's

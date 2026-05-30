@@ -5,7 +5,7 @@
 // MUI Accordion/Card → Tailwind disclosure. Wired to live DashboardData.
 import { useState } from 'react';
 import {
-  ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare,
+  ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 
@@ -522,12 +522,14 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
           <div className="text-sm whitespace-pre-wrap break-words">
             {(() => {
-              // Distinguish an EXPLICIT skip (candidate pressed "Skip") from a
-              // NO-ANSWER turn (silence / timer / auto-advance with no reply).
-              // skip_source is authoritative ('candidate' = button); fall back
-              // to response_type for legacy sessions that predate skip_source.
+              // Distinguish a real answer from a skipped/no-answer turn, and for
+              // skips show HOW it was skipped — candidate "Next Question" vs
+              // "Are you there?" silence vs timer. The reason is derived in the
+              // adapter (q.skipReason, via buildSkipReasoner) from the raw
+              // transcript + skip_source, identical to the Transcript tab. We
+              // fall back to a generic label only when the adapter couldn't
+              // derive one (e.g. no transcript available).
               const rt = (q.responseType || '').toLowerCase();
-              const src = (q.skipSource || '').toLowerCase();
               const ansClean = (answer || '').trim();
               const noRealAnswer =
                 !ansClean ||
@@ -536,19 +538,21 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               if (!noRealAnswer) {
                 return <span className="text-gray-700">{answer}</span>;
               }
+              if (q.skipReason) {
+                return (
+                  <span className={`inline-flex items-center gap-1.5 italic ${q.skipReason.tone === 'amber' ? 'text-amber-700' : 'text-gray-400'}`}>
+                    <SkipForward className="w-3.5 h-3.5" />
+                    {q.skipReason.text}
+                  </span>
+                );
+              }
+              // Fallback (no transcript to derive from) — legacy behaviour.
+              const src = (q.skipSource || '').toLowerCase();
               if (src === 'candidate') {
-                return <span className="text-gray-500 italic">Skipped — candidate pressed “Skip”</span>;
+                return <span className="text-gray-500 italic">Skipped — candidate clicked “Next Question”</span>;
               }
-              if (src) {
-                // silence_skip / timer_expired / auto_* — no reply was given
-                return <span className="text-gray-400 italic">Not Answered — no response from the candidate</span>;
-              }
-              // Legacy session (no skip_source recorded) — use response_type.
               if (rt === 'idk') {
                 return <span className="text-gray-400 italic">Not Answered — candidate said “I don't know”</span>;
-              }
-              if (rt === 'skipped') {
-                return <span className="text-gray-500 italic">Skipped</span>;
               }
               return <span className="text-gray-400 italic">Not Answered — no response from the candidate</span>;
             })()}
