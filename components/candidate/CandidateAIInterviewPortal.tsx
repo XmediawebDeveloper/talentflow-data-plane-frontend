@@ -45,6 +45,11 @@ interface Props {
   token: string;
 }
 
+// Minimum bytes to buffer before flushing a non-final screen-recording segment.
+// S3 multipart upload requires every part except the last to be >= 5 MiB; the
+// margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
+const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   return Promise.race([
     promise,
@@ -321,30 +326,33 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
     const doUpload = async () => {
       const chunks = screenChunksRef.current;
-      if (chunks.length === 0) return;
       screenChunksRef.current = [];
-      // Final segment: if periodic checkpoints already ran, this carries the
-      // trailing clusters since the last checkpoint and the backend appends
-      // it. If no checkpoint ran (very short interview), this is segment 0
-      // and the backend overwrites with the full recording.
       const segmentIndex = screenSegmentIndexRef.current;
-      const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
-      const blob = new Blob(chunks, { type: mimeType });
-      try {
-        await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex);
-        screenSegmentIndexRef.current = segmentIndex + 1;
-      } catch (e) {
-        console.warn('[ScreenRecording] Upload failed:', e);
-      } finally {
-        screenStreamRef.current?.getTracks().forEach(t => t.stop());
-        screenStreamRef.current = null;
-        screenRecorderRef.current = null;
-        recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
-        recordingMicStreamRef.current = null;
-        recordingAudioCtxRef.current?.close().catch(() => {});
-        recordingAudioCtxRef.current = null;
-        (window as any).__interviewRecordingDest = null;
+      // Final segment: ship the trailing clusters (any size) as the LAST S3
+      // multipart part with is_final=true, which tells the backend to complete
+      // the multipart upload into one object. If nothing was ever recorded (no
+      // prior segments AND empty buffer) there's no upload to complete — skip
+      // straight to cleanup.
+      const nothingRecorded = chunks.length === 0 && segmentIndex === 0;
+      if (!nothingRecorded) {
+        const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
+        const blob = new Blob(chunks, { type: mimeType });
+        try {
+          await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex, true);
+          screenSegmentIndexRef.current = segmentIndex + 1;
+        } catch (e) {
+          console.warn('[ScreenRecording] Final upload failed:', e);
+        }
       }
+      // Cleanup always runs, whether or not we uploaded.
+      screenStreamRef.current?.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+      screenRecorderRef.current = null;
+      recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
+      recordingMicStreamRef.current = null;
+      recordingAudioCtxRef.current?.close().catch(() => {});
+      recordingAudioCtxRef.current = null;
+      (window as any).__interviewRecordingDest = null;
     };
 
     if (recorder.state === 'inactive') {
@@ -671,24 +679,24 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             try { recorder.requestData(); } catch { finish(); return; }
             setTimeout(finish, 1500); // safety net for throttled tabs
           });
+          // Only flush once we have enough bytes for a valid non-final S3
+          // multipart part (>= SCREEN_MIN_SEGMENT_BYTES). S3 forbids sub-5-MiB
+          // intermediate parts, so a smaller buffer is held back for the next
+          // tick; the trailing remainder ships as the final (any-size) part from
+          // stopAndUploadScreenRecording.
+          const buffered = screenChunksRef.current.reduce((sum, c) => sum + c.size, 0);
+          if (buffered < SCREEN_MIN_SEGMENT_BYTES) return;
           // Atomically snapshot the buffered chunks and clear the ref so
           // subsequent ondataavailable pushes go into a fresh array.
           // Single-threaded JS guarantees no chunk push can race between
           // these two synchronous statements.
           const chunks = screenChunksRef.current;
-          if (chunks.length === 0) return;
           screenChunksRef.current = [];
           const segmentIndex = screenSegmentIndexRef.current;
           const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
           const blob = new Blob(chunks, { type: mimeType });
-          if (blob.size < 1024) {
-            // Header-only / empty payload — push chunks back so the next
-            // checkpoint can include them, and skip this upload.
-            screenChunksRef.current = chunks.concat(screenChunksRef.current);
-            return;
-          }
           try {
-            await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex);
+            await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex, false);
             screenSegmentIndexRef.current = segmentIndex + 1;
             console.log(`[ScreenRecording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
           } catch (err: any) {

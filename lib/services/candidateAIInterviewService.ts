@@ -159,14 +159,15 @@ export const candidateAIInterviewService = {
     token: string,
     blob: Blob,
     segmentIndex = 0,
-  ): Promise<{ message: string; path: string }> {
-    // segmentIndex 0 → backend opens file 'wb' (overwrite, full recording).
-    // segmentIndex > 0 → backend opens 'ab' (append clusters only).
-    // Lets the client clear its in-memory chunk buffer after each upload
-    // instead of growing it for the whole interview.
+    isFinal = false,
+  ): Promise<{ message: string; path: string | null; completed?: boolean }> {
+    // Each segment is one S3 multipart-upload part (part_number = segmentIndex + 1).
+    // Non-final segments must be >= 5 MiB; the final segment (isFinal) triggers
+    // CompleteMultipartUpload on the backend, assembling the single object.
     const formData = new FormData();
     formData.append('file', blob, 'screen.webm');
     formData.append('segment_index', String(segmentIndex));
+    formData.append('is_final', isFinal ? 'true' : 'false');
     const uploadUrl = `${API_BASE_URL}/candidate/ai-interview/${token}/upload-screen-recording`;
     const response = await fetch(uploadUrl, { method: 'POST', body: formData });
     if (!response.ok) {
@@ -176,9 +177,16 @@ export const candidateAIInterviewService = {
     return response.json();
   },
 
-  async uploadRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
+  async uploadRecording(
+    token: string,
+    blob: Blob,
+    segmentIndex = 0,
+    isFinal = false,
+  ): Promise<{ message: string; path: string | null; completed?: boolean }> {
     const formData = new FormData();
     formData.append('file', blob, 'recording.webm');
+    formData.append('segment_index', String(segmentIndex));
+    formData.append('is_final', isFinal ? 'true' : 'false');
     // Use native fetch (not axios) for video upload:
     // - No Content-Type override that could drop the multipart boundary
     // - No default body size limits from axios interceptors

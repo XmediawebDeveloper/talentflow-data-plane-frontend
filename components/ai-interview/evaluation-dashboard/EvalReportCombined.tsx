@@ -10,7 +10,7 @@
 //                        question-by-question, recommendations, methodology
 // All values derive from the same DashboardData the other tabs use, so the
 // numbers stay identical across tabs.
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { CheckCircle, XCircle, Play, Clock, Download, Sparkles } from 'lucide-react';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
@@ -39,10 +39,6 @@ function scoreColor(score: number) {
   return                   { text: 'text-red-500',     bar: 'bg-red-500'     };
 }
 
-function escapeHtml(s: string): string {
-  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 export function EvalReportCombined({
   data,
   aiConfidence,
@@ -53,14 +49,17 @@ export function EvalReportCombined({
   const {
     candidate, interview, scores, finalResult, sectionsPresent,
     mustHaveClusters, niceToHaveClusters, interviewResponses, perQuestionDetails,
+    aiSummary, strengths, weaknesses,
   } = data;
 
-  const reportRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
   const finalResultLabel = (finalResult ?? (isPassed ? 'Pass' : 'Fail')).toUpperCase();
-  const confidence = aiConfidence ?? Math.round(scores.final);
+  // Match Score is MUST-HAVE based only (2026-05-30) — the Must-Have section is
+  // the Pass/Fail gate, so the headline % must track it, NOT the NTH-weighted
+  // overall (scores.final). MHS is 0-10 → ×10 for a 0-100%.
+  const confidence = Math.round(scores.mustHave * 10);
   const avatarInitials =
     candidate.name.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'C';
 
@@ -115,174 +114,173 @@ export function EvalReportCombined({
     },
   ];
 
-  // ── PDF export ─────────────────────────────────────────────────────────
-  // IMPORTANT: we do NOT screenshot the on-screen React tree. This app uses
-  // Tailwind v4, whose colors are emitted as oklch(); the html2canvas bundled
-  // in html2pdf.js cannot parse oklch() and throws, so capturing the live DOM
-  // silently fails. Instead we build a dedicated print document using ONLY
-  // inline hex/rgb colors — which also yields a cleaner, purpose-built report
-  // than a screenshot of the web UI (no charts, tighter typography).
+  // ── PDF export — complete professional recruiter report (native jsPDF) ──
+  // Per the recruiter spec: Final Result, Must-Have & Nice-to-Have section
+  // scores, EVERY question with its 0-10 score, EVERY skill with its 0-10
+  // score, Must-Have / Nice-to-Have clearly separated, and HR shown but NOT
+  // scored — nothing omitted. Drawn with jsPDF primitives (html2canvas can't
+  // be used: Tailwind v4 oklch colors crash it → blank pages). Auto-paginates.
   const exportPDF = async () => {
     setExporting(true);
-    const root = document.createElement('div');
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
-      root.style.cssText =
-        'width:760px;padding:32px;font-family:Arial,Helvetica,sans-serif;color:#111827;background:#ffffff;';
-      root.innerHTML = buildPrintHtml();
-      // Off-screen but rendered so html2canvas can measure it.
-      root.style.position = 'fixed';
-      root.style.left = '-10000px';
-      root.style.top = '0';
-      document.body.appendChild(root);
-      const base = `eval_report_${candidate.name || 'candidate'}_${evalId}`.replace(/\s+/g, '_');
-      await html2pdf().set({
-        margin: [10, 10, 12, 10],
-        filename: `${base}.pdf`,
-        image: { type: 'jpeg', quality: 0.96 },
-        html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] },
-      } as any).from(root).save();
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const pageW = 210, pageH = 297, M = 12, CW = pageW - M * 2;
+      let y = M;
+      type RGB = [number, number, number];
+      const ink: RGB = [17, 24, 39], sub: RGB = [107, 114, 128], faint: RGB = [156, 163, 175];
+      const line: RGB = [229, 231, 235], bgc: RGB = [249, 250, 251], white: RGB = [255, 255, 255];
+      const indigo: RGB = [79, 70, 229], indigoDk: RGB = [67, 56, 202];
+      const green: RGB = [16, 185, 129], teal: RGB = [16, 160, 120], red: RGB = [239, 68, 68], amber: RGB = [245, 158, 11];
+      const pass = isPassed;
+      const verdict: RGB = pass ? green : red;
+      const scoreRGB = (s: number): RGB => (s >= 8 ? green : s >= 5 ? teal : s >= 3 ? amber : red);
+      const fill = (c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
+      const txt = (c: RGB) => doc.setTextColor(c[0], c[1], c[2]);
+      const stroke = (c: RGB) => doc.setDrawColor(c[0], c[1], c[2]);
+      const ensure = (h: number) => { if (y + h > pageH - M) { doc.addPage(); y = M; } };
+      const bar = (x: number, by: number, w: number, score: number, c: RGB) => {
+        fill(line); doc.roundedRect(x, by, w, 2, 1, 1, 'F');
+        const fw = Math.max(0, Math.min(w, (score / 10) * w));
+        if (fw > 0.1) { fill(c); doc.roundedRect(x, by, fw, 2, 1, 1, 'F'); }
+      };
+
+      // Header
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); txt(ink);
+      doc.text('AI Interview Evaluation Report', M, y + 4);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); txt(sub);
+      doc.text(`${candidate.name}  ·  ${candidate.role}`, M, y + 9.5);
+      doc.setFontSize(7.5); txt(faint);
+      doc.text(`#${evalId}`, pageW - M, y + 2, { align: 'right' });
+      doc.text(reportGenerated, pageW - M, y + 6, { align: 'right' });
+      y += 13; stroke(indigo); doc.setLineWidth(0.7); doc.line(M, y, pageW - M, y); doc.setLineWidth(0.2); y += 5;
+
+      // Final result + Match Score
+      fill(pass ? [236, 253, 245] : [254, 242, 242]); stroke(verdict); doc.setLineWidth(0.4);
+      doc.roundedRect(M, y, CW, 18, 2, 2, 'FD'); doc.setLineWidth(0.2);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); txt(verdict);
+      doc.text(`Final Result: ${finalResultLabel}`, M + 4, y + 7.5);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
+      doc.text(`${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'} · Must-Have ${scores.mustHave.toFixed(2)} / Threshold ${MHS_THRESHOLD.toFixed(1)}`, M + 4, y + 13.5);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(17); txt(verdict);
+      doc.text(`${confidence}%`, pageW - M - 4, y + 8, { align: 'right' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); txt(sub);
+      doc.text('Match Score (Must-Have)', pageW - M - 4, y + 13, { align: 'right' });
+      y += 23;
+
+      // Section scores summary
+      fill(bgc); stroke(line); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'FD');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(ink);
+      let sx = M + 3;
+      if (sectionsPresent.mustHave) {
+        doc.text(`Must-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Must-Have Section: ');
+        txt(pass ? green : red); doc.text(`${scores.mustHave.toFixed(2)}/10 (${pass ? 'PASS' : 'FAIL'})`, sx, y + 6);
+        sx += doc.getTextWidth(`${scores.mustHave.toFixed(2)}/10 (${pass ? 'PASS' : 'FAIL'})`) + 8; txt(ink);
+      }
+      if (sectionsPresent.niceToHave) {
+        doc.text(`Nice-to-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Nice-to-Have Section: ');
+        txt(indigo); doc.text(`${scores.niceToHave.toFixed(2)}/10 (Info)`, sx, y + 6); txt(ink);
+      }
+      y += 13;
+
+      // ── Per-section question + skill breakdown ────────────────────────
+      const drawSection = (key: 'mth' | 'nth' | 'hr', title: string, scoreVal: number, scored: boolean, badge: string, badgeColor: RGB) => {
+        const qs = perQuestionDetails.filter(q => q.section === key);
+        if (qs.length === 0) return;
+        ensure(16);
+        fill(indigo); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
+        doc.text(title, M + 3, y + 6);
+        doc.setFontSize(9);
+        doc.text(scored ? `Section Score: ${scoreVal.toFixed(2)}/10 · ${badge}` : 'Not Scored', pageW - M - 3, y + 6, { align: 'right' });
+        y += 12;
+
+        qs.forEach((q) => {
+          const rt = (q.responseType || '').toLowerCase();
+          const src = (q.skipSource || '').toLowerCase();
+          let status: { label: string; color: RGB; isScore: boolean };
+          if (key === 'hr') status = { label: 'Not Scored', color: faint, isScore: false };
+          else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
+          else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) status = { label: 'Not Answered', color: faint, isScore: false };
+          else status = { label: `${q.questionScore.toFixed(2)}/10`, color: scoreRGB(q.questionScore), isScore: true };
+
+          const qText = doc.splitTextToSize(q.question || `Question ${q.qNum}`, CW - 28);
+          const qSkills = key === 'hr' ? [] : q.skills;
+          const blockH = 6 + qText.length * 4 + qSkills.length * 4.6 + 5;
+          ensure(blockH);
+
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(indigo);
+          doc.text(`Q${q.qNum}`, M, y + 3);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(status.color);
+          doc.text(status.label, pageW - M, y + 3, { align: 'right' });
+          y += 5;
+
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
+          doc.text(qText, M, y + 2.5); y += qText.length * 4 + 1;
+
+          qSkills.forEach((s) => {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
+            doc.text(`•  ${doc.splitTextToSize(s.name, CW - 52)[0]}`, M + 2, y + 2.5);
+            if (s.is_unscored) {
+              doc.setFontSize(7.5); txt(faint); doc.text('Not evaluated', pageW - M, y + 2.5, { align: 'right' });
+            } else {
+              bar(pageW - M - 38, y + 0.8, 22, s.score, scoreRGB(s.score));
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt(scoreRGB(s.score));
+              doc.text(`${s.score.toFixed(1)}/10`, pageW - M, y + 2.5, { align: 'right' });
+            }
+            y += 4.6;
+          });
+          y += 2.5;
+          stroke(line); doc.setLineWidth(0.1); doc.line(M, y - 1, pageW - M, y - 1); doc.setLineWidth(0.2);
+        });
+        y += 3;
+      };
+
+      drawSection('mth', 'MUST-HAVE SECTION', scores.mustHave, true, pass ? 'PASS' : 'FAIL', verdict);
+      drawSection('nth', 'NICE-TO-HAVE SECTION', scores.niceToHave, true, 'Informational only', indigo);
+      drawSection('hr', 'HR SECTION', 0, false, '', faint);
+
+      // AI Analysis — pass/fail overview
+      ensure(16);
+      fill(indigo); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
+      doc.text(`AI ANALYSIS — Why this candidate ${pass ? 'Passed' : 'Failed'}`, M + 3, y + 6); y += 12;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
+      const verdictLine = `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${scores.mustHave.toFixed(2)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${Math.abs(scores.mustHave - MHS_THRESHOLD).toFixed(2)}). This drives the ${finalResultLabel} decision; Nice-to-Have (${scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.`;
+      const vl = doc.splitTextToSize(verdictLine, CW); ensure(vl.length * 4.4 + 2); doc.text(vl, M, y + 3); y += vl.length * 4.4 + 3;
+      if (aiSummary) {
+        const al = doc.splitTextToSize(aiSummary, CW); ensure(al.length * 4.4 + 2);
+        txt(sub); doc.text(al, M, y + 3); y += al.length * 4.4 + 3; txt(ink);
+      }
+      const bulletList = (title: string, items: string[], c: RGB) => {
+        if (!items || items.length === 0) return;
+        ensure(7); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); txt(c); doc.text(title, M, y + 3); y += 5;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(ink);
+        items.slice(0, 5).forEach((it) => {
+          const il = doc.splitTextToSize(`•  ${it}`, CW - 2); ensure(il.length * 4 + 1);
+          doc.text(il, M + 1, y + 3); y += il.length * 4 + 1;
+        });
+        y += 2;
+      };
+      bulletList('Key Strengths', strengths, [4, 120, 87]);
+      bulletList('Areas of Concern', weaknesses, [185, 28, 28]);
+      y += 2;
+
+      // Footer
+      ensure(18);
+      fill([238, 242, 255]); doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt(indigoDk);
+      const foot = `Scoring: Must-Have Section Score (Pass >= ${MHS_THRESHOLD.toFixed(1)}) drives the final result; Nice-to-Have is informational; HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.   Confidentiality: proprietary — for authorized hiring personnel only.`;
+      doc.text(doc.splitTextToSize(foot, CW - 6), M + 3, y + 4);
+
+      doc.save(`eval_report_${candidate.name || 'candidate'}_${evalId}`.replace(/\s+/g, '_') + '.pdf');
     } catch (err) {
       console.error('[EvalReport] PDF export failed:', err);
-      // Surface the failure instead of a silent no-op.
       // eslint-disable-next-line no-alert
-      window.alert('Could not generate the PDF. Please try again — if it keeps failing, check the browser console for details.');
+      window.alert('Could not generate the PDF. Please check the browser console for details.');
     } finally {
-      if (root.parentNode) root.parentNode.removeChild(root);
       setExporting(false);
     }
-  };
-
-  // Build the print-only HTML (inline hex colors — Tailwind/oklch never reaches
-  // html2canvas). Mirrors the on-screen report sections minus the radar chart.
-  const buildPrintHtml = (): string => {
-    const C = {
-      ink: '#111827', sub: '#6b7280', faint: '#9ca3af', line: '#e5e7eb', bg: '#f9fafb',
-      indigo: '#4f46e5', indigoDk: '#4338ca', indigoBg: '#eef2ff',
-      green: '#10b981', greenDk: '#047857', greenBg: '#ecfdf5',
-      red: '#ef4444', redDk: '#b91c1c', redBg: '#fef2f2',
-      amber: '#f59e0b', amberDk: '#b45309', amberBg: '#fffbeb',
-    };
-    const pass = isPassed;
-    const verdictColor = pass ? C.green : C.red;
-    const verdictBg = pass ? C.greenBg : C.redBg;
-    const esc = escapeHtml;
-    const scColor = (s: number) => (s >= 8 ? C.green : s >= 7 ? C.amber : C.red);
-    const card = (title: string, inner: string) =>
-      `<div style="border:1px solid ${C.line};border-radius:10px;margin-bottom:14px;overflow:hidden;page-break-inside:avoid;">
-        <div style="background:${C.bg};border-bottom:1px solid ${C.line};padding:8px 14px;font-size:13px;font-weight:700;color:${C.ink};">${esc(title)}</div>
-        <div style="padding:14px;">${inner}</div>
-      </div>`;
-    const bar = (s: number, color: string) =>
-      `<div style="height:8px;background:${C.line};border-radius:6px;overflow:hidden;">
-        <div style="height:8px;width:${Math.max(0, Math.min(100, (s / 10) * 100))}%;background:${color};border-radius:6px;"></div>
-      </div>`;
-
-    const metaRows = [
-      ['Candidate', candidate.name], ['Position', candidate.role], ['Email', candidate.email || '—'],
-      ['Interview Date', interview.date || '—'], ['Mode', interview.mode || '—'], ['Duration', interview.duration || '—'],
-    ].map(([l, v]) =>
-      `<td style="padding:6px 10px;vertical-align:top;width:33%;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:${C.faint};">${esc(l)}</div>
-        <div style="font-size:13px;font-weight:600;color:${C.ink};">${esc(v)}</div>
-      </td>`);
-    const metaTable =
-      `<table style="width:100%;border-collapse:collapse;"><tr>${metaRows.slice(0, 3).join('')}</tr><tr>${metaRows.slice(3).join('')}</tr></table>
-       <div style="display:flex;justify-content:space-between;font-size:10px;color:${C.faint};margin-top:10px;border-top:1px solid ${C.line};padding-top:8px;">
-         <span>Evaluation ID: #${esc(evalId)}</span><span>Generated ${esc(reportGenerated)}</span></div>`;
-
-    const scoreRow = (label: string, val: number, color: string, badge: string, badgeBg: string, badgeFg: string) =>
-      `<tr>
-        <td style="padding:8px 6px;font-size:12px;font-weight:600;color:${C.ink};width:38%;">${esc(label)}</td>
-        <td style="padding:8px 6px;font-size:18px;font-weight:700;color:${color};width:14%;">${val.toFixed(2)}</td>
-        <td style="padding:8px 6px;width:33%;">${bar(val, color)}</td>
-        <td style="padding:8px 6px;width:15%;text-align:right;"><span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:${badgeBg};color:${badgeFg};">${esc(badge)}</span></td>
-      </tr>`;
-    const scoreTable =
-      `<table style="width:100%;border-collapse:collapse;">
-        ${sectionsPresent.mustHave ? scoreRow('Must-Have Section Score', scores.mustHave, C.green, pass ? 'PASS' : 'FAIL', pass ? C.greenBg : C.redBg, pass ? C.greenDk : C.redDk) : ''}
-        ${sectionsPresent.niceToHave ? scoreRow('Nice-to-Have Section Score', scores.niceToHave, C.indigo, 'Info Only', C.amberBg, C.amberDk) : ''}
-        ${scoreRow('Overall Average Score', scores.final / 10, C.indigoDk, 'Reference', C.bg, C.sub)}
-      </table>`;
-
-    const skillRows = (skills: typeof flatMustHave, accent: string) => skills.map(s =>
-      `<tr style="border-bottom:1px solid ${C.line};">
-        <td style="padding:6px 4px;font-size:12px;font-weight:600;color:${C.ink};">${esc(s.name)}</td>
-        <td style="padding:6px 4px;"><span style="font-size:9px;font-weight:700;color:#fff;background:${accent};padding:2px 6px;border-radius:4px;">${s.tag}</span></td>
-        <td style="padding:6px 4px;font-size:11px;color:${C.sub};">w:${s.weight}</td>
-        <td style="padding:6px 4px;width:30%;">${bar(s.score, scColor(s.score))}</td>
-        <td style="padding:6px 4px;font-size:13px;font-weight:700;text-align:right;color:${scColor(s.score)};">${s.score.toFixed(1)}</td>
-      </tr>`).join('');
-    const skillsBlock =
-      (sectionsPresent.mustHave && flatMustHave.length
-        ? `<div style="font-size:12px;font-weight:700;margin:0 0 6px;">Must-Have Skills (${flatMustHave.length})</div>
-           <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">${skillRows(flatMustHave, C.indigo)}</table>` : '')
-      + (sectionsPresent.niceToHave && flatNiceToHave.length
-        ? `<div style="font-size:12px;font-weight:700;margin:0 0 6px;">Nice-to-Have Skills (${flatNiceToHave.length})</div>
-           <table style="width:100%;border-collapse:collapse;">${skillRows(flatNiceToHave, C.amber)}</table>` : '')
-      || `<div style="font-size:12px;color:${C.faint};font-style:italic;">No skills evaluated.</div>`;
-
-    const qRows = perQuestionDetails.map((q, i) => {
-      const isHR = q.section === 'hr';
-      const lbl = q.section === 'mth' ? 'Must-Have' : q.section === 'nth' ? 'Nice-to-Have' : 'HR';
-      const mid = isHR ? q.question : (q.skills.map(s => s.name).join(', ') || q.question);
-      return `<tr style="background:${i % 2 ? C.bg : '#fff'};">
-        <td style="padding:6px;font-size:11px;font-weight:700;color:${C.indigo};">Q${q.qNum}</td>
-        <td style="padding:6px;font-size:10px;color:${C.sub};">${esc(lbl)}</td>
-        <td style="padding:6px;font-size:11px;color:${C.sub};">${esc(mid.slice(0, 90))}</td>
-        <td style="padding:6px;font-size:12px;font-weight:700;text-align:right;color:${isHR ? C.faint : scColor(q.questionScore)};">${isHR ? '—' : q.questionScore.toFixed(2)}</td>
-      </tr>`;
-    }).join('');
-    const qBlock = perQuestionDetails.length
-      ? `<table style="width:100%;border-collapse:collapse;">${qRows}</table>`
-      : `<div style="font-size:12px;color:${C.faint};font-style:italic;">No question-level data.</div>`;
-
-    const recBullets = pass
-      ? ['<b>Proceed to next round:</b> strong technical competency across must-have skills',
-         '<b>Technical interview:</b> deeper assessment of core architecture & design',
-         '<b>Cultural fit:</b> schedule a behavioral interview']
-      : ['<b>Do not proceed:</b> did not meet minimum must-have requirements',
-         '<b>Skills gap:</b> significant development needed in core areas',
-         '<b>Alternative path:</b> consider junior roles or additional training'];
-    const recBlock =
-      `<div style="font-size:12px;font-weight:700;color:${pass ? C.greenDk : C.redDk};margin-bottom:6px;">${pass ? '✓ Recommended Actions' : '⚠ Recommended Actions'}</div>
-       <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:${C.ink};">${recBullets.map(b => `<li>${b}</li>`).join('')}</ul>`;
-
-    const summary =
-      `${esc(candidate.name)} completed an AI-powered technical interview for the ${esc(candidate.role)} position on ${esc(interview.date || 'the scheduled date')}. ` +
-      `The evaluation covered <b>${totalQuestions} question${totalQuestions !== 1 ? 's' : ''}</b> across <b>${totalSkills} skill${totalSkills !== 1 ? 's' : ''}</b>. ` +
-      (sectionsPresent.mustHave
-        ? `The Must-Have Section Score of <b>${scores.mustHave.toFixed(2)}/10</b> ${pass ? `exceeds` : `falls below`} the ${MHS_THRESHOLD.toFixed(1)} threshold. `
-        : '') +
-      `The assessment recommends <b>${pass ? 'proceeding' : 'not proceeding'}</b> with a match score of <b>${confidence}%</b>.`;
-
-    return `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${C.indigo};padding-bottom:14px;margin-bottom:16px;">
-        <div>
-          <div style="font-size:22px;font-weight:800;color:${C.ink};">AI Interview Evaluation Report</div>
-          <div style="font-size:13px;color:${C.sub};margin-top:2px;">${esc(candidate.name)} · ${esc(candidate.role)}</div>
-        </div>
-        <div style="text-align:right;font-size:11px;color:${C.faint};">#${esc(evalId)}<br/>${esc(reportGenerated)}</div>
-      </div>
-      <div style="background:${verdictBg};border:1px solid ${verdictColor};border-radius:10px;padding:16px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;page-break-inside:avoid;">
-        <div>
-          <div style="font-size:20px;font-weight:800;color:${verdictColor};">${esc(finalResultLabel)} — ${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'}</div>
-          <div style="font-size:12px;color:${C.ink};margin-top:4px;">Must-Have ${scores.mustHave.toFixed(2)} / Threshold ${MHS_THRESHOLD.toFixed(1)}</div>
-        </div>
-        <div style="text-align:center;"><div style="font-size:26px;font-weight:800;color:${verdictColor};">${confidence}%</div><div style="font-size:11px;color:${C.sub};font-weight:600;">Match Score</div></div>
-      </div>
-      ${card('Candidate & Interview', metaTable)}
-      ${card('Section Score Breakdown', scoreTable)}
-      ${card('Executive Summary', `<div style="font-size:12px;line-height:1.7;color:${C.ink};">${summary}</div>`)}
-      ${card('Skills Assessment Summary', skillsBlock)}
-      ${card('Question-by-Question Performance', qBlock)}
-      ${card('Recommendations & Next Steps', recBlock)}
-      <div style="background:${C.indigoBg};border:1px solid ${C.indigo}33;border-radius:10px;padding:14px;font-size:10px;line-height:1.6;color:${C.indigoDk};page-break-inside:avoid;">
-        <b>Methodology:</b> AI-powered automated assessment. Must-Have Score = avg of Must-Have question scores (Pass ≥ ${MHS_THRESHOLD.toFixed(1)}). Question Score = Σ(Skill×Weight)/ΣWeights (P1=10, P2=7, P3=4).<br/><br/>
-        <b>Confidentiality:</b> This report contains proprietary information for authorized hiring personnel only.
-      </div>`;
   };
 
   return (
@@ -311,44 +309,44 @@ export function EvalReportCombined({
       </div>
 
       {/* ── Everything below is captured into the PDF ─────────────────── */}
-      <div ref={reportRef} className="bg-white space-y-6">
-        {/* 1. Verdict hero — Pass/Fail + Match Score + candidate */}
+      <div className="bg-white space-y-6">
+        {/* 1. Verdict hero — compact Pass/Fail + Match Score + candidate */}
         <div
-          className={`rounded-2xl p-8 text-white shadow-lg ${
+          className={`rounded-xl p-5 text-white shadow-md ${
             isPassed ? 'bg-gradient-to-br from-emerald-500 to-emerald-400' : 'bg-gradient-to-br from-red-500 to-red-400'
           }`}
           style={{ pageBreakInside: 'avoid' }}
         >
-          <div className="flex flex-wrap items-center justify-between gap-6">
-            <div className="flex items-center gap-6">
-              <div className="relative w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-bold overflow-hidden ring-4 ring-white/30 shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="relative w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold overflow-hidden ring-2 ring-white/30 shrink-0">
                 {candidateImage
                   ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
                   : <span>{avatarInitials}</span>}
               </div>
-              <div>
-                <div className="text-3xl font-bold leading-tight">{candidate.name}</div>
-                <div className="text-base text-white/90 mb-2">{candidate.role}</div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="text-xl font-bold leading-tight truncate">{candidate.name}</div>
+                <div className="text-sm text-white/90 mb-1.5 truncate">{candidate.role}</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {isPassed
-                    ? <CheckCircle className="w-6 h-6 shrink-0" strokeWidth={2} />
-                    : <XCircle className="w-6 h-6 shrink-0" strokeWidth={2} />}
-                  <span className="text-xl font-bold">{finalResultLabel}</span>
-                  <span className="text-sm text-white/90">
+                    ? <CheckCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                    : <XCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} />}
+                  <span className="text-base font-bold">{finalResultLabel}</span>
+                  <span className="text-xs text-white/90">
                     · {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}
                   </span>
                 </div>
-                <div className="text-sm text-white/90 mt-1">
+                <div className="text-xs text-white/85 mt-1">
                   Must-Have {scores.mustHave.toFixed(2)} / Threshold {MHS_THRESHOLD.toFixed(1)}
                   {isPassed
-                    ? ` · Exceeds by +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
+                    ? ` · +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
                     : ` · Below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
                 </div>
               </div>
             </div>
-            <div className="px-8 py-5 rounded-2xl bg-white/20 backdrop-blur text-center">
-              <div className="text-4xl font-bold leading-none mb-1">{confidence}%</div>
-              <div className="text-sm font-semibold text-white/95">Match Score</div>
+            <div className="px-5 py-2.5 rounded-xl bg-white/20 backdrop-blur text-center shrink-0">
+              <div className="text-2xl font-bold leading-none">{confidence}%</div>
+              <div className="text-xs font-semibold text-white/95 mt-1">Match Score</div>
             </div>
           </div>
         </div>
@@ -668,6 +666,54 @@ export function EvalReportCombined({
                   <li><strong>Alternative path:</strong> Consider for junior positions or recommend additional training</li>
                 </ul>
               </>
+            )}
+          </div>
+        </div>
+
+        {/* 9b. AI Analysis — pass/fail overview (AI narrative + strengths/concerns) */}
+        <div className={`rounded-2xl border overflow-hidden ${isPassed ? 'border-emerald-200' : 'border-rose-200'}`} style={{ pageBreakInside: 'avoid' }}>
+          <div className={`px-5 py-3 border-b flex items-center gap-2 ${isPassed ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <Sparkles className={`w-4 h-4 ${isPassed ? 'text-emerald-600' : 'text-rose-600'}`} />
+            <div className={`text-base font-bold ${isPassed ? 'text-emerald-800' : 'text-rose-800'}`}>
+              AI Analysis — {isPassed ? 'Why this candidate Passed' : 'Why this candidate Failed'}
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-sm leading-relaxed text-gray-900">
+              <strong>{candidate.name}</strong> {isPassed ? 'meets' : 'does not meet'} the Must-Have bar — scoring{' '}
+              <strong>{scores.mustHave.toFixed(2)}/10</strong> against the {MHS_THRESHOLD.toFixed(1)} pass threshold
+              {isPassed
+                ? ` (exceeds by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)})`
+                : ` (below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)})`}.
+              {' '}This Must-Have result drives the <strong>{finalResultLabel}</strong> decision; Nice-to-Have ({scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.
+            </p>
+            {aiSummary && (
+              <div className="text-sm leading-relaxed text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-4">
+                {aiSummary}
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {strengths && strengths.length > 0 && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">
+                  <div className="text-sm font-bold text-emerald-800 mb-2">Key Strengths</div>
+                  <ul className="space-y-1.5 text-sm text-gray-800 list-disc pl-5">
+                    {strengths.slice(0, 5).map((s, i) => <li key={i}>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+              {weaknesses && weaknesses.length > 0 && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-4">
+                  <div className="text-sm font-bold text-rose-800 mb-2">Areas of Concern</div>
+                  <ul className="space-y-1.5 text-sm text-gray-800 list-disc pl-5">
+                    {weaknesses.slice(0, 5).map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            {!aiSummary && (!strengths || strengths.length === 0) && (!weaknesses || weaknesses.length === 0) && (
+              <p className="text-sm text-gray-400 italic">
+                No additional AI narrative was generated for this interview — the {finalResultLabel} decision is based on the Must-Have section score above.
+              </p>
             )}
           </div>
         </div>

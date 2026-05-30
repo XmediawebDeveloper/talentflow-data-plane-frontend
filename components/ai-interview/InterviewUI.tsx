@@ -98,6 +98,11 @@ function nowIST(): string {
 // No business-logic, audio, WS, or scoring code is touched.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Minimum bytes to buffer before flushing a non-final recording segment.
+// S3 multipart-upload requires every part except the last to be >= 5 MiB; we add
+// a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
+const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+
 const formatTimeMMSS = (seconds: number): string => {
   const safe = Math.max(0, Math.floor(seconds || 0));
   const mins = Math.floor(safe / 60);
@@ -701,6 +706,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const checkpointInProgressRef = useRef(false);
   const isFinalizingUploadRef = useRef(false);
   const uploadCheckpointRef = useRef<() => Promise<void>>(async () => {});
+  // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
+  // recordedChunksRef now holds only the UNFLUSHED clusters since the last
+  // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
+  const recordingSegmentIndexRef = useRef(0);
 
   // Avatar state controller
   const avatarState = useAvatarState();
@@ -3505,10 +3514,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => { trackPlaybackChunkRef.current = trackPlaybackChunk; }, [trackPlaybackChunk]);
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
-  // Checkpoint upload — flushes the recorder's current buffer and ships
-  // accumulated chunks WITHOUT stopping the recorder. Called on a 30 s
-  // timer and on visibilitychange→hidden so the server has the latest
-  // recording state even if the tab is throttled or closed abruptly.
+  // Checkpoint upload — flushes the recorder's buffer and ships ONE multipart
+  // segment WITHOUT stopping the recorder, but only once enough bytes have
+  // accumulated to form a valid S3 part (>= RECORDING_MIN_SEGMENT_BYTES). Called
+  // on a 30 s timer and on visibilitychange→hidden. Because S3 forbids
+  // sub-5-MiB non-final parts, small buffers are intentionally held back until
+  // the next tick rather than flushed; the trailing remainder ships as the final
+  // (any-size) part from uploadRecording().
   const uploadCheckpoint = useCallback(async (): Promise<void> => {
     if (isFinalizingUploadRef.current) return; // final upload owns the recorder
     if (checkpointInProgressRef.current) return; // skip overlap
@@ -3544,16 +3556,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setTimeout(finish, 1500);
       });
 
+      const buffered = recordedChunksRef.current.reduce((sum, c) => sum + c.size, 0);
+      // Not enough for a valid non-final S3 part yet — keep buffering.
+      if (buffered < RECORDING_MIN_SEGMENT_BYTES) return;
+
+      // Atomically snapshot the buffered clusters and reset the ref so new
+      // clusters accumulate into a fresh array. Single-threaded JS guarantees no
+      // ondataavailable push can race between these two synchronous statements.
       const chunks = recordedChunksRef.current;
-      if (chunks.length === 0) return;
+      recordedChunksRef.current = [];
+      const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
-      const blob = new Blob(chunks.slice(), { type: mimeType });
-      if (blob.size < 1024) return; // skip tiny payloads (header-only)
+      const blob = new Blob(chunks, { type: mimeType });
       try {
-        await candidateAIInterviewService.uploadRecording(token, blob);
-        console.log(`[Recording] Checkpoint uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+        await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, false);
+        recordingSegmentIndexRef.current = segmentIndex + 1;
+        console.log(`[Recording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
       } catch (err: any) {
-        console.warn(`[Recording] Checkpoint upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
+        // Upload failed — put the clusters back at the FRONT of the buffer so the
+        // next checkpoint retries them under the SAME segment index (preserves
+        // part ordering; the backend overwrites the part idempotently on retry).
+        recordedChunksRef.current = chunks.concat(recordedChunksRef.current);
+        console.warn(`[Recording] Segment ${segmentIndex} upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
       }
     } finally {
       checkpointInProgressRef.current = false;
@@ -3589,22 +3613,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
 
     const doUpload = async () => {
-      const chunks = recordedChunksRef.current;
-      console.log(`[Recording] Upload: ${chunks.length} chunks, recorder=${recorder?.state ?? 'null'}`);
-      if (chunks.length === 0) {
-        console.warn('[Recording] No chunks to upload — recording may not have started');
-        return;
+      // Wait out any in-flight checkpoint segment so its part lands BEFORE we
+      // complete the multipart upload — otherwise a late part could arrive after
+      // CompleteMultipartUpload and be discarded. Bounded to ~6s.
+      for (let i = 0; i < 60 && checkpointInProgressRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 100));
       }
-      // Use the recorder's negotiated mimeType; strip codec suffix for Blob constructor
+      // Final segment: ship whatever clusters remain since the last checkpoint as
+      // the LAST multipart part (any size allowed) with is_final=true, which tells
+      // the backend to complete the multipart upload into one object. Even if the
+      // buffer is empty (everything already flushed as full parts), we still send
+      // the final marker so the backend assembles the object.
+      const chunks = recordedChunksRef.current;
+      recordedChunksRef.current = [];
+      const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
       const blob = new Blob(chunks, { type: mimeType });
-      console.log(`[Recording] Uploading blob: ${(blob.size / 1024 / 1024).toFixed(1)} MB, type=${mimeType}`);
+      console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${(blob.size / 1024 / 1024).toFixed(1)} MB, recorder=${recorder?.state ?? 'null'}`);
       try {
-        await candidateAIInterviewService.uploadRecording(token, blob);
-        console.log('[Recording] Upload succeeded');
+        await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
+        recordingSegmentIndexRef.current = segmentIndex + 1;
+        console.log('[Recording] Final upload + multipart completion succeeded');
       } catch (err: any) {
         // Log detailed error — most common cause is nginx client_max_body_size too small
-        console.error(`[Recording] Upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
+        console.error(`[Recording] Final upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
       }
     };
 

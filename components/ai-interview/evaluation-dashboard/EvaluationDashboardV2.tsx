@@ -357,6 +357,12 @@ export function SkillsView({ data }: { data: DashboardData }) {
 export function QuestionsView({ data }: { data: DashboardData }) {
   const delivered = data.perQuestionDetails;
 
+  // Collapsible "Skills assessed" dropdown per question (keyed by card index).
+  // Multi-skill questions list 2-3 skills; collapsing keeps the timeline tidy
+  // and the expanded view shows each skill's score + the AI's per-skill note.
+  const [openSkills, setOpenSkills] = useState<Record<number, boolean>>({});
+  const toggleSkills = (idx: number) => setOpenSkills(p => ({ ...p, [idx]: !p[idx] }));
+
   if (delivered.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
@@ -549,91 +555,116 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        {/* 3. Per-skill rows — for HR, just show plain skill chips
-            without score/weight/contribution since HR isn't scored. */}
+        {/* 3. Per-skill rows — collapsible dropdown. For HR, skipped entirely
+            (HR isn't scored). Multi-skill questions list 2-3 skills, so the
+            block collapses by default; expanding shows each skill's score AND
+            the AI's per-skill rationale (one_line_note). */}
         {!isHr && (
           <div>
-            <div className="text-xs font-medium text-gray-500 mb-1.5">
-              Skills assessed in this question
-            </div>
             {q.skills.length === 0 ? (
-              <span className="text-xs text-gray-400 italic">No skills tagged</span>
-            ) : (
-              <div className="space-y-1.5">
-                {q.skills.map((s, i) => {
-                  const contribution = +(s.score * s.weight).toFixed(1);
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between gap-3 p-2 rounded bg-gray-50 border border-gray-200"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-sm text-gray-900 truncate">{s.name}</span>
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${priorityChipClass(s.priority)}`}
-                        >
-                          {priorityLabel(s.priority)}
-                        </span>
-                      </div>
-                      {s.is_unscored ? (
-                        // Skill was not evaluated — show a neutral marker, no
-                        // numeric score/weight math (it's excluded from the
-                        // question score per the spec's "no fabricated 0.0").
-                        <span
-                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-300"
-                          title="No evaluator score for this skill — excluded from the question score (not counted as 0.0)."
-                        >
-                          Not evaluated
-                        </span>
-                      ) : (
-                      <div className="flex items-center gap-4 text-xs font-mono">
-                        <span title="LLM score for this skill">
-                          <span className="text-gray-400">Score </span>
-                          <span
-                            className={`${s.is_skipped ? 'text-gray-400' : 'text-gray-900'} font-semibold`}
-                          >
-                            {s.score.toFixed(1)}
-                          </span>
-                          {s.is_skipped ? (
-                            <span
-                              className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
-                              title="Candidate skipped or said 'I don't know' — not scored for this skill."
-                            >
-                              Skipped
+              <>
+                <div className="text-xs font-medium text-gray-500 mb-1.5">Skills assessed in this question</div>
+                <span className="text-xs text-gray-400 italic">No skills tagged</span>
+              </>
+            ) : (() => {
+              const isOpen = !!openSkills[idx];
+              return (
+                <div className="rounded-lg border border-gray-200 overflow-hidden">
+                  {/* Dropdown header — click to expand/collapse */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSkills(idx)}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                      {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      Skills assessed ({q.skills.length})
+                    </span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      {!isOpen && (
+                        <span className="hidden sm:flex items-center gap-1 min-w-0">
+                          {q.skills.slice(0, 3).map((s, i) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500 truncate max-w-[110px]">
+                              {s.name}
                             </span>
-                          ) : s.is_fallback ? (
-                            <span
-                              className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
-                              title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question."
-                            >
-                              Q
-                            </span>
-                          ) : null}
+                          ))}
+                          {q.skills.length > 3 && <span className="text-[10px] text-gray-400">+{q.skills.length - 3}</span>}
                         </span>
-                        <span title="Priority weight">
-                          <span className="text-gray-400">×</span>
-                          <span className="text-gray-700"> {s.weight}</span>
-                        </span>
-                        <span title="Score × Weight">
-                          <span className="text-gray-400">= </span>
-                          <span className="text-indigo-700 font-semibold">{contribution}</span>
-                        </span>
-                      </div>
                       )}
+                      <span className="text-[11px] font-mono text-gray-500 shrink-0">
+                        Q Score <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
+                      </span>
+                    </span>
+                  </button>
+
+                  {isOpen && (
+                    <div className="p-2 space-y-1.5 border-t border-gray-200">
+                      {q.skills.map((s, i) => {
+                        const contribution = +(s.score * s.weight).toFixed(1);
+                        return (
+                          <div key={i} className="rounded bg-gray-50 border border-gray-200 p-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="text-sm text-gray-900 truncate">{s.name}</span>
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${priorityChipClass(s.priority)}`}>
+                                  {priorityLabel(s.priority)}
+                                </span>
+                              </div>
+                              {s.is_unscored ? (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-300"
+                                  title="No evaluator score for this skill — excluded from the question score (not counted as 0.0)."
+                                >
+                                  Not evaluated
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-4 text-xs font-mono shrink-0">
+                                  <span title="LLM score for this skill">
+                                    <span className="text-gray-400">Score </span>
+                                    <span className={`${s.is_skipped ? 'text-gray-400' : 'text-gray-900'} font-semibold`}>
+                                      {s.score.toFixed(1)}
+                                    </span>
+                                    {s.is_skipped ? (
+                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                                        title="Candidate skipped or said 'I don't know' — not scored for this skill.">
+                                        Skipped
+                                      </span>
+                                    ) : s.is_fallback ? (
+                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                                        title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question.">
+                                        Q
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span title="Priority weight"><span className="text-gray-400">×</span><span className="text-gray-700"> {s.weight}</span></span>
+                                  <span title="Score × Weight"><span className="text-gray-400">= </span><span className="text-indigo-700 font-semibold">{contribution}</span></span>
+                                </div>
+                              )}
+                            </div>
+                            {/* Per-skill AI analysis (one_line_note) */}
+                            {s.note && !s.is_unscored && (
+                              <div className="mt-1.5 flex items-start gap-1.5 text-xs text-gray-600 bg-white border border-gray-100 rounded px-2 py-1.5">
+                                <Brain className="w-3 h-3 text-indigo-500 mt-0.5 shrink-0" />
+                                <span className="leading-relaxed">{s.note}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {sumW > 0 ? (
+                        <div className="text-[11px] font-mono text-gray-500 pl-1 pt-1">
+                          Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
+                        </div>
+                      ) : q.isUnscored ? (
+                        <div className="text-[11px] text-gray-400 italic pl-1 pt-1">
+                          Not evaluated — excluded from the section average.
+                        </div>
+                      ) : null}
                     </div>
-                  );
-                })}
-                {sumW > 0 ? (
-                  <div className="text-[11px] font-mono text-gray-500 pl-2 pt-1">
-                    Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
-                  </div>
-                ) : q.isUnscored ? (
-                  <div className="text-[11px] text-gray-400 italic pl-2 pt-1">
-                    Not evaluated — excluded from the section average.
-                  </div>
-                ) : null}
-              </div>
-            )}
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

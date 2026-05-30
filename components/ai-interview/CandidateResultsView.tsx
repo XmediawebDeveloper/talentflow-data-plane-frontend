@@ -458,7 +458,11 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
 }
 
 export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  // Default to the combined "Evaluation Report" (key 'eval'). The old
+  // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
+  // content is merged into the Eval tab. The render blocks are kept so any
+  // deep-link / fallback still works.
+  const [activeTab, setActiveTab] = useState<TabKey>('eval');
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [qaExportMenuOpen, setQaExportMenuOpen] = useState(false);
@@ -997,11 +1001,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const pagedViolations = groupedViolations.slice((violationPage - 1) * ROWS_PER_PAGE, violationPage * ROWS_PER_PAGE);
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
-    { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
+    // 'Overview' tab hidden 2026-05-30 — merged into the combined Evaluation Report (Eval) tab.
+    // { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
       ? [
-          { key: 'eval'               as TabKey, label: 'Eval',               icon: <Sparkles className="w-4 h-4" /> },
-          { key: 'eval_report'        as TabKey, label: 'Evaluation Report',  icon: <FileText className="w-4 h-4" /> },
+          { key: 'eval'               as TabKey, label: 'Evaluation Report',  icon: <FileText className="w-4 h-4" /> },
+          // 'Evaluation Report' (old) tab hidden 2026-05-30 — superseded by the combined Eval tab above.
+          // { key: 'eval_report'        as TabKey, label: 'Evaluation Report',  icon: <FileText className="w-4 h-4" /> },
           { key: 'skill_breakdown'    as TabKey, label: 'Skill Breakdown',    icon: <Brain    className="w-4 h-4" /> },
           { key: 'question_analysis'  as TabKey, label: 'Question Analysis',  icon: <Target   className="w-4 h-4" /> },
         ]

@@ -114,21 +114,11 @@ function ClusterCard({
                 {tone.icon}
               </div>
               <div className={`text-sm font-semibold ${tone.text}`}>{s.name}</div>
-              <div className="ml-auto flex items-center gap-1.5">
-                {showScore && (
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${scoreChipCls}`}>
-                    {s.score.toFixed(1)}/10
-                  </span>
-                )}
-                {depthChip && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-600 text-white">
-                    {depthChip}
-                  </span>
-                )}
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tone.tagBg} ${tone.tagText}`}>
-                  {tone.label}
-                </span>
-              </div>
+              {/* Per-skill marks (score chip, depth chip, Covered/Not-Covered
+                  label) removed 2026-05-30 — Cluster Coverage shows COVERAGE
+                  (was the skill asked), not scores. Numeric per-skill scores
+                  live in Skill Breakdown / Question Analysis. The dot icon
+                  already signals covered vs not; cluster % is in the header. */}
             </div>
           );
         })}
