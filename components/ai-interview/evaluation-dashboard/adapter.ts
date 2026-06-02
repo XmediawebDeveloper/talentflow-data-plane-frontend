@@ -8,7 +8,7 @@ import type {
   DashboardData, Cluster, Skill, Level, Recommendation, InterviewResponse,
   PerQuestionDetail, PerQuestionSkill, PerQuestionFollowUp,
 } from './types';
-import { buildSkipReasoner } from './skipReason';
+import { buildSkipReasoner, buildClarificationsByQuestion } from './skipReason';
 
 interface ClusterConfigDef {
   id?: string;
@@ -2160,6 +2160,22 @@ export function buildDashboardData(params: {
     }
   }
 
+  // ── Clarification annotation ────────────────────────────────────────────
+  // Attach the clarification turns ("Clarify"/CL1, CL2…) that fired within
+  // each question's slot, derived from the raw conversation_transcript and
+  // grouped under their parent question — exactly how the Transcript tab
+  // surfaces them. Without this the Question Analysis tab silently dropped
+  // every clarification (it builds from question_history, which has no
+  // clarification rows). Match by question text (fuzzy, like the skip
+  // reasoner) so plan-remapped skills don't break the association.
+  {
+    const _getClar = buildClarificationsByQuestion(conversation_transcript || []);
+    for (const _row of perQuestionDetails) {
+      const _clars = _getClar(_row.question || '');
+      if (_clars.length > 0) _row.clarifications = _clars;
+    }
+  }
+
   // ── Derive ALL scores from perQuestionDetails (single source of truth) ──
   // Question Analysis is always correct because it aligns each question's
   // skills/scores to the saved distribution plan. Overview, Eval Report,
@@ -2224,11 +2240,19 @@ export function buildDashboardData(params: {
     : niceToHaveAvg;
 
   // 4. Final score from QA-derived section averages.
+  //    TIMED mode: the headline "Match Score" is Must-Have Section Score ×10
+  //    ONLY — Nice-to-Have is informational and HR isn't scored, per the
+  //    timed-eval spec. This makes the report headline equal the backend's
+  //    stored score shown in the Results list (both MHS×10), fixing the
+  //    36% (list) vs 45% (report) mismatch. Conversational mode keeps the
+  //    section-weighted blend.
   const weightedSumQA =
     mustHaveAvgQA   * (weights.mustHave   / 100) +
     niceToHaveAvgQA * (weights.niceToHave / 100) +
     hr              * (weights.hr         / 100);
-  const finalScoreQA = Math.round(weightedSumQA * 100) / 10;
+  const finalScoreQA = (mode === 'Timed' && sectionsPresent.mustHave)
+    ? Math.round(mustHaveAvgQA * 100) / 10
+    : Math.round(weightedSumQA * 100) / 10;
 
   // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
   let finalResultQA: 'Pass' | 'Fail' | null = null;

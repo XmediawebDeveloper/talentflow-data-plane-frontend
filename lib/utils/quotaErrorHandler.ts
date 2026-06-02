@@ -115,7 +115,7 @@ export function showQuotaErrorDialog(quotaError: QuotaError): Promise<'upgrade' 
  */
 export function getQuotaTypeName(quotaType: string): string {
   const names: Record<string, string> = {
-    'RU': 'Resume Upload',
+    'RU': 'Resume Storage',
     'RS': 'Resume Scoring',
     'AS': 'Assessment',
     'AIU': 'AI Interview',

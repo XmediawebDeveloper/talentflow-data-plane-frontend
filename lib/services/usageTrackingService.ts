@@ -17,7 +17,7 @@ export type QuotaType = 'RU' | 'RS' | 'AS' | 'AIU' | 'storage_gb';
 
 // Quota type descriptions for display
 export const QUOTA_TYPE_LABELS: Record<QuotaType, string> = {
-  'RU': 'Resume Upload',
+  'RU': 'Resume Storage',
   'RS': 'Resume Scoring',
   'AS': 'Assessment',
   'AIU': 'AI Interview Unit',

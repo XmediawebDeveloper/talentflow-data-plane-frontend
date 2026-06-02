@@ -51,7 +51,7 @@ const UNIT_LABELS: Record<string, string> = {
   RS: 'Resume Scoring',
   AS: 'Assessment',
   AIU: 'AI Interview',
-  RU: 'Resume Upload',
+  RU: 'Resume Storage',
 };
 
 export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashboardProps) {
@@ -316,7 +316,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           { key: 'RS',        label: 'Resume Scoring',      value: Math.round(totals.RS),        sub: `${actionCounts.RS} actions`,    Icon: FileText,        iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue',     shadow: 'shadow-brand-blue/5' },
           { key: 'AS',        label: 'Assessment',          value: totals.AS.toFixed(1),         sub: `${actionCounts.AS} actions`,    Icon: ClipboardCheck,  iconBg: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',     iconColor: 'text-brand-teal',     shadow: 'shadow-brand-teal/5' },
           { key: 'AIU',       label: 'AI Interview',        value: Math.round(totals.AIU),       sub: `${actionCounts.AIU} actions`,   Icon: Users,           iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',     iconColor: 'text-brand-cyan',     shadow: 'shadow-brand-cyan/5' },
-          { key: 'RU',        label: 'Resume Upload',       value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-orange-100',                                  iconColor: 'text-orange-600',     shadow: 'shadow-brand-orange/5' },
+          { key: 'RU',        label: 'Resume Storage',      value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-orange-100',                                  iconColor: 'text-orange-600',     shadow: 'shadow-brand-orange/5' },
           { key: 'JDS',       label: 'JDs Created',         value: creationCounts.jds,           sub: '',                              Icon: Briefcase,       iconBg: 'bg-indigo-100',                                  iconColor: 'text-indigo-600',     shadow: 'shadow-brand-blue/5' },
           { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-teal-100',                                    iconColor: 'text-teal-600',       shadow: 'shadow-brand-teal/5' },
           { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-gray-800',                                    iconColor: 'text-white',          shadow: 'shadow-brand-blue/5' },
@@ -387,7 +387,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   <Bar dataKey="RS" name="Resume Scoring" fill={COLORS.RS} stackId="stack" />
                   <Bar dataKey="AS" name="Assessment" fill={COLORS.AS} stackId="stack" />
                   <Bar dataKey="AIU" name="AI Interview" fill={COLORS.AIU} stackId="stack" />
-                  <Bar dataKey="RU" name="Resume Upload" fill={COLORS.RU} stackId="stack" />
+                  <Bar dataKey="RU" name="Resume Storage" fill={COLORS.RU} stackId="stack" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

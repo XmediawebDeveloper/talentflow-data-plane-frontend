@@ -463,12 +463,19 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       setScoredResumes(convertedResumes);
 
-      // Update stats from response
+      // Update stats — derive every match-status bucket from the SAME converted
+      // list the Scored Resumes tab displays, so the panel is internally
+      // consistent (buckets are mutually exclusive and sum to the total).
+      // Previously each bucket used `response.<count> || <filter>`, which mixed
+      // the backend's score-range bucketing (e.g. score < 50 → no_match_count)
+      // with the frontend's match_status bucketing. When a backend count was 0
+      // (falsy) it fell through to the filter, letting one resume be counted in
+      // two buckets at once — e.g. Total 1 but Partial Match 1 AND No Match 1.
       const stats = {
-        total: response.total || convertedResumes.length,
-        exactMatch: response.excellent_count || convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
-        partialMatch: response.partial_count || convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
-        noMatch: response.no_match_count || convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
+        total: response.total ?? convertedResumes.length,
+        exactMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
+        partialMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
+        noMatch: convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
       };
       console.log('[JobDetailView] Setting scored resumes stats:', stats);
       setScoredResumesStats(stats);

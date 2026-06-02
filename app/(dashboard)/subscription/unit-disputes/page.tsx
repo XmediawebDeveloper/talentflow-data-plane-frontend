@@ -69,7 +69,7 @@ const REASON_OPTIONS = [
 ];
 
 const UNIT_TYPE_LABELS: Record<string, string> = {
-  RU: 'Resume Upload',
+  RU: 'Resume Storage',
   RS: 'Resume Scoring',
   AS: 'Assessment',
   AIU: 'AI Interview',

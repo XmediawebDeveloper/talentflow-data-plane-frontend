@@ -632,7 +632,7 @@ export default function MyResumesPage() {
       const deducted = res?.units_deducted ?? 0;
       toast.success(
         deducted > 0
-          ? 'Retrying file. 1 Resume Upload unit deducted.'
+          ? 'Retrying file. 1 Resume Storage unit deducted.'
           : 'Retrying file. No additional units deducted.'
       );
       // Refresh upload history so the item shows as "pending/queued" and start polling for progress

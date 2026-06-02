@@ -37,7 +37,7 @@ const UNIT_TYPE_CONFIG = {
   RS: { label: 'Resume Scoring', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-600' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-green-500', textColor: 'text-green-600' },
   AIU: { label: 'AI Interview', icon: Users, color: 'bg-purple-500', textColor: 'text-purple-600' },
-  RU: { label: 'Resume Upload', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
+  RU: { label: 'Resume Storage', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
 };
 
 export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberUsageProps) {
@@ -284,7 +284,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   AI Interview
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Resume Upload
+                  Resume Storage
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   JDs

@@ -68,7 +68,7 @@ export default function PreConditionGuard({
     const unitNames = {
       jobPostings: 'Job Posting',
       assessments: 'Assessment',
-      resumeUploads: 'Resume Upload',
+      resumeUploads: 'Resume Storage',
       aiInterviews: 'AI Interview',
     };
 

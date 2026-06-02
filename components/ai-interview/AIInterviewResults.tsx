@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
-import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 interface AIInterviewResultsProps {
@@ -83,8 +83,11 @@ function getProctoringRisk(session: AIInterviewResponse): { level: string; badge
 
 function formatDuration(session: AIInterviewResponse): string {
   if (!session.started_at || !session.completed_at) return '—';
-  const start = new Date(session.started_at).getTime();
-  const end = new Date(session.completed_at).getTime();
+  // Parse with parseIST so the duration uses the SAME absolute instants as the
+  // Started At / Completed At columns. Raw `new Date()` treats a tz-less backend
+  // string as browser-local, which desyncs the diff from the displayed times.
+  const start = parseIST(session.started_at).getTime();
+  const end = parseIST(session.completed_at).getTime();
   const diffMs = end - start;
   if (diffMs <= 0) return '—';
   const mins = Math.floor(diffMs / 60000);

@@ -744,6 +744,40 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             </div>
           </div>
         )}
+
+        {/* 5. Clarifications (when the candidate asked Linda to repeat /
+            rephrase). Surfaced here so the Question Analysis tab agrees with
+            the Transcript tab, which labels these "Clarify"/CL1, CL2…. Each
+            shows Linda's repeated question and the candidate's reply after it.
+            Nothing rendered when no clarification fired for this slot. */}
+        {q.clarifications && q.clarifications.length > 0 && (
+          <div className="border-l-2 border-brand-orange/40 pl-3 mt-1">
+            <div className="text-xs font-semibold text-brand-orange-deep mb-1.5">
+              Clarification{q.clarifications.length === 1 ? '' : 's'} ({q.clarifications.length})
+            </div>
+            <div className="space-y-2">
+              {q.clarifications.map((cl, ci) => (
+                <div key={ci} className="rounded bg-brand-orange/5 border border-brand-orange/20 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
+                      CL{cl.number ?? ci + 1}
+                    </span>
+                    <span className="text-[10px] text-brand-orange-deep italic">candidate asked to repeat / rephrase</span>
+                  </div>
+                  <div className="text-sm text-gray-800">
+                    {cl.question || <span className="italic text-gray-500">(no clarification text)</span>}
+                  </div>
+                  {cl.answer && (
+                    <div className="text-xs text-gray-700">
+                      <span className="text-gray-500">Answer: </span>
+                      {cl.answer}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };

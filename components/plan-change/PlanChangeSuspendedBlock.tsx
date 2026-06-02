@@ -8,7 +8,7 @@ import { usePlanChange } from '@/components/providers/PlanChangeProvider';
 import type { PlanChangeSummary } from '@/lib/types/planChanges';
 
 const QUOTA_LABELS: Record<string, string> = {
-  RU: 'Resume Uploads',
+  RU: 'Resume Storage',
   RS: 'Resume Scoring',
   AS: 'Assessments',
   AIU: 'AI Interviews',

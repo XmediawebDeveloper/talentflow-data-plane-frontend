@@ -455,7 +455,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
   // Labels for each quota key shown in the plan dropdown
   const quotaLabels: Record<string, string> = {
-    RU: 'Resume Uploads',
+    RU: 'Resume Storage',
     RS: 'Resume Scoring',
     AS: 'Assessments',
     AIU: 'AI Interviews',

@@ -438,7 +438,7 @@ function TeamRow({
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
                         <span className="flex flex-col items-center gap-0.5">
                           <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
-                          <span className="text-gray-500 dark:text-slate-500">Resume Upload</span>
+                          <span className="text-gray-500 dark:text-slate-500">Resume Storage</span>
                         </span>
                       </th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
@@ -703,7 +703,7 @@ export default function TeamUsageAnalytics() {
         <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} onClick={() => openList('rs')}  active={pageView === 'list' && activeCard === 'rs'} />
         <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} onClick={() => openList('as')}  active={pageView === 'list' && activeCard === 'as'} />
         <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-green-500"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />
-        <StatCard label="Resume Uploads"  value={totals.ru}  dot="bg-orange-500" loading={loading} onClick={() => openList('ru')}  active={pageView === 'list' && activeCard === 'ru'} />
+        <StatCard label="Resume Storage"  value={totals.ru}  dot="bg-orange-500" loading={loading} onClick={() => openList('ru')}  active={pageView === 'list' && activeCard === 'ru'} />
         <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} onClick={() => openList('all')} active={pageView === 'list' && activeCard === 'all'} />
       </div>
 

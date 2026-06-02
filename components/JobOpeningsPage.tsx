@@ -875,7 +875,7 @@ export default function JobOpeningsPage() {
                   <p className="text-sm font-medium text-gray-700 mb-2">Current Unit Balance:</p>
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Resume Upload (RU)</span>
+                      <span className="text-gray-600">Resume Storage (RU)</span>
                       <span className={`font-medium ${unitQuotas?.RU === 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {unitQuotas?.RU || 0} units
                       </span>

@@ -32,7 +32,7 @@ const UNIT_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; c
     color: 'bg-purple-500',
   },
   RU: {
-    label: 'Resume Upload',
+    label: 'Resume Storage',
     icon: <Upload className="w-4 h-4" />,
     color: 'bg-orange-500',
   },

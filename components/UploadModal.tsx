@@ -455,7 +455,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     if (!quotaCheck.hasQuota) {
       errors.push({
         fileName: '',
-        error: quotaCheck.error || `Insufficient Resume Upload (RU) units. You need ${selectedFiles.length} units but only have ${quotaCheck.remaining} remaining. Please upgrade your plan or purchase additional units.`,
+        error: quotaCheck.error || `Insufficient Resume Storage (RU) units. You need ${selectedFiles.length} units but only have ${quotaCheck.remaining} remaining. Please upgrade your plan or purchase additional units.`,
         type: 'limit'
       });
     }
@@ -654,7 +654,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-blue-800 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-0.5 sm:gap-2">
-                  <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">Resume Upload Units (RU)</span>
+                  <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">Resume Storage Units (RU)</span>
                   {isCheckingQuota ? (
                     <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">Checking...</span>
                   ) : quotaInfo ? (

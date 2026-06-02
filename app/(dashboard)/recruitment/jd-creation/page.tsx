@@ -120,7 +120,7 @@ function AccessBlockedError({
             <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
             <div className="space-y-1 text-sm text-gray-600 dark:text-slate-300">
               <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
-                Resume Upload: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
+                Resume Storage: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
               </p>
               <p className={!accessCheck.units.RS?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Resume Scoring: {accessCheck.units.RS?.available || 0} available {!accessCheck.units.RS?.sufficient && '❌'}

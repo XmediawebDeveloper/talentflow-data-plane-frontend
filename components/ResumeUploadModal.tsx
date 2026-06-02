@@ -540,7 +540,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                 <div className="flex gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h5 className="text-sm font-medium text-red-900 mb-1">Resume Upload Quota {!hasQuota ? 'Exceeded' : 'Warning'}</h5>
+                    <h5 className="text-sm font-medium text-red-900 mb-1">Resume Storage Quota {!hasQuota ? 'Exceeded' : 'Warning'}</h5>
                     <p className="text-xs text-red-700">
                       {!hasQuota ? (
                         <>You have reached your resume upload limit. </>

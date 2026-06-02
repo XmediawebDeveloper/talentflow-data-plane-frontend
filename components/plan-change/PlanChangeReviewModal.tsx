@@ -25,7 +25,7 @@ const urgencyColors = {
 };
 
 const QUOTA_LABELS: Record<string, string> = {
-  RU: 'Resume Uploads',
+  RU: 'Resume Storage',
   RS: 'Resume Scoring',
   AS: 'Assessments',
   AIU: 'AI Interviews',

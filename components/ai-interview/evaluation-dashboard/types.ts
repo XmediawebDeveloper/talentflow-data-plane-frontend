@@ -75,6 +75,17 @@ export interface PerQuestionSkill {
   is_unscored?: boolean;
 }
 
+export interface PerQuestionClarification {
+  /** 1-based CL index within the parent question (CL1, CL2, ...). */
+  number: number;
+  /** Linda's repeated/rephrased question text ("Let's stick to this
+   *  question: …"). Mirrors what the Transcript tab labels "Clarify". */
+  question: string;
+  /** Candidate's response right after this clarification, if any. May be
+   *  another clarification request or their (re)attempt at the answer. */
+  answer: string;
+}
+
 export interface PerQuestionFollowUp {
   question: string;
   answer: string;
@@ -137,6 +148,12 @@ export interface PerQuestionDetail {
    *  Surfaced under the main card so reviewers can verify whether
    *  Linda actually probed deeper. */
   followUps?: PerQuestionFollowUp[];
+  /** Clarification turns ("Clarify"/CL1, CL2…) that fired within this
+   *  question's slot — when the candidate asked Linda to repeat/rephrase and
+   *  she replied "Let's stick to this question: …". Derived (adapter) from the
+   *  raw conversation_transcript so the Question Analysis tab surfaces them the
+   *  same way the Transcript tab does. Empty/undefined when none occurred. */
+  clarifications?: PerQuestionClarification[];
   /** Set when this slot ITSELF was reframed as a follow-up (Option A,
    *  bundled): the candidate volunteered a P2/P3 planned skill in an
    *  earlier answer, so the slot's single main question doubled as a

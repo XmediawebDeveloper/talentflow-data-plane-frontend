@@ -923,7 +923,7 @@ const helpArticles: Record<string, {
                   <td className="px-4 py-3 text-sm text-center text-gray-600 border border-gray-200">Unlimited</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 border border-gray-200">Resume Uploads</td>
+                  <td className="px-4 py-3 text-sm text-gray-700 border border-gray-200">Resume Storage</td>
                   <td className="px-4 py-3 text-sm text-center text-gray-600 border border-gray-200">100/mo</td>
                   <td className="px-4 py-3 text-sm text-center text-gray-600 border border-gray-200 bg-gray-50">500/mo</td>
                   <td className="px-4 py-3 text-sm text-center text-gray-600 border border-gray-200">Unlimited</td>
