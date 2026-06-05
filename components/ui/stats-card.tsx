@@ -165,7 +165,7 @@ export function StatsCard({
   );
 
   const baseClass = cn(
-    'group relative overflow-hidden rounded-xl border px-3.5 py-3.5 sm:px-4 sm:py-4 transition-all duration-200 hover:-translate-y-0.5',
+    'group relative overflow-hidden rounded-xl border px-3.5 py-3.5 sm:px-4 sm:py-4 transition-[box-shadow,border-color] duration-200',
     t.container,
     onClick && 'cursor-pointer text-left',
     className,

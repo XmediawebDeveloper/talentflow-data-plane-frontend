@@ -19,6 +19,22 @@ function DetailsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Prev/Next navigation: AIInterviewResults stores the visible session list in
+  // sessionStorage when the user opens the details view, so recruiters can step
+  // through candidates without returning to the list each time.
+  const [navList, setNavList] = useState<{ id: string }[]>([]);
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('aiInterviewResultNavList');
+      if (stored) setNavList(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+  const navIndex = navList.findIndex(n => n.id === sessionId);
+  const prevSession = navIndex > 0 ? navList[navIndex - 1] : null;
+  const nextSession = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
+  const buildNavUrl = (entry: { id: string }) =>
+    `/recruitment/ai-interviews/${configId}/results/details?session_id=${entry.id}`;
+
   useEffect(() => {
     if (!sessionId) {
       setError('No session selected');
@@ -84,7 +100,14 @@ function DetailsContent() {
 
   return (
     <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
-      <CandidateResultsView interview={session} onBack={handleBack} />
+      <CandidateResultsView
+        interview={session}
+        onBack={handleBack}
+        currentIndex={navIndex >= 0 ? navIndex : undefined}
+        totalCount={navList.length || undefined}
+        onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}
+        onNext={nextSession ? () => router.replace(buildNavUrl(nextSession)) : undefined}
+      />
     </div>
   );
 }

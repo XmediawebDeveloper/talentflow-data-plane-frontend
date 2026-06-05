@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import RecordPager from '@/components/RecordPager';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -448,42 +449,27 @@ export default function AssessmentDetailsView({
     <div className="flex-1 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
       {/* Breadcrumb */}
       <div className="px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-5">
-        <PageBreadcrumb
-          items={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Assessments', href: '/recruitment/assessments' },
-            { label: assessment.short_id || stripVersionFromTitle(assessment.title) || 'Assessment Details' },
-          ]}
-        />
+        <div className="flex items-center justify-between gap-3">
+          <PageBreadcrumb
+            className="mb-4 flex-1"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Assessments', href: '/recruitment/assessments' },
+              { label: assessment.short_id || stripVersionFromTitle(assessment.title) || 'Assessment Details' },
+            ]}
+          />
+          <RecordPager
+            currentIndex={currentIndex}
+            totalCount={totalCount}
+            onPrev={onPrev}
+            onNext={onNext}
+          />
+        </div>
       </div>
 
       {/* Sticky Header */}
       <div className="sticky top-0 z-20">
         <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-          {totalCount != null && totalCount > 0 && (
-            <div className="flex items-center justify-end gap-2 mb-3 sm:mb-4">
-              <button
-                onClick={onPrev}
-                disabled={!onPrev || currentIndex === 0}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </button>
-              <span className="text-sm text-gray-500 dark:text-slate-400 font-medium px-1">
-                {(currentIndex ?? 0) + 1} / {totalCount}
-              </span>
-              <button
-                onClick={onNext}
-                disabled={!onNext || currentIndex === totalCount - 1}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-          
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
               <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">

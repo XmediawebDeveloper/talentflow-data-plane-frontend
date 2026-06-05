@@ -22,6 +22,7 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import RecordPager from '@/components/RecordPager';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -438,14 +439,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb
-            className="mb-4 md:mb-6"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Interview Details' },
-            ]}
-          />
+          <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+            <PageBreadcrumb
+              className="mb-0 flex-1"
+              items={[
+                { label: 'Dashboard', href: '/dashboard' },
+                { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                { label: 'Interview Details' },
+              ]}
+            />
+            <RecordPager
+              currentIndex={currentIndex}
+              totalCount={totalCount}
+              onPrev={onPrev}
+              onNext={onNext}
+            />
+          </div>
       {/* Loading overlay for candidate fetch */}
       {candidateLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
@@ -455,34 +464,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       {/* Header */}
       <div className="bg-brand-blue rounded-xl shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 mb-4">
         <div className="py-2.5 sm:py-3 lg:py-3.5 px-3 sm:px-4 lg:px-5">
-          <div className="flex items-center justify-end gap-2 mb-2 sm:mb-2.5 flex-wrap">
-            {totalCount != null && totalCount > 0 && (
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <button
-                  onClick={onPrev}
-                  disabled={!onPrev || currentIndex === 0}
-                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Previous"
-                >
-                  <ChevronLeft className="w-4 h-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">Previous</span>
-                </button>
-                <span className="text-xs sm:text-sm text-white/90 font-medium px-1 tabular-nums">
-                  {(currentIndex ?? 0) + 1} / {totalCount}
-                </span>
-                <button
-                  onClick={onNext}
-                  disabled={!onNext || currentIndex === totalCount - 1}
-                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-[36px] text-xs sm:text-sm rounded-lg bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Next"
-                >
-                  <span className="hidden sm:inline">Next</span>
-                  <ChevronRight className="w-4 h-4 flex-shrink-0" />
-                </button>
-              </div>
-            )}
-          </div>
-
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
             <div className="flex items-start gap-2 sm:gap-2.5 lg:gap-3 min-w-0 flex-1">
               <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/15 backdrop-blur-sm ring-1 ring-white/25 rounded-lg flex items-center justify-center flex-shrink-0">

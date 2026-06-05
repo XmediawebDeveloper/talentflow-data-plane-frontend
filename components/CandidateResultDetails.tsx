@@ -4,8 +4,9 @@ import { ArrowLeft, ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckC
 import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
-import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import RecordPager from '@/components/RecordPager';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -21,6 +22,11 @@ interface CandidateResultDetailsProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /**
+   * Render the built-in Previous/Next pager at the top. Set false when the
+   * parent page already shows the pager (e.g. on its breadcrumb row).
+   */
+  showRecordPager?: boolean;
 }
 
 interface CandidateBasicInfo {
@@ -143,6 +149,7 @@ export default function CandidateResultDetails({
   totalCount,
   onPrev,
   onNext,
+  showRecordPager = true,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -424,9 +431,19 @@ export default function CandidateResultDetails({
 
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto">
-      {/* Sticky Header — Back + Title + Prev/Next + Export Results, all in one
-          gradient bar so the inner Question-Analysis tab nav (z-20) can no
-          longer climb on top of it during scroll. */}
+      {showRecordPager && totalCount != null && totalCount > 0 && (
+        <div className="flex justify-end px-3 sm:px-4 pt-3">
+          <RecordPager
+            currentIndex={currentIndex}
+            totalCount={totalCount}
+            onPrev={onPrev}
+            onNext={onNext}
+          />
+        </div>
+      )}
+      {/* Sticky Header — Back + Title + Export Results in one gradient bar so the
+          inner Question-Analysis tab nav (z-20) can no longer climb on top of it
+          during scroll. */}
       <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
@@ -464,31 +481,6 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
-              {totalCount != null && totalCount > 0 && (
-                <>
-                  <button
-                    onClick={onPrev}
-                    disabled={!onPrev || currentIndex === 0}
-                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                    aria-label="Previous candidate" title="Previous candidate"
-                  >
-                    <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span className="hidden sm:inline">Previous</span>
-                  </button>
-                  <span className="text-xs sm:text-sm text-white font-medium px-1.5 sm:px-2 whitespace-nowrap">
-                    {(currentIndex ?? 0) + 1} / {totalCount}
-                  </span>
-                  <button
-                    onClick={onNext}
-                    disabled={!onNext || currentIndex === totalCount - 1}
-                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                    aria-label="Next candidate" title="Next candidate"
-                  >
-                    <span className="hidden sm:inline">Next</span>
-                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </>
-              )}
               <button
                 onClick={async () => {
                   // Single-candidate export — emit a PDF report for this
@@ -637,7 +629,7 @@ export default function CandidateResultDetails({
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Start Time</div>
                 <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.started_at ? formatIST(detailedResult.started_at) : 'N/A'}
+                  {detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
                 </div>
               </div>
             </div>
@@ -648,7 +640,7 @@ export default function CandidateResultDetails({
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Submission Time</div>
                 <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.completed_at ? formatIST(detailedResult.completed_at) : 'N/A'}
+                  {detailedResult?.completed_at ? formatISTWithSeconds(detailedResult.completed_at) : 'N/A'}
                 </div>
               </div>
             </div>

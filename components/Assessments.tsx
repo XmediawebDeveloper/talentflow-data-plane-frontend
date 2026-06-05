@@ -3500,18 +3500,61 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </button>
                               )
                             ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
-                              <button
-                                onClick={() => setResendTargetInvitation(invitation)}
-                                aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
-                                  invitation.status === 'failed'
-                                    ? 'bg-red-600 text-white hover:bg-red-700'
-                                    : 'border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
-                                }`}
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                                Resend
-                              </button>
+                              // Resend retries the SAME address (good for a transient
+                              // network failure); Edit Email lets the recruiter fix a
+                              // mistyped address before resending (the common cause of
+                              // a "failed"/"Incorrect Email" invite).
+                              editingEmailId === invitation.id ? (
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => setResendTargetInvitation(invitation)}
+                                    aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
+                                    className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                      invitation.status === 'failed'
+                                        ? 'bg-red-600 text-white hover:bg-red-700'
+                                        : 'border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
+                                    }`}
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    Resend
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                    aria-label="Edit email address and resend" title="Edit email address and resend"
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Edit Email
+                                  </button>
+                                </div>
+                              )
                             ) : null}
                           </td>
                         </tr>

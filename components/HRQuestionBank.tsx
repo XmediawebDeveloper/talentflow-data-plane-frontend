@@ -192,6 +192,8 @@ export default function HRQuestionBank() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
+  // Stat-card filter: click a card to show only that answer type.
+  const [answerTypeFilter, setAnswerTypeFilter] = useState<'all' | 'text' | 'yes_no'>('all');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_QUESTION);
@@ -202,7 +204,7 @@ export default function HRQuestionBank() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterCategory, filterDifficulty]);
+  }, [searchQuery, filterCategory, filterDifficulty, answerTypeFilter]);
 
   // Load questions from API
   useEffect(() => {
@@ -331,7 +333,11 @@ export default function HRQuestionBank() {
 
   // Filter questions
   const filteredQuestions = questions.filter(q => {
-    return !searchQuery || q.question_text.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery || q.question_text.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesAnswerType =
+      answerTypeFilter === 'all' ||
+      (answerTypeFilter === 'yes_no' ? q.answer_type === 'yes_no' : q.answer_type !== 'yes_no');
+    return matchesSearch && matchesAnswerType;
   });
 
   const paginatedQuestions = filteredQuestions.slice(
@@ -539,7 +545,16 @@ export default function HRQuestionBank() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all">
+        <button
+          type="button"
+          onClick={() => setAnswerTypeFilter('all')}
+          aria-pressed={answerTypeFilter === 'all'}
+          className={`text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all ${
+            answerTypeFilter === 'all'
+              ? 'border-brand-blue ring-2 ring-brand-blue/30'
+              : 'border-gray-200 hover:border-brand-blue/30'
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <MessageSquare className="w-4 h-4" />
@@ -549,8 +564,17 @@ export default function HRQuestionBank() {
               <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.length}</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-cyan/40 transition-all">
+        </button>
+        <button
+          type="button"
+          onClick={() => setAnswerTypeFilter(prev => (prev === 'text' ? 'all' : 'text'))}
+          aria-pressed={answerTypeFilter === 'text'}
+          className={`text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all ${
+            answerTypeFilter === 'text'
+              ? 'border-brand-cyan ring-2 ring-brand-cyan/30'
+              : 'border-gray-200 hover:border-brand-cyan/40'
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
               <FileText className="w-4 h-4" />
@@ -560,8 +584,17 @@ export default function HRQuestionBank() {
               <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.filter(q => q.answer_type !== 'yes_no').length}</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange/40 transition-all">
+        </button>
+        <button
+          type="button"
+          onClick={() => setAnswerTypeFilter(prev => (prev === 'yes_no' ? 'all' : 'yes_no'))}
+          aria-pressed={answerTypeFilter === 'yes_no'}
+          className={`text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all ${
+            answerTypeFilter === 'yes_no'
+              ? 'border-brand-orange ring-2 ring-brand-orange/30'
+              : 'border-gray-200 hover:border-brand-orange/40'
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
               <CheckCircle2 className="w-4 h-4" />
@@ -571,7 +604,7 @@ export default function HRQuestionBank() {
               <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.filter(q => q.answer_type === 'yes_no').length}</p>
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Question List */}

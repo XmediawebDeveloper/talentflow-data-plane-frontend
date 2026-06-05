@@ -709,19 +709,62 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 </button>
                               )
                             ) : (['sent', 'opened', 'failed', 'expired'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
-                              <button
-                                onClick={() => handleResendInvitation(invitation)}
-                                disabled={resendingId === invitation.id}
-                                aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
-                                  invitation.status === 'failed'
-                                    ? 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
-                                    : 'border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60'
-                                }`}
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                                {resendingId === invitation.id ? 'Sending…' : 'Resend'}
-                              </button>
+                              // Resend retries the SAME address (good for a transient
+                              // network failure); Edit Email lets the recruiter fix a
+                              // mistyped address before resending (the common cause of
+                              // a "failed"/"Incorrect Email" invite). Mirrors mobile.
+                              editingEmailId === invitation.id ? (
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleResendInvitation(invitation)}
+                                    disabled={resendingId === invitation.id}
+                                    aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
+                                    className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
+                                      invitation.status === 'failed'
+                                        ? 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
+                                        : 'border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60'
+                                    }`}
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    {resendingId === invitation.id ? 'Sending…' : 'Resend'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                    aria-label="Edit email address and resend" title="Edit email address and resend"
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Edit Email
+                                  </button>
+                                </div>
+                              )
                             ) : null}
                           </td>
                         </tr>

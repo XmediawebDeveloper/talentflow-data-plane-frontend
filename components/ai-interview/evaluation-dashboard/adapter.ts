@@ -2231,13 +2231,24 @@ export function buildDashboardData(params: {
   // headline numbers in Overview / Skill Breakdown / Eval Report agree with
   // the per-section badge inside Question Analysis. Keeping 2-decimal here
   // was producing rendered mismatches like 6.95 (Overview) vs 7.00 (Q Analysis).
-  const mustHaveAvgQA = mthQARows.length > 0
-    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 10) / 10
-    : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
+  // PERMANENT FIX (2026-06-02): prefer the BACKEND authoritative section
+  // averages (`section_question_avg.mth/nth`) — the SAME values the Results-list
+  // score (capability_score = mth×10 in timed mode) and Pass/Fail derive from.
+  // Recomputing the Must-Have average independently from the QA rows here is
+  // what made the report headline (e.g. 10%) disagree with the Results list
+  // (e.g. 36%) for the same candidate. Fall back to the QA recompute only for
+  // legacy sessions that never stored section_question_avg.
+  const mustHaveAvgQA = (typeof mthQAvg === 'number')
+    ? mthQAvg
+    : (mthQARows.length > 0
+        ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 10) / 10
+        : mustHaveAvg); // keep original if QA produced no scored rows (old sessions)
 
-  const niceToHaveAvgQA = nthQARows.length > 0
-    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 10) / 10
-    : niceToHaveAvg;
+  const niceToHaveAvgQA = (typeof nthQAvg === 'number')
+    ? nthQAvg
+    : (nthQARows.length > 0
+        ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 10) / 10
+        : niceToHaveAvg);
 
   // 4. Final score from QA-derived section averages.
   //    TIMED mode: the headline "Match Score" is Must-Have Section Score ×10

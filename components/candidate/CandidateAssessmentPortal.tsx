@@ -194,6 +194,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   // Refs for proctoring
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatWorkerRef = useRef<Worker | null>(null);
+  const heartbeatBlobUrlRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -275,6 +277,53 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     return undefined;
   }, [token]);
 
+  // Tear down the heartbeat ticker (Web Worker + any fallback interval).
+  const stopHeartbeatWorker = useCallback(() => {
+    if (heartbeatWorkerRef.current) {
+      try { heartbeatWorkerRef.current.postMessage('stop'); } catch {}
+      try { heartbeatWorkerRef.current.terminate(); } catch {}
+      heartbeatWorkerRef.current = null;
+    }
+    if (heartbeatBlobUrlRef.current) {
+      try { URL.revokeObjectURL(heartbeatBlobUrlRef.current); } catch {}
+      heartbeatBlobUrlRef.current = null;
+    }
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  }, []);
+
+  // Drive the heartbeat from a Web Worker timer instead of a main-thread
+  // setInterval. Browsers throttle (and after ~5 min freeze) setInterval in a
+  // backgrounded/inactive tab, which used to starve the heartbeat — the server
+  // then mis-classified the silent-but-active candidate as "paused" and
+  // subtracted that time from the reported duration. A worker timer keeps
+  // firing at full cadence even while the tab is hidden, so heartbeats keep
+  // arriving and the server keeps seeing the candidate as active.
+  const startHeartbeatWorker = useCallback((onTick: () => void) => {
+    stopHeartbeatWorker(); // idempotent — never run two tickers at once
+    if (typeof Worker !== 'undefined') {
+      try {
+        const workerSource =
+          "let t=setInterval(function(){postMessage('tick');},3000);" +
+          "self.onmessage=function(e){if(e&&e.data==='stop'){clearInterval(t);}};";
+        const blob = new Blob([workerSource], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        const worker = new Worker(url);
+        worker.onmessage = () => { void onTick(); };
+        heartbeatWorkerRef.current = worker;
+        heartbeatBlobUrlRef.current = url;
+        return;
+      } catch (err) {
+        console.warn('[PROCTORING] Heartbeat Web Worker unavailable, falling back to setInterval:', err);
+      }
+    }
+    // Fallback: main-thread interval. Still throttled in background tabs, but
+    // the backend no longer pauses on heartbeat silence, so this is safe.
+    heartbeatRef.current = setInterval(onTick, 3000);
+  }, [stopHeartbeatWorker]);
+
   useRefreshPrevention({
     enabled: isAssessmentActive,
     message: 'You have an ongoing assessment. Leaving this page will end your session.',
@@ -332,7 +381,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     return () => {
       isMountedRef.current = false;
       console.log('[DEBUG] Component unmounting');
-      // Cleanup heartbeat and media streams
+      // Cleanup heartbeat (worker + any fallback interval) and media streams.
+      // Inlined rather than calling stopHeartbeatWorker so this mount-only
+      // effect doesn't capture a memoized callback in its deps.
+      if (heartbeatWorkerRef.current) {
+        try { heartbeatWorkerRef.current.terminate(); } catch {}
+        heartbeatWorkerRef.current = null;
+      }
+      if (heartbeatBlobUrlRef.current) {
+        try { URL.revokeObjectURL(heartbeatBlobUrlRef.current); } catch {}
+        heartbeatBlobUrlRef.current = null;
+      }
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -1294,8 +1353,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // first interval tick after a recovery reload.
     await syncHeartbeat();
 
-    // Start heartbeat for session keepalive
-    heartbeatRef.current = setInterval(syncHeartbeat, 3000);
+    // Start heartbeat for session keepalive (Web Worker timer — see
+    // startHeartbeatWorker: survives background-tab throttling).
+    startHeartbeatWorker(syncHeartbeat);
 
     console.log('[PROCTORING] Advanced monitoring active via useProctoringMonitor hook');
   };
@@ -1310,10 +1370,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       videoRef.current.srcObject = null;
     }
 
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    }
+    stopHeartbeatWorker();
 
     console.log('[PROCTORING] Monitoring stopped');
   };

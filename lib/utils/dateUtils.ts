@@ -47,6 +47,29 @@ export function formatIST(dateString: string | null | undefined): string {
 }
 
 /**
+ * Format a backend datetime string as "5 Mar 2026, 02:30:45 PM" (IST) — same as
+ * formatIST but with seconds. Used where the exact second matters (e.g. the
+ * assessment Start/Submission timeline) so recruiters can see precise timing.
+ * Returns 'N/A' for null/undefined/invalid.
+ */
+export function formatISTWithSeconds(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
+  const date = parseIST(dateString);
+  if (isNaN(date.getTime())) return 'N/A';
+
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(date);
+}
+
+/**
  * Format a backend datetime string as date only: "5 Mar 2026" (IST).
  */
 export function formatISTDate(dateString: string | null | undefined): string {

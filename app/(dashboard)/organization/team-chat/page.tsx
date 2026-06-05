@@ -2,7 +2,7 @@
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import {
   Search,
   Hash,
@@ -14,6 +14,7 @@ import {
   Plus,
   MessageCircle,
   Bell,
+  BellOff,
   Pin,
   Loader2,
   X,
@@ -21,6 +22,8 @@ import {
   Globe,
   Sparkles,
   ArrowUpRight,
+  LogOut,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import chatService, {
@@ -30,8 +33,9 @@ import chatService, {
 import { getTokens } from '@/lib/services/api';
 import userService, { ApiUser } from '@/lib/services/userService';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useSearchParams } from 'next/navigation';
-import { formatISTTime } from '@/lib/utils/dateUtils';
+import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
 import { PageSkeleton } from '@/components/ui/skeleton';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
@@ -47,6 +51,7 @@ const getInitials = (name: string) =>
 export default function TeamChatPage() {
   const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
+  const dialog = useGlobalDialog();
   const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'direct'>('all');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [directMessages, setDirectMessages] = useState<Channel[]>([]);
@@ -74,6 +79,9 @@ export default function TeamChatPage() {
   const [showNewDMModal, setShowNewDMModal] = useState(false);
   const [isCreatingDM, setIsCreatingDM] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showPinnedPanel, setShowPinnedPanel] = useState(false);
+  const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -208,6 +216,73 @@ export default function TeamChatPage() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Load muted-channel preferences (no backend mute endpoint; persisted locally).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('chatMutedChannels');
+      if (raw) setMutedChannels(new Set(JSON.parse(raw)));
+    } catch { /* ignore */ }
+  }, []);
+
+  const toggleMute = () => {
+    if (!selectedChannel) return;
+    setShowHeaderMenu(false);
+    setMutedChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(selectedChannel.id)) {
+        next.delete(selectedChannel.id);
+        toast.success('Notifications unmuted');
+      } else {
+        next.add(selectedChannel.id);
+        toast.success('Notifications muted');
+      }
+      try { localStorage.setItem('chatMutedChannels', JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const handleLeaveChannel = async () => {
+    if (!selectedChannel) return;
+    setShowHeaderMenu(false);
+    const ok = await dialog.confirm({
+      title: 'Leave channel',
+      message: `Leave "${selectedChannel.name}"? You'll need to be re-added to rejoin.`,
+      variant: 'warning',
+      confirmText: 'Leave',
+    });
+    if (!ok) return;
+    try {
+      await chatService.leaveChannel(selectedChannel.id);
+      toast.success('Left channel');
+      setSelectedChannel(null);
+      setMessages([]);
+      await fetchChannels();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to leave channel');
+    }
+  };
+
+  const handleDeleteChannel = async () => {
+    if (!selectedChannel) return;
+    setShowHeaderMenu(false);
+    const ok = await dialog.confirm({
+      title: 'Delete channel',
+      message: `Delete "${selectedChannel.name}"? This permanently removes the channel and all its messages.`,
+      variant: 'error',
+      confirmText: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await chatService.deleteChannel(selectedChannel.id);
+      toast.success('Channel deleted');
+      setSelectedChannel(null);
+      setMessages([]);
+      await fetchChannels();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to delete channel');
     }
   };
 
@@ -397,13 +472,15 @@ export default function TeamChatPage() {
   );
 
   const onlineMembersCount = selectedChannel?.members?.filter((m) => m.is_online).length || 0;
+  const isMuted = selectedChannel ? mutedChannels.has(selectedChannel.id) : false;
+  const pinnedMessages = messages.filter((m) => m.is_pinned && !m.is_deleted);
 
   if (isLoading) {
     return <PageSkeleton variant="cards" showStats={false} />;
   }
 
   return (
-    <div className="flex h-[calc(100dvh-80px)] flex-col bg-slate-50 overflow-x-hidden">
+    <div className="flex h-full min-h-0 flex-col bg-slate-50 overflow-x-hidden">
       <div className="mx-auto w-full max-w-[1400px] flex flex-col flex-1 min-h-0">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl flex flex-col flex-1 min-h-0">
       <div className="shrink-0">
@@ -651,18 +728,61 @@ export default function TeamChatPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {/* Mute / notifications */}
                   <button
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                    aria-label="Notifications" title="Notifications"
+                    onClick={toggleMute}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                      isMuted
+                        ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15'
+                        : 'text-gray-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue'
+                    }`}
+                    aria-label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
+                    title={isMuted ? 'Unmute notifications' : 'Mute notifications'}
                   >
-                    <Bell className="h-4 w-4" />
+                    {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                   </button>
-                  <button
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                    aria-label="Pinned messages" title="Pinned messages"
-                  >
-                    <Pin className="h-4 w-4" />
-                  </button>
+
+                  {/* Pinned messages */}
+                  <div className="relative">
+                    <button
+                      onClick={() => { setShowPinnedPanel((v) => !v); setShowHeaderMenu(false); }}
+                      className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                        showPinnedPanel
+                          ? 'bg-brand-blue/[0.08] text-brand-blue ring-1 ring-brand-blue/15'
+                          : 'text-gray-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue'
+                      }`}
+                      aria-label="Pinned messages" title="Pinned messages"
+                    >
+                      <Pin className="h-4 w-4" />
+                    </button>
+                    {showPinnedPanel && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowPinnedPanel(false)} />
+                        <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-80 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-xl ring-1 ring-black/[0.04]">
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                            <Pin className="h-3.5 w-3.5" /> Pinned messages
+                          </div>
+                          {pinnedMessages.length === 0 ? (
+                            <p className="px-3 py-6 text-center text-sm text-gray-400">No pinned messages yet</p>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {pinnedMessages.map((m) => (
+                                <div key={m.id} className="rounded-xl px-3 py-2 hover:bg-slate-50">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="truncate text-xs font-semibold text-brand-blue">{m.user_name}</span>
+                                    <span className="shrink-0 text-[11px] text-gray-400">{formatISTTime(m.created_at)}</span>
+                                  </div>
+                                  <p className="mt-0.5 line-clamp-2 text-sm text-gray-700">{m.content}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Members toggle */}
                   <button
                     onClick={() => setShowMembersSidebar(!showMembersSidebar)}
                     className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
@@ -674,12 +794,59 @@ export default function TeamChatPage() {
                   >
                     <Users className="h-4 w-4" />
                   </button>
-                  <button
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                    aria-label="More" title="More"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
+
+                  {/* More menu */}
+                  <div className="relative">
+                    <button
+                      onClick={() => { setShowHeaderMenu((v) => !v); setShowPinnedPanel(false); }}
+                      className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                        showHeaderMenu
+                          ? 'bg-brand-blue/[0.08] text-brand-blue ring-1 ring-brand-blue/15'
+                          : 'text-gray-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue'
+                      }`}
+                      aria-label="More" title="More"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                    {showHeaderMenu && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
+                        <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl ring-1 ring-black/[0.04]">
+                          {selectedChannel.type === 'channel' && (
+                            <button
+                              onClick={() => { setShowMembersSidebar(true); setShowHeaderMenu(false); }}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-slate-50"
+                            >
+                              <Users className="h-4 w-4 text-gray-400" /> View members
+                            </button>
+                          )}
+                          <button
+                            onClick={toggleMute}
+                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-slate-50"
+                          >
+                            {isMuted ? <Bell className="h-4 w-4 text-gray-400" /> : <BellOff className="h-4 w-4 text-gray-400" />}
+                            {isMuted ? 'Unmute notifications' : 'Mute notifications'}
+                          </button>
+                          {selectedChannel.type === 'channel' && (
+                            <button
+                              onClick={handleLeaveChannel}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-slate-50"
+                            >
+                              <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
+                            </button>
+                          )}
+                          {selectedChannel.type === 'channel' && permissions.can_create_channel && (
+                            <button
+                              onClick={handleDeleteChannel}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" /> Delete channel
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -703,42 +870,70 @@ export default function TeamChatPage() {
                     <p className="mt-1 text-sm text-gray-500">Be the first to start the conversation.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {messages.map((message) => {
+                  <div className="flex flex-col">
+                    {messages.map((message, idx) => {
                       const isSender = message.user_id === currentUser?.id;
+                      const prev = messages[idx - 1];
+                      const next = messages[idx + 1];
+                      const dayLabel = formatISTDate(message.created_at);
+                      const showDateSeparator = !prev || formatISTDate(prev.created_at) !== dayLabel;
+                      // Group consecutive messages from the same sender on the same day.
+                      const groupStart = showDateSeparator || !prev || prev.user_id !== message.user_id;
+                      const groupEnd =
+                        !next || formatISTDate(next.created_at) !== dayLabel || next.user_id !== message.user_id;
+                      const showMeta = groupEnd || message.is_pinned || message.is_edited;
+                      const bubbleRadius = isSender
+                        ? `rounded-2xl${groupStart ? ' rounded-tr-md' : ''}`
+                        : `rounded-2xl${groupStart ? ' rounded-tl-md' : ''}`;
                       return (
-                        <div
-                          key={message.id}
-                          className={`group flex gap-2.5 ${isSender ? 'flex-row-reverse' : 'flex-row'}`}
-                        >
+                        <Fragment key={message.id}>
+                          {showDateSeparator && (
+                            <div className="flex items-center gap-3 py-3">
+                              <div className="h-px flex-1 bg-gray-100" />
+                              <span className="rounded-full bg-slate-100 px-3 py-0.5 text-[11px] font-medium text-gray-500 ring-1 ring-gray-200/70">
+                                {dayLabel}
+                              </span>
+                              <div className="h-px flex-1 bg-gray-100" />
+                            </div>
+                          )}
                           <div
-                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-white shadow-sm ${
-                              isSender
-                                ? 'bg-brand-blue shadow-brand-blue/20'
-                                : 'bg-brand-cyan shadow-brand-cyan/20'
+                            className={`group flex gap-2.5 ${isSender ? 'flex-row-reverse' : 'flex-row'} ${
+                              groupStart ? 'mt-3 first:mt-0' : 'mt-0.5'
                             }`}
                           >
-                            {message.user_initials}
-                          </div>
+                            {groupStart ? (
+                              <div
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-white shadow-sm ${
+                                  isSender
+                                    ? 'bg-brand-blue shadow-brand-blue/20'
+                                    : 'bg-brand-cyan shadow-brand-cyan/20'
+                                }`}
+                              >
+                                {message.user_initials}
+                              </div>
+                            ) : (
+                              <div className="w-9 shrink-0" aria-hidden />
+                            )}
 
-                          <div className={`max-w-[70%] ${isSender ? 'items-end' : 'items-start'}`}>
+                          <div className={`flex max-w-[70%] flex-col ${isSender ? 'items-end' : 'items-start'}`}>
+                            {groupStart && !isSender && (
+                              <span className="mb-1 px-1 text-xs font-semibold text-brand-blue">
+                                {message.user_name}
+                              </span>
+                            )}
                             <div
-                              className={`px-4 py-2.5 rounded-2xl ${
+                              className={`px-4 py-2.5 ${bubbleRadius} ${
                                 isSender
-                                  ? 'bg-brand-blue text-white rounded-tr-sm shadow-sm shadow-brand-blue/20'
-                                  : 'bg-slate-100 text-gray-900 rounded-tl-sm ring-1 ring-gray-100'
+                                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20'
+                                  : 'bg-slate-100 text-gray-900 ring-1 ring-gray-100'
                               }`}
                             >
-                              {!isSender && (
-                                <p className="mb-1 text-xs font-semibold text-brand-blue">
-                                  {message.user_name}
-                                </p>
-                              )}
                               <p className="whitespace-pre-wrap text-sm leading-relaxed">
                                 {message.is_deleted ? '[Message deleted]' : message.content}
                               </p>
                             </div>
 
+                            {showMeta && (
                             <div
                               className={`mt-1 flex items-center gap-1.5 px-1 ${
                                 isSender ? 'justify-end' : 'justify-start'
@@ -756,6 +951,7 @@ export default function TeamChatPage() {
                                 <span className="text-[11px] text-gray-400">(edited)</span>
                               )}
                             </div>
+                            )}
 
                             {message.reactions.length > 0 && (
                               <div
@@ -804,7 +1000,8 @@ export default function TeamChatPage() {
                               </div>
                             )}
                           </div>
-                        </div>
+                          </div>
+                        </Fragment>
                       );
                     })}
                     <div ref={messagesEndRef} />

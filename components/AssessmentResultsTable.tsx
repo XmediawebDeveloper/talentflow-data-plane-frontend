@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
@@ -187,7 +187,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // Helper: format timeline date
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
-    return formatIST(dateStr);
+    // Timeline shows precise event times (incl. seconds) for assessment timing.
+    return formatISTWithSeconds(dateStr);
   };
 
   // Handle delete result with timeout

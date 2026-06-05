@@ -3033,6 +3033,7 @@ export default function MyResumesPage() {
           onCreateFolder={handleCreateFolder}
           onViewResume={(resumeId) => {
             setIsUploadModalOpen(false);
+            sessionStorage.setItem('resumeNavSource', 'my-resumes');
             router.push(`/recruitment/resume-view/${resumeId}`);
           }}
           onDuplicateDetected={(duplicateData) => {

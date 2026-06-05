@@ -1260,12 +1260,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // remaining even when the event loop is busy. The compute is monotonic
     // (`computeQuestionRemaining`), so accuracy vs. backend is preserved.
     questionTimerIntervalRef.current = setInterval(() => {
-      if (isClarificationRef.current) {
-        if (questionTimerPausedAtRef.current === null) {
-          questionTimerPausedAtRef.current = performance.now();
-        }
-        return;
-      }
+      // (2026-06-03, per user spec) A clarification/repeat does NOT pause the
+      // per-question timer — the original window keeps ticking right through
+      // Linda's repeat (the repeat time counts against the candidate, unlike the
+      // main question whose clock only starts after she finishes asking). The
+      // timer only resets when Linda moves to the NEXT question. So we no longer
+      // pause on isClarification here; the countdown runs continuously.
       if (questionTimerPausedAtRef.current !== null) {
         questionTimerPausedMsRef.current += performance.now() - questionTimerPausedAtRef.current;
         questionTimerPausedAtRef.current = null;
@@ -1993,15 +1993,41 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (isFlexibleMode || isNewFlexibleMode) return;
     const text = (liveText || "").trim();
     if (!text || !isTranscriptMeaningful(text)) return;
+    // CLARIFICATION utterances are committed SOLELY by the backend `transcript`
+    // event (which appends each as its own distinct bubble — see the transcript
+    // handler). Skip the provisional here so we never get a provisional+transcript
+    // double-add, and so two clarifies on the SAME question — even the IDENTICAL
+    // phrase ("Please clarify the question." twice) — each show as their own
+    // bubble instead of being de-duped away. (1st clarify still goes through the
+    // normal path below because isClarification only turns true once Linda's
+    // repeat timer arrives, i.e. before the 2nd clarify.)
+    if (isClarificationRef.current) {
+      // Clarification turn: the backend `transcript` event owns the bubble
+      // (appended distinctly). Don't create a provisional, and DON'T leave
+      // provisionalAnswerQnRef pointing at the prior bubble — otherwise the
+      // transcript handler would upgrade/collapse onto it.
+      provisionalAnswerQnRef.current = null;
+      return;
+    }
     const qn = questionNumberRef.current ?? undefined;
     const frozenTime = frozenResponseTimeRef.current;
     frozenResponseTimeRef.current = null; // consume — backend upgrade preserves it
-    provisionalAnswerQnRef.current = qn ?? null;
     setMessages(prev => {
-      // Don't double-commit if this question already has an answer bubble.
+      // If this question ALREADY has a user bubble, this is a SECOND utterance on
+      // the SAME question — a clarification the isClarification race may have
+      // cleared the flag for (question_timer_stopped clears it on end_turn before
+      // the transcript arrives). We must NOT create a provisional AND must NOT
+      // leave provisionalAnswerQnRef pointing here, or the backend transcript
+      // event would UPGRADE/collapse onto the existing bubble (the "2nd clarify
+      // not shown" bug). Null it so the transcript handler APPENDS a distinct
+      // bubble instead.
       if (qn != null && prev.some(m => m.role === "user" && m.questionNumber === qn)) {
+        provisionalAnswerQnRef.current = null;
         return prev;
       }
+      // First user bubble for this question — create the provisional and point
+      // provisionalAnswerQnRef at it so the transcript event upgrades it in place.
+      provisionalAnswerQnRef.current = qn ?? null;
       return [...prev, {
         id: crypto.randomUUID(),
         role: "user" as const,
@@ -2398,6 +2424,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               const targetQn = qn !== null ? qn : provQn;
               setMessages(prev => {
                 const updated = [...prev];
+                // ── CLARIFICATION: always a DISTINCT bubble ───────────────
+                // During a clarification, commitLiveTranscriptAsAnswer skips the
+                // provisional, so THIS transcript event is the SOLE add. Append
+                // each clarify utterance as its own bubble under the CURRENT
+                // question — never upgrade/collapse onto a prior same-question
+                // bubble. That keeps BOTH the 1st and 2nd clarify visible even
+                // when the candidate repeats the IDENTICAL phrase ("Please
+                // clarify the question." twice). isClarification is only true
+                // from Linda's repeat onward, so the 1st clarify still flows
+                // through the normal provisional→upgrade path below.
+                if (isClarificationRef.current) {
+                  updated.push({
+                    ..._userMsg,
+                    questionNumber: questionNumberRef.current ?? _userMsg.questionNumber,
+                  });
+                  return updated;
+                }
                 // ── DEDUP GUARD (2026-05-26) ──────────────────────────────
                 // A long-answer pipeline hang/timeout (run_pipeline HARD
                 // TIMEOUT at 180s, or leftover audio bleeding into the next
@@ -3045,11 +3088,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setCurrentTranscript("");
           currentTranscriptRef.current = "";
         }
-        if (sameQuestion && data.is_follow_up === true) {
-          // Follow-up / clarification: do NOT restart the timer. The main
-          // question's 2-min slot is shared between Linda's follow-up and
-          // the candidate's answer to it — the countdown must continue from
-          // wherever it was, never jump back to the full duration.
+        if (sameQuestion && (data.is_follow_up === true || data.is_clarification === true)) {
+          // Same-slot continuation — do NOT restart the timer. This covers TWO
+          // SEPARATE concepts that each keep the original 2-min slot running:
+          //   • follow-up      (is_follow_up=true,  is_clarification=false)
+          //   • clarification  (is_clarification=true, is_follow_up=false)
+          // Clarification is NOT a follow-up — they're gated independently below
+          // so the follow-up path/state is never entered for a clarification.
+          // The main question's 2-min slot is shared between Linda's repeat/
+          // follow-up and the candidate's answer — the countdown must continue
+          // from wherever it was, never jump back to the full duration.
           //
           // We deliberately do NOT "drift-correct" toward `data.seconds`
           // here. The frontend timer ticks ONLY while the candidate is on
@@ -3068,8 +3116,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             setQuestionTimerSeconds(dur);
             questionTimerSecondsRef.current = dur;
           }
-          setIsFollowUp(true);
           if (data.is_clarification === true) {
+            // CLARIFICATION — its OWN concept, NOT a follow-up. Keep the running
+            // countdown and pause it during Linda's repeat. Explicitly mark this
+            // as NOT a follow-up so the two concepts never bleed together.
+            setIsFollowUp(false);
             // Bug H fix: if the interval was stray-cleared (e.g., remaining
             // hit 0 just before the clarification arrived), the timer would
             // never resume after clarification ends because the interval
@@ -3078,18 +3129,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             if (!questionTimerIntervalRef.current && (_cur ?? dur) > 0) {
               ensureQuestionTimerRunning(_cur ?? dur);
             }
-            // Point 4: pause per-question timer during clarification
-            console.log('[INTERVIEW-DEBUG] TIMER PAUSED — clarification mode entered', {
+            // (2026-06-03) Clarification keeps the SAME running countdown — it
+            // does NOT pause and does NOT reset. The timer interval no longer
+            // pauses on isClarification, so the window keeps ticking through
+            // Linda's repeat (per user spec).
+            console.log('[INTERVIEW-DEBUG] clarification — timer keeps running (no pause/reset)', {
               question_number: data.question_number,
               currentSeconds: questionTimerSecondsRef.current,
             });
             setIsClarification(true);
             isClarificationRef.current = true;
-            setStatus("Clarifying the question — timer paused");
-          } else if (!questionTimerIntervalRef.current && dur > 0) {
-            // Only (re)create an interval if none is running. Re-anchor from
-            // the frozen value so the helper's monotonic compute stays valid.
-            ensureQuestionTimerRunning(_cur ?? dur);
+            setStatus("Clarifying the question…");
+          } else {
+            // FOLLOW-UP — unchanged behavior: keep the timer running.
+            setIsFollowUp(true);
+            if (!questionTimerIntervalRef.current && dur > 0) {
+              // Only (re)create an interval if none is running. Re-anchor from
+              // the frozen value so the helper's monotonic compute stays valid.
+              ensureQuestionTimerRunning(_cur ?? dur);
+            }
           }
           // Keep active skill highlight — same skill, follow-up question
           // Update is_follow_up flag on the active skill if backend tells us which one

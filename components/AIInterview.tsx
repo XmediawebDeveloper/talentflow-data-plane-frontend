@@ -683,7 +683,20 @@ export default function AIInterview() {
 
   // Candidate detail view from Track Invites modal
   if (candidateDetailFromModal) {
-    return <CandidateResultsView interview={candidateDetailFromModal} onBack={() => setCandidateDetailFromModal(null)} />;
+    // Prev/Next steps through the loaded invitations list for this config.
+    const invIdx = invitations.findIndex((i) => i.id === candidateDetailFromModal.id);
+    const invCount = invitations.length;
+    return (
+      <CandidateResultsView
+        interview={candidateDetailFromModal}
+        onBack={() => setCandidateDetailFromModal(null)}
+        onNavigateToList={() => setCandidateDetailFromModal(null)}
+        currentIndex={invIdx >= 0 ? invIdx : undefined}
+        totalCount={invCount || undefined}
+        onPrev={invIdx > 0 ? () => handleViewCandidateDetail(invitations[invIdx - 1].id) : undefined}
+        onNext={invIdx >= 0 && invIdx < invCount - 1 ? () => handleViewCandidateDetail(invitations[invIdx + 1].id) : undefined}
+      />
+    );
   }
 
   // Loading state

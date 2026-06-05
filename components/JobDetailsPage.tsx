@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -312,29 +313,12 @@ ${job.certifications?.join(', ') || 'N/A'}
               <ArrowLeft className="w-4 h-4" />
               Back to Job Openings
             </button>
-            {allJDIds.length > 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
-                  disabled={!prevId}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </button>
-                <span className="text-xs text-gray-400">
-                  {currentIndex + 1} / {allJDIds.length}
-                </span>
-                <button
-                  onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
-                  disabled={!nextId}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <RecordPager
+              currentIndex={currentIndex}
+              totalCount={allJDIds.length}
+              onPrev={prevId ? () => router.push(`/recruitment/job-details?id=${prevId}`) : undefined}
+              onNext={nextId ? () => router.push(`/recruitment/job-details?id=${nextId}`) : undefined}
+            />
           </div>
           <div className="flex items-start justify-between">
             <div>

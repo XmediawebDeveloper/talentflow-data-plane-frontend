@@ -12,6 +12,7 @@ import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -1295,27 +1296,13 @@ export default function ResumeScoringPage({
                   Back to Scored Candidates
                 </button>
                 {scoredHistory.length > 1 && (
-                  <div className="flex items-center justify-between gap-2 sm:justify-end">
-                    <button
-                      onClick={() => _prevItem && _goToHistoryItem(_prevItem)}
-                      disabled={!_prevItem}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4 flex-shrink-0" />
-                      Previous
-                    </button>
-                    <span className="text-xs font-medium text-gray-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
-                      {(_historyIdx >= 0 ? _historyIdx : 0) + 1} / {scoredHistory.length}
-                    </span>
-                    <button
-                      onClick={() => _nextItem && _goToHistoryItem(_nextItem)}
-                      disabled={!_nextItem}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4 flex-shrink-0" />
-                    </button>
-                  </div>
+                  <RecordPager
+                    currentIndex={_historyIdx >= 0 ? _historyIdx : 0}
+                    totalCount={scoredHistory.length}
+                    onPrev={_prevItem ? () => _goToHistoryItem(_prevItem) : undefined}
+                    onNext={_nextItem ? () => _goToHistoryItem(_nextItem) : undefined}
+                    className="justify-between sm:justify-end"
+                  />
                 )}
               </div>
             );
@@ -1758,7 +1745,7 @@ export default function ResumeScoringPage({
 
             {/* Action cards — "View by Job" and "View All Candidates" as two
                 separate cards. Clicking either opens its list view. */}
-            <div className="flex flex-wrap items-stretch gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* View by Job card */}
               <button
                 type="button"
@@ -1769,14 +1756,14 @@ export default function ResumeScoringPage({
                   }
                   setPageView('list');
                 }}
-                className={`inline-flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-900 px-6 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md text-left ${pageView === 'list' && !isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
+                className={`flex items-center gap-3 text-left bg-white dark:bg-slate-900 border rounded-xl p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' && !isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/30' : 'border-gray-200 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
               >
-                <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                  <Briefcase className="w-4 h-4 text-white" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Briefcase className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-500 dark:text-slate-500 leading-tight">View by Job</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 leading-tight mt-0.5">
+                  <p className="text-xs text-gray-500 dark:text-slate-500">View by Job</p>
+                  <p className="text-xl font-semibold text-gray-900 dark:text-slate-50 leading-tight tracking-tight">
                     {scoredHistory.length}
                   </p>
                 </div>
@@ -1793,14 +1780,14 @@ export default function ResumeScoringPage({
                   }
                   setPageView('list');
                 }}
-                className={`inline-flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-900 px-6 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md text-left ${pageView === 'list' && isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
+                className={`flex items-center gap-3 text-left bg-white dark:bg-slate-900 border rounded-xl p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${pageView === 'list' && isGlobalView ? 'border-brand-blue ring-2 ring-brand-blue/30' : 'border-gray-200 dark:border-slate-700/60 hover:border-brand-blue/30'}`}
               >
-                <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                  <Users className="w-4 h-4 text-white" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Users className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-500 dark:text-slate-500 leading-tight">View All Candidates</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 leading-tight mt-0.5">
+                  <p className="text-xs text-gray-500 dark:text-slate-500">View All Candidates</p>
+                  <p className="text-xl font-semibold text-gray-900 dark:text-slate-50 leading-tight tracking-tight">
                     {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
                   </p>
                 </div>

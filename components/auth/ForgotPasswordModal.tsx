@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, ArrowLeft, Loader2, AlertCircle, KeyRound, Send } from 'lucide-react';
 import authService from '@/lib/services/authService';
+import { detectSubdomain } from '@/lib/utils/subdomain';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type ModalStep = 'email' | 'otp' | 'password' | 'success';
+type ModalStep = 'email' | 'otp' | 'password' | 'success' | 'firstLogin';
 
 export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProps) {
   const [step, setStep] = useState<ModalStep>('email');
@@ -24,8 +25,15 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
+  // First-time-login flow (invited user who hasn't set their own password yet)
+  const [firstLoginMessage, setFirstLoginMessage] = useState('');
+  const [tempSentAgain, setTempSentAgain] = useState(false);
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // The tenant this reset is scoped to — taken from the login page URL (subdomain / ?org=).
+  const getTenantSubdomain = (): string | null =>
+    detectSubdomain(typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined);
 
   // Resend timer countdown
   useEffect(() => {
@@ -47,6 +55,8 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
         setResetToken('');
         setError('');
         setResendTimer(0);
+        setFirstLoginMessage('');
+        setTempSentAgain(false);
       }, 300);
     }
   }, [isOpen]);
@@ -78,11 +88,32 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
     setIsLoading(true);
 
     try {
-      await authService.forgotPassword(email);
+      const res = await authService.forgotPassword(email, getTenantSubdomain());
+      // Invited user who hasn't set their own password yet — block reset, guide to temp password.
+      if (res?.requires_temp_password_login) {
+        setFirstLoginMessage(res.message || '');
+        setTempSentAgain(false);
+        setStep('firstLogin');
+        return;
+      }
       setStep('otp');
       setResendTimer(60);
     } catch (err: any) {
       setError(err.message || 'Failed to send verification code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // First-time-login: send a fresh temporary password (invalidates the old one)
+  const handleSendAgain = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      await authService.resendTempPassword(email, getTenantSubdomain());
+      setTempSentAgain(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send a new temporary password');
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +169,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
     setIsLoading(true);
 
     try {
-      const response = await authService.verifyResetOTP(email, otpValue);
+      const response = await authService.verifyResetOTP(email, otpValue, getTenantSubdomain());
       setResetToken(response.reset_token);
       setStep('password');
     } catch (err: any) {
@@ -188,7 +219,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
     setIsLoading(true);
 
     try {
-      await authService.forgotPassword(email);
+      await authService.forgotPassword(email, getTenantSubdomain());
       setOtpCode(['', '', '', '', '', '']);
       setResendTimer(60);
       otpRefs.current[0]?.focus();
@@ -217,12 +248,14 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
             {step === 'otp' && 'Enter Verification Code'}
             {step === 'password' && 'Create New Password'}
             {step === 'success' && 'Password Reset Successful!'}
+            {step === 'firstLogin' && 'Finish Setting Up Your Account'}
           </h2>
           <p className="text-blue-100 text-sm mt-1">
             {step === 'email' && 'We\'ll send you a verification code'}
             {step === 'otp' && `Code sent to ${email}`}
             {step === 'password' && 'Choose a strong password'}
             {step === 'success' && 'You can now login with your new password'}
+            {step === 'firstLogin' && 'This is your first sign-in'}
           </p>
         </div>
 
@@ -414,6 +447,68 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                 )}
               </button>
             </form>
+          )}
+
+          {/* First-time login: block reset, guide to temporary password */}
+          {step === 'firstLogin' && (
+            <div className="space-y-5">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
+                  <KeyRound className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed">
+                  {firstLoginMessage ||
+                    'This looks like your first time signing in. Please log in with the temporary password from your invite email, then set your own password.'}
+                </p>
+              </div>
+
+              {tempSentAgain ? (
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-green-800 dark:text-green-300">
+                    A new temporary password is on its way to <strong>{email}</strong>. Your previous
+                    temporary password no longer works — use the newest one.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800 dark:text-amber-300">
+                      Note: clicking <strong>Send Again</strong> will invalidate your previous
+                      temporary password. Only the newest one will work.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendAgain}
+                    disabled={isLoading}
+                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Send Again
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Login
+              </button>
+            </div>
           )}
 
           {/* Step 4: Success */}

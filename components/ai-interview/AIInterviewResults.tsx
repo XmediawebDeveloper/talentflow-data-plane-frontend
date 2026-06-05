@@ -194,6 +194,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
   };
 
   const handleViewDetails = (session: AIInterviewResponse) => {
+    // Persist the currently-visible session order so the details view can offer
+    // Previous/Next navigation between candidates (mirrors AssessmentResults).
+    try {
+      const navList = paginatedSessions.map((s) => ({ id: s.id }));
+      sessionStorage.setItem('aiInterviewResultNavList', JSON.stringify(navList));
+    } catch { /* ignore storage failures */ }
     router.push(`/recruitment/ai-interviews/${configId}/results/details?session_id=${session.id}`);
   };
 

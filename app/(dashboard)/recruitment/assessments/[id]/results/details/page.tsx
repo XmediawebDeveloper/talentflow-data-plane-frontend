@@ -8,6 +8,7 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import RecordPager from '@/components/RecordPager';
 
 function DetailsContent() {
   const params = useParams();
@@ -78,15 +79,23 @@ function DetailsContent() {
   };
 
   const breadcrumb = (
-    <PageBreadcrumb
-      className="mb-4 md:mb-8"
-      items={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Assessments', href: '/recruitment/assessments' },
-        { label: 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
-        { label: 'Candidate Details' },
-      ]}
-    />
+    <div className="flex items-center justify-between gap-3 mb-4 md:mb-8">
+      <PageBreadcrumb
+        className="mb-0 flex-1"
+        items={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Assessments', href: '/recruitment/assessments' },
+          { label: 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
+          { label: 'Candidate Details' },
+        ]}
+      />
+      <RecordPager
+        currentIndex={navIndex >= 0 ? navIndex : undefined}
+        totalCount={navList.length || undefined}
+        onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
+        onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
+      />
+    </div>
   );
 
   const wrapState = (children: React.ReactNode) => (
@@ -147,6 +156,7 @@ function DetailsContent() {
         totalCount={navList.length || undefined}
         onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
         onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
+        showRecordPager={false}
       />
         </div>
       </div>

@@ -335,11 +335,17 @@ export const authService = {
   },
 
   /**
-   * Request password reset OTP
+   * Request password reset OTP.
+   * `subdomain` scopes the reset to one tenant (the org whose login page the user is on).
+   * If the email belongs to an invited user who hasn't set their own password yet, the
+   * backend returns requires_temp_password_login=true and does NOT send an OTP.
    */
-  async forgotPassword(email: string): Promise<{ message: string; email: string; expires_in_minutes: number }> {
+  async forgotPassword(
+    email: string,
+    subdomain?: string | null,
+  ): Promise<{ message: string; email: string; expires_in_minutes?: number; requires_temp_password_login?: boolean }> {
     try {
-      const response = await api.post('/auth/forgot-password', { email });
+      const response = await api.post('/auth/forgot-password', { email, subdomain: subdomain || undefined });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -347,13 +353,37 @@ export const authService = {
   },
 
   /**
-   * Verify password reset OTP
+   * Verify password reset OTP (scoped to the same tenant the OTP was issued for).
    */
-  async verifyResetOTP(email: string, otpCode: string): Promise<{ success: boolean; message: string; reset_token: string }> {
+  async verifyResetOTP(
+    email: string,
+    otpCode: string,
+    subdomain?: string | null,
+  ): Promise<{ success: boolean; message: string; reset_token: string }> {
     try {
       const response = await api.post('/auth/verify-reset-otp', {
         email,
         otp_code: otpCode,
+        subdomain: subdomain || undefined,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Resend a fresh temporary password to a first-time-login user (tenant-scoped).
+   * Invalidates the previous temp password and re-sends the branded invite email.
+   */
+  async resendTempPassword(
+    email: string,
+    subdomain?: string | null,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await api.post('/auth/resend-temp-password', {
+        email,
+        subdomain: subdomain || undefined,
       });
       return response.data;
     } catch (error) {

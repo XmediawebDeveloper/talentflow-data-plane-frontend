@@ -1,7 +1,6 @@
 'use client';
 
 import { Sparkles, Target, Filter, Search, ChevronDown, ChevronLeft, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
-import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -22,6 +21,7 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import RecordPager from '@/components/RecordPager';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 
@@ -907,14 +907,35 @@ export default function AITalentMatchPage({
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb
-              className="mb-4 md:mb-6"
-              items={[
-                { label: 'Dashboard', href: '/dashboard' },
-                { label: 'AI Talent Match', onClick: () => setViewMode('history') },
-                { label: 'Match Details' },
-              ]}
-            />
+            <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+              <PageBreadcrumb
+                className="mb-0 flex-1"
+                items={[
+                  { label: 'Dashboard', href: '/dashboard' },
+                  { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+                  { label: 'Match Details' },
+                ]}
+              />
+              {(() => {
+                const _matchIdx = matchHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
+                const _prevMatch = _matchIdx > 0 ? matchHistory[_matchIdx - 1] : null;
+                const _nextMatch = _matchIdx >= 0 && _matchIdx < matchHistory.length - 1 ? matchHistory[_matchIdx + 1] : null;
+                const _goToMatch = (item: MatchHistory) => {
+                  setSelectedHistoryItem(item);
+                  setSelectedCandidates([]);
+                  setSelectedJob('');
+                };
+                if (matchHistory.length <= 1) return null;
+                return (
+                  <RecordPager
+                    currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
+                    totalCount={matchHistory.length}
+                    onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
+                    onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
+                  />
+                );
+              })()}
+            </div>
         {/* Header Section */}
         <div className="border-b border-gray-200 dark:border-slate-700 mb-4 pb-4">
           <div className="w-full">
@@ -929,7 +950,7 @@ export default function AITalentMatchPage({
 
             return (
               <>
-                <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 mb-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
                   <button
                     onClick={() => {
                       setViewMode('history');
@@ -943,69 +964,32 @@ export default function AITalentMatchPage({
                     <ArrowLeft className="w-4 h-4" />
                     Back to Matched Jobs
                   </button>
-                  {/* Right corner: Previous/Next row, Run AI Match below */}
-                  <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
-                    {(() => {
-                      const _matchIdx = matchHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
-                      const _prevMatch = _matchIdx > 0 ? matchHistory[_matchIdx - 1] : null;
-                      const _nextMatch = _matchIdx >= 0 && _matchIdx < matchHistory.length - 1 ? matchHistory[_matchIdx + 1] : null;
-                      const _goToMatch = (item: MatchHistory) => {
-                        setSelectedHistoryItem(item);
-                        setSelectedCandidates([]);
-                        setSelectedJob('');
-                      };
-                      if (matchHistory.length <= 1) return null;
-                      return (
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => _prevMatch && _goToMatch(_prevMatch)}
-                            disabled={!_prevMatch}
-                            className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                            Previous
-                          </button>
-                          <span className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">
-                            {(_matchIdx >= 0 ? _matchIdx : 0) + 1} / {matchHistory.length}
-                          </span>
-                          <button
-                            onClick={() => _nextMatch && _goToMatch(_nextMatch)}
-                            disabled={!_nextMatch}
-                            className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300"
-                          >
-                            Next
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })()}
-                    {/* Run AI Match button — below Previous/Next */}
-                    {canRunAIMatch && (
-                      <button
-                        onClick={() => {
-                          if (!canRunAiMatch) {
-                            toast.error('You do not have permission to run AI matching operations');
-                            return;
-                          }
-                          const jobId = selectedJob || selectedHistoryItem?.jobId;
-                          if (jobId) {
-                            handleRunAIMatch(jobId);
-                            setSelectedCandidates([]);
-                          }
-                        }}
-                        disabled={!canRunAiMatch}
-                        className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
-                          canRunAiMatch
-                            ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                        }`}
-                        title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Run AI Match
-                      </button>
-                    )}
-                  </div>
+                  {/* Run AI Match — right side of the Back row */}
+                  {canRunAIMatch && (
+                    <button
+                      onClick={() => {
+                        if (!canRunAiMatch) {
+                          toast.error('You do not have permission to run AI matching operations');
+                          return;
+                        }
+                        const jobId = selectedJob || selectedHistoryItem?.jobId;
+                        if (jobId) {
+                          handleRunAIMatch(jobId);
+                          setSelectedCandidates([]);
+                        }
+                      }}
+                      disabled={!canRunAiMatch}
+                      className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
+                        canRunAiMatch
+                          ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                      }`}
+                      title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Run AI Match
+                    </button>
+                  )}
                 </div>
 
                 {/* Job Info Card */}
@@ -1750,16 +1734,27 @@ export default function AITalentMatchPage({
         </div>
 
         {/* Stats Cards — clicking Matched Jobs drills into the list */}
-        <StatsCardGrid className="mb-5">
-          <StatsCard
-            tone="blue"
-            icon={History}
-            label="Matched Jobs"
-            value={matchHistory.length}
-            sparkline={false}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          <button
+            type="button"
             onClick={() => setHistoryPageView('list')}
-          />
-        </StatsCardGrid>
+            className={`flex items-center gap-3 text-left bg-white dark:bg-slate-900 border rounded-xl p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${
+              historyPageView === 'list'
+                ? 'border-brand-blue ring-2 ring-brand-blue/30'
+                : 'border-gray-200 dark:border-slate-700/60 hover:border-brand-blue/30'
+            }`}
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+              <History className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 dark:text-slate-500">Matched Jobs</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-slate-50 leading-tight tracking-tight">
+                {matchHistory.length}
+              </p>
+            </div>
+          </button>
+        </div>
 
         {historyPageView === 'list' && (
         <>

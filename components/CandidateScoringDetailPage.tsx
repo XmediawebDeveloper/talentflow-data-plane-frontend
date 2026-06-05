@@ -4,6 +4,7 @@ import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, B
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import RecordPager from '@/components/RecordPager';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -426,29 +427,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           Back to Scored Resumes
         </button>
 
-        {totalCount != null && totalCount > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onPrev}
-              disabled={!onPrev || currentIndex === 0}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              {(currentIndex ?? 0) + 1} / {totalCount}
-            </span>
-            <button
-              onClick={onNext}
-              disabled={!onNext || currentIndex === totalCount - 1}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <RecordPager
+          currentIndex={currentIndex}
+          totalCount={totalCount}
+          onPrev={onPrev}
+          onNext={onNext}
+        />
       </div>
 
       {/* Header */}

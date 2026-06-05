@@ -33,10 +33,25 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import ListPagination from '@/components/ListPagination';
+import RecordPager from '@/components/RecordPager';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
   onBack: () => void;
+  /** Index of this candidate within the visible results list (for Prev/Next). */
+  currentIndex?: number;
+  /** Total candidates in the visible results list. */
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
+  /**
+   * When this view is rendered inline within the AI Interviews list page
+   * (Invites → View Details), the "AI Interviews" breadcrumb can't navigate via
+   * href (we're already on that route). Pass a handler to return to the list by
+   * clearing the inline state instead.
+   */
+  onNavigateToList?: () => void;
 }
 
 type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
@@ -458,7 +473,7 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
-export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
+export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList }: CandidateResultsViewProps) {
   // Default to the combined "Evaluation Report" (key 'eval'). The old
   // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
   // content is merged into the Eval tab. The render blocks are kept so any
@@ -478,6 +493,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
+  const [violationsPerPage, setViolationsPerPage] = useState(10);
   const [riskThresholds, setRiskThresholds] = useState<RiskThresholds>(DEFAULT_THRESHOLDS);
   const [violationThresholds, setViolationThresholds] = useState<ViolationCountThresholds>(DEFAULT_VIOLATION_THRESHOLDS);
   const [showThresholdEditor, setShowThresholdEditor] = useState(false);
@@ -997,9 +1013,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     );
   }, [violations]);
 
-  const ROWS_PER_PAGE = 10;
+  const ROWS_PER_PAGE = violationsPerPage;
   const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
-  const pagedViolations = groupedViolations.slice((violationPage - 1) * ROWS_PER_PAGE, violationPage * ROWS_PER_PAGE);
+  const safeViolationPage = Math.min(violationPage, totalPages);
+  const pagedViolations = groupedViolations.slice((safeViolationPage - 1) * ROWS_PER_PAGE, safeViolationPage * ROWS_PER_PAGE);
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
     // 'Overview' tab hidden 2026-05-30 — merged into the combined Evaluation Report (Eval) tab.
@@ -1078,17 +1095,28 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const placeholderMsg = getPlaceholderMessage();
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb
-            className="mb-4 md:mb-6"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Candidate Results' },
-            ]}
-          />
+          <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+            <PageBreadcrumb
+              className="mb-0 flex-1"
+              sticky={false}
+              items={[
+                { label: 'Dashboard', href: '/dashboard' },
+                onNavigateToList
+                  ? { label: 'AI Interviews', onClick: onNavigateToList }
+                  : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                { label: 'Candidate Results' },
+              ]}
+            />
+            <RecordPager
+              currentIndex={currentIndex}
+              totalCount={totalCount}
+              onPrev={onPrev}
+              onNext={onNext}
+            />
+          </div>
 
       <div>
         <div className="w-full">
@@ -1243,7 +1271,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
         {/* Tabs card */}
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="sticky top-[64px] sm:top-[80px] z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
+          <div className="sticky top-0 z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
             <div className="flex gap-1 min-w-max">
               {tabs.map(tab => (
                 <button
@@ -3433,7 +3461,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 row.count >= 5 ? 'text-red-600 font-bold' :
                                 row.count >= 3 ? 'text-brand-orange-deep font-semibold' :
                                                  'text-gray-600';
-                              const globalIdx = (violationPage - 1) * ROWS_PER_PAGE + idx + 1;
+                              const globalIdx = (safeViolationPage - 1) * ROWS_PER_PAGE + idx + 1;
                               return (
                                 <tr key={idx} className="hover:bg-brand-blue/[0.02] transition-colors">
                                   <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
@@ -3459,31 +3487,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         </table>
                       </div>
 
-                      {/* Pagination */}
-                      {totalPages > 1 && (
-                        <div className="flex items-center justify-between mt-3 px-4 py-3 bg-slate-50 border-t border-gray-100 rounded-b-xl">
-                          <p className="text-xs text-gray-500">
-                            Showing {(violationPage - 1) * ROWS_PER_PAGE + 1}–{Math.min(violationPage * ROWS_PER_PAGE, groupedViolations.length)} of {groupedViolations.length} events
-                          </p>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => setViolationPage(p => Math.max(1, p - 1))}
-                              disabled={violationPage === 1}
-                              className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="text-xs text-gray-600 px-2">{violationPage} / {totalPages}</span>
-                            <button
-                              onClick={() => setViolationPage(p => Math.min(totalPages, p + 1))}
-                              disabled={violationPage === totalPages}
-                              className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      {/* Pagination — shared ListPagination (consistent with other pages) */}
+                      <ListPagination
+                        currentPage={safeViolationPage}
+                        itemsPerPage={violationsPerPage}
+                        totalItems={groupedViolations.length}
+                        onPageChange={setViolationPage}
+                        onItemsPerPageChange={setViolationsPerPage}
+                        itemLabel="events"
+                      />
                     </>
                   )}
                 </div>
