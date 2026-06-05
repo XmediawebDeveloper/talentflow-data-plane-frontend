@@ -526,71 +526,54 @@ export default function StepSystemCheck({
           ambientLevel = getRMS(analyser);
         }
 
-        if (ambientLevel < 1) {
-          // Mic is muted or dead — skip speak test, fail immediately
-          updateSystemCheck('microphone', { status: 'fail', detail: 'No audio signal — mic may be muted or disconnected' });
-          // Live polling so user sees it recover if they fix the issue
-          micIntervalRef.current = setInterval(() => {
-            const a = analyserRef.current;
-            if (!a) return;
-            const lvl = getRMS(a);
-            if (lvl >= 1) updateSystemCheck('microphone', { status: 'checking', detail: 'Signal detected — say something to confirm...' });
-          }, 1000);
-        } else {
-          // Step 2: active speak window — ask user to say something for 3s
-          updateSystemCheck('microphone', { status: 'checking', detail: 'Say something to test your microphone...' });
-          const SPEAK_WINDOW_MS = 3000;
-          const SPEAK_SAMPLES = 15; // sample every 200ms
-          const INTERVAL_MS = SPEAK_WINDOW_MS / SPEAK_SAMPLES;
-          // Voice detected when level spikes ≥ 1.8× ambient AND above absolute floor of 8
-          const VOICE_THRESHOLD = Math.max(ambientLevel * 1.8, 8);
+        // --- LIVE microphone test (continuous, like the live face check) ---
+        // Previously this used a fixed 3-second "say something now" window that
+        // FAILED if the candidate happened to stay quiet during those 3 seconds.
+        // Instead we now monitor the mic CONTINUOUSLY and flip to PASS the moment
+        // any voice is detected — at any time. The check simply keeps listening
+        // ("say something") and never times out, exactly like face detection
+        // waits until a face appears. Once voice is heard it stays passed and
+        // doesn't flicker back during the natural pauses between words.
+        const VOICE_FACTOR = 1.8;          // voice = ≥ 1.8× the ambient baseline
+        const VOICE_FLOOR = 8;             // …and above an absolute RMS floor
+        const voiceBaseline = Math.max(ambientLevel, 0);
+        const voiceThreshold = Math.max(voiceBaseline * VOICE_FACTOR, VOICE_FLOOR);
+        let voiceEverDetected = false;
 
-          let peakVoiceLevel = 0;
-          for (let i = 0; i < SPEAK_SAMPLES; i++) {
-            if (cancelled()) return;
-            await new Promise((r) => setTimeout(r, INTERVAL_MS));
-            if (cancelled()) return;
-            const lvl = getRMS(analyser);
-            if (lvl > peakVoiceLevel) peakVoiceLevel = lvl;
+        updateSystemCheck('microphone', { status: 'checking', detail: 'Say something — your microphone will be detected automatically...' });
+
+        micIntervalRef.current = setInterval(() => {
+          const a = analyserRef.current;
+          if (!a) return;
+          const lvl = getRMS(a);
+          if (lvl >= voiceThreshold) {
+            // Voice heard → pass, and keep it (don't drop on later silence).
+            voiceEverDetected = true;
+            updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
+          } else if (!voiceEverDetected) {
+            // Still waiting for the candidate to speak — keep listening, never fail.
+            updateSystemCheck('microphone', lvl >= 1
+              ? { status: 'checking', detail: 'Listening — say something to confirm your microphone...' }
+              : { status: 'checking', detail: 'No audio yet — say something, or check that your mic is unmuted...' },
+            );
           }
-
-          if (cancelled()) return;
-
-          const voiceDetected = peakVoiceLevel >= VOICE_THRESHOLD;
-          updateSystemCheck('microphone', voiceDetected
-            ? { status: 'pass', detail: 'Voice detected — microphone working correctly' }
-            : { status: 'fail', detail: 'No voice detected — speak louder or check mic hardware/settings' },
-          );
-
-          // Live re-check every 2s — recover automatically if user fixes their mic
-          micIntervalRef.current = setInterval(() => {
-            const a = analyserRef.current;
-            if (!a) return;
-            const lvl = getRMS(a);
-            if (lvl >= VOICE_THRESHOLD) {
-              updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
-            } else if (lvl < 1) {
-              updateSystemCheck('microphone', { status: 'fail', detail: 'No audio signal — mic may be muted or disconnected' });
-            }
-            // Silence between words — don't flicker; leave result as-is
-          }, 2000);
-        }
+          // Detected already, or a silent gap between words → leave result as-is.
+        }, 150);
       } catch {
         if (cancelled()) return;
         updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       }
 
-      // 4. Internet Connection — measure Mbps using NetworkInformation API (Chrome/Edge)
-      //    and fall back to a latency-based heuristic for Firefox/Safari.
+      // 4. Internet Connection — measure REAL download throughput.
+      //    NOTE: we deliberately do NOT use navigator.connection.downlink — Chrome
+      //    privacy-caps that value at ~10 Mbps, so a 250 Mbps line always reported
+      //    "10 Mbps". Instead we stream a sizeable payload and measure actual
+      //    bytes/elapsed-time, which reflects the candidate's true speed.
       if (cancelled()) return;
-      updateSystemCheck('internet', { status: 'checking', detail: 'Testing connection speed...' });
+      updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
       const healthUrl = `${API_BASE_URL.replace('/api/v1', '')}/health`;
 
-      // --- Primary: NetworkInformation API (Chrome/Edge only) ---
-      const connection = (navigator as any).connection ?? (navigator as any).mozConnection ?? (navigator as any).webkitConnection;
-      let measuredMbps: number | null = connection?.downlink ?? null; // already in Mbps
-
-      // --- Fallback: download timing against /health (tiny payload, latency-based) ---
+      // --- Latency: a few quick pings against /health (used for display + fallback) ---
       const latencies: number[] = [];
       for (let i = 0; i < 3; i++) {
         try {
@@ -600,29 +583,74 @@ export default function StepSystemCheck({
         } catch { /* individual ping failed */ }
       }
       if (cancelled()) return;
+      const avgLatency = latencies.length
+        ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+        : null;
 
-      if (latencies.length === 0 && measuredMbps === null) {
-        updateSystemCheck('internet', { status: 'fail', detail: 'Unable to reach server — check your connection' });
-      } else if (measuredMbps !== null) {
-        // Use NetworkInformation API value (most accurate)
-        const mbps = measuredMbps;
-        networkSpeedMbpsRef.current = mbps;
-        if (latencies.length > 0) networkLatencyMsRef.current = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
-        const passes = mbps >= MIN_INTERNET_MBPS;
+      // --- Real download throughput (streamed, time- and byte-bounded) ---
+      // Reads from a CORS-enabled sizeable source for up to ~4s (or until ~25 MB),
+      // then computes Mbps = bytes×8 / seconds. Adapts to the link: fast links
+      // finish the payload quickly, slow links measure whatever transferred in 4s.
+      const measureDownloadMbps = async (): Promise<number | null> => {
+        const MAX_MS = 4000;          // cap the test at ~4 seconds
+        const MAX_BYTES = 25_000_000; // …or ~25 MB, whichever comes first
+        const MIN_BYTES = 250_000;    // need ≥ ~0.25 MB for a meaningful reading
+        const sources = [
+          `https://speed.cloudflare.com/__down?bytes=${MAX_BYTES}`,
+        ];
+        for (const base of sources) {
+          try {
+            const controller = new AbortController();
+            const hardStop = setTimeout(() => controller.abort(), MAX_MS + 1500);
+            const url = `${base}${base.includes('?') ? '&' : '?'}_=${Date.now()}`;
+            const start = performance.now();
+            const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+            if (!res.ok || !res.body) { clearTimeout(hardStop); continue; }
+            const reader = res.body.getReader();
+            let bytes = 0;
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) bytes += value.length;
+              if (performance.now() - start >= MAX_MS || bytes >= MAX_BYTES) {
+                try { await reader.cancel(); } catch { /* ignore */ }
+                controller.abort();
+                break;
+              }
+            }
+            clearTimeout(hardStop);
+            const elapsedSec = (performance.now() - start) / 1000;
+            if (bytes >= MIN_BYTES && elapsedSec > 0.15) {
+              return (bytes * 8) / (elapsedSec * 1_000_000); // Mbps
+            }
+          } catch { /* aborted/blocked — try next source or fall back below */ }
+        }
+        return null;
+      };
+
+      let realMbps: number | null = null;
+      try { realMbps = await measureDownloadMbps(); } catch { realMbps = null; }
+      if (cancelled()) return;
+      if (avgLatency !== null) networkLatencyMsRef.current = avgLatency;
+
+      if (realMbps !== null) {
+        // True measured throughput — the accurate path.
+        networkSpeedMbpsRef.current = realMbps;
+        const passes = realMbps >= MIN_INTERNET_MBPS;
         updateSystemCheck('internet', passes
-          ? { status: 'pass', detail: `Speed: ${mbps.toFixed(1)} Mbps (≥ ${MIN_INTERNET_MBPS} Mbps required)` }
-          : { status: 'fail', detail: `Speed: ${mbps.toFixed(1)} Mbps (below ${MIN_INTERNET_MBPS} Mbps minimum)` },
+          ? { status: 'pass', detail: `Speed: ${realMbps.toFixed(1)} Mbps (≥ ${MIN_INTERNET_MBPS} Mbps required)` }
+          : { status: 'fail', detail: `Speed: ${realMbps.toFixed(1)} Mbps (below ${MIN_INTERNET_MBPS} Mbps minimum)` },
+        );
+      } else if (avgLatency !== null) {
+        // Throughput test blocked (e.g. corporate firewall) — fall back to latency.
+        const passes = avgLatency < 500;
+        updateSystemCheck('internet', passes
+          ? { status: 'pass', detail: `Connection: Good (${avgLatency}ms latency — speed test unavailable on this network)` }
+          : { status: 'fail', detail: `Connection: Slow (${avgLatency}ms latency — check your internet, ${MIN_INTERNET_MBPS} Mbps required)` },
         );
       } else {
-        // Latency-only fallback — infer speed category from round-trip time
-        const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
-        networkLatencyMsRef.current = avg;
-        // < 150ms ≈ fast broadband, 150-500ms ≈ marginal, > 500ms = slow/congested
-        const passes = avg < 500;
-        updateSystemCheck('internet', passes
-          ? { status: 'pass', detail: `Connection: Good (${avg}ms latency — speed measurement not available on this browser)` }
-          : { status: 'fail', detail: `Connection: Slow (${avg}ms latency — check your internet speed, ${MIN_INTERNET_MBPS} Mbps required)` },
-        );
+        updateSystemCheck('internet', { status: 'fail', detail: 'Unable to reach server — check your connection' });
       }
 
       // 4b. AI Engine — ping the AI health endpoint

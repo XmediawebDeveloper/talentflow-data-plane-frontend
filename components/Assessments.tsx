@@ -3476,7 +3476,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <div className="flex gap-1">
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
                                       className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                                     >
                                       <Send className="w-3 h-3" />
@@ -3517,7 +3517,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <div className="flex gap-1">
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
                                       className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                                     >
                                       <Send className="w-3 h-3" />

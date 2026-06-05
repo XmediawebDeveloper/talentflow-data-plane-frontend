@@ -4,6 +4,7 @@ import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, P
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
+import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 
 interface TrackInvitesModalProps {
@@ -154,13 +155,21 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     try {
       await api.patch(
         `/assessments/${invitation.assessment_id}/invitations/${invitation.id}/update-email`,
-        { new_email: newEmailValue }
+        { new_email: newEmailValue.trim() }
       );
       setEditingEmailId(null);
       setNewEmailValue('');
+      toast.success('Email updated — previous link deactivated and a new invitation sent.');
       await loadInvitations(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update email:', error);
+      // Surface the backend validation (e.g. "already invited to this assessment").
+      const msg =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.message ||
+        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
+        'Failed to update email. Please try again.';
+      toast.error(msg);
     } finally {
       setIsSendingEmail(false);
     }
@@ -417,7 +426,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               <div className="flex gap-1">
                                 <button
                                   onClick={() => handleUpdateEmail(invitation)}
-                                  disabled={!isValidEmail(newEmailValue) || isSendingEmail}
+                                  disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
                                   className="flex items-center gap-1 px-2 py-1 text-[10px] bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                   <Send className="w-3 h-3" />
@@ -685,7 +694,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   <div className="flex gap-1">
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail}
+                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
                                       className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
                                       <Send className="w-3 h-3" />
@@ -726,7 +735,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   <div className="flex gap-1">
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail}
+                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
                                       className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
                                       <Send className="w-3 h-3" />

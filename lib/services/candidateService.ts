@@ -656,7 +656,11 @@ export const candidateService = {
         }
 
         if (error.response.status === 404) {
-          throw new Error('Assessment not found. Please verify the link is correct.');
+          // Token no longer resolves — commonly a link that was superseded
+          // (recruiter edited the email / resent, which rotates the token) or
+          // a mistyped URL. Surface the friendly "expired/updated" screen
+          // rather than a bare "not found". Handled in CandidateAssessmentPortal.
+          throw new Error('LINK_NOT_VALID');
         }
 
         if (error.response.status >= 500) {

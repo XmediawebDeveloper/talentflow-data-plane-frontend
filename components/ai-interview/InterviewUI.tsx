@@ -792,6 +792,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const flushProctoringEventsRef = useRef(flushEvents);
   useEffect(() => { flushProctoringEventsRef.current = flushEvents; }, [flushEvents]);
 
+  // ── Device recovery (2026-06-05) ───────────────────────────────────────────
+  // <Webcam> acquires getUserMedia ONCE on mount and never re-acquires, so after
+  // the candidate unplugs / denies and then re-plugs / re-grants a device, the
+  // proctoring monitor keeps watching the DEAD stream → the blocking "… Disabled"
+  // overlay stays forever and they're stuck (interview runs behind it). When the
+  // monitor reports a device disabled, poll Webcam.reacquire() until a fresh LIVE
+  // stream returns; that re-feeds the monitor (onStream → setWebcamStream) so it
+  // sees live tracks and clears the overlay + refreshes the preview. The per-turn
+  // ASR mic is re-acquired by startRecording each turn, so it self-heals once the
+  // device is back. getUserMedia needs BOTH cam+mic, so it only succeeds (and the
+  // overlay only clears) once everything that was lost is back — which is exactly
+  // the condition for resuming.
+  useEffect(() => {
+    if (!isConnected) return;
+    const disabled = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
+    if (!disabled) return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      if (cancelled) return;
+      let ok = false;
+      try {
+        ok = (await webcamRef.current?.reacquire()) ?? false;
+      } catch {
+        /* device still unavailable — keep polling */
+      }
+      if (ok) {
+        cancelled = true;
+        clearInterval(id);
+        console.log('[InterviewUI] Device recovery: re-acquired media stream — overlay will clear');
+      }
+    }, 2500);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isConnected, proctoringState.isCameraActive, proctoringState.isMicrophoneActive]);
+
   // Fullscreen — disabled (no popup/overlay)
   const isFullscreenActive = true;
 
@@ -5209,7 +5243,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 : "Microphone Disabled"}
             </h2>
             <p className="text-gray-400 mb-4">
-              {!proctoringState.isCameraActive
+              {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                ? "Your camera and microphone have been disabled. Please re-enable them to continue the interview."
+                : !proctoringState.isCameraActive
                 ? "Your camera has been disabled. Please re-enable it to continue the interview."
                 : "Your microphone has been disabled. Please re-enable it to continue the interview."}
             </p>

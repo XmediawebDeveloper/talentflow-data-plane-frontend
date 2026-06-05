@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 interface ErrorScreenProps {
   message: string;
   onRetry?: () => void;
-  variant?: 'error' | 'expired' | 'completed' | 'revoked';
+  variant?: 'error' | 'expired' | 'completed' | 'revoked' | 'cancelled';
 }
 
 export function ErrorScreen({ message, onRetry, variant = 'error' }: ErrorScreenProps) {
@@ -30,6 +30,11 @@ export function ErrorScreen({ message, onRetry, variant = 'error' }: ErrorScreen
       iconBg: 'bg-red-100',
       icon: <Ban className="w-8 h-8 text-red-600" />,
       title: 'Invitation Revoked',
+    },
+    cancelled: {
+      iconBg: 'bg-amber-100',
+      icon: <Ban className="w-8 h-8 text-amber-600" />,
+      title: 'Link Cancelled',
     },
   }[variant];
 

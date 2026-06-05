@@ -164,6 +164,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // the invitation. Drives a different icon + title on the error screen so
   // the candidate knows to contact the recruiter rather than wait.
   const [isRevokedLink, setIsRevokedLink] = useState(false);
+  // Set when the token no longer resolves because it was superseded — the
+  // recruiter edited the email / resent, which rotates the token and cancels
+  // the old link. Drives a "Link Cancelled" screen with no retry button.
+  const [isCancelledLink, setIsCancelledLink] = useState(false);
   const [assessmentInfo, setAssessmentInfo] = useState<AssessmentInfo | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<CurrentQuestion | null>(null);
   const [assessmentData, setAssessmentData] = useState<StartAssessmentResponse | null>(null);
@@ -690,6 +694,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         } else if (errorMessage === 'LINK_EXPIRED') {
           setIsExpiredLink(true);
           setError('This assessment link has expired. Please contact your recruiter for a new link.');
+        } else if (
+          errorMessage === 'LINK_NOT_VALID' ||
+          errorMessage.toLowerCase().includes('invalid or expired')
+        ) {
+          // Token no longer resolves — typically a link that was superseded
+          // (recruiter edited the email / resent → token rotated, which cancels
+          // the old link) or a mistyped URL. Show the friendly "Link Cancelled"
+          // screen, not a bare 404. (Genuinely time-expired links still resolve
+          // to a row and take the dedicated "expired" path above.)
+          setIsCancelledLink(true);
+          setError('This invitation link has been cancelled. Please contact your recruiter for a new link.');
         } else {
           setError(errorMessage);
         }
@@ -1389,12 +1404,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return (
           <ErrorScreen
             message={error || 'An error occurred'}
-            variant={isRevokedLink ? 'revoked' : (isExpiredLink ? 'expired' : 'error')}
-            onRetry={(isExpiredLink || isRevokedLink) ? undefined : () => {
+            variant={isRevokedLink ? 'revoked' : (isCancelledLink ? 'cancelled' : (isExpiredLink ? 'expired' : 'error'))}
+            onRetry={(isExpiredLink || isRevokedLink || isCancelledLink) ? undefined : () => {
               isFlowActiveRef.current = false;
               isStartingRef.current = false;
               setIsExpiredLink(false);
               setIsRevokedLink(false);
+              setIsCancelledLink(false);
               setError(null);
               sessionTokenManager.setAssessmentToken(token);
               sessionStorage.removeItem(ASSESS_SESSION_KEY);
