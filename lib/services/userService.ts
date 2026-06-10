@@ -46,6 +46,10 @@ export interface UserPermissions {
   can_create_users: boolean;
   can_update_users: boolean;
   can_delete_users: boolean;
+  can_disable_users?: boolean;
+  can_reset_user_password?: boolean;
+  can_force_password_change?: boolean;
+  can_assign_roles?: boolean;
 
   // Role Management Permissions (Granular CRUD)
   can_view_roles: boolean;

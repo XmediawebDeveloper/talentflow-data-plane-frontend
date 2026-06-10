@@ -114,6 +114,15 @@ export interface Permission {
   canCreateUsers?: boolean;
   canUpdateUsers?: boolean;
   canDeleteUsers?: boolean;
+  canDisableUsers?: boolean;
+  canResetUserPassword?: boolean;
+  canForcePasswordChange?: boolean;
+  canAssignRoles?: boolean;
+  // snake_case aliases (backend shape read directly by legacy UI)
+  can_disable_users?: boolean;
+  can_reset_user_password?: boolean;
+  can_force_password_change?: boolean;
+  can_assign_roles?: boolean;
   canManageResumes?: boolean;
 
   // ---------------------------------------------------------------------------

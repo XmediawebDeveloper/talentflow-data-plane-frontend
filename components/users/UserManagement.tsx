@@ -26,6 +26,7 @@ import {
   Eye,
   Shield,
   Lock,
+  KeyRound,
   Users as UsersIcon,
   UserCheck,
   UserX,
@@ -479,6 +480,16 @@ export default function UserManagement() {
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
+
+  // Granular action gates. Tenant admins always pass; delegated admins pass when
+  // they hold the matching users:* permission. Accept both snake_case (API) and
+  // camelCase (AuthProvider) shapes for resilience.
+  const _isTenantAdmin = currentUser?.role === 'tenant_admin';
+  const _perms: any = currentUser?.permissions || {};
+  const canDisableUser = _isTenantAdmin || !!_perms.can_disable_users || !!_perms.canDisableUsers;
+  const canResetPassword = _isTenantAdmin || !!_perms.can_reset_user_password || !!_perms.canResetUserPassword;
+  const canForcePwChange = _isTenantAdmin || !!_perms.can_force_password_change || !!_perms.canForcePasswordChange;
+  const canAssignRole = _isTenantAdmin || !!_perms.can_assign_roles || !!_perms.canAssignRoles;
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -532,6 +543,25 @@ export default function UserManagement() {
   const [viewingRolePopup, setViewingRolePopup] = useState<RoleListItem | null>(null);
   const [viewingRolePopupPermissions, setViewingRolePopupPermissions] = useState<Permission[]>([]);
   const [isViewingRolePopupLoading, setIsViewingRolePopupLoading] = useState(false);
+
+  // Reset Password modal — offers BOTH "email a temp password" and "set directly".
+  const [resetPwUser, setResetPwUser] = useState<ApiUser | null>(null);
+  const [resetPwMode, setResetPwMode] = useState<'choose' | 'direct'>('choose');
+  const [directPw, setDirectPw] = useState('');
+  const [directPwConfirm, setDirectPwConfirm] = useState('');
+  const [directPwForceChange, setDirectPwForceChange] = useState(false); // default OFF
+  const [directPwShow, setDirectPwShow] = useState(false);
+  const [resetPwSubmitting, setResetPwSubmitting] = useState(false);
+
+  const closeResetPwModal = () => {
+    setResetPwUser(null);
+    setResetPwMode('choose');
+    setDirectPw('');
+    setDirectPwConfirm('');
+    setDirectPwForceChange(false);
+    setDirectPwShow(false);
+    setResetPwSubmitting(false);
+  };
 
   const [newUser, setNewUser] = useState({
     name: '',
@@ -1365,6 +1395,10 @@ export default function UserManagement() {
         if (perm.code === 'users:create' && freshUserData.permissions.can_create_users) hasPermission = true;
         if (perm.code === 'users:update' && (freshUserData.permissions.can_manage_users || freshUserData.permissions.can_update_users)) hasPermission = true;
         if (perm.code === 'users:delete' && freshUserData.permissions.can_delete_users) hasPermission = true;
+        if (perm.code === 'users:disable' && (freshUserData.permissions.can_disable_users || freshUserData.permissions.can_manage_users)) hasPermission = true;
+        if (perm.code === 'users:reset_password' && freshUserData.permissions.can_reset_user_password) hasPermission = true;
+        if (perm.code === 'users:force_password_change' && freshUserData.permissions.can_force_password_change) hasPermission = true;
+        if (perm.code === 'users:assign_role' && (freshUserData.permissions.can_assign_roles || freshUserData.permissions.can_manage_users)) hasPermission = true;
 
         // Roles
         if (perm.code === 'roles:read' && freshUserData.permissions.can_view_roles) hasPermission = true;
@@ -1553,6 +1587,99 @@ export default function UserManagement() {
       console.error('Error toggling user status:', error);
       const isNetworkError = error.message === 'Failed to fetch' || error.name === 'TypeError';
       toast.error(isNetworkError ? 'Unable to update user status. Please check your connection and try again.' : (error.message || 'Failed to update user status'));
+    }
+  };
+
+  // Email-a-temp-password flow: rotates a temp password, emails it to the user,
+  // and forces a change on next login. No password is ever shown to the admin.
+  const handleResetPasswordEmail = async (user: ApiUser) => {
+    setResetPwSubmitting(true);
+    try {
+      const response = await fetch(`${API_URL}/users/${user.id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      if (response.status === 401) { handleUnauthorized(); return; }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.detail?.message || errorData.detail || 'Failed to reset password');
+        return;
+      }
+      toast.success(`Temporary password emailed to ${user.email}`);
+      closeResetPwModal();
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      toast.error(error.message || 'Failed to reset password');
+    } finally {
+      setResetPwSubmitting(false);
+    }
+  };
+
+  // Direct-set flow: admin types a new password; it applies immediately (no email,
+  // no OTP). force-change-on-next-login defaults OFF. Admin hands it over out-of-band.
+  const handleSetPasswordDirect = async (user: ApiUser) => {
+    if (directPw.length < 8) { toast.error('Password must be at least 8 characters long'); return; }
+    if (!/[A-Z]/.test(directPw)) { toast.error('Password must contain an uppercase letter'); return; }
+    if (!/[a-z]/.test(directPw)) { toast.error('Password must contain a lowercase letter'); return; }
+    if (!/[0-9]/.test(directPw)) { toast.error('Password must contain a number'); return; }
+    if (!/[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(directPw)) { toast.error('Password must contain a special character'); return; }
+    if (directPw !== directPwConfirm) { toast.error('Passwords do not match'); return; }
+
+    setResetPwSubmitting(true);
+    try {
+      const response = await fetch(`${API_URL}/users/${user.id}/set-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          new_password: directPw,
+          require_change_on_next_login: directPwForceChange,
+        }),
+      });
+      if (response.status === 401) { handleUnauthorized(); return; }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.detail?.message || errorData.detail || 'Failed to set password');
+        return;
+      }
+      toast.success(`Password updated for ${user.email}`);
+      closeResetPwModal();
+    } catch (error: any) {
+      console.error('Error setting password:', error);
+      toast.error(error.message || 'Failed to set password');
+    } finally {
+      setResetPwSubmitting(false);
+    }
+  };
+
+  // Force the user to change their password on next login (no rotation, no email).
+  const handleForcePasswordChange = async (user: ApiUser) => {
+    if (!await dialog.confirm({
+      title: 'Force Password Change',
+      message: `Require ${user.email} to change their password on next login? Their active sessions will be signed out immediately.`,
+      variant: 'warning',
+      confirmText: 'Force Change',
+      cancelText: 'Cancel',
+    })) {
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/users/${user.id}/force-password-change`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      if (response.status === 401) { handleUnauthorized(); return; }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.detail?.message || errorData.detail || 'Failed to force password change');
+        return;
+      }
+      toast.success('User will be required to change their password on next login');
+    } catch (error: any) {
+      console.error('Error forcing password change:', error);
+      toast.error(error.message || 'Failed to force password change');
     }
   };
 
@@ -2143,8 +2270,8 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                    {/* Toggle Switch for Active/Inactive */}
-                    {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
+                    {/* Toggle Switch for Active/Inactive — requires users:disable */}
+                    {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canDisableUser ? (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleToggleActive(user)}
@@ -2213,6 +2340,38 @@ export default function UserManagement() {
                           title={user.is_active ? 'Edit User' : 'Cannot edit inactive user'}
                         >
                           <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Reset Password — requires users:reset_password */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canResetPassword && (
+                        <button
+                          onClick={() => { if (user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
+                          disabled={!user.is_active}
+                          className={`p-2 rounded-lg transition-all ${
+                            user.is_active
+                              ? 'text-gray-500 dark:text-slate-500 hover:text-amber-600 hover:bg-amber-50 cursor-pointer'
+                              : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+                          }`}
+                          title={user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Force Password Change — requires users:force_password_change */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canForcePwChange && (
+                        <button
+                          onClick={() => user.is_active && handleForcePasswordChange(user)}
+                          disabled={!user.is_active}
+                          className={`p-2 rounded-lg transition-all ${
+                            user.is_active
+                              ? 'text-gray-500 dark:text-slate-500 hover:text-orange-600 hover:bg-orange-50 cursor-pointer'
+                              : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+                          }`}
+                          title={user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}
+                        >
+                          <Lock className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -3000,6 +3159,118 @@ export default function UserManagement() {
           onClose={() => setFeaturePermissionUser(null)}
           onUpdate={() => setTimeout(async () => { await refreshUser(); loadUsers(); }, 300)}
         />
+      )}
+
+      {/* Reset Password Modal — choose: email a temp password OR set one directly */}
+      {resetPwUser && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md ring-1 ring-black/5 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold leading-tight">Reset Password</p>
+                  <p className="text-xs text-white/80 truncate">{resetPwUser.email}</p>
+                </div>
+              </div>
+              <button onClick={closeResetPwModal} className="p-1.5 rounded-lg hover:bg-white/15 transition-colors" aria-label="Close">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {resetPwMode === 'choose' ? (
+                <>
+                  <button
+                    onClick={() => handleResetPasswordEmail(resetPwUser)}
+                    disabled={resetPwSubmitting}
+                    className="w-full text-left p-4 rounded-xl ring-1 ring-gray-200 dark:ring-slate-600 hover:ring-amber-400 hover:bg-amber-50/50 dark:hover:bg-slate-700/50 transition-all disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm">Email a temporary password</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Sends a temp password to the user and forces a reset on next login. You never see it.</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setResetPwMode('direct')}
+                    disabled={resetPwSubmitting}
+                    className="w-full text-left p-4 rounded-xl ring-1 ring-gray-200 dark:ring-slate-600 hover:ring-brand-blue/50 hover:bg-brand-blue/5 transition-all disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <KeyRound className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm">Set a password directly</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">You type a new password and hand it to the user. No email, no OTP.</p>
+                      </div>
+                    </div>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
+                    <div className="relative">
+                      <input
+                        type={directPwShow ? 'text' : 'password'}
+                        value={directPw}
+                        onChange={(e) => setDirectPw(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full px-3 py-2 pr-10 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/50"
+                        placeholder="Min 8 chars, upper, lower, number, special"
+                      />
+                      <button type="button" onClick={() => setDirectPwShow(s => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600" aria-label="Toggle visibility">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
+                    <input
+                      type={directPwShow ? 'text' : 'password'}
+                      value={directPwConfirm}
+                      onChange={(e) => setDirectPwConfirm(e.target.value)}
+                      autoComplete="new-password"
+                      className="w-full px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/50"
+                      placeholder="Re-enter password"
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={directPwForceChange}
+                      onChange={(e) => setDirectPwForceChange(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                    />
+                    <span className="text-xs text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
+                  </label>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => setResetPwMode('choose')}
+                      disabled={resetPwSubmitting}
+                      className="px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => handleSetPasswordDirect(resetPwUser)}
+                      disabled={resetPwSubmitting}
+                      className="flex-1 px-3 py-2 text-sm font-medium rounded-lg bg-brand-blue text-white hover:bg-brand-blue/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                      {resetPwSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Set Password
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* RBAC07: Dependency Matrix Modal */}

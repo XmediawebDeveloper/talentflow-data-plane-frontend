@@ -3425,8 +3425,12 @@ export default function AIInterviewClusters() {
       </main>{/* closes flex-1 main */}
 
       {/* ── Sticky footer ── */}
-      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-10">
-        <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      {/* Outer is a transparent full-width positioning layer; the WHITE bar
+          (bg/border/shadow) lives on the inner max-w-[1400px] div so it matches
+          the content card width and leaves no white bleed in the side margins —
+          the page background shows through on the left/right. */}
+      <div className="fixed bottom-0 left-0 right-0 z-10">
+        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={handleBack}

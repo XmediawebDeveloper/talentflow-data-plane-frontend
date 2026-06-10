@@ -595,7 +595,10 @@ export default function AIInterviewPreview() {
       </div>
 
       {/* ── Sticky Footer ── */}
-      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
+      {/* Full-width bar — no left nav in this flow (left-64 was leftover from a
+          sidebar layout). Inner padding matches the main content's p-4/sm:p-6/lg:p-8
+          so the buttons line up with the content above. */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
         <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button

@@ -5,7 +5,7 @@ import {
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
   Video, Upload, Layers, ChevronRight, Camera, Play,
-  Lock, ArrowRightLeft,
+  Lock, ArrowRightLeft, Mic,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -18,6 +18,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
+import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttModels';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -1018,6 +1019,8 @@ export default function AIInterviewConfig() {
   const [bufferEnabled, setBufferEnabled] = useState(false);
   /* Per-question time limit (timed mode only), in seconds */
   const [perQuestionSeconds, setPerQuestionSeconds] = useState<number>(120);
+  /* Speech-to-Text model used to transcribe the candidate (both modes) */
+  const [sttModel, setSttModel] = useState<string>(DEFAULT_STT_MODEL);
 
   /* Category configs */
   const [mth, setMth] = useState<CategoryConfig>({
@@ -1337,6 +1340,11 @@ export default function AIInterviewConfig() {
               setPerQuestionSeconds(Number(parsed.per_question_seconds));
             }
 
+            // Restore Speech-to-Text model selection
+            if (parsed.stt_model) {
+              setSttModel(String(parsed.stt_model));
+            }
+
             // Restore buffer time toggle
             if (parsed.buffer_enabled !== undefined) {
               setBufferEnabled(Boolean(parsed.buffer_enabled));
@@ -1498,7 +1506,7 @@ export default function AIInterviewConfig() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, mode, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
+  }, [mth, nth, hrPct, hrEnabled, mode, sttModel, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -1851,6 +1859,9 @@ export default function AIInterviewConfig() {
   const buildClusterJson = () => JSON.stringify({
     interview_mode: mode,
     per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
+    // Speech-to-Text model the backend uses to transcribe the candidate.
+    // Applies to both modes; resolved per-interview in asr_factory.py.
+    stt_model: sttModel,
     // Flexible mode: persist JD description so the Clusters page can send it to AI on re-generate
     jd_description: mode === 'flexible' ? (selectedJd?.description ?? '') : undefined,
     buffer_enabled: mode === 'flexible' ? bufferEnabled : undefined,
@@ -2302,6 +2313,48 @@ export default function AIInterviewConfig() {
                   </div>
                 )}
 
+              </div>
+            </div>
+
+            {/* ── Speech-to-Text Model ── */}
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                  <Mic className="w-5 h-5 text-brand-blue" />
+                </div>
+                <div>
+                  <span className="font-semibold text-gray-900 text-sm tracking-tight">Speech-to-Text Model</span>
+                  <p className="text-xs text-gray-500">Engine used to transcribe the candidate&apos;s spoken answers.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="relative">
+                  <select
+                    value={sttModel}
+                    onChange={e => setSttModel(e.target.value)}
+                    className="appearance-none text-sm font-medium pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  >
+                    {STT_MODELS.map(m => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}{m.recommended ? ' (Recommended)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                </div>
+                {(() => {
+                  const sel = STT_MODELS.find(m => m.value === sttModel) ?? STT_MODELS[0];
+                  return (
+                    <>
+                      {sel.recommended && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
+                          Recommended
+                        </span>
+                      )}
+                      {sel.note && <span className="text-xs text-gray-500">{sel.note}</span>}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 

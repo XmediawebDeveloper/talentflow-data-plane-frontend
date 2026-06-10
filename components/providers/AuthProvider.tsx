@@ -554,6 +554,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Fetch fresh user data with new permissions
         const apiUserData = await authService.getCurrentUser();
+
+        // Admin forced a password reset → bounce to /set-password immediately
+        // (no manual reload needed). Mirrors the page-load guard.
+        if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+          console.log('[AUTH] must_reset_password=true on permissions-updated — redirecting to /set-password');
+          localStorage.setItem('pending_password_reset', 'true');
+          setUser(null);
+          setIsLoading(true);
+          window.location.href = '/set-password';
+          return;
+        }
+
         const userData = mapApiUserToUser(apiUserData);
         // Preserve lastLogin and createdAt from current user if API doesn't return them
         const currentUser = getUserFromStorage();
@@ -769,6 +781,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[AUTH] refreshUser() called — fetching latest user from API...');
       const apiUserData = await authService.getCurrentUser();
+
+      // Enforce admin-initiated forced password reset WITHOUT a manual page reload.
+      // force-password-change / reset-password set must_reset_password=true on the
+      // server + push a permissions_updated nudge → refreshUser(). Bounce to
+      // /set-password here so the user can't keep using their session.
+      if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+        console.log('[AUTH] must_reset_password=true on refresh — redirecting to /set-password');
+        localStorage.setItem('pending_password_reset', 'true');
+        setUser(null);
+        setIsLoading(true);
+        window.location.href = '/set-password';
+        return;
+      }
+
       const userData = mapApiUserToUser(apiUserData);
       // Preserve lastLogin and createdAt from current user if API doesn't return them
       const currentUser = getUserFromStorage();

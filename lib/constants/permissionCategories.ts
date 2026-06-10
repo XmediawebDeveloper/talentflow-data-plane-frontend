@@ -280,6 +280,21 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     ],
   },
   {
+    id: 'user_management',
+    name: 'User Management',
+    description: 'Create, edit, and manage users. Each sensitive action is independently grantable.',
+    viewCode: 'users:read',
+    actions: [
+      { code: 'users:create', label: 'Create User' },
+      { code: 'users:update', label: 'Edit User' },
+      { code: 'users:delete', label: 'Delete User' },
+      { code: 'users:disable', label: 'Disable / Enable User' },
+      { code: 'users:assign_role', label: 'Assign Roles' },
+      { code: 'users:reset_password', label: 'Reset Password', description: 'Email the user a temporary password and force a reset on next login' },
+      { code: 'users:force_password_change', label: 'Force Password Change', description: 'Require the user to change their password on next login' },
+    ],
+  },
+  {
     id: 'teams',
     name: 'Teams',
     description: 'Team management permissions',

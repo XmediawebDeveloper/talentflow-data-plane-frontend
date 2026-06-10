@@ -1,6 +1,7 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList, Mic } from 'lucide-react';
+import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -1249,6 +1250,27 @@ export default function AIInterview() {
                                   {enabledRounds.length} rounds
                                 </span>
                               )}
+                              {(() => {
+                                // Speech-to-Text model chosen for this interview
+                                // (special_instructions.stt_model). Only shown when
+                                // explicitly set so legacy configs (env-default ASR)
+                                // don't imply a choice that wasn't made.
+                                let sttModel: string | undefined;
+                                try {
+                                  sttModel = JSON.parse(config.special_instructions || '{}').stt_model;
+                                } catch {}
+                                if (!sttModel) return null;
+                                const opt = getSttModelOption(sttModel);
+                                return (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/20"
+                                    title={`Speech-to-Text model: ${opt.label}`}
+                                  >
+                                    <Mic className="w-3 h-3" />
+                                    {opt.label}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             {config.jd_short_id && (
                               <div className="text-xs text-gray-500 dark:text-slate-500 mb-2">
