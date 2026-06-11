@@ -16,13 +16,11 @@ export interface SttModelOption {
 }
 
 export const STT_MODELS: SttModelOption[] = [
+  { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', note: 'OpenAI · high accuracy' },
+  { value: 'deepgram-nova', label: 'Deepgram Nova', note: 'Streaming · keyterm-boosted' },
   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Highest accuracy (recommended)', recommended: true },
-  { value: 'deepgram-flux', label: 'Deepgram Flux', note: 'Live streaming, turn-aware' },
-  { value: 'deepgram-nova', label: 'Deepgram Nova', note: 'Fast batch transcription' },
   { value: 'sarvam', label: 'Sarvam', note: 'Tuned for Indian English' },
-  { value: 'soniox', label: 'Soniox', note: 'Multilingual' },
-  { value: 'gpt-4o-mini-transcribe', label: 'GPT-4o Mini Transcribe', note: 'OpenAI · faster & cheaper' },
-  { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', note: 'OpenAI · higher accuracy' },
+  { value: 'assemblyai', label: 'AssemblyAI', note: 'High-accuracy batch' },
 ];
 
 export const DEFAULT_STT_MODEL = 'gemini-2.5-pro';

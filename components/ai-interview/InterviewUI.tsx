@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
+import { MicWaveform } from "./MicWaveform";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
 import {
@@ -952,6 +953,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  // AnalyserNode tapped off the mic source for the live recording waveform UI.
+  // Passive sink (source→analyser only, never →destination, so no echo).
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
   const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
   const recordingContextRef = useRef<AudioContext | null>(null);
   // Tracks whether 'pcm-processor' has been registered in the current recordingContext.
@@ -2424,19 +2428,37 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 ? data.question_number
                 : null;
             if (data.is_enhanced) {
-              // RAW-IN-CHAT POLICY (2026-05-26): the live chat must show the
-              // EXACT raw Whisper transcript (matching the backend
-              // [ASR] FINAL / [BGTranscribe] FINAL logs), NOT the LLM autocorrect
-              // rewrite. The enhancer substitutes domain words it can't verify
-              // (observed: "Chase"→"AWS", "redoubt"→"frontend", "type down"→
-              // "Python"), so replacing the bubble with it showed the candidate
-              // words they never said. The enhanced text is still computed and
-              // stored server-side (question_history) and used for scoring — see
-              // message_handler.py _transcribe_and_record_async / _process_llm.
-              // We just never surface it in the live chat. The raw transcript
-              // message (always sent first) is already on screen, so this
-              // enhanced follow-up is intentionally a display no-op.
-              console.debug('[Transcript] Ignoring is_enhanced rewrite for display (raw-in-chat policy)');
+              // SHOW-CORRECTED-IN-CHAT (2026-06-10): replace the raw answer
+              // bubble with the context-aware enhanced transcript — the SAME
+              // text used for scoring + the Question Analysis report. (Supersedes
+              // the earlier RAW-IN-CHAT policy.) The enhancer's guards
+              // (length/overlap rejection in transcript_enhancer.py) + the
+              // deterministic pre-pass keep substitutions in check; if it ever
+              // shows a wrong word, the raw is still in the backend logs.
+              // Upgrade the existing bubble IN PLACE — never add a duplicate.
+              setMessages(prev => {
+                const updated = [...prev];
+                for (let i = updated.length - 1; i >= 0; i--) {
+                  if (
+                    updated[i].role === "user" &&
+                    (qn == null || updated[i].questionNumber === qn)
+                  ) {
+                    if (updated[i].content !== transcriptText) {
+                      updated[i] = { ...updated[i], content: transcriptText };
+                    }
+                    return updated;
+                  }
+                }
+                // No raw bubble yet (enhanced arrived first) — add it.
+                updated.push({
+                  id: crypto.randomUUID(),
+                  role: "user",
+                  content: transcriptText,
+                  timestamp: nowIST(),
+                  questionNumber: qn ?? undefined,
+                });
+                return updated;
+              });
             } else {
               // Raw Whisper transcript — add as new user message, stamping the
               // frozen timer value captured when the candidate stopped speaking.
@@ -4072,6 +4094,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       const source = ctx.createMediaStreamSource(stream);
 
+      // Tap a passive AnalyserNode off the mic source for the live recording
+      // waveform (MicWaveform). source→analyser only — NOT →destination, so it
+      // never plays back / echoes. Re-created each recording session.
+      try {
+        const _micAnalyser = ctx.createAnalyser();
+        _micAnalyser.fftSize = 256;
+        _micAnalyser.smoothingTimeConstant = 0.6;
+        source.connect(_micAnalyser);
+        micAnalyserRef.current = _micAnalyser;
+      } catch (_waveErr) {
+        micAnalyserRef.current = null;
+      }
+
       // Downsample to 16kHz for the backend (hardware rate is typically 44.1/48kHz)
       const targetSampleRate = 16000;
       const downsampleRatio = ctx.sampleRate / targetSampleRate;
@@ -5387,6 +5422,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             <div>
               <span className="text-emerald-300 font-bold block" style={{ fontSize: 14 }}>Your turn — speak now</span>
               <span className="text-[#94a3b8] text-[11px]">Microphone is active · Linda is listening</span>
+            </div>
+            {/* Live recording waveform — candidate's actual mic input */}
+            <div className="pl-1 border-l border-emerald-500/20 ml-1">
+              <MicWaveform analyserRef={micAnalyserRef} active={true} />
             </div>
           </div>
         </div>
