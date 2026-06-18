@@ -80,6 +80,29 @@ function isRepetitionLoop(text: string): boolean {
   return dominance > 0.6;
 }
 
+const ROMANIZED_TAMIL_MARKERS = new Set([
+  'aama', 'ama', 'adha', 'adhu', 'adhe', 'antha', 'andha', 'anga',
+  'apdi', 'appadi', 'avanga', 'avan', 'aval', 'da', 'di', 'dhan',
+  'dhaan', 'enna', 'enakku', 'enga', 'epdi', 'eppadi', 'idhu',
+  'idha', 'idhula', 'idathula', 'illa', 'illai', 'iruka', 'iruku',
+  'irukku', 'irukiya', 'irukkinga', 'mudiyuma', 'mudiyum', 'naan',
+  'namma', 'nee', 'neenga', 'oru', 'panna', 'pannala', 'pannum',
+  'panren', 'pesu', 'pesuren', 'sari', 'seri', 'solra', 'sollunga',
+  'sollu', 'thaniya', 'theriyala', 'theriyum', 'unga', 'vandirucha',
+  'vanducha', 'varum', 'vechirukiya', 'venum',
+]);
+
+function looksRomanizedTamil(text: string): boolean {
+  const words = text.toLowerCase().match(/[a-z]+/g) ?? [];
+  if (words.length < 2) return false;
+  const markerCount = words.filter(word => ROMANIZED_TAMIL_MARKERS.has(word)).length;
+  if (markerCount >= 2) return true;
+  const suffixCount = words.filter(word =>
+    word.length >= 5 && /(kku|nga|la|uma|iya|ucha)$/.test(word)
+  ).length;
+  return markerCount >= 1 && suffixCount >= 2;
+}
+
 /**
  * Returns true if the text looks like real candidate speech (should be shown
  * to the user / sent to the LLM). Returns false for known Whisper hallucinations.
@@ -89,5 +112,6 @@ export function isTranscriptMeaningful(text: string): boolean {
   if (!t) return false;
   if (HALLUCINATION_PATTERNS.some(p => p.test(t))) return false;
   if (isRepetitionLoop(t)) return false;
+  if (looksRomanizedTamil(t)) return false;
   return true;
 }

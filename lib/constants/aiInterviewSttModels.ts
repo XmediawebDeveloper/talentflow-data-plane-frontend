@@ -13,14 +13,16 @@ export interface SttModelOption {
   note?: string;
   /** Renders a "Recommended" badge. */
   recommended?: boolean;
+  /** True when the model can stream interim transcript text during the answer. */
+  liveTranscript?: boolean;
 }
 
 export const STT_MODELS: SttModelOption[] = [
-  { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', note: 'OpenAI · high accuracy' },
-  { value: 'deepgram-nova', label: 'Deepgram Nova', note: 'Streaming · keyterm-boosted' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Highest accuracy (recommended)', recommended: true },
-  { value: 'sarvam', label: 'Sarvam', note: 'Tuned for Indian English' },
-  { value: 'assemblyai', label: 'AssemblyAI', note: 'High-accuracy batch' },
+  { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', note: 'OpenAI · final transcript after answer' },
+  { value: 'deepgram-nova', label: 'Deepgram Nova', note: 'Live transcript · keyterm-boosted', liveTranscript: true },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Highest accuracy · final transcript after answer', recommended: true },
+  { value: 'sarvam', label: 'Sarvam', note: 'Indian English · final transcript after answer' },
+  { value: 'assemblyai', label: 'AssemblyAI', note: 'High-accuracy final transcript after answer' },
 ];
 
 export const DEFAULT_STT_MODEL = 'gemini-2.5-pro';

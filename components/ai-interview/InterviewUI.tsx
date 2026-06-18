@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
-import { MicWaveform } from "./MicWaveform";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
 import {
@@ -252,11 +251,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState("");
+  const [isCandidateTranscriptProcessing, setIsCandidateTranscriptProcessing] = useState(false);
+  const [liveTranscriptEnabled, setLiveTranscriptEnabled] = useState(false);
+  const [activeMicLabel, setActiveMicLabel] = useState("");
+  const [micInputLevel, setMicInputLevel] = useState(0);
   // Sync ref mirror of currentTranscript — the live (Deepgram cumulative)
-  // transcript the candidate sees. Read by commitLiveTranscriptAsAnswer at
-  // end_turn to show the FULL answer instantly (the browser Web Speech API is
-  // disabled, so webSpeechFinalizedRef is always empty).
+  // transcript the candidate sees while speaking.
   const currentTranscriptRef = useRef("");
+  const liveTranscriptDisplayRef = useRef("");
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [textInput, setTextInput] = useState("");
@@ -640,6 +642,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const maxRecordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const handleNoResponseRef = useRef<() => void>(() => {});
   const stopRecordingSilentRef = useRef<() => void>(() => {});
+  const abortRecordingForSkipRef = useRef<() => void>(() => {});
 
   // Clear no-response timer helper — declared early because it's referenced in
   // many setInterval / ws.onmessage callbacks that appear before the former
@@ -953,9 +956,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  // Device tracking — scoped to the ACTIVE recording session only. We clear the
+  // pin at turn end so each new question reopens on the browser's current
+  // default input instead of staying stuck on an old system/headset device.
+  const pinnedAudioDeviceIdRef = useRef<string | undefined>(undefined);
+  const audioDeviceChangeListenerRef = useRef<(() => void) | null>(null);
   // AnalyserNode tapped off the mic source for the live recording waveform UI.
   // Passive sink (source→analyser only, never →destination, so no echo).
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const candidateAudioStreamingRef = useRef(false);
+  const candidateAudioFrameCountRef = useRef(0);
+  const micLevelLastUpdateRef = useRef(0);
   const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
   const recordingContextRef = useRef<AudioContext | null>(null);
   // Tracks whether 'pcm-processor' has been registered in the current recordingContext.
@@ -1151,6 +1162,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const audioEndReceivedRef = useRef(false);
   const currentAiTextRef = useRef("");
   const recognitionRef = useRef<any>(null);
+  const lastBrowserTranscriptTextRef = useRef("");
+  const lastBrowserTranscriptUpdateAtRef = useRef<number | null>(null);
+  const lastLiveTranscriptTextRef = useRef("");
+  const lastLiveTranscriptUpdateAtRef = useRef<number | null>(null);
+  const turnHasLiveTranscriptRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
   // True while Linda is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
@@ -1646,6 +1662,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.005);
   const silenceDurationMsRef = useRef(9000); // conversational mode needs long pauses tolerated; backend may override
+  const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
+  const MIN_CLIENT_SILENCE_DURATION_MS = 9000;
+  const POSSIBLE_SPEECH_LEVEL = 0.0018;
+  const MIN_POSSIBLE_SPEECH_FRAMES = 6;
+  const QUIET_SPEECH_ACTIVITY_LEVEL = 0.0032;
+  const POSSIBLE_SPEECH_NOISE_MULTIPLIER = 2.2;
+  const POSSIBLE_SPEECH_MARGIN = 0.0012;
+  const IN_TURN_NOISE_MULTIPLIER = 2.2;
+  const IN_TURN_ACTIVITY_MARGIN = 0.0015;
+  const STRONG_IN_TURN_NOISE_MULTIPLIER = 3.1;
+  const STRONG_IN_TURN_ACTIVITY_MARGIN = 0.0024;
+  const MIN_STRONG_IN_TURN_LEVEL = 0.0056;
+  const TRANSCRIPT_ACTIVITY_GRACE_MS = 1800;
   const LIVE_BATCH_CHAR_THRESHOLD = 320;
   const liveBatchSentCharsRef = useRef(0);
   const liveBatchIndexRef = useRef(0);
@@ -1673,11 +1702,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechFrameCountRef = useRef(0);
   const MIN_SPEECH_FRAMES = 3;
 
-  // After speech is confirmed, require this many consecutive above-threshold frames
-  // to reset the silence timer. Prevents noise spikes (1-2 frames of ambient sound
-  // at ~0.005-0.006) from restarting the silence countdown after the user stops talking.
-  const postSpeechNoiseCountRef = useRef(0);
-  const MIN_RESPEECH_FRAMES = 2; // ~186ms of sustained audio resets silence timer (lower = more responsive)
+  // Track the room's baseline energy and the candidate's recent speech peak so
+  // quiet headset audio can keep the turn alive, while background office noise
+  // still allows the 5s silence timeout to close the turn.
+  const ambientNoiseFloorRef = useRef(POSSIBLE_SPEECH_LEVEL * 0.5);
+  const lastMeaningfulAudioAtRef = useRef<number | null>(null);
+  const speechPeakLevelRef = useRef(0);
+  const inTurnSpeechFrameCountRef = useRef(0);
+  const MIN_IN_TURN_SPEECH_FRAMES = 3;
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -1685,10 +1717,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // `speechDetectedRef` flips true → Whisper transcribes from the middle of
   // the answer ("half la irunthuthan eduthkuthu" symptom).
   // On speech confirmation, the buffer is flushed to backend BEFORE live
-  // frames start flowing. Sized at 16000 samples/s × 2s = 32000 Int16s.
+  // frames start flowing. Sized at 16000 samples/s × 10s = 160000 Int16s.
   const preSpeechPCMRingRef = useRef<Int16Array[]>([]);
   const preSpeechPCMSampleCountRef = useRef(0);
-  const PRE_SPEECH_BUFFER_MAX_SAMPLES = 32000; // ~2s at 16kHz
+  const PRE_SPEECH_BUFFER_MAX_SAMPLES = 160000; // ~10s at 16kHz
 
   // Fix 4: playback_complete delivery is the single gate that unblocks the
   // backend's silence clock. Dropping this one message stalls the 8s silence
@@ -1711,6 +1743,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) return;
       try { ws2.send(payload); } catch { /* ignore */ }
     }, 150);
+  }, []);
+
+  const removeAudioDeviceChangeListener = () => {
+    if (audioDeviceChangeListenerRef.current) {
+      navigator.mediaDevices.removeEventListener('devicechange', audioDeviceChangeListenerRef.current);
+      audioDeviceChangeListenerRef.current = null;
+    }
+  };
+
+  const flushPreSpeechAudioToBackend = useCallback(() => {
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN &&
+      !isAiSpeakingRef.current &&
+      preSpeechPCMRingRef.current.length > 0
+    ) {
+      for (const buf of preSpeechPCMRingRef.current) {
+        wsRef.current.send(buf.buffer);
+      }
+    }
+    preSpeechPCMRingRef.current = [];
+    preSpeechPCMSampleCountRef.current = 0;
   }, []);
 
   // Save AI message — called from finalizePlayback at the TRUE end-of-audio.
@@ -1887,30 +1940,44 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return;
   }, []);
 
+  const buildStableLiveTranscriptPreview = useCallback((incomingText: string) => {
+    const next = incomingText.replace(/\s+/g, ' ').trim();
+    if (!next) return "";
+    // Keep the live bubble as close as possible to the raw provider/browser
+    // transcript. The older prefix-stability logic avoided visible rewrites,
+    // but it also dropped legitimate sentence updates when the recognizer
+    // revised earlier words or emitted a shorter replacement segment.
+    liveTranscriptDisplayRef.current = next;
+    return next;
+  }, []);
+
+  const snapshotVisibleLiveTranscript = useCallback(() => {
+    const visible = currentTranscriptRef.current.replace(/\s+/g, ' ').trim();
+    if (visible) return visible;
+    return webSpeechFinalizedRef.current.replace(/\s+/g, ' ').trim();
+  }, []);
+
   const startWebSpeechRecognition = useCallback(() => {
-    // Browser Web Speech API DISABLED per spec — Whisper (server-side ASR)
-    // is now the SOLE source of truth for transcripts. The browser STT was
-    // dropping words via echo guard, hardcoded en-US, and producing a
-    // different transcript than the one used for evaluation.
-    //
-    // Live bubble now shows "Listening…" while the candidate speaks; the
-    // actual transcript appears after MediaRecorder stops and Whisper
-    // returns the final transcription via the WS pipeline.
+    // Frontend-only live transcript for batch/final-only ASR models such as
+    // gpt-4o-transcribe. This is UI feedback only — the backend transcript
+    // still remains the canonical answer for evaluation and final chat save.
     webSpeechFinalizedRef.current = "";
     liveBatchSentCharsRef.current = 0;
     liveBatchIndexRef.current = 0;
     liveBatchStopRequestedRef.current = false;
+    lastBrowserTranscriptTextRef.current = "";
+    lastBrowserTranscriptUpdateAtRef.current = null;
+    lastLiveTranscriptTextRef.current = "";
+    lastLiveTranscriptUpdateAtRef.current = null;
+    turnHasLiveTranscriptRef.current = false;
+    liveTranscriptDisplayRef.current = "";
     setCurrentTranscript("");
-    return;
-    // ── Disabled code below kept as no-op. ──
-    // eslint-disable-next-line no-unreachable
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setCurrentTranscript("(live transcript unavailable in this browser — your audio is still being recorded)");
-      setTimeout(() => setCurrentTranscript(""), 4000);
       return;
     }
+    setLiveTranscriptEnabled(true);
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
     }
@@ -1960,7 +2027,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // instead of sitting hidden until the buffer grows — makes the bubble feel real-time.
       const fullText = (webSpeechFinalizedRef.current + (interimText ? ' ' + interimText : '')).trim();
       if (fullText.length > 0) {
-        setCurrentTranscript(fullText);
+        const nowMs = Date.now();
+        const normalizedFullText = fullText.replace(/\s+/g, ' ').trim();
+        if (normalizedFullText && normalizedFullText !== lastBrowserTranscriptTextRef.current) {
+          lastBrowserTranscriptTextRef.current = normalizedFullText;
+          lastBrowserTranscriptUpdateAtRef.current = nowMs;
+          lastLiveTranscriptTextRef.current = normalizedFullText;
+          lastLiveTranscriptUpdateAtRef.current = nowMs;
+          turnHasLiveTranscriptRef.current = true;
+          lastMeaningfulAudioAtRef.current = nowMs;
+          if (!candidateAudioStreamingRef.current && !isAiSpeakingRef.current) {
+            candidateAudioStreamingRef.current = true;
+            candidateAudioFrameCountRef.current = MIN_POSSIBLE_SPEECH_FRAMES;
+            flushPreSpeechAudioToBackend();
+            console.log('[INTERVIEW-DEBUG] Browser transcript triggered early audio streaming');
+          }
+        }
+        const displayText = buildStableLiveTranscriptPreview(fullText);
+        setCurrentTranscript(displayText);
+        currentTranscriptRef.current = displayText;
         // Bridge: Web Speech API detected real speech — also set the VAD's
         // speechDetectedRef and send speech_started to the backend. This
         // prevents the "Are you there?" prompt from firing when the candidate
@@ -1971,8 +2056,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // even though the transcript bubble is visibly showing text.
         if (!speechDetectedRef.current) {
           speechDetectedRef.current = true;
-          speechDetectedAtRef.current = Date.now();
-          postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES;
+          speechDetectedAtRef.current = nowMs;
+          lastMeaningfulAudioAtRef.current = nowMs;
+          speechPeakLevelRef.current = Math.max(speechPeakLevelRef.current, QUIET_SPEECH_ACTIVITY_LEVEL);
           // Unfreeze the per-question timer — candidate is talking now.
           questionTimerAwaitingSpeechRef.current = false;
           if (!speechStartSentRef.current) {
@@ -2006,78 +2092,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
     recognitionRef.current = recognition;
     try { recognition.start(); } catch {}
-  }, [sendLiveTranscriptBatch, isFlexibleMode, isNewFlexibleMode]);
+  }, [buildStableLiveTranscriptPreview, flushPreSpeechAudioToBackend, sendLiveTranscriptBatch, isFlexibleMode, isNewFlexibleMode]);
 
   const stopWebSpeechRecognition = useCallback(() => {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); recognitionRef.current = null; } catch {}
     }
     webSpeechFinalizedRef.current = "";
+    liveTranscriptDisplayRef.current = "";
+    lastBrowserTranscriptTextRef.current = "";
+    lastBrowserTranscriptUpdateAtRef.current = null;
+    lastLiveTranscriptTextRef.current = "";
+    lastLiveTranscriptUpdateAtRef.current = null;
+    turnHasLiveTranscriptRef.current = false;
   }, []);
 
-  // Question number of the most recent answer we committed PROVISIONALLY from
-  // the browser's live transcript (decoupled timed mode). The backend's later
-  // raw-Whisper + enhanced `transcript` events upgrade this bubble's text in
-  // place instead of appending a duplicate. Cleared once upgraded.
+  // Question number of the most recent provisional answer. Provisional chat
+  // commits are disabled for English-only enforcement, but the transcript
+  // handler still understands this ref for older in-flight sessions.
   const provisionalAnswerQnRef = useRef<number | null>(null);
-
-  // Commit the browser live transcript as the answer bubble IMMEDIATELY on
-  // end_turn, so the candidate sees their answer instantly instead of waiting
-  // ~20-30s for the backend's background Whisper pass. The accurate Whisper
-  // text (then the autocorrected text) replaces it in place when it arrives.
-  // Timed/decoupled mode only — in flexible mode the synchronous pipeline owns
-  // the transcript, so we leave it to the backend `transcript` event.
-  const commitLiveTranscriptAsAnswer = useCallback((liveText: string) => {
-    if (isFlexibleMode || isNewFlexibleMode) return;
-    const text = (liveText || "").trim();
-    if (!text || !isTranscriptMeaningful(text)) return;
-    // CLARIFICATION utterances are committed SOLELY by the backend `transcript`
-    // event (which appends each as its own distinct bubble — see the transcript
-    // handler). Skip the provisional here so we never get a provisional+transcript
-    // double-add, and so two clarifies on the SAME question — even the IDENTICAL
-    // phrase ("Please clarify the question." twice) — each show as their own
-    // bubble instead of being de-duped away. (1st clarify still goes through the
-    // normal path below because isClarification only turns true once Linda's
-    // repeat timer arrives, i.e. before the 2nd clarify.)
-    if (isClarificationRef.current) {
-      // Clarification turn: the backend `transcript` event owns the bubble
-      // (appended distinctly). Don't create a provisional, and DON'T leave
-      // provisionalAnswerQnRef pointing at the prior bubble — otherwise the
-      // transcript handler would upgrade/collapse onto it.
-      provisionalAnswerQnRef.current = null;
-      return;
-    }
-    const qn = questionNumberRef.current ?? undefined;
-    const frozenTime = frozenResponseTimeRef.current;
-    frozenResponseTimeRef.current = null; // consume — backend upgrade preserves it
-    setMessages(prev => {
-      // If this question ALREADY has a user bubble, this is a SECOND utterance on
-      // the SAME question — a clarification the isClarification race may have
-      // cleared the flag for (question_timer_stopped clears it on end_turn before
-      // the transcript arrives). We must NOT create a provisional AND must NOT
-      // leave provisionalAnswerQnRef pointing here, or the backend transcript
-      // event would UPGRADE/collapse onto the existing bubble (the "2nd clarify
-      // not shown" bug). Null it so the transcript handler APPENDS a distinct
-      // bubble instead.
-      if (qn != null && prev.some(m => m.role === "user" && m.questionNumber === qn)) {
-        provisionalAnswerQnRef.current = null;
-        return prev;
-      }
-      // First user bubble for this question — create the provisional and point
-      // provisionalAnswerQnRef at it so the transcript event upgrades it in place.
-      provisionalAnswerQnRef.current = qn ?? null;
-      return [...prev, {
-        id: crypto.randomUUID(),
-        role: "user" as const,
-        content: text,
-        responseTimeSeconds: frozenTime ?? undefined,
-        timestamp: nowIST(),
-        questionNumber: qn,
-      }];
-    });
-    setCurrentTranscript("");
-    currentTranscriptRef.current = ""; // clear so the next answer starts fresh
-  }, [isFlexibleMode, isNewFlexibleMode]);
 
   // ── Real-time viseme loop ────────────────────────────────────────────────────
   // Driven by a Web Audio AnalyserNode tapped into the playback graph.
@@ -2268,13 +2301,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "connected":
         console.log(`[WS ${timestamp}] Connected: session_id=${data.session_id}, total_questions=${data.total_questions}, duration_minutes=${data.duration_minutes}, remaining_seconds=${data.remaining_seconds}`);
+        setLiveTranscriptEnabled(Boolean(data.live_transcript_enabled));
         if (data.session_id) {
           sessionIdRef.current = data.session_id;
         }
         if (data.vad_config) {
-          silenceThresholdRef.current = data.vad_config.silence_threshold;
-          silenceDurationMsRef.current = data.vad_config.silence_duration_ms;
-          console.log(`[WS ${timestamp}] VAD config: threshold=${data.vad_config.silence_threshold}, silence_ms=${data.vad_config.silence_duration_ms}`);
+          const serverThreshold = Number(data.vad_config.silence_threshold);
+          const serverSilenceMs = Number(data.vad_config.silence_duration_ms);
+          silenceThresholdRef.current = Number.isFinite(serverThreshold)
+            ? Math.min(serverThreshold, MAX_CLIENT_SPEECH_THRESHOLD)
+            : MAX_CLIENT_SPEECH_THRESHOLD;
+          silenceDurationMsRef.current = Number.isFinite(serverSilenceMs)
+            ? Math.max(serverSilenceMs, MIN_CLIENT_SILENCE_DURATION_MS)
+            : MIN_CLIENT_SILENCE_DURATION_MS;
+          console.log(`[WS ${timestamp}] VAD config: server_threshold=${data.vad_config.silence_threshold}, effective_threshold=${silenceThresholdRef.current}, server_silence_ms=${data.vad_config.silence_duration_ms}, effective_silence_ms=${silenceDurationMsRef.current}`);
         }
         // Sync global timer from backend — accounts for resumed sessions with elapsed time.
         if (data.remaining_seconds != null && data.remaining_seconds >= 0) {
@@ -2388,14 +2428,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // the answer was already committed as a "You" message (the duplicate).
         if (!isRecordingRef.current) break;
         if (liveText.length > 0) {
-          setCurrentTranscript(liveText);
-          currentTranscriptRef.current = liveText; // zero-lag for end_turn commit
+          if (isTranscriptMeaningful(liveText)) {
+            const nowMs = Date.now();
+            const normalizedLiveText = liveText.replace(/\s+/g, ' ').trim();
+            if (normalizedLiveText && normalizedLiveText !== lastLiveTranscriptTextRef.current) {
+              lastLiveTranscriptTextRef.current = normalizedLiveText;
+              lastLiveTranscriptUpdateAtRef.current = nowMs;
+              turnHasLiveTranscriptRef.current = true;
+              lastMeaningfulAudioAtRef.current = nowMs;
+            }
+            const displayText = buildStableLiveTranscriptPreview(liveText);
+            setCurrentTranscript(displayText);
+            currentTranscriptRef.current = displayText;
+          } else {
+            setCurrentTranscript("");
+            currentTranscriptRef.current = "";
+          }
           // Bridge to VAD: real speech detected — mark speechDetected so the
           // "Are you there?" no-response timer doesn't fire mid-answer.
           if (!speechDetectedRef.current) {
             speechDetectedRef.current = true;
-            speechDetectedAtRef.current = Date.now();
-            postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES;
+            const nowMs = Date.now();
+            speechDetectedAtRef.current = nowMs;
+            lastMeaningfulAudioAtRef.current = nowMs;
+            speechPeakLevelRef.current = Math.max(speechPeakLevelRef.current, QUIET_SPEECH_ACTIVITY_LEVEL);
             questionTimerAwaitingSpeechRef.current = false;
             if (!speechStartSentRef.current) {
               speechStartSentRef.current = true;
@@ -2420,6 +2476,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // Clear live bubble only now — it atomically transitions to a chat message.
             // Never clear before this point: keeps transcript visible during processing gap.
             setCurrentTranscript("");
+            currentTranscriptRef.current = "";
+            liveTranscriptDisplayRef.current = "";
+            setIsCandidateTranscriptProcessing(false);
             // The decoupled/background flow tags late transcripts with the
             // question they answered. `qn` is that number (or null for the
             // synchronous flow, where the answer is always the most recent one).
@@ -2472,18 +2531,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 timestamp: nowIST(),
                 questionNumber: qn ?? undefined,
               };
-              // A PROVISIONAL bubble may already be on screen from the live
-              // browser transcript (commitLiveTranscriptAsAnswer). targetQn is
-              // the question this Whisper text belongs to: qn for the decoupled
-              // flow, else the pending provisional's question number.
+              // targetQn is the question this Whisper text belongs to: qn for
+              // the decoupled flow, else an older in-flight provisional answer's
+              // question number.
               const provQn = provisionalAnswerQnRef.current;
               const targetQn = qn !== null ? qn : provQn;
               setMessages(prev => {
                 const updated = [...prev];
                 // ── CLARIFICATION: always a DISTINCT bubble ───────────────
-                // During a clarification, commitLiveTranscriptAsAnswer skips the
-                // provisional, so THIS transcript event is the SOLE add. Append
-                // each clarify utterance as its own bubble under the CURRENT
+                // During a clarification, this transcript event is the SOLE add.
+                // Append each clarify utterance as its own bubble under the CURRENT
                 // question — never upgrade/collapse onto a prior same-question
                 // bubble. That keeps BOTH the 1st and 2nd clarify visible even
                 // when the candidate repeats the IDENTICAL phrase ("Please
@@ -2570,8 +2627,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             currentAiTextRef.current = "";
             setCurrentAiText("");
           }
-          // If transcript is empty or fails validation: keep the live transcript visible.
-          // The candidate can still see what they said; backend will advance to next Q.
+          // If transcript is empty or fails validation, do not show it. The backend
+          // will send silent_discard for rejected/off-language speech.
         } else {
           // Partial transcript from backend (VAD-enhanced) — intentionally ignored.
           // The live transcript bubble is driven solely by the Web Speech API
@@ -2664,6 +2721,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
+        // Any pending candidate-processing bubble belongs to the PREVIOUS turn.
+        // Once Linda takes over, that turn is resolved (accepted, discarded, or
+        // skipped) and the stale loader must not remain on screen.
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
         // Stop any stale recording or pending start-recording timer — Linda is speaking.
         stopRecordingSilentRef.current();
         if (startRecordingTimerRef.current) {
@@ -2685,9 +2749,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // immediately stream PCM (including Linda's echo) to the backend.
         speechDetectedRef.current = false;
         speechFrameCountRef.current = 0;
-        postSpeechNoiseCountRef.current = 0;
         speechStartSentRef.current = false;
         silenceStartRef.current = null;
+        lastMeaningfulAudioAtRef.current = null;
+        speechPeakLevelRef.current = 0;
+        ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
         // stale live-transcript text. If we leave it running while Linda
         // speaks, it eagerly transcribes her TTS leaking back through the
@@ -2875,6 +2941,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // window should keep ticking down from where it froze).
         setIsProcessing(false);
         isProcessingRef.current = false;
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
         // Read the frozen value from state — stopRecording nulls the REF to
         // prevent double-deduction of the global timer, but leaves React state
         // intact so the banner stays visible. Without falling back to state
@@ -2903,6 +2973,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             }
           }, 300);
         }
+        break;
+      case "transcript_discarded":
+        // Background timed-mode transcript was rejected after the backend had
+        // already advanced to the next question. Clear only the candidate-side
+        // validation UI; do not reopen the mic or alter timers here.
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
+        frozenResponseTimeRef.current = null;
         break;
       case "speaking_ended":
         // Backend detected stuck speaking state (>30s without audio_end) and reset it.
@@ -2938,6 +3018,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setIsAiSpeaking(false);
         setIsProcessing(false);
         isProcessingRef.current = false;
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
         avatarState.onAiStopSpeaking();
         pendingBuffersRef.current = 0;
         audioEndReceivedRef.current = false;
@@ -3132,6 +3216,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         //  is_follow_up=false                        → new question; start fresh countdown
         const incomingQNum = data.question_number ?? null;
         const sameQuestion = incomingQNum !== null && incomingQNum === questionNumberRef.current;
+        if (!sameQuestion) {
+          // A new question means the prior answer path is over. Clear any stale
+          // candidate-side processing state even if no transcript ever arrived.
+          setIsCandidateTranscriptProcessing(false);
+          setCurrentTranscript("");
+          currentTranscriptRef.current = "";
+          provisionalAnswerQnRef.current = null;
+          frozenResponseTimeRef.current = null;
+        }
         // NEW MAIN QUESTION: clear any leftover live transcript from the prior
         // answer. On long answers in decoupled mode the candidate's speech can
         // spill past end_turn into the next question's mic window and fire a
@@ -3486,6 +3579,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setStatus("Linda is saying goodbye...");
         shouldDisconnectAfterAudioRef.current = true;
         setIsClosing(true); isClosingRef.current = true;
+        setCompletionMessage(prev =>
+          prev || (
+            data.reason === "candidate_ended"
+              ? "Thank you for your time. The interview has ended successfully."
+              : "Thank you for completing the interview. Your responses have been recorded successfully."
+          )
+        );
         // Tear down the per-question timer — interview is over, no more answer
         // window. Without this clear, the frozen-on-stop change above would
         // leave the answer-time banner visible during Linda's farewell.
@@ -3794,10 +3894,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     silenceStartRef.current = null;
     speechDetectedRef.current = false;
     speechDetectedAtRef.current = null;
-    // Capture the live (Deepgram cumulative) transcript the candidate sees, so
-    // we can show their full answer INSTANTLY (timed/decoupled mode) instead of
-    // waiting ~20-60s for the background Whisper pass.
-    const _liveAnswerText = currentTranscriptRef.current;
+    lastMeaningfulAudioAtRef.current = null;
+    speechPeakLevelRef.current = 0;
+    inTurnSpeechFrameCountRef.current = 0;
+    candidateAudioStreamingRef.current = false;
+    candidateAudioFrameCountRef.current = 0;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -3812,6 +3913,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       setCurrentTranscript(""); // clear immediately — no speech, nothing to keep showing
       voiceVerifBufferRef.current = [];
       setTimeout(() => {
+        pinnedAudioDeviceIdRef.current = undefined;
         mediaStreamRef.current?.getTracks().forEach(t => t.stop());
         processorRef.current?.disconnect();
         processorRef.current = null;
@@ -3825,11 +3927,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       liveBatchSentCharsRef.current = webSpeechFinalizedRef.current.length;
     }
 
-    // Show the candidate's answer INSTANTLY from the live browser transcript
-    // (timed/decoupled mode). The backend's background Whisper text — then the
-    // autocorrected text — upgrade this bubble in place via the `transcript`
-    // event. This does NOT delay the next question (that's the backend path).
-    commitLiveTranscriptAsAnswer(_liveAnswerText);
+    const browserTranscript = snapshotVisibleLiveTranscript();
+    // Do NOT commit the live transcript as a final answer. The backend owns
+    // English-only validation and sends the accepted transcript; until then the
+    // UI shows only a candidate-side processing indicator.
+    setIsCandidateTranscriptProcessing(true);
+    setCurrentTranscript("");
+    currentTranscriptRef.current = "";
 
     // Voice verification: compare this turn's audio with enrolled baseline
     if (voiceVerification?.hasBaseline() && voiceVerifBufferRef.current.length > 0) {
@@ -3847,6 +3951,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     voiceVerifBufferRef.current = [];
 
     setTimeout(() => {
+      removeAudioDeviceChangeListener();
+      pinnedAudioDeviceIdRef.current = undefined;
       mediaStreamRef.current?.getTracks().forEach(t => t.stop());
       processorRef.current?.disconnect();
       processorRef.current = null;
@@ -3889,10 +3995,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       questionTimerPendingRef.current = null;
       questionTimerReceivedAtRef.current = null;
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "end_turn" }));
+        wsRef.current.send(JSON.stringify({
+          type: "end_turn",
+          browser_transcript: browserTranscript || undefined,
+        }));
       }
     }, 100);
-  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, voiceVerification, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, commitLiveTranscriptAsAnswer]);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, voiceVerification, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, snapshotVisibleLiveTranscript]);
 
   // Stop recording silently — used for timer expiry, face block, mute.
   // If candidate was mid-answer (speech detected), sends end_turn so their
@@ -3907,9 +4016,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     silenceStartRef.current = null;
     speechDetectedRef.current = false;
     speechDetectedAtRef.current = null;
-    postSpeechNoiseCountRef.current = 0;
-    // Capture the live (Deepgram cumulative) transcript to show the answer instantly.
-    const _liveAnswerText = currentTranscriptRef.current;
+    lastMeaningfulAudioAtRef.current = null;
+    speechPeakLevelRef.current = 0;
+    inTurnSpeechFrameCountRef.current = 0;
+    candidateAudioStreamingRef.current = false;
+    candidateAudioFrameCountRef.current = 0;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -3920,13 +4031,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         sendLiveTranscriptBatch(remainingFinalized, "candidate_stop");
         liveBatchSentCharsRef.current = webSpeechFinalizedRef.current.length;
       }
+      const browserTranscript = snapshotVisibleLiveTranscript();
       // Candidate was mid-answer: capture timer snapshot, keep transcript visible,
       // and send end_turn so Whisper processes their audio (never silently discard).
       frozenResponseTimeRef.current = questionTimerSecondsRef.current;
-      // Show the answer instantly from the live transcript (timed mode); backend
-      // upgrades it in place later. After frozenResponseTimeRef is set so the
-      // bubble carries the correct response-time badge.
-      commitLiveTranscriptAsAnswer(_liveAnswerText);
+      // Do NOT commit the live transcript as a final answer. The backend owns
+      // English-only validation and sends the accepted transcript.
+      setIsCandidateTranscriptProcessing(true);
+      setCurrentTranscript("");
+      currentTranscriptRef.current = "";
       voiceVerifBufferRef.current = [];
       setTimeout(() => {
         mediaStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -3952,7 +4065,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         questionTimerPendingRef.current = null;
         questionTimerReceivedAtRef.current = null;
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: "end_turn" }));
+          wsRef.current.send(JSON.stringify({
+            type: "end_turn",
+            browser_transcript: browserTranscript || undefined,
+          }));
         }
       }, 100);
       return;
@@ -3960,10 +4076,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
     // No speech detected: silent discard — clear transcript and stop cleanly
     setCurrentTranscript("");
+    removeAudioDeviceChangeListener();
+    pinnedAudioDeviceIdRef.current = undefined;
     mediaStreamRef.current?.getTracks().forEach(t => t.stop());
     processorRef.current?.disconnect();
     processorRef.current = null;
-  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, commitLiveTranscriptAsAnswer]);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, snapshotVisibleLiveTranscript]);
+
+  // Manual Next/skip must ABORT the current answer entirely. Reusing
+  // stopRecordingSilent() is unsafe here because a false-positive speechDetected
+  // bit can still schedule an end_turn 100 ms later, and that stale end_turn
+  // lands after the backend already advanced to the next question.
+  const abortRecordingForSkip = useCallback(() => {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    avatarState.onUserStopSpeaking();
+    silenceStartRef.current = null;
+    speechDetectedRef.current = false;
+    speechDetectedAtRef.current = null;
+    speechStartSentRef.current = false;
+    lastMeaningfulAudioAtRef.current = null;
+    speechPeakLevelRef.current = 0;
+    candidateAudioStreamingRef.current = false;
+    candidateAudioFrameCountRef.current = 0;
+    preSpeechPCMRingRef.current = [];
+    preSpeechPCMSampleCountRef.current = 0;
+    voiceVerifBufferRef.current = [];
+    frozenResponseTimeRef.current = null;
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    clearMaxRecordingTimer();
+    removeAudioDeviceChangeListener();
+    pinnedAudioDeviceIdRef.current = undefined;
+    setIsCandidateTranscriptProcessing(false);
+    setCurrentTranscript("");
+    currentTranscriptRef.current = "";
+    setMicInputLevel(0);
+    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+    mediaStreamRef.current = null;
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer]);
 
   // Mute toggle — fully stops/restarts recording + Web Speech Recognition.
   // Disabling track.enabled alone doesn't mute the browser's SpeechRecognition API
@@ -4060,14 +4214,97 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     });
     console.log(`[Recording ${timestamp}] Starting recording...`);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: { ideal: 1 }, // prefer mono but don't require it — Safari rejects hard constraint
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+      // Pin the audio device ID at recording start. If the user switches devices
+      // (e.g., unplugs headphones mid-answer), detect the switch and restart the
+      // stream to avoid mixing audio from two different devices.
+      const baseAudioDeviceConstraint: MediaTrackConstraints = {
+        channelCount: { ideal: 1 }, // prefer mono but don't require it — Safari rejects hard constraint
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+      let audioDeviceConstraint: boolean | MediaTrackConstraints = baseAudioDeviceConstraint;
+
+      // If a device was pinned in a prior recording session, try to use it again.
+      // If the device is no longer available, the constraint will be ignored and
+      // getUserMedia will fall back to the default device.
+      if (pinnedAudioDeviceIdRef.current) {
+        audioDeviceConstraint = {
+          ...audioDeviceConstraint,
+          deviceId: { exact: pinnedAudioDeviceIdRef.current },
+        };
+      }
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioDeviceConstraint,
+        });
+      } catch (err) {
+        if (!pinnedAudioDeviceIdRef.current) {
+          const sharedAudioTrack = webcamStreamRef.current
+            ?.getAudioTracks()
+            .find(track => track.readyState === 'live' && track.enabled);
+          if (!sharedAudioTrack) throw err;
+          console.warn(`[Recording ${timestamp}] Fresh audio capture failed; falling back to webcam audio track`, err);
+          stream = new MediaStream([sharedAudioTrack.clone()]);
+        } else {
+          console.warn(`[Recording ${timestamp}] Pinned audio device unavailable; falling back to default input`, err);
+          pinnedAudioDeviceIdRef.current = undefined;
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: baseAudioDeviceConstraint,
+          });
         }
-      });
+      }
+
+      // Capture the device ID of the track we actually got. This is the REAL device
+      // in use (might be different from the one we requested if it wasn't available).
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        try {
+          const actualDeviceId = audioTracks[0].getSettings?.().deviceId;
+          const actualLabel = audioTracks[0].label || "Selected microphone";
+          setActiveMicLabel(actualLabel);
+          if (actualDeviceId && actualDeviceId !== pinnedAudioDeviceIdRef.current) {
+            console.log(`[Recording ${timestamp}] Device ID captured: ${actualDeviceId}`);
+            pinnedAudioDeviceIdRef.current = actualDeviceId;
+          }
+        } catch (err) {
+          setActiveMicLabel(audioTracks[0].label || "Selected microphone");
+          console.log(`[Recording ${timestamp}] getSettings not supported, skipping device ID capture`);
+        }
+
+        // Listen for device changes while recording. If the user disconnects the
+        // pinned device (e.g., unplugs headphones), we'll detect a new available
+        // device on the next check and can restart this recording session to switch
+        // to the new device cleanly.
+        const handleDeviceChange = async () => {
+          if (!isRecordingRef.current) return;
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioDevices = devices.filter(d => d.kind === 'audioinput');
+            const pinnedStillExists = audioDevices.some(d => d.deviceId === pinnedAudioDeviceIdRef.current);
+            if (!pinnedStillExists && audioDevices.length > 0) {
+              console.warn(`[Recording ${timestamp}] Pinned device disconnected — restarting recording with default device`);
+              // Restart the stream with the default device to avoid mixing audio
+              stopRecordingSilentRef.current();
+              // Small delay to let cleanup finish, then restart
+              setTimeout(() => {
+                if (isRecordingRef.current === false && wsRef.current?.readyState === WebSocket.OPEN) {
+                  startRecordingInternal();
+                }
+              }, 100);
+            }
+          } catch (err) {
+            console.error(`[Recording ${timestamp}] Device enumeration failed:`, err);
+          }
+        };
+
+        removeAudioDeviceChangeListener();
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+        audioDeviceChangeListenerRef.current = handleDeviceChange;
+      }
+
       // Apply mute state immediately if candidate had muted before recording started
       if (isMutedRef.current) {
         stream.getAudioTracks().forEach(t => { t.enabled = false; });
@@ -4116,7 +4353,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       speechDetectedAtRef.current = null;
       speechStartSentRef.current = false;
       speechFrameCountRef.current = 0;
-      postSpeechNoiseCountRef.current = 0;
+      lastMeaningfulAudioAtRef.current = null;
+      speechPeakLevelRef.current = 0;
+      inTurnSpeechFrameCountRef.current = 0;
+      ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
+      candidateAudioStreamingRef.current = false;
+      candidateAudioFrameCountRef.current = 0;
+      lastBrowserTranscriptTextRef.current = "";
+      lastBrowserTranscriptUpdateAtRef.current = null;
+      lastLiveTranscriptTextRef.current = "";
+      lastLiveTranscriptUpdateAtRef.current = null;
+      turnHasLiveTranscriptRef.current = false;
+      liveTranscriptDisplayRef.current = "";
+      micLevelLastUpdateRef.current = 0;
+      setMicInputLevel(0);
       // Pre-speech ring buffer: cleared at turn start so the previous turn's
       // tail can't leak into this turn's flush.
       preSpeechPCMRingRef.current = [];
@@ -4160,6 +4410,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         let sum = 0;
         for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
         const avgLevel = sum / input.length;
+        const nowMs = Date.now();
+        if (nowMs - micLevelLastUpdateRef.current > 120) {
+          micLevelLastUpdateRef.current = nowMs;
+          setMicInputLevel(Math.min(1, avgLevel / 0.03));
+        }
 
         // Skip empty frames — AudioWorklet can produce zero-filled frames
         if (avgLevel < 0.0001) return;
@@ -4211,7 +4466,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // detection. The ring buffer will flush to backend the moment VAD
         // does confirm speech (post-warmup), preserving the warmup-window
         // audio that used to be discarded.
-        if (Date.now() < vadWarmupUntilRef.current) return;
+        if (nowMs < vadWarmupUntilRef.current) return;
         // Fix 3 (revised): the echo guard and "Linda still speaking" check
         // must NOT `return` — that drops the PCM send block at the bottom of
         // this function and silently kills candidate audio. Instead, fold
@@ -4222,8 +4477,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // the silence nudge. Per spec: candidate's response must only be
         // captured AFTER "Are you there?" finishes speaking.
         const suppressNewSpeechDetection =
-          Date.now() < playbackEchoGuardUntilRef.current ||
+          nowMs < playbackEchoGuardUntilRef.current ||
           isAiSpeakingRef.current;
+
+        // Track the room's baseline mic energy before the candidate starts.
+        // The in-turn silence clock later uses this to distinguish quiet speech
+        // from constant office / fan noise.
+        if (
+          !speechDetectedRef.current &&
+          !candidateAudioStreamingRef.current &&
+          !suppressNewSpeechDetection &&
+          avgLevel < QUIET_SPEECH_ACTIVITY_LEVEL
+        ) {
+          ambientNoiseFloorRef.current =
+            ambientNoiseFloorRef.current * 0.92 + avgLevel * 0.08;
+        }
 
         // Log every 20th frame to confirm audio is flowing
         speechFrameCountRef.current;
@@ -4231,97 +4499,141 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           console.log(`[VAD] level=${avgLevel.toFixed(4)} thresh=${silenceThresholdRef.current} speech=${speechDetectedRef.current}`);
         }
 
-        // Speech detection: require MIN_SPEECH_FRAMES consecutive frames above threshold
-        if (avgLevel > silenceThresholdRef.current) {
-          speechFrameCountRef.current++;
-          if (!speechDetectedRef.current) {
-            // Pre-confirmation: reset silence start (not yet in silence tracking mode)
-            silenceStartRef.current = null;
-            // Fix 3 (revised): only block the speechDetected transition while
-            // the echo guard is up or Linda is still speaking. Frame counting
-            // continues so a real answer that starts during the guard window
-            // is still picked up the moment the guard lifts.
-            if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES && !suppressNewSpeechDetection) {
-              if (!speechDetectedRef.current) {
-                console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
-                  questionTimerSeconds: questionTimerSecondsRef.current,
-                  questionNumber: questionNumberRef.current,
-                  preBufferedSamples: preSpeechPCMSampleCountRef.current,
-                });
-              }
-              speechDetectedRef.current = true;
-              speechDetectedAtRef.current = Date.now();
-              postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES; // start confirmed
-              // Flush the pre-speech ring buffer to backend so Whisper gets
-              // the candidate's FIRST WORDS (the ones spoken during VAD
-              // warmup + the 3-frame confirmation delay). Without this flush,
-              // Whisper transcribes from mid-sentence and the start of the
-              // answer is lost.
-              if (
-                wsRef.current?.readyState === WebSocket.OPEN &&
-                !isAiSpeakingRef.current &&
-                preSpeechPCMRingRef.current.length > 0
-              ) {
-                for (const buf of preSpeechPCMRingRef.current) {
-                  wsRef.current.send(buf.buffer);
-                }
-              }
-              preSpeechPCMRingRef.current = [];
-              preSpeechPCMSampleCountRef.current = 0;
-              // Unfreeze the per-question timer on VAD-confirmed speech as well.
-              questionTimerAwaitingSpeechRef.current = false;
-              if (!speechStartSentRef.current) {
-                speechStartSentRef.current = true;
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                  wsRef.current.send(JSON.stringify({ type: "speech_started" }));
-                  console.log('[INTERVIEW-DEBUG] sent speech_started to backend');
-                }
-              }
-              clearNoResponseTimer();
-              noResponseRetryRef.current = 0;
-            }
-          } else {
-            // Speech already confirmed — need MIN_RESPEECH_FRAMES consecutive frames
-            // above threshold to reset silence timer (prevents noise spikes from
-            // restarting the countdown after the user actually stops talking)
-            postSpeechNoiseCountRef.current++;
-            if (postSpeechNoiseCountRef.current >= MIN_RESPEECH_FRAMES) {
-              silenceStartRef.current = null; // real speech resuming
+        // Soft capture gate: low-gain headset speech can be below the normal
+        // VAD threshold. This gate may START PCM streaming earlier, but it must
+        // NOT on its own mark the turn as "real speech" or send speech_started —
+        // that was causing background office noise to hold the full 2-minute slot
+        // open until hard-cap. Real turn ownership still requires either:
+        //   1) browser live transcript movement, or
+        //   2) the stricter VAD confirmation path below.
+        const possibleSpeechThreshold = Math.max(
+          POSSIBLE_SPEECH_LEVEL,
+          ambientNoiseFloorRef.current * POSSIBLE_SPEECH_NOISE_MULTIPLIER,
+          ambientNoiseFloorRef.current + POSSIBLE_SPEECH_MARGIN
+        );
+        if (
+          avgLevel > possibleSpeechThreshold &&
+          !candidateAudioStreamingRef.current &&
+          !suppressNewSpeechDetection
+        ) {
+          candidateAudioFrameCountRef.current++;
+          if (candidateAudioFrameCountRef.current >= MIN_POSSIBLE_SPEECH_FRAMES) {
+            if (!candidateAudioStreamingRef.current) {
+              candidateAudioStreamingRef.current = true;
+              flushPreSpeechAudioToBackend();
+              console.log('[INTERVIEW-DEBUG] soft audio gate opened PCM streaming', {
+                avgLevel: Number(avgLevel.toFixed(4)),
+                possibleSpeechThreshold: Number(possibleSpeechThreshold.toFixed(4)),
+              });
             }
           }
+        } else if (!candidateAudioStreamingRef.current && avgLevel <= possibleSpeechThreshold) {
+          candidateAudioFrameCountRef.current = 0;
+        }
+
+        const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
+        if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold) {
+          speechFrameCountRef.current++;
+          silenceStartRef.current = null;
+          if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES && !suppressNewSpeechDetection) {
+            console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
+              questionTimerSeconds: questionTimerSecondsRef.current,
+              questionNumber: questionNumberRef.current,
+              preBufferedSamples: preSpeechPCMSampleCountRef.current,
+            });
+            candidateAudioStreamingRef.current = true;
+            speechDetectedRef.current = true;
+            speechDetectedAtRef.current = nowMs;
+            lastMeaningfulAudioAtRef.current = nowMs;
+            speechPeakLevelRef.current = avgLevel;
+            // Flush the pre-speech ring buffer to backend so Whisper gets
+            // the candidate's FIRST WORDS (the ones spoken during VAD
+            // warmup + the 3-frame confirmation delay). Without this flush,
+            // Whisper transcribes from mid-sentence and the start of the
+            // answer is lost.
+            flushPreSpeechAudioToBackend();
+            questionTimerAwaitingSpeechRef.current = false;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+                console.log('[INTERVIEW-DEBUG] sent speech_started to backend');
+              }
+            }
+            clearNoResponseTimer();
+            noResponseRetryRef.current = 0;
+          }
         } else {
-          postSpeechNoiseCountRef.current = 0; // below threshold → reset noise counter
           if (!speechDetectedRef.current) {
-            // Not yet confirmed — reset counter
             speechFrameCountRef.current = 0;
           } else {
-            // Speech confirmed — track silence for end-of-turn
-            if (silenceStartRef.current === null) {
-              silenceStartRef.current = Date.now();
-            } else if (Date.now() - silenceStartRef.current > silenceDurationMsRef.current) {
-              // Conversational mode: do not end the turn too early after the first
-              // detected speech. This prevents a brief pause inside an answer from
-              // immediately closing the turn and moving Linda to the next question.
-              const speechAgeMs =
-                speechDetectedAtRef.current == null ? 0 : Date.now() - speechDetectedAtRef.current;
-              if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
+            const transcriptRecentlyAdvanced =
+              lastLiveTranscriptUpdateAtRef.current != null &&
+              nowMs - lastLiveTranscriptUpdateAtRef.current < TRANSCRIPT_ACTIVITY_GRACE_MS;
+            const transcriptLedTurn =
+              turnHasLiveTranscriptRef.current &&
+              lastLiveTranscriptUpdateAtRef.current != null;
+            speechPeakLevelRef.current = Math.max(avgLevel, speechPeakLevelRef.current * 0.99);
+            const inTurnActivityThreshold = Math.max(
+              QUIET_SPEECH_ACTIVITY_LEVEL,
+              ambientNoiseFloorRef.current * IN_TURN_NOISE_MULTIPLIER,
+              ambientNoiseFloorRef.current + IN_TURN_ACTIVITY_MARGIN,
+              Math.min(0.0048, speechPeakLevelRef.current * 0.48)
+            );
+            const strongInTurnActivityThreshold = Math.max(
+              MIN_STRONG_IN_TURN_LEVEL,
+              ambientNoiseFloorRef.current * STRONG_IN_TURN_NOISE_MULTIPLIER,
+              ambientNoiseFloorRef.current + STRONG_IN_TURN_ACTIVITY_MARGIN,
+              Math.min(0.008, speechPeakLevelRef.current * 0.68)
+            );
+            if (transcriptRecentlyAdvanced) {
+              lastMeaningfulAudioAtRef.current = nowMs;
+              silenceStartRef.current = null;
+              inTurnSpeechFrameCountRef.current = 0;
+            } else if (avgLevel > strongInTurnActivityThreshold) {
+              inTurnSpeechFrameCountRef.current++;
+              if (!transcriptLedTurn || inTurnSpeechFrameCountRef.current >= MIN_IN_TURN_SPEECH_FRAMES) {
+                lastMeaningfulAudioAtRef.current = nowMs;
+                silenceStartRef.current = null;
+              }
+            } else if (!transcriptLedTurn && avgLevel > inTurnActivityThreshold) {
+              inTurnSpeechFrameCountRef.current = 0;
+              lastMeaningfulAudioAtRef.current = nowMs;
+              silenceStartRef.current = null;
+            } else {
+              inTurnSpeechFrameCountRef.current = 0;
+              const silenceSince =
+                transcriptLedTurn
+                  ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
+                  : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
+              silenceStartRef.current = silenceSince;
+              if (nowMs - silenceSince > silenceDurationMsRef.current) {
+                const speechAgeMs =
+                  speechDetectedAtRef.current == null ? 0 : nowMs - speechDetectedAtRef.current;
+                if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
+                  return;
+                }
+                console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', {
+                  avgLevel: Number(avgLevel.toFixed(4)),
+                  inTurnActivityThreshold: Number(inTurnActivityThreshold.toFixed(4)),
+                  strongInTurnActivityThreshold: Number(strongInTurnActivityThreshold.toFixed(4)),
+                  transcriptLedTurn,
+                  silenceMs: nowMs - silenceSince,
+                });
+                stopRecording();
                 return;
               }
-              stopRecording();
-              return;
             }
           }
         }
 
         // PCM was already encoded at the top of this function into `pcmEarly`.
-        // Only forward audio once speech is detected — sending silence/noise
-        // causes Whisper to hallucinate prompt text as the transcript. Block
-        // PCM transmission while Linda is speaking at all — including during
-        // the "Are you there?" silence nudge. Per spec: candidate's response
-        // must only be captured AFTER the nudge finishes.
+        // Once possible speech is detected, forward the full candidate-turn
+        // audio continuously. VAD now controls turn timing only; OpenAI gets
+        // the quiet headset audio instead of the browser filtering it out.
         const lindaHoldingTurn = isAiSpeakingRef.current;
         if (
-          speechDetectedRef.current &&
+          candidateAudioStreamingRef.current &&
           !lindaHoldingTurn &&
           wsRef.current?.readyState === WebSocket.OPEN
         ) {
@@ -4648,6 +4960,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     stopRecordingSilentRef.current = stopRecordingSilent;
   }, [stopRecordingSilent]);
+  useEffect(() => {
+    abortRecordingForSkipRef.current = abortRecordingForSkip;
+  }, [abortRecordingForSkip]);
 
   // WebSocket connection
   const connect = useCallback(() => {
@@ -5423,10 +5738,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <span className="text-emerald-300 font-bold block" style={{ fontSize: 14 }}>Your turn — speak now</span>
               <span className="text-[#94a3b8] text-[11px]">Microphone is active · Linda is listening</span>
             </div>
-            {/* Live recording waveform — candidate's actual mic input */}
-            <div className="pl-1 border-l border-emerald-500/20 ml-1">
-              <MicWaveform analyserRef={micAnalyserRef} active={true} />
-            </div>
           </div>
         </div>
       )}
@@ -5440,7 +5751,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-white font-bold mb-3" style={{ fontSize: 20 }}>Interview Complete</h2>
+            <h2 className="text-white font-bold mb-3" style={{ fontSize: 20 }}>
+              {closingReason === "candidate_ended" ? "Interview Ended" : "Interview Complete"}
+            </h2>
             <p className="text-[#94A3B8] mb-6" style={{ fontSize: 15, lineHeight: 1.6 }}>
               {completionMessage}
             </p>
@@ -5611,6 +5924,37 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
               {/* Face detection ellipse */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
+
+              {/* Candidate mic health — confirms which input browser selected and whether level is usable. */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none">
+                <div className="rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isMuted ? (
+                        <MicOff className="w-3.5 h-3.5 text-red-300 shrink-0" />
+                      ) : (
+                        <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                      )}
+                      <span className="text-white/80 text-[11px] truncate">
+                        {activeMicLabel || "Microphone"}
+                      </span>
+                    </div>
+                    <div className="w-20 h-1.5 rounded-full bg-white/15 overflow-hidden shrink-0">
+                      <div
+                        className={`h-full rounded-full transition-all duration-150 ${
+                          micInputLevel < 0.12 && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
+                        }`}
+                        style={{ width: `${Math.max(4, Math.round(micInputLevel * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                  {isRecording && !isMuted && micInputLevel < 0.12 && (
+                    <div className="mt-1 text-[10px] leading-tight text-amber-200">
+                      Microphone input is low. Check headset mic or system input.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -5781,7 +6125,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             }`}
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
           >
-            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && (
+            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing && (
               <div className="flex items-center justify-center h-full">
                 <p className="text-gray-400 text-sm text-center">Conversation will appear here...</p>
               </div>
@@ -5795,9 +6139,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             ))}
 
             {/* Live speech indicator — teal (matches candidate bubble).
-                Browser Web Speech API removed; Whisper transcribes after stop.
-                Show a "Listening…" placeholder while recording so the
-                candidate has visual confirmation they're being heard. */}
+                Streaming STT models can show partial text while recording.
+                Batch models like gpt-4o-transcribe show listening feedback and
+                reveal the transcript only after the turn is processed. */}
             {(currentTranscript || isRecording) && (
               <div className="flex gap-2 flex-row-reverse">
                 <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
@@ -5809,16 +6153,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     <div className="flex items-center gap-1 mb-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="text-emerald-600 text-[10px] font-medium">
-                        {currentTranscript ? 'speaking…' : 'listening…'}
+                        {currentTranscript ? 'speaking…' : liveTranscriptEnabled ? 'listening…' : 'recording…'}
                       </span>
                     </div>
                     {currentTranscript ? (
                       <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
+                    ) : liveTranscriptEnabled ? (
+                      <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                        Start speaking...
+                      </p>
                     ) : (
                       <p className="text-xs leading-relaxed italic text-emerald-700/70">
-                        Your transcript will appear here when you finish speaking.
+                        This speech model shows the transcript after you finish speaking.
                       </p>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isCandidateTranscriptProcessing && !currentTranscript && (
+              <div className="flex gap-2 flex-row-reverse">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                  <span className="text-white text-[8px] font-bold">You</span>
+                </div>
+                <div className="max-w-[80%]">
+                  <span className="text-[10px] font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
+                  <div className="px-3.5 py-2.5 bg-emerald-50 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5830,7 +6196,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             {currentAiText && <LiveAIBubbleMemo text={currentAiText} />}
 
             {/* Thinking dots — violet (matches AI bubble) */}
-            {isProcessing && !currentAiText && (
+            {isProcessing && !isCandidateTranscriptProcessing && !currentAiText && (
               <div className="flex gap-2">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
                   <span className="text-white text-[8px] font-bold">L</span>
@@ -5924,7 +6290,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       }
 
                       // 1. Stop mic silently — no end_turn, no processing state
-                      stopRecordingSilentRef.current();
+                      abortRecordingForSkipRef.current();
 
                       // 2. Clear no-response timer explicitly (stopRecordingSilent skips this
                       //    when isRecording=false, e.g. candidate never spoke)
@@ -6048,24 +6414,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <button
                 onClick={() => {
                   setShowEndConfirm(false);
-                  // Send end_interview and DO NOT close the WS yet — closing it
-                  // the same tick races against the server reading the message,
-                  // which leaves the DB stuck at in_progress. The server will
-                  // emit auto_disconnect once _save_interview_results completes,
-                  // and the existing auto_disconnect handler tears down the WS.
-                  // The 5s safety-net below forces a disconnect if the server
-                  // never acks (e.g. backend crash), so the UI can't hang.
-                  setIsClosing(true);
-                  isClosingRef.current = true;
+                  // Send end_interview and let the backend farewell flow own the
+                  // close. The frontend already waits for the true end of Linda's
+                  // audio on interview_ended/auto_disconnect. Flipping the
+                  // local closing flag here makes finalizePlayback tear down
+                  // the CURRENT Linda audio before the backend farewell starts.
                   setStatus("Ending interview…");
                   if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
-                  setTimeout(() => {
-                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                      disconnect();
-                    }
-                  }, 5000);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}

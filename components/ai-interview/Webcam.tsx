@@ -42,7 +42,12 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
           height: { ideal: 480 },
           facingMode: "user",
         },
-        audio: true, // Required for proctoring voice detection
+        audio: {
+          channelCount: { ideal: 1 },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }, // Required for proctoring voice detection and shared ASR capture
       });
 
       const old = streamRef.current;
