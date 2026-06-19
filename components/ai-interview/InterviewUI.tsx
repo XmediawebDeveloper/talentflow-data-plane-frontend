@@ -1876,9 +1876,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const getDedicatedRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
     const headsetFriendlyAudio: MediaTrackConstraints = {
       channelCount: { ideal: 1 },
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
+      echoCancellation: true,   // browser WebRTC handles speaker echo
+      noiseSuppression: true,   // browser suppression as baseline; RNNoise worklet layers on top
+      autoGainControl: false,   // keep off — AGC distorts quiet speech levels for ASR
     };
 
     const attempts: Array<{ label: string; constraints: MediaStreamConstraints }> = [];
@@ -4709,54 +4709,36 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       if (ctx.audioWorklet) {
         try {
-          // Register pcm-processor only once per AudioContext.
+          // Register rnnoise-processor only once per AudioContext.
           // AudioWorklet processors can only be registered once — calling addModule
           // again on the same context throws NotSupportedError.
           if (!pcmWorkletRegisteredRef.current) {
-            // Inline worklet via blob URL — no separate file needed.
-            // Accumulates 4096 samples (same as ScriptProcessor) before posting,
-            // so VAD timing is identical between both paths.
-            const workletCode = `
-              class PCMProcessor extends AudioWorkletProcessor {
-                constructor() {
-                  super();
-                  this._buf = [];
-                  this._size = 4096;
-                }
-                process(inputs) {
-                  const ch = inputs[0]?.[0];
-                  if (ch) {
-                    for (let i = 0; i < ch.length; i++) this._buf.push(ch[i]);
-                    while (this._buf.length >= this._size) {
-                      const chunk = new Float32Array(this._buf.splice(0, this._size));
-                      this.port.postMessage(chunk, [chunk.buffer]);
-                    }
-                  }
-                  return true;
-                }
-              }
-              registerProcessor('pcm-processor', PCMProcessor);
-            `;
-            const blob = new Blob([workletCode], { type: 'application/javascript' });
-            const workletUrl = URL.createObjectURL(blob);
-            await ctx.audioWorklet.addModule(workletUrl);
-            URL.revokeObjectURL(workletUrl);
+            // rnnoise-processor.js fetches /workers/rnnoise.wasm on first construction
+            // and denoises audio via RNNoise before posting 4096-sample chunks.
+            // Falls back to pass-through automatically if the WASM is unavailable.
+            await ctx.audioWorklet.addModule('/workers/rnnoise-processor.js');
             pcmWorkletRegisteredRef.current = true;
           }
 
-          const workletNode = new AudioWorkletNode(ctx, 'pcm-processor', {
+          const workletNode = new AudioWorkletNode(ctx, 'rnnoise-processor', {
             channelCount: 1,
             channelCountMode: 'explicit',
             channelInterpretation: 'discrete',
           });
-          workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
-            processAudioChunk(e.data);
+          workletNode.port.onmessage = (e: MessageEvent) => {
+            if (e.data instanceof Float32Array) {
+              processAudioChunk(e.data);
+            } else if (e.data?.type === 'rnnoise-ready') {
+              console.log('[InterviewUI] RNNoise WASM ready — noise suppression active');
+            } else if (e.data?.type === 'rnnoise-fallback') {
+              console.warn('[InterviewUI] RNNoise WASM unavailable — using pass-through:', e.data.reason);
+            }
           };
           source.connect(workletNode);
           workletNode.connect(ctx.destination);
           processorRef.current = workletNode;
           audioNodeConnected = true;
-          console.log('[InterviewUI] AudioWorklet active');
+          console.log('[InterviewUI] AudioWorklet active (rnnoise-processor)');
         } catch (err) {
           console.warn('[InterviewUI] AudioWorklet unavailable, falling back to ScriptProcessor:', err);
         }
