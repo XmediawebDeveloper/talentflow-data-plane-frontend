@@ -3596,6 +3596,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         clearNoResponseTimer();
         break;
       }
+      case "speech_threshold_not_met":
+        // Backend decided the speech_started we sent was noise-floor audio, not
+        // real speech — it's keeping the silence-nudge watcher armed. Reset our
+        // speechDetected flag so that when Linda's nudge fires speaking_started,
+        // stopRecordingSilent does NOT send end_turn with the hallucinated ASR text.
+        speechDetectedRef.current = false;
+        speechDetectedAtRef.current = null;
+        speechStartSentRef.current = false;
+        speechFrameCountRef.current = 0;
+        break;
       case "question_timer_nudge":
         // Candidate has been silent for a long time — gentle prompt; don't override the
         // silence banner countdown if it's already running.
