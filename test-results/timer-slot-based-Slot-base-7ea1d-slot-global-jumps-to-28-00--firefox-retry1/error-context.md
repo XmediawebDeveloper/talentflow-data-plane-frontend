@@ -31,54 +31,71 @@ Received:    1791
             - generic [ref=e15]: 👤
             - paragraph [ref=e16]: Avatar Not Loaded
             - paragraph [ref=e17]: Model must be from Ready Player Me or Avaturn
-          - generic [ref=e21]: Processing...
-        - generic [ref=e22]:
-          - generic [ref=e24]: You
-          - paragraph [ref=e27]: Camera unavailable
-      - generic [ref=e28]:
+          - generic [ref=e19]:
+            - img "Linda — AI Interviewer" [ref=e21]
+            - generic [ref=e22]: Linda
+            - generic [ref=e24]: AI Interviewer
+          - generic [ref=e28]: Processing...
         - generic [ref=e29]:
-          - generic [ref=e30]:
-            - img [ref=e32]
-            - generic [ref=e34]:
-              - heading "Chat with LINDA" [level=2] [ref=e35]
-              - paragraph [ref=e36]: Live AI-powered interview
+          - generic [ref=e31]: You
+          - generic [ref=e32]:
+            - paragraph [ref=e34]: Camera unavailable
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - img
+                    - generic: Microphone
+      - generic [ref=e35]:
+        - generic [ref=e36]:
           - generic [ref=e37]:
-            - generic [ref=e38]:
-              - generic [ref=e39]: Q 1
-              - generic [ref=e40]: /
-              - generic [ref=e41]: "15"
-            - generic [ref=e42]:
-              - img [ref=e43]
-              - generic [ref=e47]: 29:51
-            - generic [ref=e50]: LIVE
-            - button "End" [ref=e51]:
-              - img [ref=e52]
-              - generic [ref=e56]: End
-        - generic [ref=e57]:
-          - generic [ref=e59]:
-            - generic [ref=e61]: You
-            - generic [ref=e62]:
-              - generic [ref=e64]: Your Response
-              - paragraph [ref=e66]: I answered briefly.
-              - paragraph [ref=e67]: 04:03 pm
-          - generic [ref=e70]: L
-        - generic [ref=e78]:
-          - generic [ref=e81]: REC
-          - button "Next Q" [ref=e82]:
-            - img [ref=e83]
+            - img [ref=e39]
+            - generic [ref=e41]:
+              - heading "Chat with LINDA" [level=2] [ref=e42]
+              - paragraph [ref=e43]: Live AI-powered interview
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Q 1
+              - generic [ref=e47]: /
+              - generic [ref=e48]: "15"
+            - generic [ref=e49]:
+              - img [ref=e50]
+              - generic [ref=e54]: 29:51
+            - generic [ref=e57]: LIVE
+            - button "End" [ref=e58]:
+              - img [ref=e59]
+              - generic [ref=e63]: End
+        - generic [ref=e65]:
+          - img [ref=e66]
+          - generic [ref=e69]:
+            - generic [ref=e70]: "Answered:"
+            - generic [ref=e73]: 01:52
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e77]: You
+            - generic [ref=e78]:
+              - generic [ref=e80]: Your Response
+              - paragraph [ref=e82]: I answered briefly.
+              - paragraph [ref=e83]: 11:18 am
+          - generic [ref=e86]: L
+        - generic [ref=e94]:
+          - generic [ref=e97]: REC
+          - button "Next Q" [ref=e98]:
+            - img [ref=e99]
             - text: Next Q
-    - generic [ref=e87]:
-      - img [ref=e88]
-      - heading "Fullscreen Required" [level=2] [ref=e93]
-      - paragraph [ref=e94]: Please return to fullscreen mode to continue your AI interview.
-      - generic [ref=e96]:
-        - generic [ref=e97]: Interview Time
-        - generic [ref=e98]: 29:51
-        - generic [ref=e99]: remaining
-      - button "Return to Fullscreen" [ref=e100]
-      - paragraph [ref=e101]: This event has been recorded
+    - button "Tester mute toggle" [ref=e102] [cursor=pointer]
+    - generic [ref=e104]:
+      - img [ref=e105]
+      - heading "Fullscreen Required" [level=2] [ref=e110]
+      - paragraph [ref=e111]: Please return to fullscreen mode to continue your AI interview.
+      - generic [ref=e113]:
+        - generic [ref=e114]: Interview Time
+        - generic [ref=e115]: 29:51
+        - generic [ref=e116]: remaining
+      - button "Return to Fullscreen" [ref=e117]
+      - paragraph [ref=e118]: This event has been recorded
   - region "Notifications alt+T"
-  - alert [ref=e102]
+  - alert [ref=e119]
 ```
 
 # Test source

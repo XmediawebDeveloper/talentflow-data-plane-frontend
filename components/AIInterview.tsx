@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
+import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from '@/components/InviteFilterBar';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -49,6 +50,17 @@ type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'proces
 const CONFIG_PAGE_SIZE = 10;
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
+const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'invited', label: 'Invited' },
+  { value: 'consent_pending', label: 'Consent Pending' },
+  { value: 'system_check', label: 'System Check' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'scheduled', label: 'Scheduled' },
+];
 
 export default function AIInterview() {
   const router = useRouter();
@@ -105,9 +117,11 @@ export default function AIInterview() {
   const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
   // Resend-with-new-link confirmation dialog target
   const [resendInviteTarget, setResendInviteTarget] = useState<any | null>(null);
+  const [inviteFilters, setInviteFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
   const [invitationTotal, setInvitationTotal] = useState(0);
   const [invitationTotalPages, setInvitationTotalPages] = useState(1);
-  const [invitationSummary, setInvitationSummary] = useState({
+  const [invitationOverview, setInvitationOverview] = useState({
+    total: 0,
     completed: 0,
     inProgress: 0,
   });
@@ -280,20 +294,44 @@ export default function AIInterview() {
     }
   }, []);
 
-  const loadInvitations = useCallback(async (configId: string, page: number) => {
+  const loadInvitationOverview = useCallback(async (configId: string) => {
+    try {
+      const result = await aiInterviewService.getConfigInvitations(configId, {
+        page: 1,
+        page_size: 1,
+      });
+      setInvitationOverview({
+        total: result.total || 0,
+        completed: result.completed || 0,
+        inProgress: result.in_progress || 0,
+      });
+    } catch (error) {
+      console.error('Failed to load invitation overview:', error);
+      setInvitationOverview({
+        total: 0,
+        completed: 0,
+        inProgress: 0,
+      });
+    }
+  }, []);
+
+  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState) => {
     setLoadingInvitations(true);
     try {
       const result = await aiInterviewService.getConfigInvitations(configId, {
+        search: filters.search.trim() || undefined,
+        status: filters.status !== 'all' ? filters.status : undefined,
+        invite_date_from: filters.dateFrom || undefined,
+        invite_date_to: filters.dateTo || undefined,
         page,
         page_size: INVITATION_PAGE_SIZE,
       });
       setInvitations(result.items);
       setInvitationTotal(result.total);
       setInvitationTotalPages(Math.max(1, result.total_pages || 1));
-      setInvitationSummary({
-        completed: result.completed || 0,
-        inProgress: result.in_progress || 0,
-      });
+      if (result.items.length === 0 && result.total > 0 && page > 1) {
+        setInvitationPage((current) => Math.min(current - 1, Math.max(1, result.total_pages || 1)));
+      }
     } catch (error) {
       console.error('Failed to load invitations:', error);
       toast.error('Failed to load invitations');
@@ -359,8 +397,13 @@ export default function AIInterview() {
 
   useEffect(() => {
     if (!viewInvitationsConfig) return;
-    loadInvitations(viewInvitationsConfig.id, invitationPage);
-  }, [viewInvitationsConfig, invitationPage, loadInvitations]);
+    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters);
+  }, [viewInvitationsConfig, invitationPage, inviteFilters, loadInvitations]);
+
+  useEffect(() => {
+    if (!viewInvitationsConfig) return;
+    loadInvitationOverview(viewInvitationsConfig.id);
+  }, [viewInvitationsConfig, loadInvitationOverview]);
 
   // Click-outside handler for 3-dot menu
   useEffect(() => {
@@ -415,6 +458,7 @@ export default function AIInterview() {
 
   const handleViewInvitations = async (config: AIInterviewResponse) => {
     setViewInvitationsConfig(config);
+    setInviteFilters(EMPTY_INVITE_FILTERS);
     setInvitationPage(1);
     setOpenMenuId(null);
   };
@@ -1831,13 +1875,21 @@ export default function AIInterview() {
           return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
         };
 
-        const invTotal = invitationTotal;
-        const invInvited = Math.max(0, invitationTotal - invitationSummary.completed - invitationSummary.inProgress);
-        const invInProgress = invitationSummary.inProgress;
-        const invCompleted = invitationSummary.completed;
-        const invCancelled = Math.max(0, invitationTotal - invInvited - invInProgress - invCompleted);
+        const invTotal = invitationOverview.total;
+        const invInvited = Math.max(0, invitationOverview.total - invitationOverview.completed - invitationOverview.inProgress);
+        const invInProgress = invitationOverview.inProgress;
+        const invCompleted = invitationOverview.completed;
+        const invCancelled = Math.max(0, invTotal - invInvited - invInProgress - invCompleted);
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
         const paginatedInvitations = invitations;
+        const hasActiveInviteFilters =
+          inviteFilters.search.trim() !== '' ||
+          inviteFilters.status !== 'all' ||
+          inviteFilters.dateFrom !== '' ||
+          inviteFilters.dateTo !== '';
+        const invitationResultsLabel = hasActiveInviteFilters
+          ? `${invitationTotal} matching candidate${invitationTotal === 1 ? '' : 's'}`
+          : `${invitationTotal} candidate${invitationTotal !== 1 ? 's' : ''} invited`;
 
         const getInvStatusBadge = (inv: any) => {
           const status = inv.status;
@@ -1869,7 +1921,7 @@ export default function AIInterview() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] lg:max-w-5xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] lg:max-w-5xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
               {/* Header */}
               <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-start gap-3 min-w-0">
@@ -1934,6 +1986,16 @@ export default function AIInterview() {
                 </div>
               </div>
 
+              <InviteFilterBar
+                filters={inviteFilters}
+                onChange={(nextFilters) => {
+                  setInviteFilters(nextFilters);
+                  setInvitationPage(1);
+                }}
+                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
+                searchPlaceholder="Search by candidate name or email..."
+              />
+
               {/* Candidate List */}
               <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 min-h-0">
                 {loadingInvitations ? (
@@ -1943,8 +2005,12 @@ export default function AIInterview() {
                 ) : invitations.length === 0 ? (
                   <div className="text-center py-12">
                     <Users className="w-10 h-10 mx-auto mb-3 text-brand-blue/30" />
-                    <p className="text-gray-500 dark:text-slate-500 mb-2 text-sm">No candidates invited yet</p>
-                    <p className="text-xs sm:text-sm text-gray-400 dark:text-slate-500">Use the &quot;Send via Email&quot; button to invite candidates</p>
+                    <p className="text-gray-500 dark:text-slate-500 mb-2 text-sm">
+                      {hasActiveInviteFilters ? 'No candidates match the current filters' : 'No candidates invited yet'}
+                    </p>
+                    {!hasActiveInviteFilters && (
+                      <p className="text-xs sm:text-sm text-gray-400 dark:text-slate-500">Use the &quot;Send via Email&quot; button to invite candidates</p>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2 sm:space-y-3">
@@ -2090,7 +2156,7 @@ export default function AIInterview() {
               {/* Footer */}
               <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
                 <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">
-                  {invitationTotal} candidate{invitationTotal !== 1 ? 's' : ''} invited
+                  {invitationResultsLabel}
                 </span>
                 <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
@@ -2212,7 +2278,10 @@ export default function AIInterview() {
             toast.success(`New invitation link sent to ${inv.candidate_email}`);
             // refresh invitations list so the new expires_at is reflected
             if (viewInvitationsConfig) {
-              await loadInvitations(viewInvitationsConfig.id, invitationPage);
+              await Promise.all([
+                loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters),
+                loadInvitationOverview(viewInvitationsConfig.id),
+              ]);
             }
           } catch (err: any) {
             const detail = err?.response?.data?.detail;

@@ -31,47 +31,59 @@ Received: false
             - generic [ref=e15]: 👤
             - paragraph [ref=e16]: Avatar Not Loaded
             - paragraph [ref=e17]: Model must be from Ready Player Me or Avaturn
-          - generic [ref=e21]: Speaking...
-        - generic [ref=e22]:
-          - generic [ref=e24]: You
-          - paragraph [ref=e27]: Camera unavailable
-      - generic [ref=e28]:
-        - generic [ref=e29]:
-          - generic [ref=e30]:
-            - img [ref=e32]
-            - generic [ref=e34]:
-              - heading "Chat with LINDA" [level=2] [ref=e35]
-              - paragraph [ref=e36]: Live AI-powered interview
-          - generic [ref=e37]:
-            - generic [ref=e38]:
-              - generic [ref=e39]: Q 1
-              - generic [ref=e40]: /
-              - generic [ref=e41]: "15"
-            - generic [ref=e42]:
-              - img [ref=e43]
-              - generic [ref=e47]: 30:00
-            - generic [ref=e50]: LIVE
-            - button "End" [ref=e51]:
-              - img [ref=e52]
-              - generic [ref=e56]: End
-        - paragraph [ref=e59]: Conversation will appear here...
-        - generic [ref=e62]:
-          - generic [ref=e65]: REC
-          - button "Next Q" [ref=e66]:
-            - img [ref=e67]
+          - generic [ref=e19]:
+            - img "Linda — AI Interviewer" [ref=e21]
+            - generic [ref=e22]: Linda
+            - generic [ref=e28]: Speaking…
+          - generic [ref=e32]: Speaking...
+        - generic [ref=e33]:
+          - generic [ref=e35]: You
+          - generic [ref=e36]:
+            - paragraph [ref=e38]: Camera unavailable
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - img
+                    - generic: Microphone
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - img [ref=e43]
+            - generic [ref=e45]:
+              - heading "Chat with LINDA" [level=2] [ref=e46]
+              - paragraph [ref=e47]: Live AI-powered interview
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]: Q 1
+              - generic [ref=e51]: /
+              - generic [ref=e52]: "15"
+            - generic [ref=e53]:
+              - img [ref=e54]
+              - generic [ref=e58]: 30:00
+            - generic [ref=e61]: LIVE
+            - button "End" [ref=e62]:
+              - img [ref=e63]
+              - generic [ref=e67]: End
+        - paragraph [ref=e70]: Conversation will appear here...
+        - generic [ref=e73]:
+          - generic [ref=e76]: REC
+          - button "Next Q" [disabled] [ref=e77]:
+            - img [ref=e78]
             - text: Next Q
-    - generic [ref=e71]:
-      - img [ref=e72]
-      - heading "Fullscreen Required" [level=2] [ref=e77]
-      - paragraph [ref=e78]: Please return to fullscreen mode to continue your AI interview.
-      - generic [ref=e80]:
-        - generic [ref=e81]: Interview Time
-        - generic [ref=e82]: 30:00
-        - generic [ref=e83]: remaining
-      - button "Return to Fullscreen" [ref=e84]
-      - paragraph [ref=e85]: This event has been recorded
+    - button "Tester mute toggle" [ref=e81] [cursor=pointer]
+    - generic [ref=e83]:
+      - img [ref=e84]
+      - heading "Fullscreen Required" [level=2] [ref=e89]
+      - paragraph [ref=e90]: Please return to fullscreen mode to continue your AI interview.
+      - generic [ref=e92]:
+        - generic [ref=e93]: Interview Time
+        - generic [ref=e94]: 30:00
+        - generic [ref=e95]: remaining
+      - button "Return to Fullscreen" [ref=e96]
+      - paragraph [ref=e97]: This event has been recorded
   - region "Notifications alt+T"
-  - alert [ref=e86]
+  - alert [ref=e98]
 ```
 
 # Test source

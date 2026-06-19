@@ -49,6 +49,8 @@ interface Props {
 // S3 multipart upload requires every part except the last to be >= 5 MiB; the
 // margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
 const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
+const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   return Promise.race([
@@ -77,6 +79,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [languageSubmitting, setLanguageSubmitting] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
+  const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
   // true when candidate stopped screen sharing during the interview
   const [screenShareStopped, setScreenShareStopped] = useState(false);
   const [resharing, setResharing] = useState(false);
@@ -441,6 +444,35 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     'video/webm',
   ];
 
+  const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
+    const displayMediaOptions: any = {
+      video: {
+        frameRate: 15,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        displaySurface: 'monitor',
+      },
+      audio: true,
+      preferCurrentTab: false,
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'exclude',
+      monitorTypeSurfaces: 'include',
+    };
+
+    const screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
+    const videoTrack = screenStream.getVideoTracks()[0];
+    const displaySurface = (videoTrack?.getSettings?.() as any)?.displaySurface;
+
+    if (displaySurface && displaySurface !== 'monitor') {
+      screenStream.getTracks().forEach((track) => track.stop());
+      const error = new Error(ENTIRE_SCREEN_REQUIRED_MESSAGE);
+      (error as any).name = 'InvalidScreenSelectionError';
+      throw error;
+    }
+
+    return screenStream;
+  }, []);
+
   // ========== HANDLERS ==========
 
   const handleConsentAccept = async (consents: {
@@ -631,10 +663,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // By requesting screen share first (while not in fullscreen) we avoid a second
     // "Fullscreen Required" popup when the interview step loads.
     try {
-      const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true, // capture tab audio (AI TTS voice); user sees "Share audio" checkbox in picker
-      });
+      const screenStream = await requestEntireScreenShare();
       screenStreamRef.current = screenStream;
       // Build a combined stream: screen video + mixed audio (tab + mic)
       const recordingStream = await buildRecordingStreamWithAudio(screenStream);
@@ -742,12 +771,20 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         }
       });
       setScreenShareDeclined(false);
+      setScreenShareDeclinedReason('');
     } catch (e: any) {
       // NotAllowedError / AbortError = user explicitly cancelled the picker — block the interview.
       // Any other error (browser doesn't support getDisplayMedia) = proceed without recording.
       const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
-      if (cancelled) {
+      const invalidSelection = e?.name === 'InvalidScreenSelectionError';
+      if (cancelled || invalidSelection) {
         setScreenShareDeclined(true);
+        setScreenShareDeclinedReason(
+          invalidSelection ? ENTIRE_SCREEN_REQUIRED_MESSAGE : SCREEN_SHARE_REQUIRED_MESSAGE,
+        );
+        if (invalidSelection) {
+          toast.error(ENTIRE_SCREEN_REQUIRED_MESSAGE, { duration: 6000 });
+        }
         setStartSubmitting(false);
         return; // do NOT enter fullscreen or start interview
       }
@@ -783,7 +820,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     } finally {
       setStartSubmitting(false);
     }
-  }, [startSubmitting, token]);
+  }, [startSubmitting, token, requestEntireScreenShare]);
 
   // Fullscreen enforcement during interview — with 10s grace period so
   // accidental Esc presses don't immediately slap the hard-pause overlay
@@ -1105,28 +1142,32 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 <AlertTriangle className="w-10 h-10 text-red-600" />
               </div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
-                Screen Sharing Required
+                Entire Screen Required
               </h1>
               <p className="text-gray-600 mb-5 text-center text-sm">
-                Screen sharing permission was denied. This is mandatory to ensure a fair and monitored interview.
+                {screenShareDeclinedReason || SCREEN_SHARE_REQUIRED_MESSAGE}
               </p>
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
                 <p className="font-semibold text-red-800 mb-2 text-sm">Why is this required?</p>
                 <ul className="space-y-1.5 text-sm text-red-700">
                   <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>Screen recording prevents proxy interviews and malpractice</span></li>
                   <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>The recording is reviewed only if a violation is flagged</span></li>
-                  <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>You cannot proceed without granting this permission</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>You must select Entire Screen. Window and Current Tab are not allowed</span></li>
                 </ul>
               </div>
               <button
-                onClick={() => { setScreenShareDeclined(false); handleFullscreenReady(); }}
+                onClick={() => {
+                  setScreenShareDeclined(false);
+                  setScreenShareDeclinedReason('');
+                  handleFullscreenReady();
+                }}
                 disabled={startSubmitting}
                 className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
               >
                 {startSubmitting ? (
                   <><Loader2 className="w-5 h-5 animate-spin" />Requesting Permission...</>
                 ) : (
-                  <><Monitor className="w-5 h-5" />Allow Screen Sharing &amp; Continue</>
+                  <><Monitor className="w-5 h-5" />Choose Entire Screen &amp; Continue</>
                 )}
               </button>
             </>
@@ -1140,11 +1181,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 Enter Fullscreen Mode
               </h1>
               <p className="text-gray-600 mb-6 text-center text-sm">
-                The AI interview requires fullscreen mode and screen sharing to ensure a focused and fair environment.
+                The AI interview requires fullscreen mode and Entire Screen sharing to ensure a focused and fair environment.
               </p>
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
                 <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
                 <ul className="space-y-2 text-sm text-indigo-800">
+                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Select Entire Screen only. Window and Current Tab are not allowed</span></li>
                   <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Screen sharing is required to prevent malpractice</span></li>
                   <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden (fullscreen mode)</span></li>
                   <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Exiting fullscreen will be flagged as a violation</span></li>
@@ -1158,7 +1200,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 {startSubmitting ? (
                   <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
                 ) : (
-                  <><Maximize2 className="w-5 h-5" />Share Screen &amp; Start Interview</>
+                  <><Maximize2 className="w-5 h-5" />Share Entire Screen &amp; Start Interview</>
                 )}
               </button>
             </>
@@ -1175,10 +1217,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (resharing) return;
       setResharing(true);
       try {
-        const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
-          video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: true,
-        });
+        const screenStream = await requestEntireScreenShare();
         screenStreamRef.current = screenStream;
         const recordingStream = await buildRecordingStreamWithAudio(screenStream);
         const screenMime = SCREEN_MIME_TYPES
@@ -1212,12 +1251,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       } catch (e: any) {
         // User cancelled re-share — report as additional malpractice
         const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
-        if (cancelled) {
+        const invalidSelection = e?.name === 'InvalidScreenSelectionError';
+        if (invalidSelection) {
+          toast.error(ENTIRE_SCREEN_REQUIRED_MESSAGE, { duration: 6000 });
+        }
+        if (cancelled || invalidSelection) {
           InterviewEventBus.emit('screen_share_stopped');
           candidateAIInterviewService.reportProctorEvent(token, {
             event_type: 'screen_share_stopped',
             severity: 'severe',
-            details: { reason: 'reshare_declined' },
+            details: { reason: invalidSelection ? 'invalid_screen_selection' : 'reshare_declined' },
           }).catch(() => {});
         }
       } finally {
@@ -1252,7 +1295,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 Screen sharing is mandatory throughout the interview. This incident has been recorded as a violation.
               </p>
               <p className="text-sm text-red-600 font-medium mb-6">
-                You must re-enable screen sharing to continue.
+                You must re-enable Entire Screen sharing to continue. Window and Current Tab are not allowed.
               </p>
               <button
                 onClick={handleReshareScreen}
@@ -1262,7 +1305,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 {resharing ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
                 ) : (
-                  <><Monitor className="w-4 h-4" />Re-share Screen</>
+                  <><Monitor className="w-4 h-4" />Re-share Entire Screen</>
                 )}
               </button>
               <p className="text-xs text-gray-400 mt-4">

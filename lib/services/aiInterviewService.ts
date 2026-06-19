@@ -650,6 +650,8 @@ export const aiInterviewService = {
     score_max?: number;
     date_from?: string;
     date_to?: string;
+    invite_date_from?: string;
+    invite_date_to?: string;
     page?: number;
     page_size?: number;
   }): Promise<AIInterviewInvitationListResponse> {

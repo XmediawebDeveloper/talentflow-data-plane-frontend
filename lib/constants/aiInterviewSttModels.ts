@@ -19,6 +19,7 @@ export interface SttModelOption {
 
 export const STT_MODELS: SttModelOption[] = [
   { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', note: 'OpenAI · final transcript after answer' },
+  { value: 'gpt-realtime-whisper', label: 'GPT Realtime Whisper', note: 'OpenAI Realtime · live transcript', liveTranscript: true },
   { value: 'deepgram-nova', label: 'Deepgram Nova', note: 'Live transcript · keyterm-boosted', liveTranscript: true },
   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Highest accuracy · final transcript after answer', recommended: true },
   { value: 'sarvam', label: 'Sarvam', note: 'Indian English · final transcript after answer' },

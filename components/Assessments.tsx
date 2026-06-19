@@ -15,6 +15,7 @@ import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
+import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from './InviteFilterBar';
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
@@ -30,6 +31,18 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
+const ASSESSMENT_INVITE_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'sent', label: 'Invite Sent' },
+  { value: 'opened', label: 'Link Opened' },
+  { value: 'started', label: 'Started' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'failed', label: 'Invite Failed' },
+  { value: 'bounced', label: 'Bounced' },
+  { value: 'abandoned', label: 'Abandoned' },
+];
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -156,6 +169,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [trackingCurrentPage, setTrackingCurrentPage] = useState(1);
   const [trackingTotalItems, setTrackingTotalItems] = useState(0);
   const [trackingTotalPages, setTrackingTotalPages] = useState(1);
+  const [trackingFilters, setTrackingFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
 
   // Cross-assessment "Candidates Assessed" tab — aggregates all completed
   // invitations across every assessment by fanning out listInvitations() calls
@@ -293,6 +307,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setTrackingCurrentPage(1);
     setTrackingTotalItems(0);
     setTrackingTotalPages(1);
+    setTrackingFilters(EMPTY_INVITE_FILTERS);
     setEditingEmailId(null);
     setNewEmailValue('');
   };
@@ -334,46 +349,47 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  const loadTrackingInvitations = async (assessment: any, page: number) => {
+  const loadTrackingInvitationSummary = async (assessment: any) => {
+    try {
+      const response = await assessmentService.listInvitations(assessment.id, {
+        page: 1,
+        page_size: 1,
+      });
+      setInvitationStats({
+        total: response.total || 0,
+        expired: response.expired || 0,
+        started: response.started || 0,
+        completed: response.completed || 0,
+        failed: response.failed || 0,
+      });
+    } catch (error) {
+      console.error('Failed to load invitation summary:', error);
+      setInvitationStats({
+        total: 0,
+        expired: 0,
+        started: 0,
+        completed: 0,
+        failed: 0,
+      });
+    }
+  };
+
+  const loadTrackingInvitations = async (assessment: any, page: number, filters: InviteFilterState) => {
     setIsLoadingInvitations(true);
     try {
       const response = await assessmentService.listInvitations(assessment.id, {
+        status: filters.status !== 'all' ? filters.status : undefined,
+        search: filters.search.trim() || undefined,
+        invite_date_from: filters.dateFrom || undefined,
+        invite_date_to: filters.dateTo || undefined,
         page,
         page_size: INVITATIONS_PAGE_SIZE,
       });
       const invitations = response.items || [];
       setTrackingInvitations(invitations);
       setTrackingTotalItems(response.total || 0);
-      const totalPages = Math.max(1, Math.ceil((response.total || 0) / INVITATIONS_PAGE_SIZE));
+      const totalPages = Math.max(1, response.total_pages || Math.ceil((response.total || 0) / INVITATIONS_PAGE_SIZE));
       setTrackingTotalPages(totalPages);
-
-      // Single-bucket classifier so the five card stats stay mutually
-      // exclusive (each invitation falls into exactly one of: completed,
-      // failed, expired, in-progress, or sent/waiting). Earlier the same
-      // invitation could be counted under both expired and failed because
-      // 'expired' was inside the failed list; recruiters saw inflated
-      // failure counts.
-      const _now = new Date();
-      const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
-        const s = (inv.status || '').toLowerCase();
-        if (s === 'completed' || inv.completed_at) return 'completed';
-        if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
-        if (s === 'expired') return 'expired';
-        // Clock-based expiry: link expires_at past + candidate didn't start.
-        if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
-          return 'expired';
-        }
-        if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
-        return 'sent';
-      };
-      const stats = {
-        total: response.total || invitations.length,
-        expired: invitations.filter((inv: any) => _bucket(inv) === 'expired').length,
-        started: invitations.filter((inv: any) => _bucket(inv) === 'started').length,
-        completed: invitations.filter((inv: any) => _bucket(inv) === 'completed').length,
-        failed: invitations.filter((inv: any) => _bucket(inv) === 'failed').length,
-      };
-      setInvitationStats(stats);
 
       if (invitations.length === 0 && (response.total || 0) > 0 && page > 1) {
         setTrackingCurrentPage(Math.min(page - 1, totalPages));
@@ -583,8 +599,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
-    loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
-  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingCurrentPage]);
+    loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingCurrentPage, trackingFilters]);
+
+  useEffect(() => {
+    if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
+    loadTrackingInvitationSummary(selectedAssessmentForTracking);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking]);
 
   // Load settings data when settings tab is active
   useEffect(() => {
@@ -992,6 +1013,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleTrackInvites = async (assessment: any) => {
     setSelectedAssessmentForTracking(assessment);
     setShowTrackInvitesModal(true);
+    setTrackingFilters(EMPTY_INVITE_FILTERS);
     setTrackingCurrentPage(1);
   };
 
@@ -1033,7 +1055,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/resend`
       );
       toast.success('New invitation link generated and emailed!');
-      await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
+      await Promise.all([
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitationSummary(selectedAssessmentForTracking),
+      ]);
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
       const detail = error?.response?.data?.detail;
@@ -1060,7 +1085,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setEditingEmailId(null);
       setNewEmailValue('');
       toast.success('Email updated and invitation resent!');
-      await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
+      await Promise.all([
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitationSummary(selectedAssessmentForTracking),
+      ]);
     } catch (error: any) {
       console.error('Failed to update email:', error);
       const msg =
@@ -1204,6 +1232,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const trackingPaginationVisible = trackingTotalPages > 1;
   const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
+  const trackingHasActiveFilters =
+    trackingFilters.search.trim() !== '' ||
+    trackingFilters.status !== 'all' ||
+    trackingFilters.dateFrom !== '' ||
+    trackingFilters.dateTo !== '';
+  const trackingResultsLabel = trackingHasActiveFilters
+    ? `${trackingTotalItems} matching invite${trackingTotalItems === 1 ? '' : 's'}`
+    : `Showing ${trackingStartIndex} to ${trackingEndIndex} of ${trackingTotalItems} invites`;
 
   return (
     <div className="flex-1 overflow-x-hidden bg-slate-50">
@@ -3105,7 +3141,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       {/* Track Invites Modal */}
       {showTrackInvitesModal && selectedAssessmentForTracking && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-5xl max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-5xl h-[95dvh] sm:h-[calc(100dvh-3rem)] max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
@@ -3180,6 +3216,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             </div>
 
+            <InviteFilterBar
+              filters={trackingFilters}
+              onChange={(nextFilters) => {
+                setTrackingFilters(nextFilters);
+                setTrackingCurrentPage(1);
+              }}
+              statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS}
+              searchPlaceholder="Search by candidate name, email, or CID..."
+            />
+
             {/* Invitations Table / Cards */}
             <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
               {isLoadingInvitations ? (
@@ -3189,7 +3235,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               ) : trackingInvitations.length === 0 ? (
                 <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
                   <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/40" />
-                  <p className="text-xs sm:text-sm">No invitations found for this assessment.</p>
+                  <p className="text-xs sm:text-sm">
+                    {trackingHasActiveFilters
+                      ? 'No invitations match the current filters.'
+                      : 'No invitations found for this assessment.'}
+                  </p>
                 </div>
               ) : (
                 <table className="w-full min-w-[900px] table-fixed">
@@ -3568,7 +3618,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50 dark:bg-slate-950 shrink-0">
               <p className="text-sm text-gray-500 dark:text-slate-500">
-                Showing <strong>{trackingStartIndex}</strong> to <strong>{trackingEndIndex}</strong> of <strong>{trackingTotalItems}</strong> invites
+                {trackingResultsLabel}
               </p>
               <div className="flex items-center gap-2">
                 {trackingPaginationVisible && (

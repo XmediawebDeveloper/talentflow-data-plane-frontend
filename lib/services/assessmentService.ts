@@ -166,6 +166,18 @@ export interface AssessmentResultsListResponse {
   average_score?: number;
 }
 
+export interface AssessmentInvitationListResponse {
+  items: InvitationResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  completed: number;
+  started: number;
+  expired: number;
+  failed: number;
+}
+
 // Detailed result response (for recruiter view)
 export interface QuestionEvaluation {
   question_id: string;
@@ -634,12 +646,15 @@ export const assessmentService = {
     assessmentId: string,
     params?: {
       status?: string;
+      search?: string;
+      invite_date_from?: string;
+      invite_date_to?: string;
       page?: number;
       page_size?: number;
     }
-  ) {
+  ): Promise<AssessmentInvitationListResponse> {
     try {
-      const response = await api.get(`/assessments/${assessmentId}/invitations`, { params });
+      const response = await api.get<AssessmentInvitationListResponse>(`/assessments/${assessmentId}/invitations`, { params });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
