@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const PUBLIC_FILE_REGEX = /\.[^/]+$/;
+
 // Define public routes that don't require authentication
 const publicRoutes = [
   '/',
@@ -56,6 +58,14 @@ function isReservedSubdomain(sub: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Public assets in /public (e.g. /linda-3.png, /linda-avatar.webp) must never
+  // flow through org/auth routing. If they do, subdomain-only route guards can
+  // redirect the optimizer's internal fetch to /login, and Next image
+  // optimization returns 400 because it received HTML instead of an image.
+  if (PUBLIC_FILE_REGEX.test(pathname)) {
+    return NextResponse.next();
+  }
 
   // --- Extract tenant subdomain ---
   const host = request.headers.get('host') || '';
@@ -352,6 +362,7 @@ export const config = {
      * - workers (audio worklet JS files)
      * - models (3D avatar .glb files)
      * - three (Three.js assets)
+     * - any request ending with a file extension (served from /public)
      */
     '/((?!api|_next/static|_next/image|favicon.ico|logos|talkinghead|workers|models|three).*)',
   ],

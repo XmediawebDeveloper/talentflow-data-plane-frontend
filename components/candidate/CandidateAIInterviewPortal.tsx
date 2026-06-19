@@ -100,6 +100,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
   // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
   const identityPhotoRef = useRef<Blob | null>(null);
+  // Shared promise for best-effort baseline registration from the verified
+  // identity photo. Starting it before system-check avoids proceed-time races
+  // where practice opens before face registration finishes.
+  const faceRegistrationPromiseRef = useRef<Promise<boolean> | null>(null);
 
   // Screen recording
   const screenRecorderRef = useRef<MediaRecorder | null>(null);
@@ -109,6 +113,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Lets us clear screenChunksRef after each upload so memory stays flat.
   const screenSegmentIndexRef = useRef<number>(0);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenCheckpointInProgressRef = useRef(false);
+  const isFinalizingScreenUploadRef = useRef(false);
   // Audio mixing for screen recording (tab audio + mic)
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
   const recordingMicStreamRef = useRef<MediaStream | null>(null);
@@ -130,6 +136,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       InterviewEventBus.emit('voice_identity_changed', { similarity: similarity.toFixed(3) });
     },
   });
+
+  const ensureFaceBaselineFromIdentityPhoto = useCallback(async (): Promise<boolean> => {
+    if (faceVerification.hasBaseline()) return true;
+    if (faceRegistrationPromiseRef.current) {
+      const ok = await faceRegistrationPromiseRef.current;
+      return ok || faceVerification.hasBaseline();
+    }
+    if (!identityPhotoRef.current) return false;
+
+    faceRegistrationPromiseRef.current = withTimeout(
+      faceVerification.registerFaceFromBlob(identityPhotoRef.current),
+      8000,
+    )
+      .then((ok) => Boolean(ok))
+      .catch(() => false)
+      .finally(() => {
+        faceRegistrationPromiseRef.current = null;
+      });
+
+    const ok = await faceRegistrationPromiseRef.current;
+    return ok || faceVerification.hasBaseline();
+  }, [faceVerification]);
 
   // Post-check step persistence goes through aiInterviewSessionStore, which
   // mirrors to localStorage with a TTL so an accidental tab close within the
@@ -325,9 +353,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Must be declared here (before any early returns) to satisfy Rules of Hooks
   const stopAndUploadScreenRecording = useCallback(() => {
     const recorder = screenRecorderRef.current;
-    if (!recorder) return;
+    if (!recorder || isFinalizingScreenUploadRef.current) return;
+    isFinalizingScreenUploadRef.current = true;
 
     const doUpload = async () => {
+      // Let any in-flight checkpoint finish first so the final multipart
+      // completion sees a stable, ordered part list.
+      for (let i = 0; i < 60 && screenCheckpointInProgressRef.current; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
       const chunks = screenChunksRef.current;
       screenChunksRef.current = [];
       const segmentIndex = screenSegmentIndexRef.current;
@@ -356,13 +390,20 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       recordingAudioCtxRef.current?.close().catch(() => {});
       recordingAudioCtxRef.current = null;
       (window as any).__interviewRecordingDest = null;
+      isFinalizingScreenUploadRef.current = false;
     };
 
     if (recorder.state === 'inactive') {
-      doUpload();
+      void doUpload();
     } else {
-      recorder.onstop = () => doUpload();
-      try { recorder.stop(); } catch { doUpload(); }
+      const originalOnStop = recorder.onstop;
+      recorder.onstop = (event) => {
+        if (originalOnStop) {
+          (originalOnStop as (event: Event) => void).call(recorder, event);
+        }
+        void doUpload();
+      };
+      try { recorder.stop(); } catch { void doUpload(); }
     }
   }, [token]);
 
@@ -513,6 +554,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // face-api.js polling corrupts the shared TF.js WebGL backend.
       if (data.photo) {
         identityPhotoRef.current = data.photo;
+        void ensureFaceBaselineFromIdentityPhoto();
       }
 
       // Advance immediately once backend identity verification succeeds.
@@ -684,9 +726,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // this, an abrupt tab close / network drop / browser crash loses ALL
       // screen recording (it only uploads at interview-complete). Periodic
       // uploads make sure the server always has the latest screen state.
-      const screenCheckpointInProgressRef = { current: false };
       const screenCheckpoint = async () => {
-        if (screenCheckpointInProgressRef.current) return;
+        if (screenCheckpointInProgressRef.current || isFinalizingScreenUploadRef.current) return;
         const recorder = screenRecorderRef.current;
         if (!recorder || recorder.state !== 'recording') return;
         screenCheckpointInProgressRef.current = true;
@@ -1278,7 +1319,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             if (isFullscreen()) exitFullscreen().catch(() => {});
             setStep('completed');
           }}
-          faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
+          faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={interview?.copy_paste_blocking ?? true}
           onTimerChange={setTimerSnapshot}
@@ -1484,15 +1525,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             // Prefer the identity photo blob (better quality than live video).
             // Called here — after StepSystemCheck stops all face polling — so there
             // is no concurrent TF.js/WebGL call that could corrupt the backend.
-            if (identityPhotoRef.current && !faceVerification.hasBaseline()) {
-              const ok = await withTimeout(faceVerification.registerFaceFromBlob(identityPhotoRef.current), 5000);
-              if (ok) return true;
-              // Blob registration failed — fall through to live video.
-            }
+            if (await ensureFaceBaselineFromIdentityPhoto()) return true;
             if (faceVerification.hasBaseline()) return true;
             return faceVerification.registerFace(video);
           }}
-          onVerifyFace={faceVerification.hasBaseline() ? faceVerification.verifyCurrentFace : undefined}
+          onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
           onEnrollVoice={async (stream) => {
             // Record 10 s of the candidate's voice from the live mic stream
             // already open for the noise check. Without this baseline,
@@ -1554,7 +1591,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           onGoBack={goBack}
           selectedLanguage={selectedLanguage}
           submitting={startSubmitting}
-          faceVerification={faceVerification.hasBaseline() ? {
+          faceVerification={faceVerification.baselineReady ? {
             hasBaseline: faceVerification.hasBaseline,
             startVerification: faceVerification.startVerification,
             stopVerification: faceVerification.stopVerification,

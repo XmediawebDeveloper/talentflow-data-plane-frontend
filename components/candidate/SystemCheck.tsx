@@ -21,6 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
 import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
@@ -331,7 +332,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const runFaceDetectionFaceApi = async () => {
     if (!videoRef.current) return;
     try {
-      const faceapi = await import('face-api.js');
+      const faceapi = await loadFaceApiWithCpuBackend();
       if (!faceapi.nets.tinyFaceDetector.isLoaded) {
         await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
       }

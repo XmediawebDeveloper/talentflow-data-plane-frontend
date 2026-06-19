@@ -6,6 +6,7 @@ import {
   CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
+import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 
@@ -136,7 +137,7 @@ export default function StepIdentity({
   // Load face-api.js in the background so it's ready when the user starts the liveness check
   useEffect(() => {
     const FACE_API_MODEL_URL = '/models/';
-    import('face-api.js').then(async (fa) => {
+    loadFaceApiWithCpuBackend().then(async (fa) => {
       if (!fa.nets.tinyFaceDetector.isLoaded) {
         await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
       }

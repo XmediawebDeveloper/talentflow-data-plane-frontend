@@ -224,8 +224,10 @@ export default function StepSamplePractice({
     if (!micReady || !faceVerification?.hasBaseline()) return;
     if (!videoRef.current) return;
     faceVerification.startVerification(videoRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [micReady]);
+    return () => {
+      faceVerification.stopVerification();
+    };
+  }, [micReady, faceVerification]);
 
   // ── TTS: Speak the practice question ──────────────────────────────────────
   // Called only on explicit user click so the browser always has a user gesture.

@@ -18,6 +18,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBus';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
+import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from '@/lib/ProctoringEventBus';
@@ -587,7 +588,7 @@ export function useProctoringMonitor({
         }
 
         // ── Path B: face-api.js with TinyFaceDetector (Firefox / Safari / all others) ──
-        const faceapi = await import('face-api.js');
+        const faceapi = await loadFaceApiWithCpuBackend();
 
         if (!faceapi.nets.tinyFaceDetector.isLoaded) {
           let loaded = false;

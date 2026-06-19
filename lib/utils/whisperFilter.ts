@@ -110,6 +110,9 @@ function looksRomanizedTamil(text: string): boolean {
 export function isTranscriptMeaningful(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
+  // Ignore quote-only / punctuation-only artifacts such as `""` that can
+  // appear from live STT when no actual speech was captured.
+  if (![...t].some(ch => /\p{L}|\p{N}/u.test(ch))) return false;
   if (HALLUCINATION_PATTERNS.some(p => p.test(t))) return false;
   if (isRepetitionLoop(t)) return false;
   if (looksRomanizedTamil(t)) return false;

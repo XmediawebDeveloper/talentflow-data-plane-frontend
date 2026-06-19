@@ -660,7 +660,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // "Now Speak" banner — shown when mic opens for candidate after Linda stops
   const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
-  const nowSpeakTimerRef = useRef<NodeJS.Timeout | null>(null);
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
 
   // Bug C fix: flips true ONLY inside TalkingHead's onAudioEnd callback — the
@@ -682,42 +681,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // "Now Speak" banner — visible for the ENTIRE candidate-turn window.
   //
-  // Bug B fix: previously this banner auto-hid after 5 s, which left candidates
-  // speaking into a silent UI with no indication that their turn was still
-  // active. The banner now persists from the moment the mic opens until the
-  // mic closes (candidate finishes speaking / timer expires / Linda takes
-  // over). The render condition in the JSX (`!isAiSpeaking && !isProcessing
-  // && !questionTimerExpired && !showSilenceBanner`) handles transient states
-  // like clarifications, so no explicit auto-hide is needed here.
+  // It is shown at the exact moment the mic becomes active inside
+  // startRecordingInternal(), so the popup and the right-side listening
+  // bubble appear together. This effect only resets state when the turn ends.
   useEffect(() => {
-    if (isRecording && !isAiSpeaking && !isProcessing && !isClosing && isConnected) {
-      if (!nowSpeakShownForSessionRef.current) {
-        // Defer by 250ms and re-check refs before showing. Without this, a
-        // follow-up or next-question `speaking_started` that arrives in the
-        // same React batch as the isRecording=true transition would flash the
-        // banner WHILE Linda is already speaking (state updates haven't
-        // committed yet). Refs are synchronous so they reflect the truth.
-        if (nowSpeakTimerRef.current) clearTimeout(nowSpeakTimerRef.current);
-        nowSpeakTimerRef.current = setTimeout(() => {
-          if (
-            isRecordingRef.current &&
-            !isAiSpeakingRef.current &&
-            !isProcessingRef.current &&
-            !isClosingRef.current
-          ) {
-            nowSpeakShownForSessionRef.current = true;
-            setShowNowSpeakBanner(true);
-          }
-        }, 250);
-      }
-    }
     if (!isRecording) {
       // Reset for next recording session
       nowSpeakShownForSessionRef.current = false;
       setShowNowSpeakBanner(false);
-      if (nowSpeakTimerRef.current) { clearTimeout(nowSpeakTimerRef.current); nowSpeakTimerRef.current = null; }
     }
-  }, [isRecording, isAiSpeaking, isProcessing, isClosing, isConnected]);
+  }, [isRecording]);
 
   // Bulletproof hide: whenever Linda starts speaking (any path — greeting,
   // follow-up, clarification, interstitial), tear down the banner AND the
@@ -726,10 +699,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (isAiSpeaking) {
       setShowNowSpeakBanner(false);
-      if (nowSpeakTimerRef.current) {
-        clearTimeout(nowSpeakTimerRef.current);
-        nowSpeakTimerRef.current = null;
-      }
     }
   }, [isAiSpeaking]);
 
@@ -1447,6 +1416,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }, 200);
   }, [computeQuestionRemaining, startQuestionTimerExpiry]);
 
+  const startPendingQuestionTimer = useCallback((source: string) => {
+    const pendingDur = questionTimerPendingRef.current;
+    if (pendingDur === null) return;
+    const timestamp = new Date().toISOString();
+    console.log(`[Timer ${timestamp}] Starting pending timer from ${source}: ${pendingDur}s`);
+    questionTimerPendingRef.current = null;
+    questionTimerReceivedAtRef.current = null;
+    questionTimerAwaitingSpeechRef.current = false;
+    if (questionTimerExpiredRef.current) {
+      setQuestionTimerExpired(false);
+      questionTimerExpiredRef.current = false;
+    }
+    ensureQuestionTimerRunning(pendingDur);
+  }, [ensureQuestionTimerRunning]);
+
   // Self-healing watchdog: if the interval is null but seconds > 0 and we are
   // NOT legitimately paused (Linda speaking, clarification, fullscreen exit,
   // expired, awaiting a pending dispatch), restart from the frozen value.
@@ -1491,6 +1475,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         && cur > 0
         && !questionTimerExpiredRef.current
         && !isAiSpeakingRef.current
+        && !isProcessingRef.current
+        && !isFullscreenExitedRef.current
         && questionTimerPendingRef.current === null
       );
       // Force-clear a stuck clarification flag if the timer has been
@@ -1605,10 +1591,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // expected — keep waiting.
       if (
         isAiSpeakingRef.current
+        || isProcessingRef.current
         || isClarificationRef.current
+        || isFullscreenExitedRef.current
         || questionTimerExpiredRef.current
         || questionTimerPendingRef.current !== null
       ) {
+        stableSinceMs = performance.now();
+        return;
+      }
+      // If the interval is still ticking, a temporarily unchanged whole-second
+      // display is not itself evidence of a stuck timer. Only self-heal when
+      // the visible value is frozen AND the underlying interval stopped
+      // ticking too.
+      const lastTickMs = questionTimerLastTickMsRef.current;
+      const intervalAlive = questionTimerIntervalRef.current !== null;
+      const tickStalled = lastTickMs > 0 && (performance.now() - lastTickMs) > 3000;
+      if (intervalAlive && !tickStalled) {
         stableSinceMs = performance.now();
         return;
       }
@@ -1618,7 +1617,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (stuckMs > 3000 && cur > 0) {
         console.warn('[Timer watchdog] Per-Q timer hasn\'t decremented in', Math.round(stuckMs), 'ms — restarting', {
           frozenValue: cur,
-          intervalAlive: questionTimerIntervalRef.current !== null,
+          intervalAlive,
+          tickStalled,
           isAiSpeaking: isAiSpeakingRef.current,
           isRecording: isRecordingRef.current,
           isProcessing: isProcessingRef.current,
@@ -1629,31 +1629,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }, 1000);
     return () => clearInterval(id);
   }, [isConnected, isClosing, ensureQuestionTimerRunning]);
-
-  // Start pending per-question countdown the moment Linda stops speaking.
-  // Always starts from the full duration so the candidate sees the complete
-  // time available to them from the moment they can actually answer.
-  // The backend's TTS_PLAYBACK_BUFFER already accounts for playback lag on
-  // its auto-skip timer, so no client-side subtraction is needed here.
-  useEffect(() => {
-    const timestamp = new Date().toISOString();
-    console.log(`[Timer ${timestamp}] Pending timer useEffect: isAiSpeaking=${isAiSpeaking}, pendingDur=${questionTimerPendingRef.current}`);
-    if (isAiSpeaking) return; // still speaking — nothing to do
-    const pendingDur = questionTimerPendingRef.current;
-    if (pendingDur === null) return; // no pending timer
-    console.log(`[Timer ${timestamp}] Starting pending timer: ${pendingDur}s`);
-    questionTimerPendingRef.current = null;
-    questionTimerReceivedAtRef.current = null;
-    // Clear any lingering "TIME UP" state from the previous question — the
-    // next-question expired-flag clear was deferred at receipt time so the
-    // display would stay on "TIME UP" rather than flashing "00:00" during
-    // Linda's TTS. Now that the new timer is about to tick, drop the flag.
-    if (questionTimerExpiredRef.current) {
-      setQuestionTimerExpired(false);
-      questionTimerExpiredRef.current = false;
-    }
-    ensureQuestionTimerRunning(pendingDur);
-  }, [isAiSpeaking, ensureQuestionTimerRunning, questionTimerPendingTick]);
 
   // ── Pending Timer Watchdog ──────────────────────────────────────────────
   // Recovery for the "Linda finished but timer stuck" race. Three known
@@ -1679,12 +1654,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isAiSpeakingRef.current = false;
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
-      const dur = questionTimerPendingRef.current;
-      questionTimerPendingRef.current = null;
-      questionTimerReceivedAtRef.current = null;
-      if (dur !== null) {
-        ensureQuestionTimerRunning(dur);
-      }
       setStatus("Your turn — speak now...");
       // Re-open mic if it was disabled while Linda was "speaking" but never
       // re-enabled (since the normal handleAllAudioFinished path didn't run).
@@ -1700,7 +1669,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
     }, 20000);
     return () => clearTimeout(stuckGuard);
-  }, [questionTimerPendingTick, avatarState, ensureQuestionTimerRunning]);
+  }, [questionTimerPendingTick, avatarState]);
 
   // ── Message-Independent Speaking-State Watchdog ────────────────────────
   // The pending-timer watchdog above only fires when `question_timer_started`
@@ -1736,9 +1705,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
       const dur = questionTimerPendingRef.current ?? 120;
-      questionTimerPendingRef.current = null;
-      questionTimerReceivedAtRef.current = null;
-      ensureQuestionTimerRunning(dur);
+      questionTimerPendingRef.current = dur;
+      questionTimerTotalRef.current = dur;
+      questionTimerReceivedAtRef.current = questionTimerReceivedAtRef.current ?? Date.now();
       setStatus("Your turn — speak now...");
       if (mediaStreamRef.current && !isMutedRef.current) {
         mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
@@ -1752,7 +1721,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
     }, 30000);
     return () => clearTimeout(watchdog);
-  }, [isAiSpeaking, avatarState, ensureQuestionTimerRunning]);
+  }, [isAiSpeaking, avatarState]);
 
   // When the per-question timer expires, the client sends skip_question to the
   // backend (see the timer-expiry block above). The backend's handle_skip_question
@@ -1859,8 +1828,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
   };
 
-  const teardownRecordingMedia = useCallback((clearPinnedDevice: boolean = true) => {
+  const teardownRecordingMedia = useCallback((clearPinnedDevice: boolean = false) => {
     removeAudioDeviceChangeListener();
+    // Keep the answer-capture device pinned across turns so Q2+ stays on the
+    // same headset/mic that worked for Q1 unless we explicitly clear it.
     if (clearPinnedDevice) {
       pinnedAudioDeviceIdRef.current = undefined;
     }
@@ -2154,7 +2125,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   const buildStableLiveTranscriptPreview = useCallback((incomingText: string) => {
     const next = incomingText.replace(/\s+/g, ' ').trim();
-    if (!next) return "";
+    if (!next || !isTranscriptMeaningful(next)) return "";
     // Keep the live bubble as close as possible to the raw provider/browser
     // transcript. The older prefix-stability logic avoided visible rewrites,
     // but it also dropped legitimate sentence updates when the recognizer
@@ -2241,6 +2212,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // instead of sitting hidden until the buffer grows — makes the bubble feel real-time.
       const fullText = (webSpeechFinalizedRef.current + (interimText ? ' ' + interimText : '')).trim();
       if (fullText.length > 0) {
+        const displayText = buildStableLiveTranscriptPreview(fullText);
+        if (!displayText) {
+          setCurrentTranscript("");
+          currentTranscriptRef.current = "";
+          return;
+        }
         const nowMs = Date.now();
         const normalizedFullText = fullText.replace(/\s+/g, ' ').trim();
         if (normalizedFullText && normalizedFullText !== lastBrowserTranscriptTextRef.current) {
@@ -2257,7 +2234,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             console.log('[INTERVIEW-DEBUG] Browser transcript triggered early audio streaming');
           }
         }
-        const displayText = buildStableLiveTranscriptPreview(fullText);
         setCurrentTranscript(displayText);
         currentTranscriptRef.current = displayText;
         // Bridge: Web Speech API detected real speech — also set the VAD's
@@ -2522,7 +2498,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // the answer was already committed as a "You" message (the duplicate).
         if (!isRecordingRef.current) break;
         if (liveText.length > 0) {
-          if (isTranscriptMeaningful(liveText)) {
+          const meaningfulLiveText = isTranscriptMeaningful(liveText);
+          if (meaningfulLiveText) {
             const nowMs = Date.now();
             const normalizedLiveText = liveText.replace(/\s+/g, ' ').trim();
             if (normalizedLiveText && normalizedLiveText !== lastLiveTranscriptTextRef.current) {
@@ -2540,7 +2517,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
           // Bridge to VAD: real speech detected — mark speechDetected so the
           // "Are you there?" no-response timer doesn't fire mid-answer.
-          if (!speechDetectedRef.current) {
+          if (meaningfulLiveText && !speechDetectedRef.current) {
             speechDetectedRef.current = true;
             const nowMs = Date.now();
             speechDetectedAtRef.current = nowMs;
@@ -2911,7 +2888,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // visibly while Linda speaks (follow-ups, next questions, clarifications).
         setShowNowSpeakBanner(false);
         nowSpeakShownForSessionRef.current = false; // allow a fresh banner after she finishes
-        if (nowSpeakTimerRef.current) { clearTimeout(nowSpeakTimerRef.current); nowSpeakTimerRef.current = null; }
         setStatus("Linda is speaking...");
         startRevealingTokens();
         // Clear stale expired timer when Linda starts speaking the NEXT question
@@ -3204,13 +3180,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             setIsClarification(false);
             isClarificationRef.current = false;
             setStatus("Your turn - speak now...");
-            // Start pending timer in safety-net too
-            const _sfPendingDur = questionTimerPendingRef.current;
-            if (_sfPendingDur !== null) {
-              questionTimerPendingRef.current = null;
-              questionTimerReceivedAtRef.current = null;
-              ensureQuestionTimerRunning(_sfPendingDur);
-            }
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
               startRecordingTimerRef.current = null;
@@ -3462,29 +3431,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
-        if (isAiSpeakingRef.current) {
-          // Linda is still speaking — store duration and wait until she stops.
-          // Do NOT display the timer yet: candidate wants it to surface ONLY
-          // after Linda finishes her question. handleAllAudioFinished reads
-          // questionTimerPendingRef at the true end-of-audio and starts the
-          // visible countdown from that exact moment.
-          console.log(`[Timer ${timestamp}] Linda still speaking, storing pending timer: ${dur}s`);
+        if (isAiSpeakingRef.current || !isRecordingRef.current) {
+          // Keep the timer pending until the candidate turn is ACTUALLY open:
+          // Linda has finished, the mic is active, and the listening UI is visible.
+          console.log(`[Timer ${timestamp}] Candidate turn not open yet, storing pending timer: ${dur}s`);
           questionTimerPendingRef.current = dur;
           questionTimerTotalRef.current = dur;
           questionTimerReceivedAtRef.current = Date.now();
-          // Bump the tick so the pending-timer useEffect re-fires if
-          // isAiSpeaking transitions to false between storing and the
-          // useEffect firing (otherwise the effect's dep array wouldn't
-          // detect a change and the pending value would just sit there).
+          // Bump the tick so the pending-timer watchdogs treat this as a new
+          // queued timer window.
           setQuestionTimerPendingTick(t => t + 1);
         } else {
-          console.log(`[Timer ${timestamp}] Linda not speaking, starting timer immediately: ${dur}s`);
-          questionTimerPendingRef.current = null;
-          questionTimerReceivedAtRef.current = null;
-          // User spec: per-question timer ticks throughout the candidate's
-          // turn (including silence nudge), not just when they actually speak.
-          questionTimerAwaitingSpeechRef.current = false;
-          ensureQuestionTimerRunning(dur);
+          console.log(`[Timer ${timestamp}] Candidate turn already open, starting timer immediately: ${dur}s`);
+          questionTimerPendingRef.current = dur;
+          questionTimerTotalRef.current = dur;
+          questionTimerReceivedAtRef.current = Date.now();
+          startPendingQuestionTimer("timer_event_during_open_turn");
         }
         break;
       }
@@ -4812,20 +4774,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         console.log('[InterviewUI] ScriptProcessor active (AudioWorklet not available)');
       }
       setIsRecording(true);
+      startPendingQuestionTimer("candidate_turn_open");
+      if (
+        !nowSpeakShownForSessionRef.current &&
+        !isAiSpeakingRef.current &&
+        !isProcessingRef.current &&
+        !isClosingRef.current
+      ) {
+        nowSpeakShownForSessionRef.current = true;
+        setShowNowSpeakBanner(true);
+      }
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
       if (!backendLiveTranscriptEnabled) {
         startWebSpeechRecognition();
       }
 
-      // No-response detection — fire after 15s of total silence with no speech.
-      // If candidate hasn't spoken, ask "Are you there?" then skip after another 15s.
+      // No-response detection fallback — fire after 8s of total silence with no
+      // speech. The backend normally drives the canonical silence-nudge flow,
+      // but the client fallback should match the same threshold.
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 15000);
+      }, 8000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a

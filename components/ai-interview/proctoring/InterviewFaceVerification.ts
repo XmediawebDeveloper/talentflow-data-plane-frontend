@@ -17,13 +17,11 @@
  *   > 0.8 = different person (face_identity_changed)
  */
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 // Side-effect import: installs the global unhandledrejection guard for
 // face-api.js / TF.js WebGL backend crashes. Safe to import anywhere.
 import '@/lib/tfjs-rejection-guard';
-
-// face-api.js types (dynamically loaded)
-type FaceApiModule = typeof import('face-api.js');
+import { ensureFaceApiCpuBackend, loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
 
 interface FaceVerificationCallbacks {
   onFaceMismatch?: (distance: number) => void;
@@ -55,6 +53,65 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   const loadPromiseRef = useRef<Promise<boolean> | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const isDetectingRef = useRef(false); // guard against concurrent TF.js calls
+  const verificationActiveRef = useRef(false);
+  const [baselineReady, setBaselineReady] = useState(false);
+
+  const isTfjsBackendError = useCallback((err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err ?? '');
+    return (
+      msg.includes("reading 'backend'") ||
+      msg.includes("reading 'moveData'") ||
+      msg.includes('backend') ||
+      msg.includes('moveData') ||
+      msg.includes('WebGL') ||
+      msg.includes('context')
+    );
+  }, []);
+
+  const ensureFaceApiBackend = useCallback(async (faceapiOverride?: FaceApiModule | null): Promise<boolean> => {
+    const faceapi = faceapiOverride ?? faceApiRef.current;
+    try {
+      if (!faceapi) return true;
+      await ensureFaceApiCpuBackend(faceapi);
+      return true;
+    } catch (err) {
+      console.warn('[FaceVerification] Failed to ensure TF backend readiness:', err);
+      return false;
+    }
+  }, []);
+
+  const detectFaceWithDescriptor = useCallback(async (
+    input: HTMLVideoElement | HTMLImageElement,
+    scoreThreshold: number,
+  ) => {
+    const faceapi = faceApiRef.current;
+    if (!faceapi) return null;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const backendReady = await ensureFaceApiBackend(faceapi);
+      if (!backendReady) return null;
+      try {
+        if (!verificationActiveRef.current && input === videoElementRef.current) return null;
+        return await Promise.resolve(
+          faceapi
+            .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold }))
+            .withFaceLandmarks()
+            .withFaceDescriptor()
+        );
+      } catch (err) {
+        if (isTfjsBackendError(err) && attempt === 0) {
+          console.warn('[FaceVerification] TF.js backend crashed during detectSingleFace — retrying after backend recovery');
+          continue;
+        }
+        if (!isTfjsBackendError(err)) {
+          console.warn('[FaceVerification] detectSingleFace failed:', err);
+        }
+        return null;
+      }
+    }
+
+    return null;
+  }, [ensureFaceApiBackend, isTfjsBackendError]);
 
   /**
    * Load face-api.js models (lazy — only when face verification is needed).
@@ -65,8 +122,13 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
 
     loadPromiseRef.current = (async () => {
       try {
-        const faceapi = await import('face-api.js');
+        const faceapi = await loadFaceApiWithCpuBackend();
         faceApiRef.current = faceapi;
+        const backendReady = await ensureFaceApiBackend(faceapi);
+        if (!backendReady) {
+          console.error('[FaceVerification] Failed to initialize TF backend before model load');
+          return false;
+        }
 
         // Timeout after 15s to prevent indefinite hang
         const loadPromise = Promise.all([
@@ -78,9 +140,16 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
           setTimeout(() => reject(new Error('Model loading timed out')), 15000)
         );
         await Promise.race([loadPromise, timeoutPromise]);
+        const backendStillReady = await ensureFaceApiBackend(faceapi);
+        if (!backendStillReady) {
+          console.error('[FaceVerification] TF backend unavailable after model load');
+          return false;
+        }
 
         isLoadedRef.current = true;
-        console.log('[FaceVerification] Models loaded successfully');
+        console.log('[FaceVerification] Models loaded successfully', {
+          backend: typeof faceapi.tf?.getBackend === 'function' ? faceapi.tf.getBackend() : 'unknown',
+        });
         return true;
       } catch (err) {
         faceApiRef.current = null;
@@ -111,47 +180,24 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     if (isDetectingRef.current) return null;
     const faceapi = faceApiRef.current;
     const video = videoElementRef.current;
-    if (!faceapi || !video || video.paused || video.videoWidth === 0) return null;
+    if (!faceapi || !video || !verificationActiveRef.current || video.paused || video.videoWidth === 0) return null;
     // Skip when tab is hidden — the WebGL context may have been
     // suspended/lost and the next tensor call will throw.
     if (typeof document !== 'undefined' && document.hidden) return null;
 
     isDetectingRef.current = true;
     try {
-      // Wrap the face-api task in Promise.resolve so any rejection — even
-      // one emitted from an internal microtask — can be caught here and
-      // does not bubble up as "Uncaught (in promise)".
-      const detection = await Promise.resolve(
-        faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-          .withFaceLandmarks()
-          .withFaceDescriptor()
-      ).catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (
-          msg.includes("reading 'backend'") ||
-          msg.includes('backend') ||
-          msg.includes('moveData') ||
-          msg.includes('WebGL') ||
-          msg.includes('context')
-        ) {
-          return null;
-        }
-        console.warn('[FaceVerification] extractDescriptor inner error:', msg);
-        return null;
-      });
-
+      const detection = await detectFaceWithDescriptor(video, 0.5);
       return (detection && (detection as { descriptor?: Float32Array }).descriptor) || null;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes('backend') && !msg.includes('moveData')) {
-        console.warn('[FaceVerification] extractDescriptor outer error:', msg);
+      if (!isTfjsBackendError(err)) {
+        console.warn('[FaceVerification] extractDescriptor outer error:', err);
       }
       return null;
     } finally {
       isDetectingRef.current = false;
     }
-  }, []);
+  }, [detectFaceWithDescriptor, isTfjsBackendError]);
 
   /**
    * Register the candidate's face from an image Blob (e.g. the identity photo).
@@ -184,12 +230,13 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
         img.onerror = reject;
         img.src = url;
       });
+      try {
+        await img.decode?.();
+      } catch {
+        // decode() is not available or needed in some browsers.
+      }
 
-      const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
+      const detection = await detectFaceWithDescriptor(img, 0.4);
       URL.revokeObjectURL(url);
 
       if (!detection?.descriptor) {
@@ -198,6 +245,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       }
 
       baselineDescriptorRef.current = detection.descriptor;
+      setBaselineReady(true);
       console.log('[FaceVerification] Face baseline registered from identity photo');
       return true;
     } catch (err) {
@@ -222,15 +270,21 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     if (!faceapi || !baselineDescriptorRef.current) return null;
 
     videoElementRef.current = videoElement;
-    const descriptor = await extractDescriptor();
-    if (!descriptor) return null;
+    const previousActive = verificationActiveRef.current;
+    verificationActiveRef.current = true;
+    try {
+      const descriptor = await extractDescriptor();
+      if (!descriptor) return null;
 
-    const distance = faceapi.euclideanDistance(
-      Array.from(baselineDescriptorRef.current),
-      Array.from(descriptor),
-    );
+      const distance = faceapi.euclideanDistance(
+        Array.from(baselineDescriptorRef.current),
+        Array.from(descriptor),
+      );
 
-    return { matched: distance < MISMATCH_THRESHOLD, distance };
+      return { matched: distance < MISMATCH_THRESHOLD, distance };
+    } finally {
+      verificationActiveRef.current = previousActive;
+    }
   }, [extractDescriptor]);
 
   /**
@@ -243,43 +297,53 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
    */
   const registerFace = useCallback(async (videoElement: HTMLVideoElement): Promise<boolean> => {
     videoElementRef.current = videoElement;
+    const previousActive = verificationActiveRef.current;
+    verificationActiveRef.current = true;
 
     const loaded = await loadModels();
-    if (!loaded) return false;
-
-    const descriptors: Float32Array[] = [];
-
-    for (let i = 0; i < REGISTRATION_CAPTURES; i++) {
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, CAPTURE_DELAY_MS));
-      }
-
-      const descriptor = await extractDescriptor();
-      if (descriptor) {
-        descriptors.push(descriptor);
-        console.log(`[FaceVerification] Registration capture ${i + 1}/${REGISTRATION_CAPTURES}`);
-      }
-    }
-
-    if (descriptors.length === 0) {
-      console.warn('[FaceVerification] No face detected during registration');
+    if (!loaded) {
+      verificationActiveRef.current = previousActive;
       return false;
     }
 
-    // Average all captured descriptors
-    const avg = new Float32Array(descriptors[0].length);
-    for (const d of descriptors) {
-      for (let i = 0; i < d.length; i++) {
-        avg[i] += d[i];
-      }
-    }
-    for (let i = 0; i < avg.length; i++) {
-      avg[i] /= descriptors.length;
-    }
+    try {
+      const descriptors: Float32Array[] = [];
 
-    baselineDescriptorRef.current = avg;
-    console.log(`[FaceVerification] Face registered (${descriptors.length} captures averaged)`);
-    return true;
+      for (let i = 0; i < REGISTRATION_CAPTURES; i++) {
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, CAPTURE_DELAY_MS));
+        }
+
+        const descriptor = await extractDescriptor();
+        if (descriptor) {
+          descriptors.push(descriptor);
+          console.log(`[FaceVerification] Registration capture ${i + 1}/${REGISTRATION_CAPTURES}`);
+        }
+      }
+
+      if (descriptors.length === 0) {
+        console.warn('[FaceVerification] No face detected during registration');
+        return false;
+      }
+
+      // Average all captured descriptors
+      const avg = new Float32Array(descriptors[0].length);
+      for (const d of descriptors) {
+        for (let i = 0; i < d.length; i++) {
+          avg[i] += d[i];
+        }
+      }
+      for (let i = 0; i < avg.length; i++) {
+        avg[i] /= descriptors.length;
+      }
+
+      baselineDescriptorRef.current = avg;
+      setBaselineReady(true);
+      console.log(`[FaceVerification] Face registered (${descriptors.length} captures averaged)`);
+      return true;
+    } finally {
+      verificationActiveRef.current = previousActive;
+    }
   }, [loadModels, extractDescriptor]);
 
   /**
@@ -289,8 +353,10 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
    */
   const startVerification = useCallback((videoElement: HTMLVideoElement) => {
     videoElementRef.current = videoElement;
+    verificationActiveRef.current = true;
 
     if (!baselineDescriptorRef.current) {
+      verificationActiveRef.current = false;
       console.warn('[FaceVerification] Cannot start verification — no baseline registered');
       return;
     }
@@ -300,7 +366,10 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     }
 
     const faceapi = faceApiRef.current;
-    if (!faceapi) return;
+    if (!faceapi) {
+      verificationActiveRef.current = false;
+      return;
+    }
 
     verificationIntervalRef.current = setInterval(async () => {
       try {
@@ -333,6 +402,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
    * Stop verification and clean up.
    */
   const stopVerification = useCallback(() => {
+    verificationActiveRef.current = false;
     if (verificationIntervalRef.current) {
       clearInterval(verificationIntervalRef.current);
       verificationIntervalRef.current = null;
@@ -353,6 +423,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     startVerification,
     stopVerification,
     hasBaseline,
+    baselineReady,
     baselineDescriptorRef,
   };
 }

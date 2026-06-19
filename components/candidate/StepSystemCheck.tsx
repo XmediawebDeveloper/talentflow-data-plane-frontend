@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
+import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import {
   Monitor,
   Globe,
@@ -189,7 +190,10 @@ const SUPPORTED_BROWSERS = [
 ];
 
 const MIN_INTERNET_MBPS = 1.0;
-const FACE_REGISTRATION_TIMEOUT_MS = 3000;
+// Face baseline registration loads face-api models on first use and may need
+// a few seconds on a cold browser cache. 3s was too short and let the UI move
+// to practice while registration was still running in the background.
+const FACE_REGISTRATION_TIMEOUT_MS = 8000;
 
 const SYSTEM_REQUIREMENTS = [
   {
@@ -831,7 +835,7 @@ export default function StepSystemCheck({
       };
 
       const runFaceApi = async (vid: HTMLVideoElement) => {
-        const faceapi = await import('face-api.js');
+        const faceapi = await loadFaceApiWithCpuBackend();
         if (!faceapi.nets.tinyFaceDetector.isLoaded) {
           await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
         }
@@ -951,7 +955,7 @@ export default function StepSystemCheck({
     // If we start async and model arrives late, all early frames return null → false "pass".
     let faceApiReady = false;
     const faceApiLoadPromise = !useNative
-      ? import('face-api.js').then(async (fa) => {
+      ? loadFaceApiWithCpuBackend().then(async (fa) => {
           if (!fa.nets.tinyFaceDetector.isLoaded) {
             await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
           }
