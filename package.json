@@ -9,9 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "npx playwright test",
-    "test:e2e:ui": "npx playwright test --ui",
-    "copy-wasm": "node -e \"const fs=require('fs');const src='node_modules/rnnoise-wasm/rnnoise.wasm';const dst='public/workers/rnnoise.wasm';if(fs.existsSync(src)){fs.mkdirSync('public/workers',{recursive:true});fs.copyFileSync(src,dst);console.log('rnnoise.wasm copied to public/workers/');}else{console.warn('rnnoise-wasm not found — run npm install first');}\"",
-    "postinstall": "npm run copy-wasm"
+    "test:e2e:ui": "npx playwright test --ui"
   },
   "dependencies": {
     "@mediapipe/camera_utils": "^0.3.1675466862",
@@ -84,8 +82,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.183.1",
     "util-deprecate": "^1.0.2",
-    "vaul": "^1.1.2",
-    "rnnoise-wasm": "^0.0.8"
+    "vaul": "^1.1.2"
   },
   "overrides": {
     "node-fetch": "^2.7.0",

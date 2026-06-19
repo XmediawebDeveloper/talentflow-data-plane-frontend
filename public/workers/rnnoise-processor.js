@@ -13,13 +13,25 @@
  * RNNoise API contract:
  *   - Frame size : 480 float32 samples (≈10 ms @ 48 kHz)
  *   - PCM range  : [-32768, 32768]  (NOT the [-1, 1] Web Audio range)
- *   - Exported fns: rnnoise_create(0), rnnoise_process_frame(st,out,in),
- *                   rnnoise_destroy(st), malloc(n), free(p)
+ *   - Supports both named exports and minified Emscripten exports from
+ *     vendored rnnoise.wasm builds
  */
 
 const RNN_FRAME  = 480;    // RNNoise input/output frame size (samples)
 const POST_SIZE  = 4096;   // chunk size sent to main thread
 const SCALE      = 32768.0;
+const WASM_PAGE_BYTES = 64 * 1024;
+
+function pickExport(ex, names) {
+  for (const name of names) {
+    if (typeof ex[name] === 'function') return ex[name];
+  }
+  return null;
+}
+
+function pickMemory(ex, fallback) {
+  return ex.memory || ex.c || fallback;
+}
 
 class RNNoiseProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -64,7 +76,22 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       // (needs env.__memory_base / memory / table) and modern standalone builds.
       // Unknown imports are stubs so instantiation never throws on extras.
       const sharedMemory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
-      let   memView      = null; // filled after instantiation for memcpy helpers
+      let activeMemory   = sharedMemory;
+      const copyBytes = (dest, src, n) => {
+        const view = new Uint8Array(activeMemory.buffer);
+        view.copyWithin(dest, src, src + n);
+      };
+      const resizeHeap = (requestedSize) => {
+        const currentSize = activeMemory.buffer.byteLength;
+        if (requestedSize <= currentSize) return 1;
+        const growByPages = Math.ceil((requestedSize - currentSize) / WASM_PAGE_BYTES);
+        try {
+          activeMemory.grow(growByPages);
+          return 1;
+        } catch {
+          return 0;
+        }
+      };
 
       const env = {
         // Legacy Emscripten asm.js-style
@@ -74,14 +101,11 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
         __table_base     : 0,
         // Runtime helpers — implement the ones rnnoise actually calls
         abort            : () => { throw new Error('rnnoise WASM abort()'); },
-        emscripten_memcpy_big: (dest, src, n) => {
-          if (!memView) memView = new Uint8Array(sharedMemory.buffer);
-          memView.copyWithin(dest, src, src + n);
-        },
-        emscripten_resize_heap: () => 0,
+        emscripten_memcpy_big: copyBytes,
+        emscripten_resize_heap: resizeHeap,
         // Catch-all stubs for any other env imports the build may declare
-        _emscripten_memcpy_big     : (d, s, n) => { if (!memView) memView = new Uint8Array(sharedMemory.buffer); memView.copyWithin(d, s, s + n); },
-        _emscripten_resize_heap    : () => 0,
+        _emscripten_memcpy_big     : copyBytes,
+        _emscripten_resize_heap    : resizeHeap,
         _abort                     : () => { throw new Error('rnnoise _abort'); },
         ___setErrNo                : () => {},
         ___syscall3                : () => -1,
@@ -97,21 +121,41 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       try {
         ({ instance } = await WebAssembly.instantiate(buf, {}));
       } catch {
-        // Fall back to Emscripten env imports
-        ({ instance } = await WebAssembly.instantiate(buf, { env }));
+        try {
+          // Fall back to legacy Emscripten env imports
+          ({ instance } = await WebAssembly.instantiate(buf, { env }));
+        } catch {
+          // Some published rnnoise.wasm builds minify the module/import names.
+          ({ instance } = await WebAssembly.instantiate(buf, {
+            a: {
+              a: resizeHeap,
+              b: copyBytes,
+            },
+          }));
+        }
       }
 
       const ex = instance.exports;
-      // Verify the expected exports are present
-      if (typeof ex.rnnoise_create !== 'function') {
+      activeMemory = pickMemory(ex, sharedMemory);
+
+      const ctorFn    = pickExport(ex, ['___wasm_call_ctors', '__wasm_call_ctors', 'd']);
+      const createFn  = pickExport(ex, ['rnnoise_create', 'f']);
+      const processFn = pickExport(ex, ['rnnoise_process_frame', 'j']);
+      const destroyFn = pickExport(ex, ['rnnoise_destroy', 'h']);
+      const mallocFn  = pickExport(ex, ['malloc', 'g']);
+      const freeFn    = pickExport(ex, ['free', 'i']);
+
+      if (ctorFn) ctorFn();
+
+      if (!createFn || !processFn || !destroyFn || !mallocFn || !freeFn) {
         throw new Error('rnnoise_create not exported — wrong WASM binary?');
       }
 
-      const state  = ex.rnnoise_create(0);
-      const inPtr  = ex.malloc(RNN_FRAME * 4);  // 4 bytes per float32
-      const outPtr = ex.malloc(RNN_FRAME * 4);
+      const state  = createFn(0);
+      const inPtr  = mallocFn(RNN_FRAME * 4);  // 4 bytes per float32
+      const outPtr = mallocFn(RNN_FRAME * 4);
 
-      this._rnn = { ex, state, inPtr, outPtr };
+      this._rnn = { ex, memory: activeMemory, state, inPtr, outPtr, processFn };
       this._ready = true;
       this.port.postMessage({ type: 'rnnoise-ready' });
 
@@ -135,18 +179,18 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
   // ---------------------------------------------------------------------------
 
   _denoise(samples) {
-    const { ex, state, inPtr, outPtr } = this._rnn;
+    const { memory, processFn, state, inPtr, outPtr } = this._rnn;
 
     // Write float32 samples scaled to PCM range into WASM heap
     const inOff = inPtr >>> 2;
-    const heap  = new Float32Array(ex.memory.buffer);
+    const heap  = new Float32Array(memory.buffer);
     for (let i = 0; i < RNN_FRAME; i++) heap[inOff + i] = samples[i] * SCALE;
 
-    ex.rnnoise_process_frame(state, outPtr, inPtr);
+    processFn(state, outPtr, inPtr);
 
     // Read back denoised samples — re-read heap in case memory grew
     const outOff   = outPtr >>> 2;
-    const heap2    = new Float32Array(ex.memory.buffer);
+    const heap2    = new Float32Array(memory.buffer);
     const out      = new Float32Array(RNN_FRAME);
     for (let i = 0; i < RNN_FRAME; i++) out[i] = heap2[outOff + i] / SCALE;
     return out;
