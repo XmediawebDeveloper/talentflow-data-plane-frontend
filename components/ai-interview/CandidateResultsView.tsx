@@ -2506,12 +2506,16 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                     {/* Original (raw ASR) — shown FIRST */}
                                     <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-brand-orange/10 ring-1 ring-brand-orange/25 text-brand-orange-deep">
                                       <div className="text-[10px] font-semibold text-brand-orange-deep mb-1 uppercase tracking-wide">Original (ASR)</div>
-                                      <DiffText parts={diff.raw} tone="raw" />
+                                      {diff.mode === 'word'
+                                        ? <DiffText parts={diff.raw} tone="raw" />
+                                        : <span>{rawContent}</span>}
                                     </div>
                                     {/* Corrected — shown BELOW */}
                                     <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                       <div className="text-[10px] font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
-                                      <DiffText parts={diff.corrected} tone="corrected" />
+                                      {diff.mode === 'word'
+                                        ? <DiffText parts={diff.corrected} tone="corrected" />
+                                        : <span>{content}</span>}
                                     </div>
                                     {diff.mode === 'sentence' && (
                                       <div className="text-[10px] text-brand-orange-deep mt-1 pr-1 text-right italic">full-sentence rewrite</div>
@@ -2872,14 +2876,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                         {r.question || '—'}
                                       </td>
                                       <td className="px-3 py-3 align-top text-brand-orange-deep leading-snug">
-                                        {diff && diff.mode !== 'none'
+                                        {diff && diff.mode === 'word'
                                           ? <DiffText parts={diff.raw} tone="raw" />
                                           : rowSkip
                                             ? <span className="text-gray-400">—</span>
                                             : <span className="text-gray-700">{r.raw || '—'}</span>}
                                       </td>
                                       <td className="px-3 py-3 align-top text-gray-800 leading-snug">
-                                        {diff && diff.mode !== 'none'
+                                        {diff && diff.mode === 'word'
                                           ? <DiffText parts={diff.corrected} tone="corrected" />
                                           : rowSkip
                                             ? <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${rowSkip.tone === 'amber' ? 'text-amber-700' : 'text-slate-500'}`}>
