@@ -1736,9 +1736,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechDetectedAtRef = useRef<number | null>(null);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.005);
-  const silenceDurationMsRef = useRef(9000); // conversational mode needs long pauses tolerated; backend may override
+  const silenceDurationMsRef = useRef(5000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env
   const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
-  const MIN_CLIENT_SILENCE_DURATION_MS = 9000;
   const POSSIBLE_SPEECH_LEVEL = 0.0018;
   const MIN_POSSIBLE_SPEECH_FRAMES = 6;
   const QUIET_SPEECH_ACTIVITY_LEVEL = 0.0032;
@@ -2382,8 +2381,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             ? Math.min(serverThreshold, MAX_CLIENT_SPEECH_THRESHOLD)
             : MAX_CLIENT_SPEECH_THRESHOLD;
           silenceDurationMsRef.current = Number.isFinite(serverSilenceMs)
-            ? Math.max(serverSilenceMs, MIN_CLIENT_SILENCE_DURATION_MS)
-            : MIN_CLIENT_SILENCE_DURATION_MS;
+            ? serverSilenceMs
+            : silenceDurationMsRef.current;
           console.log(`[WS ${timestamp}] VAD config: server_threshold=${data.vad_config.silence_threshold}, effective_threshold=${silenceThresholdRef.current}, server_silence_ms=${data.vad_config.silence_duration_ms}, effective_silence_ms=${silenceDurationMsRef.current}`);
         }
         // Sync global timer from backend — accounts for resumed sessions with elapsed time.
