@@ -4644,26 +4644,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               }
             } else {
               inTurnSpeechFrameCountRef.current = 0;
-              const silenceSince =
-                transcriptLedTurn
-                  ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
-                  : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
-              silenceStartRef.current = silenceSince;
-              if (nowMs - silenceSince > silenceDurationMsRef.current) {
-                const speechAgeMs =
-                  speechDetectedAtRef.current == null ? 0 : nowMs - speechDetectedAtRef.current;
-                if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
+              // Soft-voice guard: if audio is above ambient * 1.5 the candidate
+              // is still producing sound — just quieter than the adaptive
+              // in-turn threshold. Don't let the silence clock accumulate during
+              // live speech; only genuine silence (at/below ambient floor) counts.
+              // Without this, a voice consistently below inTurnActivityThreshold
+              // accumulates "silence" the whole time it's speaking, and a 2-second
+              // breath gap tips the total over silenceDurationMs → premature cut-off.
+              const softVoiceFloor = Math.max(POSSIBLE_SPEECH_LEVEL, ambientNoiseFloorRef.current * 1.5);
+              if (avgLevel > softVoiceFloor) {
+                lastMeaningfulAudioAtRef.current = nowMs;
+                silenceStartRef.current = null;
+              } else {
+                const silenceSince =
+                  transcriptLedTurn
+                    ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
+                    : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
+                silenceStartRef.current = silenceSince;
+                if (nowMs - silenceSince > silenceDurationMsRef.current) {
+                  const speechAgeMs =
+                    speechDetectedAtRef.current == null ? 0 : nowMs - speechDetectedAtRef.current;
+                  if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
+                    return;
+                  }
+                  console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', {
+                    avgLevel: Number(avgLevel.toFixed(4)),
+                    softVoiceFloor: Number(softVoiceFloor.toFixed(4)),
+                    inTurnActivityThreshold: Number(inTurnActivityThreshold.toFixed(4)),
+                    strongInTurnActivityThreshold: Number(strongInTurnActivityThreshold.toFixed(4)),
+                    transcriptLedTurn,
+                    silenceMs: nowMs - silenceSince,
+                  });
+                  stopRecording();
                   return;
                 }
-                console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', {
-                  avgLevel: Number(avgLevel.toFixed(4)),
-                  inTurnActivityThreshold: Number(inTurnActivityThreshold.toFixed(4)),
-                  strongInTurnActivityThreshold: Number(strongInTurnActivityThreshold.toFixed(4)),
-                  transcriptLedTurn,
-                  silenceMs: nowMs - silenceSince,
-                });
-                stopRecording();
-                return;
               }
             }
           }
