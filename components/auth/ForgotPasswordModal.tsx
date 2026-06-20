@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, ArrowLeft, Loader2, AlertCircle, KeyRound, Send } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, ArrowLeft, Loader2, AlertCircle, KeyRound, Send, ShieldOff, UserX } from 'lucide-react';
 import authService from '@/lib/services/authService';
 import { detectSubdomain } from '@/lib/utils/subdomain';
 
@@ -10,7 +10,7 @@ interface ForgotPasswordModalProps {
   onClose: () => void;
 }
 
-type ModalStep = 'email' | 'otp' | 'password' | 'success' | 'firstLogin';
+type ModalStep = 'email' | 'otp' | 'password' | 'success' | 'firstLogin' | 'accountSuspended' | 'userDeactivated';
 
 export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProps) {
   const [step, setStep] = useState<ModalStep>('email');
@@ -89,6 +89,16 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
 
     try {
       const res = await authService.forgotPassword(email, getTenantSubdomain());
+      // Organization suspended by super admin — block reset entirely.
+      if (res?.account_suspended) {
+        setStep('accountSuspended');
+        return;
+      }
+      // User deactivated by tenant admin — block reset entirely.
+      if (res?.user_deactivated) {
+        setStep('userDeactivated');
+        return;
+      }
       // Invited user who hasn't set their own password yet — block reset, guide to temp password.
       if (res?.requires_temp_password_login) {
         setFirstLoginMessage(res.message || '');
@@ -249,6 +259,8 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
             {step === 'password' && 'Create New Password'}
             {step === 'success' && 'Password Reset Successful!'}
             {step === 'firstLogin' && 'Finish Setting Up Your Account'}
+            {step === 'accountSuspended' && 'Account Suspended'}
+            {step === 'userDeactivated' && 'Account Deactivated'}
           </h2>
           <p className="text-blue-100 text-sm mt-1">
             {step === 'email' && 'We\'ll send you a verification code'}
@@ -256,6 +268,8 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
             {step === 'password' && 'Choose a strong password'}
             {step === 'success' && 'You can now login with your new password'}
             {step === 'firstLogin' && 'This is your first sign-in'}
+            {step === 'accountSuspended' && 'Password reset is unavailable'}
+            {step === 'userDeactivated' && 'Password reset is unavailable'}
           </p>
         </div>
 
@@ -499,6 +513,76 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                   </button>
                 </>
               )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Login
+              </button>
+            </div>
+          )}
+
+          {/* Account Suspended: tenant suspended by super admin */}
+          {step === 'accountSuspended' && (
+            <div className="space-y-5">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                  <ShieldOff className="w-8 h-8 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-gray-800 dark:text-slate-200 font-medium">
+                    Your organization's account has been suspended
+                  </p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm leading-relaxed">
+                    This account was suspended by the platform administrator. Password reset and login are currently unavailable for all users in this organization.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-1">What to do next</p>
+                <p className="text-sm text-red-700 dark:text-red-400">
+                  Please contact <strong>TalentFlow support</strong> to resolve the suspension and restore access to your account.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Login
+              </button>
+            </div>
+          )}
+
+          {/* User Deactivated: user deactivated by tenant admin */}
+          {step === 'userDeactivated' && (
+            <div className="space-y-5">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+                  <UserX className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-gray-800 dark:text-slate-200 font-medium">
+                    Your account has been deactivated
+                  </p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm leading-relaxed">
+                    A workspace administrator has deactivated your account. You won't be able to reset your password until the account is reactivated.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">What to do next</p>
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  Please contact your <strong>organization administrator</strong> to reactivate your account. Once reactivated, you'll be able to reset your password.
+                </p>
+              </div>
 
               <button
                 type="button"

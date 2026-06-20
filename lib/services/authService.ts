@@ -343,7 +343,7 @@ export const authService = {
   async forgotPassword(
     email: string,
     subdomain?: string | null,
-  ): Promise<{ message: string; email: string; expires_in_minutes?: number; requires_temp_password_login?: boolean }> {
+  ): Promise<{ message: string; email: string; expires_in_minutes?: number; requires_temp_password_login?: boolean; account_suspended?: boolean; user_deactivated?: boolean }> {
     try {
       const response = await api.post('/auth/forgot-password', { email, subdomain: subdomain || undefined });
       return response.data;
