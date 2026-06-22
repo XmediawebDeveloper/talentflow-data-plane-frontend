@@ -34,8 +34,8 @@ function pickMemory(ex, fallback) {
 }
 
 class RNNoiseProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
+  constructor(options) {
+    super(options);
 
     // Input ring – accumulates raw mic samples waiting for a full RNN_FRAME
     this._inBuf  = [];
@@ -45,14 +45,21 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
     // WASM state (null until _initWasm resolves)
     this._rnn        = null;   // { ex, state, inPtr, outPtr }
     this._ready      = false;
-    this._passthrough = false; // set true on unrecoverable WASM error
+    this._passthrough = false; // set true on unrecoverable WASM error or bypass
 
     // Frames received before WASM is ready are queued here and replayed
     // as pass-through once _initWasm settles (avoids dropping the first
     // ~200 ms of speech that arrives during WASM load).
     this._earlyFrames = [];
 
-    this._initWasm();
+    // bypass:true → skip WASM entirely, run as pure pass-through off-thread
+    if (options?.processorOptions?.bypass === true) {
+      this._passthrough = true;
+      this._ready = true;
+      this.port.postMessage({ type: 'rnnoise-fallback', reason: 'bypass' });
+    } else {
+      this._initWasm();
+    }
 
     this.port.onmessage = ({ data }) => {
       // Ping from main thread — reply with current readiness state

@@ -4841,10 +4841,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // ScriptProcessor is deprecated but kept as fallback for older browsers.
       let audioNodeConnected = false;
 
-      // Set false to bypass RNNoise WASM and use raw ScriptProcessor pass-through.
+      // false = pass-through off-thread (no WASM denoising); true = full RNNoise
       const RNNOISE_ENABLED = false;
 
-      if (RNNOISE_ENABLED && ctx.audioWorklet) {
+      if (ctx.audioWorklet) {
         try {
           // Register rnnoise-processor only once per AudioContext.
           // AudioWorklet processors can only be registered once — calling addModule
@@ -4861,6 +4861,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             channelCount: 1,
             channelCountMode: 'explicit',
             channelInterpretation: 'discrete',
+            processorOptions: { bypass: !RNNOISE_ENABLED },
           });
           workletNode.port.onmessage = (e: MessageEvent) => {
             if (e.data instanceof Float32Array) {
