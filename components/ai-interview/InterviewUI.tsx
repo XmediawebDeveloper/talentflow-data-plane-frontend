@@ -4637,10 +4637,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           console.log('[INTERVIEW-DEBUG] realtime transcription opened continuous PCM streaming');
         }
 
-        // Log every 20th frame to confirm audio is flowing
-        if (Math.random() < 0.05) {
-          console.log(`[VAD] level=${avgLevel.toFixed(4)} thresh=${silenceThresholdRef.current} speech=${speechDetectedRef.current}`);
-        }
 
         // Soft capture gate: low-gain headset speech can be below the normal
         // VAD threshold. This gate may START PCM streaming earlier, but it must
@@ -4822,17 +4818,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               const interviewWindow = window as InterviewWindow;
               interviewWindow.__audioFramesSent = (interviewWindow.__audioFramesSent || 0) + 1;
               interviewWindow.__audioBytesSent = (interviewWindow.__audioBytesSent || 0) + pcmEarly.byteLength;
-              if (interviewWindow.__audioFramesSent % 50 === 1) {
-                console.log(`[AUDIO-SEND] frames=${interviewWindow.__audioFramesSent} bytes=${interviewWindow.__audioBytesSent} bufferedAmount=${_bufAmt} wsState=${wsRef.current.readyState}`);
-              }
             } catch (sendErr) {
               const interviewWindow = window as InterviewWindow;
               interviewWindow.__audioFramesFailed = (interviewWindow.__audioFramesFailed || 0) + 1;
               console.error(`[AUDIO-SEND-FAILED] send() threw (${interviewWindow.__audioFramesFailed} failures total):`, sendErr);
             }
           }
-        } else if (speechDetectedRef.current && Math.random() < 0.02) {
-          console.log(`[AUDIO-SEND-BLOCKED] speechDetected=${speechDetectedRef.current} aiSpeaking=${isAiSpeakingRef.current} wsState=${wsRef.current?.readyState}`);
         }
       };
 

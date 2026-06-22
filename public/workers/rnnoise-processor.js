@@ -52,6 +52,11 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
     // ~200 ms of speech that arrives during WASM load).
     this._earlyFrames = [];
 
+    // Pre-allocated TypedArray ring buffer for bypass mode — avoids GC-heavy
+    // plain-array push/splice at 375 calls/second (Web Audio frame rate).
+    this._bypassBuf = new Float32Array(POST_SIZE);
+    this._bypassPos = 0;
+
     // bypass:true → skip WASM entirely, run as pure pass-through off-thread
     if (options?.processorOptions?.bypass === true) {
       this._passthrough = true;
@@ -228,17 +233,41 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
   // AudioWorkletProcessor interface
   // ---------------------------------------------------------------------------
 
+  // Fast TypedArray ring buffer for bypass pass-through — no GC pressure.
+  // Called at Web Audio frame rate (128 samples/frame @ 48kHz = 375 calls/s).
+  _drainBypass(inputFrame) {
+    let srcOff = 0;
+    while (srcOff < inputFrame.length) {
+      const space = POST_SIZE - this._bypassPos;
+      const copy  = Math.min(space, inputFrame.length - srcOff);
+      this._bypassBuf.set(inputFrame.subarray(srcOff, srcOff + copy), this._bypassPos);
+      this._bypassPos += copy;
+      srcOff += copy;
+      if (this._bypassPos >= POST_SIZE) {
+        // Transfer ownership — zero-copy postMessage
+        const chunk = new Float32Array(this._bypassBuf);
+        this.port.postMessage(chunk, [chunk.buffer]);
+        this._bypassPos = 0;
+      }
+    }
+  }
+
   process(inputs) {
     const ch = inputs[0]?.[0];
     if (!ch) return true;
 
-    const frame = new Float32Array(ch);
+    if (this._passthrough) {
+      // Bypass mode: TypedArray ring buffer, no WASM, no GC
+      this._drainBypass(ch);
+      return true;
+    }
 
-    if (!this._ready && !this._passthrough) {
+    const frame = new Float32Array(ch);
+    if (!this._ready) {
       // WASM still loading — queue raw frame, replay after init
       this._earlyFrames.push(frame);
     } else {
-      this._drain(frame, this._passthrough);
+      this._drain(frame, false);
     }
 
     return true; // keep processor alive
