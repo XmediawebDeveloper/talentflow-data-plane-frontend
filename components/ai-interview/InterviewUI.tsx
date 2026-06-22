@@ -248,6 +248,16 @@ const Row = ({ label, value, color = '#e2e8f0' }: { label: string; value: string
   </div>
 );
 
+const Section = ({ label }: { label: string }) => (
+  <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>{label}</div>
+);
+
+const Bar = ({ pct, color = '#818cf8' }: { pct: number; color?: string }) => (
+  <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
+  </div>
+);
+
 // ── MessageRow ──────────────────────────────────────────────────────────
 // Single chat bubble. Memoized on the immutable `msg` reference. When
 // `setMessages([...prev, newMsg])` runs, only the newly-appended msg has a
@@ -672,6 +682,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
   const [debugOpen, setDebugOpen] = useState(true);
+  const [debugPos, setDebugPos] = useState({ x: 12, y: 12 });
   const [debugStats, setDebugStats] = useState({
     heapUsed: 0, heapTotal: 0, heapLimit: 0,
     wsState: 'N/A',
@@ -682,10 +693,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     inTurnFrames: 0,
     audioCtxState: 'N/A',
     chunksPerSec: 0,
+    sysRamUsed: -1, sysRamTotal: -1, sysRamPct: -1,
+    sysCpu: -1,
+    procRss: -1,
   });
   const _dbgChunkCountRef = useRef(0);
   const _dbgLastChunkSecRef = useRef(Date.now());
   const _dbgAvgLevelRef = useRef(0);
+  // drag state — all in refs so dragging never triggers re-render
+  const _dbgDragRef = useRef({ dragging: false, ox: 0, oy: 0 });
+
+  // Poll browser stats every 500ms
   useEffect(() => {
     const id = setInterval(() => {
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
@@ -694,12 +712,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       const cps = elapsed > 0 ? Math.round(_dbgChunkCountRef.current / elapsed) : 0;
       _dbgChunkCountRef.current = 0;
       _dbgLastChunkSecRef.current = now;
-      setDebugStats({
+      setDebugStats(prev => ({
+        ...prev,
         heapUsed: mem ? Math.round(mem.usedJSHeapSize / 1048576) : -1,
         heapTotal: mem ? Math.round(mem.totalJSHeapSize / 1048576) : -1,
         heapLimit: mem ? Math.round(mem.jsHeapSizeLimit / 1048576) : -1,
         wsState: wsRef.current
-          ? ['CONNECTING','OPEN','CLOSING','CLOSED'][wsRef.current.readyState] ?? 'UNKNOWN'
+          ? (['CONNECTING','OPEN','CLOSING','CLOSED'][wsRef.current.readyState] ?? 'UNKNOWN')
           : 'NO WS',
         avgLevel: _dbgAvgLevelRef.current,
         silenceThresh: silenceThresholdRef.current,
@@ -710,11 +729,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         inTurnFrames: inTurnSpeechFrameCountRef.current,
         audioCtxState: (audioContextRef as React.MutableRefObject<AudioContext | null>)?.current?.state ?? 'N/A',
         chunksPerSec: cps,
-      });
+      }));
     }, 500);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll server system stats every 2s
+  useEffect(() => {
+    const fetchSys = async () => {
+      try {
+        const r = await fetch('/api/v1/debug/system-stats');
+        if (!r.ok) return;
+        const d = await r.json();
+        setDebugStats(prev => ({
+          ...prev,
+          sysRamUsed: d.ram_used_mb ?? -1,
+          sysRamTotal: d.ram_total_mb ?? -1,
+          sysRamPct: d.ram_percent ?? -1,
+          sysCpu: d.cpu_percent ?? -1,
+          procRss: d.process_rss_mb ?? -1,
+        }));
+      } catch { /* silent */ }
+    };
+    fetchSys();
+    const id = setInterval(fetchSys, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Drag handlers — attached to document while dragging
+  const _dbgOnPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    _dbgDragRef.current = { dragging: true, ox: e.clientX - debugPos.x, oy: e.clientY - debugPos.y };
+  };
+  const _dbgOnPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!_dbgDragRef.current.dragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - 20, e.clientX - _dbgDragRef.current.ox));
+    const y = Math.max(0, Math.min(window.innerHeight - 20, e.clientY - _dbgDragRef.current.oy));
+    setDebugPos({ x, y });
+  };
+  const _dbgOnPointerUp = () => { _dbgDragRef.current.dragging = false; };
   // ── END DEV DEBUG OVERLAY ─────────────────────────────────────────────
 
   // Bug C fix: flips true ONLY inside TalkingHead's onAudioEnd callback — the
@@ -5883,61 +5937,78 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         </div>
       )}
 
-      {/* ── DEV DEBUG OVERLAY — remove before production release ── */}
-      <div className="fixed top-2 right-2 z-[999] font-mono text-[10px] select-none" style={{ minWidth: 220 }}>
-        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(0,0,0,0.88)', border: '1px solid rgba(99,102,241,0.5)' }}>
-          {/* Header */}
+      {/* ── DEV DEBUG OVERLAY — draggable, remove before production release ── */}
+      <div
+        className="fixed z-[999] font-mono text-[10px] select-none"
+        style={{ left: debugPos.x, top: debugPos.y, minWidth: 230, maxWidth: 260 }}
+      >
+        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(8,8,20,0.93)', border: '1px solid rgba(99,102,241,0.55)', backdropFilter: 'blur(8px)' }}>
+          {/* Drag handle + collapse */}
           <div
-            className="flex items-center justify-between px-3 py-1.5 cursor-pointer"
-            style={{ background: 'rgba(99,102,241,0.25)', borderBottom: debugOpen ? '1px solid rgba(99,102,241,0.3)' : 'none' }}
-            onClick={() => setDebugOpen(o => !o)}
+            className="flex items-center justify-between px-3 py-1.5 cursor-grab active:cursor-grabbing"
+            style={{ background: 'rgba(99,102,241,0.22)', borderBottom: debugOpen ? '1px solid rgba(99,102,241,0.3)' : 'none', touchAction: 'none' }}
+            onPointerDown={_dbgOnPointerDown}
+            onPointerMove={_dbgOnPointerMove}
+            onPointerUp={_dbgOnPointerUp}
           >
-            <span className="text-indigo-300 font-bold tracking-wide">DEV MONITOR</span>
-            <span className="text-indigo-400 text-xs">{debugOpen ? '▲' : '▼'}</span>
+            <span className="text-indigo-300 font-bold tracking-wider text-[9px]">⠿ DEV MONITOR</span>
+            <button
+              className="text-indigo-400 hover:text-white px-1 text-[10px]"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={() => setDebugOpen(o => !o)}
+            >{debugOpen ? '▲' : '▼'}</button>
           </div>
+
           {debugOpen && (() => {
             const silenceSec = debugStats.silenceSince != null
-              ? ((Date.now() - debugStats.silenceSince) / 1000).toFixed(1)
-              : null;
+              ? ((Date.now() - debugStats.silenceSince) / 1000).toFixed(1) : null;
             const silenceLimit = (debugStats.silenceDurationMs / 1000).toFixed(1);
             const wsColor = debugStats.wsState === 'OPEN' ? '#34d399' : debugStats.wsState === 'CONNECTING' ? '#fbbf24' : '#f87171';
             const levelPct = Math.min(100, (debugStats.avgLevel / Math.max(debugStats.silenceThresh * 3, 0.001)) * 100);
+            const sysRamPct = debugStats.sysRamTotal > 0 ? (debugStats.sysRamUsed / debugStats.sysRamTotal) * 100 : 0;
+            const jsHeapPct = debugStats.heapTotal > 0 ? (debugStats.heapUsed / debugStats.heapTotal) * 100 : 0;
+
             return (
               <div className="px-3 py-2 space-y-1">
-                {/* RAM */}
-                <div className="text-purple-300 font-semibold pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>MEMORY</div>
+
+                {/* ── SYSTEM (server) ── */}
+                <Section label="SERVER" />
+                {debugStats.sysCpu >= 0 ? (
+                  <>
+                    <Row label="CPU" value={`${debugStats.sysCpu}%`} color={debugStats.sysCpu > 80 ? '#f87171' : '#e2e8f0'} />
+                    <Bar pct={debugStats.sysCpu} color={debugStats.sysCpu > 80 ? '#f87171' : '#34d399'} />
+                    <Row label="System RAM" value={`${debugStats.sysRamUsed} / ${debugStats.sysRamTotal} MB  (${debugStats.sysRamPct}%)`} color={sysRamPct > 85 ? '#f87171' : '#e2e8f0'} />
+                    <Bar pct={sysRamPct} color={sysRamPct > 85 ? '#f87171' : '#818cf8'} />
+                    <Row label="Process RSS" value={`${debugStats.procRss} MB`} />
+                  </>
+                ) : <Row label="Server" value="polling…" color="#64748b" />}
+
+                {/* ── BROWSER memory ── */}
+                <Section label="BROWSER" />
                 {debugStats.heapUsed >= 0 ? (
                   <>
-                    <Row label="JS Heap" value={`${debugStats.heapUsed} / ${debugStats.heapTotal} MB`} />
-                    <Row label="Heap Limit" value={`${debugStats.heapLimit} MB`} />
-                    {/* Heap bar */}
-                    <div className="mt-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                      <div className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, (debugStats.heapUsed / Math.max(debugStats.heapTotal, 1)) * 100)}%`, background: debugStats.heapUsed / Math.max(debugStats.heapTotal, 1) > 0.8 ? '#f87171' : '#818cf8' }} />
-                    </div>
+                    <Row label="JS Heap" value={`${debugStats.heapUsed} / ${debugStats.heapTotal} MB`} color={jsHeapPct > 80 ? '#f87171' : '#e2e8f0'} />
+                    <Bar pct={jsHeapPct} color={jsHeapPct > 80 ? '#f87171' : '#818cf8'} />
+                    <Row label="Heap Limit" value={`${debugStats.heapLimit} MB`} color="#64748b" />
                   </>
-                ) : <Row label="JS Heap" value="N/A (non-Chrome)" color="#94a3b8" />}
+                ) : <Row label="JS Heap" value="N/A (Chrome only)" color="#64748b" />}
 
-                {/* WebSocket */}
-                <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>WEBSOCKET</div>
+                {/* ── WEBSOCKET ── */}
+                <Section label="WEBSOCKET" />
                 <Row label="State" value={debugStats.wsState} color={wsColor} />
                 <Row label="AudioCtx" value={debugStats.audioCtxState} />
                 <Row label="PCM chunks/s" value={`${debugStats.chunksPerSec}`} />
 
-                {/* VAD */}
-                <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>VAD</div>
-                <Row label="Speech" value={debugStats.speechDetected ? 'YES' : 'no'} color={debugStats.speechDetected ? '#34d399' : '#94a3b8'} />
+                {/* ── VAD ── */}
+                <Section label="VAD" />
+                <Row label="Speech" value={debugStats.speechDetected ? 'YES ●' : 'no'} color={debugStats.speechDetected ? '#34d399' : '#94a3b8'} />
                 <Row label="InTurn frames" value={`${debugStats.inTurnFrames}`} />
                 <Row label="Level" value={debugStats.avgLevel.toFixed(4)} />
                 <Row label="Threshold" value={debugStats.silenceThresh.toFixed(4)} />
                 <Row label="Ambient" value={debugStats.ambient.toFixed(4)} />
-                {/* Level bar */}
-                <div className="mt-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                  <div className="h-full rounded-full transition-all duration-100"
-                    style={{ width: `${levelPct}%`, background: debugStats.speechDetected ? '#34d399' : '#fbbf24' }} />
-                </div>
+                <Bar pct={levelPct} color={debugStats.speechDetected ? '#34d399' : '#fbbf24'} />
                 <Row
-                  label="Silence"
+                  label="Silence timer"
                   value={silenceSec != null ? `${silenceSec}s / ${silenceLimit}s` : `– / ${silenceLimit}s`}
                   color={silenceSec != null && parseFloat(silenceSec) > debugStats.silenceDurationMs * 0.7 / 1000 ? '#f87171' : '#94a3b8'}
                 />
