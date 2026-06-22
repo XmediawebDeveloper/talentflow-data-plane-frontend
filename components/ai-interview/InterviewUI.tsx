@@ -240,6 +240,14 @@ const formatTimeMMSS = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
+// ── DEV: Debug overlay row helper (remove with overlay) ─────────────────
+const Row = ({ label, value, color = '#e2e8f0' }: { label: string; value: string; color?: string }) => (
+  <div className="flex justify-between gap-2">
+    <span style={{ color: '#64748b' }}>{label}</span>
+    <span style={{ color }} className="text-right">{value}</span>
+  </div>
+);
+
 // ── MessageRow ──────────────────────────────────────────────────────────
 // Single chat bubble. Memoized on the immutable `msg` reference. When
 // `setMessages([...prev, newMsg])` runs, only the newly-appended msg has a
@@ -661,6 +669,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // "Now Speak" banner — shown when mic opens for candidate after Linda stops
   const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
+
+  // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
+  const [debugOpen, setDebugOpen] = useState(true);
+  const [debugStats, setDebugStats] = useState({
+    heapUsed: 0, heapTotal: 0, heapLimit: 0,
+    wsState: 'N/A',
+    avgLevel: 0, silenceThresh: 0, ambient: 0,
+    silenceSince: null as number | null,
+    silenceDurationMs: 5000,
+    speechDetected: false,
+    inTurnFrames: 0,
+    audioCtxState: 'N/A',
+    chunksPerSec: 0,
+  });
+  const _dbgChunkCountRef = useRef(0);
+  const _dbgLastChunkSecRef = useRef(Date.now());
+  const _dbgAvgLevelRef = useRef(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+      const now = Date.now();
+      const elapsed = (now - _dbgLastChunkSecRef.current) / 1000;
+      const cps = elapsed > 0 ? Math.round(_dbgChunkCountRef.current / elapsed) : 0;
+      _dbgChunkCountRef.current = 0;
+      _dbgLastChunkSecRef.current = now;
+      setDebugStats({
+        heapUsed: mem ? Math.round(mem.usedJSHeapSize / 1048576) : -1,
+        heapTotal: mem ? Math.round(mem.totalJSHeapSize / 1048576) : -1,
+        heapLimit: mem ? Math.round(mem.jsHeapSizeLimit / 1048576) : -1,
+        wsState: wsRef.current
+          ? ['CONNECTING','OPEN','CLOSING','CLOSED'][wsRef.current.readyState] ?? 'UNKNOWN'
+          : 'NO WS',
+        avgLevel: _dbgAvgLevelRef.current,
+        silenceThresh: silenceThresholdRef.current,
+        ambient: ambientNoiseFloorRef.current,
+        silenceSince: silenceStartRef.current,
+        silenceDurationMs: silenceDurationMsRef.current,
+        speechDetected: speechDetectedRef.current,
+        inTurnFrames: inTurnSpeechFrameCountRef.current,
+        audioCtxState: (audioContextRef as React.MutableRefObject<AudioContext | null>)?.current?.state ?? 'N/A',
+        chunksPerSec: cps,
+      });
+    }, 500);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // ── END DEV DEBUG OVERLAY ─────────────────────────────────────────────
 
   // Bug C fix: flips true ONLY inside TalkingHead's onAudioEnd callback — the
   // canonical "audio actually finished playing" signal. Stays false while
@@ -4428,6 +4483,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         let sum = 0;
         for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
         const avgLevel = sum / input.length;
+        _dbgAvgLevelRef.current = avgLevel; // dev overlay
+        _dbgChunkCountRef.current++;        // dev overlay
         const nowMs = Date.now();
         if (nowMs - micLevelLastUpdateRef.current > 120) {
           micLevelLastUpdateRef.current = nowMs;
@@ -5825,6 +5882,71 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           </div>
         </div>
       )}
+
+      {/* ── DEV DEBUG OVERLAY — remove before production release ── */}
+      <div className="fixed top-2 right-2 z-[999] font-mono text-[10px] select-none" style={{ minWidth: 220 }}>
+        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(0,0,0,0.88)', border: '1px solid rgba(99,102,241,0.5)' }}>
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-3 py-1.5 cursor-pointer"
+            style={{ background: 'rgba(99,102,241,0.25)', borderBottom: debugOpen ? '1px solid rgba(99,102,241,0.3)' : 'none' }}
+            onClick={() => setDebugOpen(o => !o)}
+          >
+            <span className="text-indigo-300 font-bold tracking-wide">DEV MONITOR</span>
+            <span className="text-indigo-400 text-xs">{debugOpen ? '▲' : '▼'}</span>
+          </div>
+          {debugOpen && (() => {
+            const silenceSec = debugStats.silenceSince != null
+              ? ((Date.now() - debugStats.silenceSince) / 1000).toFixed(1)
+              : null;
+            const silenceLimit = (debugStats.silenceDurationMs / 1000).toFixed(1);
+            const wsColor = debugStats.wsState === 'OPEN' ? '#34d399' : debugStats.wsState === 'CONNECTING' ? '#fbbf24' : '#f87171';
+            const levelPct = Math.min(100, (debugStats.avgLevel / Math.max(debugStats.silenceThresh * 3, 0.001)) * 100);
+            return (
+              <div className="px-3 py-2 space-y-1">
+                {/* RAM */}
+                <div className="text-purple-300 font-semibold pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>MEMORY</div>
+                {debugStats.heapUsed >= 0 ? (
+                  <>
+                    <Row label="JS Heap" value={`${debugStats.heapUsed} / ${debugStats.heapTotal} MB`} />
+                    <Row label="Heap Limit" value={`${debugStats.heapLimit} MB`} />
+                    {/* Heap bar */}
+                    <div className="mt-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, (debugStats.heapUsed / Math.max(debugStats.heapTotal, 1)) * 100)}%`, background: debugStats.heapUsed / Math.max(debugStats.heapTotal, 1) > 0.8 ? '#f87171' : '#818cf8' }} />
+                    </div>
+                  </>
+                ) : <Row label="JS Heap" value="N/A (non-Chrome)" color="#94a3b8" />}
+
+                {/* WebSocket */}
+                <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>WEBSOCKET</div>
+                <Row label="State" value={debugStats.wsState} color={wsColor} />
+                <Row label="AudioCtx" value={debugStats.audioCtxState} />
+                <Row label="PCM chunks/s" value={`${debugStats.chunksPerSec}`} />
+
+                {/* VAD */}
+                <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>VAD</div>
+                <Row label="Speech" value={debugStats.speechDetected ? 'YES' : 'no'} color={debugStats.speechDetected ? '#34d399' : '#94a3b8'} />
+                <Row label="InTurn frames" value={`${debugStats.inTurnFrames}`} />
+                <Row label="Level" value={debugStats.avgLevel.toFixed(4)} />
+                <Row label="Threshold" value={debugStats.silenceThresh.toFixed(4)} />
+                <Row label="Ambient" value={debugStats.ambient.toFixed(4)} />
+                {/* Level bar */}
+                <div className="mt-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                  <div className="h-full rounded-full transition-all duration-100"
+                    style={{ width: `${levelPct}%`, background: debugStats.speechDetected ? '#34d399' : '#fbbf24' }} />
+                </div>
+                <Row
+                  label="Silence"
+                  value={silenceSec != null ? `${silenceSec}s / ${silenceLimit}s` : `– / ${silenceLimit}s`}
+                  color={silenceSec != null && parseFloat(silenceSec) > debugStats.silenceDurationMs * 0.7 / 1000 ? '#f87171' : '#94a3b8'}
+                />
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+      {/* ── END DEV DEBUG OVERLAY ── */}
 
       {/* ── Main interview UI ── */}
       <div className="flex h-screen overflow-hidden bg-[#0F1117]">
