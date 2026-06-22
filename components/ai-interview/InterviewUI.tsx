@@ -737,9 +737,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // Poll server system stats every 2s
   useEffect(() => {
+    let sysStatsAvailable = true;
     const fetchSys = async () => {
+      if (!sysStatsAvailable) return;
       try {
         const r = await fetch('/api/v1/debug/system-stats');
+        if (r.status === 404) { sysStatsAvailable = false; return; }
         if (!r.ok) return;
         const d = await r.json();
         setDebugStats(prev => ({
