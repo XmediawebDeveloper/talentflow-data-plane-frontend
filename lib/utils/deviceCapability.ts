@@ -37,8 +37,16 @@ const LOW_CORES = 2;
 const HIGH_CORES = 8;
 const LOW_MEMORY_GB = 2;
 const HIGH_MEMORY_GB = 8;
-// Micro-benchmark ceiling: above this many ms the CPU is too slow for neural VAD.
+// Micro-benchmark ceiling for the 'high' tier (fast modern CPU).
 const BENCH_SLOW_MS = 12;
+// Separate, MUCH more lenient ceiling for neural (Silero) VAD. Silero is tiny
+// (~1.8MB model, ~1ms per 32ms chunk, ~2-5% of one core) — it runs fine on a
+// typical 4-core machine. We only DISABLE it on a genuinely slow CPU, judged
+// by the benchmark rather than core count, so most candidates (4-core) still
+// get accurate neural turn detection. Above this many ms = too slow → fall
+// back to the lightweight amplitude VAD.
+const BENCH_NEURAL_VAD_MAX_MS = 35;
+const NEURAL_VAD_MIN_CORES = 4;
 
 /**
  * Tiny CPU micro-benchmark (~a few ms even on slow machines). Pure arithmetic,
@@ -94,12 +102,23 @@ export function detectDeviceCapability(opts: { runBenchmark?: boolean } = {}): D
   }
   // (everything else stays 'mid')
 
+  // Neural (Silero) VAD is judged SEPARATELY from tier because it is light
+  // enough for most machines — gating it on tier==='high' would deny it to the
+  // majority of candidates who run 4-core systems. Enable it whenever the CPU
+  // has at least NEURAL_VAD_MIN_CORES cores AND the benchmark isn't genuinely
+  // slow. A fast benchmark alone also qualifies a strong 2-core machine.
+  const benchKnown = benchmarkMs !== null;
+  const benchOkForNeural = benchKnown ? benchmarkMs! <= BENCH_NEURAL_VAD_MAX_MS : true;
+  const useNeuralVad =
+    benchOkForNeural && (cores >= NEURAL_VAD_MIN_CORES || (benchKnown && benchmarkMs! <= BENCH_SLOW_MS));
+
   return {
     tier,
     cores,
     memoryGB,
     benchmarkMs,
-    useNeuralVad: tier === 'high',
+    useNeuralVad,
+    // Heavy WebGL/face work scales with tier (these ARE the real CPU hogs).
     use3DAvatar: tier !== 'low',
     useNoiseSuppression: tier !== 'low',
     faceVerifyIntervalMs: tier === 'high' ? 10_000 : tier === 'mid' ? 15_000 : 30_000,

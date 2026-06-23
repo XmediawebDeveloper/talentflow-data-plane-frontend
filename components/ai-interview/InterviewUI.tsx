@@ -22,6 +22,7 @@ import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
 import type { DeviceCapability } from "@/lib/utils/deviceCapability";
+import { createSileroVad } from "@/lib/utils/sileroVad";
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement) => void;
@@ -1923,6 +1924,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const micRecentPeakRef = useRef(0);
   const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level for confident VAD/ASR
   const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this (caps silence-time gain)
+
+  // ── Neural (Silero) VAD — accurate speech detection on capable devices ────
+  // Started only when deviceCapability.useNeuralVad is true. Runs ALONGSIDE the
+  // amplitude VAD as the authoritative "is the candidate speaking now?" signal.
+  // While neuralSpeechActiveRef is true, processAudioChunk keeps the silence
+  // clock reset — so quiet headphone speech is no longer mistaken for silence
+  // and the turn isn't cut mid-answer. The existing silence-clock + hard-cap
+  // still own the actual turn-end timing, so a Silero misfire can't hang a turn.
+  // If Silero fails to load, sileroVadRef stays null and the amplitude VAD runs
+  // exactly as before (graceful fallback).
+  const sileroVadRef = useRef<{ destroy: () => void; isRunning: () => boolean } | null>(null);
+  const neuralVadActiveRef = useRef(false);   // true once Silero is loaded + running
+  const neuralSpeechActiveRef = useRef(false); // true between onSpeechStart/onSpeechEnd
 
   // ── Mic device profile — ONE source of truth for all device-dependent audio
   // handling. The detected type maps to four condition-based knobs:
@@ -4228,6 +4242,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
+    // Tear down the neural VAD for this turn (re-created next recording start).
+    try { sileroVadRef.current?.destroy(); } catch { /* ignore */ }
+    sileroVadRef.current = null;
+    neuralVadActiveRef.current = false;
+    neuralSpeechActiveRef.current = false;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -4343,6 +4362,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
+    // Tear down the neural VAD for this turn (re-created next recording start).
+    try { sileroVadRef.current?.destroy(); } catch { /* ignore */ }
+    sileroVadRef.current = null;
+    neuralVadActiveRef.current = false;
+    neuralSpeechActiveRef.current = false;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -4587,6 +4611,57 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
       mediaStreamRef.current = stream;
 
+      // ── Neural (Silero) VAD — only on capable devices (deviceCapability) ──
+      // Bound to the SAME recording stream. Provides the accurate speech signal
+      // that drives onSpeechStart (turn start) and keeps the silence clock reset
+      // while the candidate is genuinely speaking (see processAudioChunk). Tear
+      // down any prior instance first. Failure → null → amplitude VAD fallback.
+      if (deviceCapability?.useNeuralVad) {
+        try { sileroVadRef.current?.destroy(); } catch { /* ignore */ }
+        sileroVadRef.current = null;
+        neuralVadActiveRef.current = false;
+        neuralSpeechActiveRef.current = false;
+        createSileroVad({
+          stream,
+          onSpeechStart: () => {
+            neuralSpeechActiveRef.current = true;
+            const t = Date.now();
+            // Mirror the amplitude speech-confirm path so PCM streams and the
+            // backend is told speech started — but only when Linda isn't talking.
+            if (isAiSpeakingRef.current || t < playbackEchoGuardUntilRef.current) return;
+            if (!candidateAudioStreamingRef.current) {
+              candidateAudioStreamingRef.current = true;
+              flushPreSpeechAudioToBackend();
+            }
+            speechDetectedRef.current = true;
+            speechDetectedAtRef.current = t;
+            lastMeaningfulAudioAtRef.current = t;
+            silenceStartRef.current = null;
+            questionTimerAwaitingSpeechRef.current = false;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              try { wsRef.current?.send(JSON.stringify({ type: 'speech_started' })); } catch { /* ignore */ }
+            }
+            console.log('[INTERVIEW-DEBUG] Speech DETECTED (neural Silero VAD)');
+          },
+          onSpeechEnd: () => {
+            // Just flip "not speaking" — the existing silence clock then counts
+            // down and ends the turn after the configured window (× device
+            // multiplier). We do NOT call stopRecording here, so a Silero
+            // misfire can never end a turn prematurely.
+            neuralSpeechActiveRef.current = false;
+          },
+        }).then((handle) => {
+          if (handle) {
+            sileroVadRef.current = handle;
+            neuralVadActiveRef.current = true;
+            console.log('[InterviewUI] Neural VAD active (Silero)');
+          } else {
+            neuralVadActiveRef.current = false; // fell back to amplitude VAD
+          }
+        }).catch(() => { neuralVadActiveRef.current = false; });
+      }
+
       // Use native sample rate — 16kHz AudioContext causes silent worklets on some browsers.
       // Downsampling to 16kHz is done manually before sending to backend.
       if (!recordingContextRef.current || recordingContextRef.current.state === 'closed') {
@@ -4713,6 +4788,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (nowMs - micLevelLastUpdateRef.current > 120) {
           micLevelLastUpdateRef.current = nowMs;
           setMicInputLevel(Math.min(1, avgLevel / 0.03));
+        }
+
+        // Neural VAD override: while Silero confirms the candidate is speaking,
+        // keep the silence clock reset so quiet (headset) speech is never
+        // counted as silence and the turn isn't cut mid-answer. This only
+        // SUPPLEMENTS the amplitude logic — the existing silence-timeout still
+        // fires once Silero reports not-speaking AND audio stays low.
+        if (neuralVadActiveRef.current && neuralSpeechActiveRef.current && speechDetectedRef.current) {
+          lastMeaningfulAudioAtRef.current = nowMs;
+          silenceStartRef.current = null;
         }
 
         // ── Encode PCM up-front so warmup / pre-detection audio can also be
@@ -5498,6 +5583,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       audioContextRef.current = null;
       try { recordingContextRef.current?.close(); } catch {}
       recordingContextRef.current = null;
+      try { sileroVadRef.current?.destroy(); } catch {}
+      sileroVadRef.current = null;
       teardownRecordingMedia();
     };
   }, [teardownRecordingMedia]);
