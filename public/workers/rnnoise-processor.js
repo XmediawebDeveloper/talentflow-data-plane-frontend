@@ -35,7 +35,7 @@ function pickMemory(ex, fallback) {
 
 class RNNoiseProcessor extends AudioWorkletProcessor {
   constructor(options) {
-    super(options);
+    super();
 
     // Input ring – accumulates raw mic samples waiting for a full RNN_FRAME
     this._inBuf  = [];
