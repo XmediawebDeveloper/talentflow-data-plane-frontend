@@ -25,6 +25,11 @@ import {
   writeInterviewStep,
   clearInterviewStep,
 } from '@/lib/utils/aiInterviewSessionStore';
+import {
+  detectDeviceCapability,
+  describeCapability,
+  type DeviceCapability,
+} from '@/lib/utils/deviceCapability';
 
 type Step =
   | 'loading'
@@ -96,6 +101,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // interview. null = not in grace period.
   const [fullscreenGraceRemaining, setFullscreenGraceRemaining] = useState<number | null>(null);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
+  // Device tier + feature flags — detected once during the system check so the
+  // interview runs the heavy/accurate path only on capable machines and a
+  // lightweight path on old/low-end systems. See lib/utils/deviceCapability.
+  const [deviceCapability, setDeviceCapability] = useState<DeviceCapability | undefined>(undefined);
 
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
   // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
@@ -567,6 +576,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   };
 
   const handleSystemCheckPassed = () => {
+    // Detect the candidate's device tier ONCE here (system check already gates
+    // entry). The interview then enables heavy features (neural VAD, 3D avatar)
+    // only on 'high' tier and a lightweight path on weaker machines.
+    try {
+      const cap = detectDeviceCapability({ runBenchmark: true });
+      setDeviceCapability(cap);
+      console.log('[Portal] Device capability:', describeCapability(cap));
+    } catch (err) {
+      console.warn('[Portal] Device capability detection failed (using defaults):', err);
+    }
     // Record system check (fire-and-forget)
     candidateAIInterviewService.recordSystemCheck(token, {
       camera: 'granted',
@@ -1323,6 +1342,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={interview?.copy_paste_blocking ?? true}
           onTimerChange={setTimerSnapshot}
+          deviceCapability={deviceCapability}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (

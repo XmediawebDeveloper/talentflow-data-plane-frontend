@@ -95,6 +95,12 @@ const ROMANIZED_TAMIL_MARKERS = new Set([
 function looksRomanizedTamil(text: string): boolean {
   const words = text.toLowerCase().match(/[a-z]+/g) ?? [];
   if (words.length < 2) return false;
+  // Long answers (>40 words) are English interview responses — English vocabulary
+  // naturally contains words ending in Tamil-like suffixes (formula, Kerala,
+  // Australia, gorilla) and the false-positive rate grows with text length.
+  // Only apply the Tamil filter to short texts where a Tamil-only response is
+  // plausible. 40 words ≈ ~30 seconds of speech.
+  if (words.length > 40) return false;
   const markerCount = words.filter(word => ROMANIZED_TAMIL_MARKERS.has(word)).length;
   if (markerCount >= 2) return true;
   const suffixCount = words.filter(word =>

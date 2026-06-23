@@ -21,6 +21,7 @@ import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
+import type { DeviceCapability } from "@/lib/utils/deviceCapability";
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement) => void;
@@ -49,6 +50,9 @@ interface InterviewUIProps {
   voiceVerification?: VoiceVerificationHandle;
   copyPasteBlocking?: boolean;
   onTimerChange?: (state: InterviewTimerSnapshot) => void;
+  /** Detected device tier + feature flags (from the system-check step). When
+   * omitted, the interview assumes a capable device (all features on). */
+  deviceCapability?: DeviceCapability;
 }
 
 interface Message {
@@ -372,7 +376,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability }: InterviewUIProps) {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -1906,6 +1910,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechFrameCountRef = useRef(0);
   const MIN_SPEECH_FRAMES = 3;
 
+  // ── Adaptive mic gain (headset / low-gain mic normalization) ──────────────
+  // autoGainControl is OFF (it distorts levels for ASR), so quiet mics —
+  // wired earbuds, Bluetooth headsets — produce low-amplitude audio. With the
+  // amplitude-based VAD that caused two headphone bugs: (1) speech confirmed
+  // late → opening words dropped, (2) quiet ongoing speech read as silence →
+  // turn auto-cut to the next question mid-answer. We track a slowly-decaying
+  // recent peak and boost both the VAD level AND the PCM sent to ASR toward a
+  // target, bounded so noise can't be over-amplified. Built-in mics already
+  // near the target get gain≈1 (unchanged). Ambient-relative thresholds + the
+  // RNNoise worklet scale with the boost, so noise rejection still holds.
+  const micRecentPeakRef = useRef(0);
+  const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level for confident VAD/ASR
+  const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this (caps silence-time gain)
+
+  // ── Mic device profile — ONE source of truth for all device-dependent audio
+  // handling. The detected type maps to four condition-based knobs:
+  //   (1) gainMax            → software gain ceiling (quiet mics need more)
+  //   (2) echoCancellation   → OFF for headphones (no speaker→mic echo path)
+  //   (3) isBluetooth        → HFP is quietest + laggiest → most lenient knobs
+  //   (4) silenceMultiplier  → stretch the VAD silence window for quiet/laggy
+  //                            mics so a real answer isn't cut off mid-sentence
+  // Built-in mic = strict defaults; wired headset = relaxed; Bluetooth = most
+  // relaxed; unknown = safe middle ground (echo cancellation stays ON).
+  type MicType = 'builtin' | 'wired_headphone' | 'bluetooth' | 'unknown';
+  const micTypeRef = useRef<MicType>('unknown');
+  const micGainMaxRef = useRef(6);            // (1) gain ceiling
+  const micSilenceMultiplierRef = useRef(1);  // (4) silence-window multiplier
+
   // Track the room's baseline energy and the candidate's recent speech peak so
   // quiet headset audio can keep the turn alive, while background office noise
   // still allows the 5s silence timeout to close the turn.
@@ -1970,6 +2002,82 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     micAnalyserRef.current = null;
   }, []);
 
+  // Classify the active mic from its device label. Heuristic (labels vary by
+  // OS/browser/locale) but the common ones are stable. Bluetooth is matched
+  // FIRST and kept distinct from wired headsets because its HFP profile is the
+  // quietest + laggiest and needs the most lenient handling. Falls back to
+  // 'unknown' → safe defaults (echo cancellation ON).
+  const classifyMicType = useCallback((label: string): MicType => {
+    const l = (label || '').toLowerCase();
+    if (!l) return 'unknown';
+    // (3) Bluetooth / hands-free profile — check first (most specific).
+    if (/bluetooth|hands[\s-]?free|\bhfp\b|\bhsp\b|airpod|earpods|galaxy buds|\bbuds\b|\bwh-|\bwf-/.test(l)) {
+      return 'bluetooth';
+    }
+    // Wired headsets / earphones — no speaker→mic acoustic echo path.
+    if (/headset|headphone|earphone|earbud|jabra|\bplantronics\b|\bsennheiser\b/.test(l)) {
+      return 'wired_headphone';
+    }
+    // Built-in / internal mics — laptop speaker echo IS a real path.
+    if (/built[\s-]?in|internal|realtek|macbook|microphone array|digital microphone|intel smart sound|default/.test(l)) {
+      return 'builtin';
+    }
+    return 'unknown';
+  }, []);
+
+  const isHeadphoneType = useCallback(
+    (t: MicType) => t === 'wired_headphone' || t === 'bluetooth',
+    [],
+  );
+
+  // Resolve the per-device profile and set the four condition-based knobs.
+  // Called once on device detection; the hot audio loop reads the refs.
+  const applyMicProfile = useCallback((type: MicType) => {
+    micTypeRef.current = type;
+    switch (type) {
+      case 'bluetooth':
+        // (1) quietest mic → highest gain  (4) HFP latency → longest silence window
+        micGainMaxRef.current = 10;
+        micSilenceMultiplierRef.current = 1.6;
+        break;
+      case 'wired_headphone':
+        micGainMaxRef.current = 9;
+        micSilenceMultiplierRef.current = 1.4;
+        break;
+      case 'builtin':
+        micGainMaxRef.current = 6;
+        micSilenceMultiplierRef.current = 1.0;
+        break;
+      default: // unknown — safe middle ground
+        micGainMaxRef.current = 7;
+        micSilenceMultiplierRef.current = 1.2;
+    }
+    console.log('[InterviewUI] Mic profile applied', {
+      type,
+      gainMax: micGainMaxRef.current,
+      silenceMultiplier: micSilenceMultiplierRef.current,
+      echoCancellation: !isHeadphoneType(type),
+    });
+  }, [isHeadphoneType]);
+
+  // (2) Echo cancellation: OFF for headphones (no speaker→mic echo to cancel;
+  // leaving it on can duck/attenuate the candidate's own quiet speech). ON for
+  // built-in/unknown (laptop speaker echo is real). Uses applyConstraints
+  // (no re-acquire → no permission re-prompt). Best-effort.
+  const tuneTrackForMicType = useCallback(async (track: MediaStreamTrack, micType: MicType) => {
+    if (!isHeadphoneType(micType)) return; // builtin/unknown keep EC on (the acquisition default)
+    try {
+      await track.applyConstraints({
+        echoCancellation: false,
+        noiseSuppression: true,
+        autoGainControl: false,
+      });
+      console.log(`[InterviewUI] ${micType} detected — echo cancellation disabled for clearer near-end speech`);
+    } catch (err) {
+      console.warn('[InterviewUI] applyConstraints for headphone tuning failed (non-fatal):', err);
+    }
+  }, [isHeadphoneType]);
+
   const getSharedRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
     const findSharedTrack = () =>
       webcamStreamRef.current
@@ -1998,8 +2106,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       pinnedAudioDeviceIdRef.current = sharedDeviceId;
     }
 
-    return new MediaStream([sharedTrack.clone()]);
-  }, []);
+    const micType = classifyMicType(sharedTrack.label);
+    applyMicProfile(micType);
+    const cloned = sharedTrack.clone();
+    await tuneTrackForMicType(cloned, micType);
+    return new MediaStream([cloned]);
+  }, [classifyMicType, applyMicProfile, tuneTrackForMicType]);
 
   const getDedicatedRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
     const headsetFriendlyAudio: MediaTrackConstraints = {
@@ -2046,10 +2158,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (actualDeviceId) {
           pinnedAudioDeviceIdRef.current = actualDeviceId;
         }
+        // Detect device type, set its profile (gain/silence/EC), and tune EC.
+        const micType = classifyMicType(liveTrack.label);
+        applyMicProfile(micType);
+        await tuneTrackForMicType(liveTrack, micType);
         console.log('[InterviewUI] Dedicated answer microphone opened', {
           attempt: attempt.label,
           label: liveTrack.label || 'unknown',
           deviceId: actualDeviceId || 'unknown',
+          micType,
         });
         return stream;
       } catch (err) {
@@ -2061,7 +2178,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     throw lastError instanceof Error
       ? lastError
       : new Error('Dedicated microphone unavailable');
-  }, []);
+  }, [classifyMicType, applyMicProfile, tuneTrackForMicType]);
 
   const getRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
     try {
@@ -2253,7 +2370,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   const buildStableLiveTranscriptPreview = useCallback((incomingText: string) => {
     const next = incomingText.replace(/\s+/g, ' ').trim();
-    if (!next || !isTranscriptMeaningful(next)) return "";
+    // Only reject empty or pure-punctuation/symbol text. Do NOT run the full
+    // isTranscriptMeaningful filter here — the accumulated live partial grows
+    // to 200+ words over a long answer and looksRomanizedTamil false-positives
+    // on English words (formula, Kerala, Australia) trigger after ~1 minute,
+    // blanking the display and breaking the VAD silence timer.
+    if (!next || ![...next].some(ch => /\p{L}|\p{N}/u.test(ch))) return "";
     // Keep the live bubble as close as possible to the raw provider/browser
     // transcript. The older prefix-stability logic avoided visible rewrites,
     // but it also dropped legitimate sentence updates when the recognizer
@@ -2626,7 +2748,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // the answer was already committed as a "You" message (the duplicate).
         if (!isRecordingRef.current) break;
         if (liveText.length > 0) {
-          const meaningfulLiveText = isTranscriptMeaningful(liveText);
+          // For live partials, only check that the text has at least one real
+          // character — don't run the full hallucination/Tamil filter here.
+          // The full filter operates on complete Whisper batch output (short
+          // clips). Live partials are accumulated turn text (grows to 200+ words
+          // over a 1-minute answer) — running looksRomanizedTamil on long English
+          // answers causes false positives that clear the display and break the
+          // VAD silence timer, stopping the transcript after ~1 minute.
+          const meaningfulLiveText = [...liveText].some(ch => /\p{L}|\p{N}/u.test(ch));
           if (meaningfulLiveText) {
             const nowMs = Date.now();
             const normalizedLiveText = liveText.replace(/\s+/g, ' ').trim();
@@ -4502,6 +4631,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       speechFrameCountRef.current = 0;
       lastMeaningfulAudioAtRef.current = null;
       speechPeakLevelRef.current = 0;
+      micRecentPeakRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
       ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
       candidateAudioStreamingRef.current = false;
@@ -4553,10 +4683,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           voiceVerifBufferRef.current.push(new Float32Array(input));
         }
 
-        // Compute average absolute amplitude
+        // Compute average absolute amplitude (RAW, pre-gain)
         let sum = 0;
         for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
-        const avgLevel = sum / input.length;
+        const rawLevel = sum / input.length;
+
+        // Skip empty frames — AudioWorklet can produce zero-filled frames.
+        // Checked on the RAW level so boosting can't un-skip a silent frame.
+        if (rawLevel < 0.0001) return;
+
+        // ── Adaptive gain: boost quiet (headset) mics toward a target level ──
+        // Track a slowly-decaying recent peak; gain brings that peak up to the
+        // target, clamped to [1, MIC_GAIN_MAX]. A built-in mic already at/above
+        // target gets gain≈1. The peak floor caps how high gain can climb while
+        // the candidate is silent, so steady noise isn't amplified into a false
+        // trigger. The SAME micGain is applied to the VAD level (below) and the
+        // PCM bytes sent to ASR (pcmEarly), so detection and transcription see
+        // a consistent, audible signal regardless of device.
+        // (1) Gain — ceiling comes from the active device profile.
+        micRecentPeakRef.current = Math.max(rawLevel, micRecentPeakRef.current * 0.995);
+        const micGain = Math.min(
+          micGainMaxRef.current,
+          Math.max(1, MIC_GAIN_TARGET_PEAK / Math.max(micRecentPeakRef.current, MIC_GAIN_PEAK_FLOOR)),
+        );
+        const avgLevel = rawLevel * micGain;
         _dbgAvgLevelRef.current = avgLevel; // dev overlay
         _dbgChunkCountRef.current++;        // dev overlay
         const nowMs = Date.now();
@@ -4564,9 +4714,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           micLevelLastUpdateRef.current = nowMs;
           setMicInputLevel(Math.min(1, avgLevel / 0.03));
         }
-
-        // Skip empty frames — AudioWorklet can produce zero-filled frames
-        if (avgLevel < 0.0001) return;
 
         // ── Encode PCM up-front so warmup / pre-detection audio can also be
         // captured into the ring buffer. The old code returned early on
@@ -4588,9 +4735,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         } else {
           samplesEarly = input;
         }
+        // Apply the same adaptive gain to the PCM sent to ASR so a quiet
+        // headset mic reaches the backend at an audible level (the clamp
+        // handles any overshoot from the boost).
         const pcmEarly = new Int16Array(samplesEarly.length);
         for (let i = 0; i < samplesEarly.length; i++) {
-          pcmEarly[i] = Math.max(-32768, Math.min(32767, samplesEarly[i] * 32768));
+          pcmEarly[i] = Math.max(-32768, Math.min(32767, samplesEarly[i] * micGain * 32768));
         }
 
         // While Linda is mid-speech the mic might still be hot — never buffer
@@ -4788,7 +4938,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
                     : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
                 silenceStartRef.current = silenceSince;
-                if (nowMs - silenceSince > silenceDurationMsRef.current) {
+                // (4) Stretch the silence window for quiet/laggy devices
+                // (headphones, Bluetooth) so a real answer isn't cut off
+                // mid-sentence; built-in mic uses the base value (×1).
+                const effectiveSilenceMs = silenceDurationMsRef.current * micSilenceMultiplierRef.current;
+                if (nowMs - silenceSince > effectiveSilenceMs) {
                   const speechAgeMs =
                     speechDetectedAtRef.current == null ? 0 : nowMs - speechDetectedAtRef.current;
                   if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
@@ -5304,15 +5458,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => clearTimeout(t);
   }, [avatarReady, avatarFailed]);
 
+  // Low-tier device → skip waiting on the heavy 3D avatar: show the static
+  // Linda image immediately and let the interview connect right away (audio
+  // still routes through the mounted TalkingHead). On capable devices the 3D
+  // avatar loads normally.
   useEffect(() => {
-    if (!avatarReady || hasConnectedRef.current) return;
+    if (deviceCapability && deviceCapability.use3DAvatar === false) {
+      setAvatarFailed(true);
+    }
+  }, [deviceCapability]);
+
+  // Connect once the avatar is ready OR has fallen back to the static image.
+  // Previously this fired only on avatarReady — so on a low-end machine where
+  // the 3D avatar hangs past the 12s timeout (→ avatarFailed), the WebSocket
+  // never connected and the interview silently never started. Gating on
+  // avatarFailed too means a slow/failed avatar still launches the interview
+  // (audio + static visual), which is exactly the old-system case.
+  useEffect(() => {
+    if ((!avatarReady && !avatarFailed) || hasConnectedRef.current) return;
     hasConnectedRef.current = true;
     isUnmountedRef.current = false;
     const timer = setTimeout(() => { connect(); }, 300);
     return () => {
       clearTimeout(timer);
     };
-  }, [avatarReady, connect]);
+  }, [avatarReady, avatarFailed, connect]);
 
   // Cleanup on unmount only
   useEffect(() => {

@@ -1,0 +1,117 @@
+/**
+ * Device capability detection for the AI interview.
+ *
+ * Many candidates join from old / low-end machines. Heavy client-side features
+ * (neural VAD, 3D talking-head avatar, RNNoise WASM, frequent face verification)
+ * can overload such systems → dropped audio frames, UI freeze, worse accuracy.
+ *
+ * This module classifies the candidate's device into a tier during the system
+ * check and derives feature flags from it, so the interview runs the HEAVY,
+ * most-accurate path only where the hardware can afford it and a LIGHTWEIGHT
+ * path everywhere else. Detection uses cheap, synchronous browser signals plus
+ * an optional tiny micro-benchmark — it never loads any heavy library to decide.
+ */
+
+export type DeviceTier = 'low' | 'mid' | 'high';
+
+export interface DeviceCapability {
+  tier: DeviceTier;
+  cores: number;
+  /** RAM in GB if the browser exposes it (Chrome only), else null. */
+  memoryGB: number | null;
+  /** ms taken by the micro-benchmark (lower = faster CPU); null if not run. */
+  benchmarkMs: number | null;
+
+  // ── Derived feature flags (read by the interview UI) ──────────────────────
+  /** Silero / neural VAD — only on 'high'. Otherwise amplitude VAD + server EndOfTurn. */
+  useNeuralVad: boolean;
+  /** 3D TalkingHead avatar — off on 'low' (falls back to a static image). */
+  use3DAvatar: boolean;
+  /** RNNoise WASM noise suppression — off on 'low' (server-side denoise covers it). */
+  useNoiseSuppression: boolean;
+  /** Face-verification poll interval — longer on weaker devices to save CPU. */
+  faceVerifyIntervalMs: number;
+}
+
+const LOW_CORES = 2;
+const HIGH_CORES = 8;
+const LOW_MEMORY_GB = 2;
+const HIGH_MEMORY_GB = 8;
+// Micro-benchmark ceiling: above this many ms the CPU is too slow for neural VAD.
+const BENCH_SLOW_MS = 12;
+
+/**
+ * Tiny CPU micro-benchmark (~a few ms even on slow machines). Pure arithmetic,
+ * no allocation, so it measures raw single-core speed without janking the page.
+ * Returns elapsed ms. Uses performance.now() (always available in browsers).
+ */
+export function runCpuMicroBenchmark(iterations = 2_000_000): number {
+  const start = performance.now();
+  let acc = 0;
+  for (let i = 0; i < iterations; i++) {
+    acc += Math.sqrt(i) * 1.0000001;
+  }
+  // Prevent the loop being optimized away.
+  if (acc === -1) console.debug('bench', acc);
+  return performance.now() - start;
+}
+
+/**
+ * Classify the device. Pass `runBenchmark: false` to skip the micro-benchmark
+ * and decide from cores + memory only (instant). The benchmark refines the
+ * tier when core count alone is misleading (e.g. a CPU-throttled old laptop
+ * reporting 8 logical cores).
+ */
+export function detectDeviceCapability(opts: { runBenchmark?: boolean } = {}): DeviceCapability {
+  const runBenchmark = opts.runBenchmark ?? true;
+
+  const cores = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+    ? navigator.hardwareConcurrency
+    : 2;
+  const memoryGB =
+    typeof navigator !== 'undefined' && typeof (navigator as { deviceMemory?: number }).deviceMemory === 'number'
+      ? (navigator as { deviceMemory?: number }).deviceMemory ?? null
+      : null;
+
+  const benchmarkMs = runBenchmark ? runCpuMicroBenchmark() : null;
+
+  // ── Tier decision ─────────────────────────────────────────────────────────
+  // Start optimistic from cores+memory, then DOWNGRADE on any weak signal so a
+  // single strong number can't promote a genuinely slow machine.
+  let tier: DeviceTier = 'mid';
+
+  const coreHigh = cores >= HIGH_CORES;
+  const coreLow = cores <= LOW_CORES;
+  const memHigh = memoryGB === null ? true : memoryGB >= HIGH_MEMORY_GB; // unknown → don't penalize
+  const memLow = memoryGB !== null && memoryGB <= LOW_MEMORY_GB;
+  const benchSlow = benchmarkMs !== null && benchmarkMs > BENCH_SLOW_MS;
+
+  if (coreHigh && memHigh && !benchSlow) {
+    tier = 'high';
+  }
+  if (coreLow || memLow || benchSlow) {
+    tier = 'low';
+  }
+  // (everything else stays 'mid')
+
+  return {
+    tier,
+    cores,
+    memoryGB,
+    benchmarkMs,
+    useNeuralVad: tier === 'high',
+    use3DAvatar: tier !== 'low',
+    useNoiseSuppression: tier !== 'low',
+    faceVerifyIntervalMs: tier === 'high' ? 10_000 : tier === 'mid' ? 15_000 : 30_000,
+  };
+}
+
+/** One-line human summary for logs / the dev monitor. */
+export function describeCapability(cap: DeviceCapability): string {
+  return (
+    `tier=${cap.tier} cores=${cap.cores} ram=${cap.memoryGB ?? '?'}GB ` +
+    `bench=${cap.benchmarkMs?.toFixed(1) ?? '?'}ms ` +
+    `[neuralVad=${cap.useNeuralVad} avatar3d=${cap.use3DAvatar} ` +
+    `rnnoise=${cap.useNoiseSuppression} faceVerify=${cap.faceVerifyIntervalMs / 1000}s]`
+  );
+}
