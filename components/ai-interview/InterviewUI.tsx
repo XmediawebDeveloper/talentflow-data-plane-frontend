@@ -681,6 +681,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
 
   // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
+  // Gate the whole overlay + its /debug/system-stats polling behind an opt-in
+  // so candidates never see it and never trigger the 404 (the endpoint only
+  // exists when the backend runs with DEBUG=True). Enabled in dev builds by
+  // default, or on any build via ?debug=1 (persisted) / ?debug=0 (cleared).
+  const [devMonitorEnabled] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const flag = params.get('debug');
+      if (flag === '1') { window.localStorage.setItem('tf_dev_monitor', '1'); return true; }
+      if (flag === '0') { window.localStorage.removeItem('tf_dev_monitor'); return false; }
+      if (window.localStorage.getItem('tf_dev_monitor') === '1') return true;
+    } catch { /* localStorage blocked — fall through */ }
+    return process.env.NODE_ENV !== 'production';
+  });
   const [debugOpen, setDebugOpen] = useState(true);
   const [debugPos, setDebugPos] = useState({ x: 12, y: 12 });
   const [debugStats, setDebugStats] = useState({
@@ -735,8 +750,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll server system stats every 2s
+  // Poll server system stats every 2s — only when the dev monitor is enabled,
+  // so candidate sessions never hit the (DEBUG-gated) endpoint or log a 404.
   useEffect(() => {
+    if (!devMonitorEnabled) return;
     let sysStatsAvailable = true;
     const fetchSys = async () => {
       if (!sysStatsAvailable) return;
@@ -758,7 +775,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     fetchSys();
     const id = setInterval(fetchSys, 2000);
     return () => clearInterval(id);
-  }, []);
+  }, [devMonitorEnabled]);
 
   // Drag handlers — attached to document while dragging
   const _dbgOnPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -5935,7 +5952,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         </div>
       )}
 
-      {/* ── DEV DEBUG OVERLAY — draggable, remove before production release ── */}
+      {/* ── DEV DEBUG OVERLAY — draggable, opt-in only (?debug=1 or dev build) ── */}
+      {devMonitorEnabled && (
       <div
         className="fixed z-[999] font-mono text-[10px] select-none"
         style={{ left: debugPos.x, top: debugPos.y, minWidth: 230, maxWidth: 260 }}
@@ -6015,6 +6033,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           })()}
         </div>
       </div>
+      )}
       {/* ── END DEV DEBUG OVERLAY ── */}
 
       {/* ── Main interview UI ── */}
