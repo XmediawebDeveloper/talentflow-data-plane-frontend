@@ -559,6 +559,7 @@ const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 5, code: 'architect', label: 'Architect Level (10+ Years)', min_years: 10, max_years: null, sort_order: 5, is_active: true },
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
 ];
+const CUSTOM_EXPERIENCE_VALUE = '__custom_experience__';
 
 const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
   { id: 1, code: 'diploma', label: 'Diploma', level: 1, sort_order: 1, is_active: true },
@@ -932,6 +933,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [educationLevels, setEducationLevels] = useState<EducationLevel[]>(FALLBACK_EDUCATION_LEVELS);
   const [industryTypes, setIndustryTypes] = useState<IndustryType[]>(FALLBACK_INDUSTRY_TYPES);
   const [masterDataLoading, setMasterDataLoading] = useState(false);  // Set to false since we have fallback data
+  const [showCustomExperienceInput, setShowCustomExperienceInput] = useState(false);
 
   // Fetch master data on mount
   useEffect(() => {
@@ -965,6 +967,203 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     fetchMasterData();
   }, []);
+
+  const getExperienceLevelByCode = (value?: string | null): ExperienceLevel | undefined => {
+    const normalized = value?.trim() || '';
+    if (!normalized) return undefined;
+    return experienceLevels.find((level) => level.code === normalized);
+  };
+
+  const inferExperienceRangeFromCustomValue = (value?: string | null): { experienceMin?: number; experienceMax?: number } => {
+    const normalized = value?.toLowerCase().trim() || '';
+    if (!normalized) return {};
+
+    const rangeMatch = normalized.match(/(\d{1,2})\s*(?:-|to|–)\s*(\d{1,2})/);
+    if (rangeMatch) {
+      const first = Number(rangeMatch[1]);
+      const second = Number(rangeMatch[2]);
+      if (!Number.isNaN(first) && !Number.isNaN(second)) {
+        return {
+          experienceMin: Math.min(first, second),
+          experienceMax: Math.max(first, second),
+        };
+      }
+    }
+
+    const plusMatch = normalized.match(/(\d{1,2})\s*(?:\+|plus|or more|and above)/);
+    if (plusMatch) {
+      const years = Number(plusMatch[1]);
+      if (!Number.isNaN(years)) {
+        return { experienceMin: years };
+      }
+    }
+
+    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2})/);
+    if (minimumMatch) {
+      const years = Number(minimumMatch[1]);
+      if (!Number.isNaN(years)) {
+        return { experienceMin: years };
+      }
+    }
+
+    const singleMatch = normalized.match(/(\d{1,2})\s*(?:years?|yrs?)/);
+    if (singleMatch) {
+      const years = Number(singleMatch[1]);
+      if (!Number.isNaN(years)) {
+        return { experienceMin: years };
+      }
+    }
+
+    return {};
+  };
+
+  const resolveExperiencePayload = (value?: string | null) => {
+    const normalized = value?.trim() || '';
+    if (!normalized) {
+      return {
+        jobLevel: undefined,
+        experienceMin: undefined,
+        experienceMax: undefined,
+        isCustom: false,
+      };
+    }
+
+    const experienceLevel = getExperienceLevelByCode(normalized);
+    if (experienceLevel) {
+      return {
+        jobLevel: experienceLevel.code,
+        experienceMin: experienceLevel.min_years ?? undefined,
+        experienceMax: experienceLevel.max_years ?? undefined,
+        isCustom: false,
+      };
+    }
+
+    const { experienceMin, experienceMax } = inferExperienceRangeFromCustomValue(normalized);
+    return {
+      jobLevel: normalized,
+      experienceMin,
+      experienceMax,
+      isCustom: true,
+    };
+  };
+
+  const mapExtractedExperienceValue = (
+    params: {
+      experience_min?: number | string | null;
+      experience_max?: number | string | null;
+      experience_level?: string | null;
+      job_level?: string | null;
+    },
+    jdText: string
+  ): string => {
+    let experienceValue = '';
+
+    const expMin = params.experience_min !== null && params.experience_min !== undefined
+      ? Number(params.experience_min)
+      : null;
+    const expMax = params.experience_max !== null && params.experience_max !== undefined
+      ? Number(params.experience_max)
+      : null;
+
+    const hasExpMin = expMin !== null && !Number.isNaN(expMin);
+    const hasExpMax = expMax !== null && !Number.isNaN(expMax);
+
+    const mapToExperienceCode = (min: number, max: number | null, text: string): string => {
+      if (min >= 10 || (max && max >= 10)) {
+        const jdLower = text.toLowerCase();
+        const isArchitect = jdLower.includes('architect')
+          || jdLower.includes('system design')
+          || jdLower.includes('architecture')
+          || jdLower.includes('technical design')
+          || jdLower.includes('solution design');
+        const isManagement = jdLower.includes('management')
+          || jdLower.includes('leadership')
+          || jdLower.includes('strategic planning')
+          || jdLower.includes('team lead')
+          || jdLower.includes('director')
+          || jdLower.includes('head of');
+
+        if (isArchitect && !isManagement) return 'architect';
+        if (isManagement) return 'management';
+        return 'senior';
+      }
+
+      if (min >= 7 || (max && max >= 7 && min >= 5)) return 'senior';
+      if (min >= 4 || (max && max >= 5 && min >= 3)) return 'mid';
+      if (min >= 2 || (max && max >= 2 && min >= 1)) return 'junior';
+      return 'entry';
+    };
+
+    if (hasExpMin || hasExpMax) {
+      const min = hasExpMin ? expMin! : 0;
+      const max = hasExpMax ? expMax : null;
+      experienceValue = mapToExperienceCode(min, max, jdText);
+    }
+
+    const rawExperienceValue = (params.job_level || params.experience_level || '').trim();
+    if (!experienceValue && rawExperienceValue) {
+      const levelMap: Record<string, string> = {
+        entry: 'entry',
+        entrylevel: 'entry',
+        fresher: 'entry',
+        fresh: 'entry',
+        noexperience: 'entry',
+        graduate: 'entry',
+        trainee: 'entry',
+        junior: 'junior',
+        juniorlevel: 'junior',
+        associate: 'junior',
+        mid: 'mid',
+        midlevel: 'mid',
+        intermediate: 'mid',
+        experienced: 'mid',
+        senior: 'senior',
+        seniorlevel: 'senior',
+        lead: 'senior',
+        teamlead: 'senior',
+        principal: 'senior',
+        architect: 'architect',
+        solutionarchitect: 'architect',
+        technicalarchitect: 'architect',
+        systemarchitect: 'architect',
+        architectlevel: 'architect',
+        management: 'management',
+        manager: 'management',
+        director: 'management',
+        head: 'management',
+        executive: 'management',
+        vp: 'management',
+        cto: 'management',
+        ceo: 'management',
+        managementlevel: 'management',
+      };
+
+      const normalizedLevel = rawExperienceValue.toLowerCase().replace(/[^a-z]/g, '');
+      experienceValue = levelMap[normalizedLevel] || '';
+
+      if (!experienceValue) {
+        if (normalizedLevel.includes('entry')) experienceValue = 'entry';
+        else if (normalizedLevel.includes('junior')) experienceValue = 'junior';
+        else if (normalizedLevel.includes('mid')) experienceValue = 'mid';
+        else if (normalizedLevel.includes('senior')) experienceValue = 'senior';
+        else if (normalizedLevel.includes('architect')) experienceValue = 'architect';
+        else if (normalizedLevel.includes('management') || normalizedLevel.includes('manager')) experienceValue = 'management';
+      }
+
+      if (!experienceValue) {
+        return rawExperienceValue;
+      }
+    }
+
+    return experienceValue;
+  };
+
+  const selectedExperienceLevel = getExperienceLevelByCode(extractedData.experience);
+  const experienceSelectValue = selectedExperienceLevel
+    ? selectedExperienceLevel.code
+    : showCustomExperienceInput
+      ? CUSTOM_EXPERIENCE_VALUE
+      : '';
 
   // Check max_jobs quota on mount
   useEffect(() => {
@@ -1183,37 +1382,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Helper function to process extracted params from generation response
     // This pre-fills step 2 form with salary, skills, etc. extracted by backend
-    const processExtractedParams = (params: any) => {
+    const processExtractedParams = (params: any, experienceSourceText: string) => {
       console.log('[TalentFlow] Processing extracted params from generation:', params);
 
-      // Map experience - prioritize explicit min/max values over level mapping
-      let expValue = '';
-      if (params.experience_min !== null && params.experience_min !== undefined) {
-        if (params.experience_max !== null && params.experience_max !== undefined) {
-          expValue = `${params.experience_min}-${params.experience_max}`;
-        } else {
-          expValue = `${params.experience_min}+`;
-        }
-      } else if (params.experience_max !== null && params.experience_max !== undefined) {
-        expValue = `0-${params.experience_max}`;
-      }
-
-      // Fall back to experience_level mapping if no min/max
-      if (!expValue && params.experience_level) {
-        const levelMap: Record<string, string> = {
-          'entry': '0-2',
-          'junior': '2-5',
-          'mid': '5-7',
-          'senior': '7-10',
-          'architect': '10+',
-          'management': '10+',
-        };
-        const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
-        expValue = levelMap[normalizedLevel] || '';
-      }
+      const expValue = mapExtractedExperienceValue(params, experienceSourceText);
 
       // When in edit mode, preserve existing values if extraction returns empty arrays
       const isEditMode = !!editingId;
+      const nextExperienceValue = expValue || (isEditMode ? extractedData.experience : '');
+
+      setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
 
       setExtractedData(prev => ({
         ...prev,
@@ -1260,12 +1438,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         if (response?.description) {
           if (response.title) {
             setJobTitle(response.title);
-          }
+        }
           setGeneratedJD(response.description);
 
           // Pre-fill step 2 form with extracted params (salary, skills, etc.)
           if (response.extracted_params) {
-            processExtractedParams(response.extracted_params);
+            processExtractedParams(response.extracted_params, response.description);
           }
 
           toast.success({
@@ -1330,7 +1508,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             // Pre-fill step 2 form with extracted params (salary, skills, etc.)
             if (response.extracted_params) {
               console.log('[TalentFlow] Extracted params from stream:', response.extracted_params);
-              processExtractedParams(response.extracted_params);
+              processExtractedParams(response.extracted_params, response.description);
 
               toast.success({
                 title: 'JD Generated Successfully',
@@ -1504,10 +1682,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         job_type: params.job_type
       });
 
-      // Map API response to component's ExtractedData format
-      // Map experience to dropdown codes: '0-1', '1-3', '3-5', '5-7', '7-10', '10+'
-      let experienceValue = '';
-
       // Convert experience values to numbers (API might return strings)
       const expMin = params.experience_min !== null && params.experience_min !== undefined
         ? Number(params.experience_min)
@@ -1529,127 +1703,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         hasExpMax
       });
 
-      // Map experience to predefined levels based on rules:
-      // Entry Level (0-2 Years), Junior Level (2-4 Years), Mid Level (5-7 Years),
-      // Senior Level (7-10 Years), Architect Level (10+), Management Level (10+)
-      const mapToExperienceCode = (min: number, max: number | null, jdText: string): string => {
-        console.log('[TalentFlow] mapToExperienceCode input:', { min, max });
-
-        // Check for 10+ years - need to determine if Architect or Management
-        if (min >= 10 || (max && max >= 10)) {
-          const jdLower = jdText.toLowerCase();
-          // Check for architecture-related keywords
-          const isArchitect = jdLower.includes('architect') ||
-                              jdLower.includes('system design') ||
-                              jdLower.includes('architecture') ||
-                              jdLower.includes('technical design') ||
-                              jdLower.includes('solution design');
-          // Check for management-related keywords
-          const isManagement = jdLower.includes('management') ||
-                               jdLower.includes('leadership') ||
-                               jdLower.includes('strategic planning') ||
-                               jdLower.includes('team lead') ||
-                               jdLower.includes('director') ||
-                               jdLower.includes('head of');
-
-          if (isArchitect && !isManagement) return 'architect';
-          if (isManagement) return 'management';
-          return 'senior'; // Default to senior if 10+ but no specific keywords
-        }
-
-        // 7-10 years = Senior Level
-        if (min >= 7 || (max && max >= 7 && min >= 5)) return 'senior';
-
-        // 4-7 years = Mid Level
-        // NOTE: threshold is 4 (not 5) — a JD requiring "4 years of experience" is
-        // asking for someone at or beyond the Junior ceiling, which is Mid-level.
-        if (min >= 4 || (max && max >= 5 && min >= 3)) return 'mid';
-
-        // 2-3 years = Junior Level
-        if (min >= 2 || (max && max >= 2 && min >= 1)) return 'junior';
-
-        // 0-2 years = Entry Level
-        return 'entry';
-      };
-
-      if (hasExpMin || hasExpMax) {
-        const min = hasExpMin ? expMin! : 0;
-        const max = hasExpMax ? expMax : null;
-        experienceValue = mapToExperienceCode(min, max, jdText);
-        console.log('[TalentFlow] Mapped experience:', { min, max, code: experienceValue });
-      }
-
-      // Fall back to experience_level mapping if no min/max
-      if (!experienceValue && params.experience_level) {
-        const levelMap: Record<string, string> = {
-          // Entry Level keywords
-          'entry': 'entry',
-          'entrylevel': 'entry',
-          'fresher': 'entry',
-          'fresh': 'entry',
-          'noexperience': 'entry',
-          'graduate': 'entry',
-          'trainee': 'entry',
-          // Junior Level keywords
-          'junior': 'junior',
-          'juniorlevel': 'junior',
-          'associate': 'junior',
-          // Mid Level keywords
-          'mid': 'mid',
-          'midlevel': 'mid',
-          'intermediate': 'mid',
-          'experienced': 'mid',
-          // Senior Level keywords
-          'senior': 'senior',
-          'seniorlevel': 'senior',
-          'lead': 'senior',
-          'teamlead': 'senior',
-          'principal': 'senior',
-          // Architect Level keywords
-          'architect': 'architect',
-          'solutionarchitect': 'architect',
-          'technicalarchitect': 'architect',
-          'systemarchitect': 'architect',
-          'architectlevel': 'architect',
-          // Management Level keywords
-          'management': 'management',
-          'manager': 'management',
-          'director': 'management',
-          'head': 'management',
-          'executive': 'management',
-          'vp': 'management',
-          'cto': 'management',
-          'ceo': 'management',
-          'managementlevel': 'management',
-        };
-        // Handle various formats like "mid", "Mid", "Mid Level", "mid-level", "mid_level"
-        const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
-        experienceValue = levelMap[normalizedLevel] || '';
-
-        // If still not found, try to extract the base level from the string
-        if (!experienceValue) {
-          if (normalizedLevel.includes('entry')) experienceValue = 'entry';
-          else if (normalizedLevel.includes('junior')) experienceValue = 'junior';
-          else if (normalizedLevel.includes('mid')) experienceValue = 'mid';
-          else if (normalizedLevel.includes('senior')) experienceValue = 'senior';
-          else if (normalizedLevel.includes('architect')) experienceValue = 'architect';
-          else if (normalizedLevel.includes('management') || normalizedLevel.includes('manager')) experienceValue = 'management';
-        }
-
-        if (experienceValue) {
-          console.log('[TalentFlow] Mapped experience from level:', { level: params.experience_level, code: experienceValue });
-        }
-      }
-
-      // Final fallback: use experience_level directly if it's a valid code
-      if (!experienceValue && params.experience_level) {
-        const validCodes = ['entry', 'junior', 'mid', 'senior', 'architect', 'management'];
-        const directCode = params.experience_level.toLowerCase();
-        if (validCodes.includes(directCode)) {
-          experienceValue = directCode;
-          console.log('[TalentFlow] Using experience_level directly:', experienceValue);
-        }
-      }
+      const experienceValue = mapExtractedExperienceValue(
+        {
+          experience_min: params.experience_min,
+          experience_max: params.experience_max,
+          experience_level: params.experience_level,
+          job_level: params.job_level,
+        },
+        jdText
+      );
 
       // Log if still no experience extracted
       if (!experienceValue) {
@@ -1812,6 +1874,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         codingRequired: params.coding_required === true || (isEditMode ? extractedData.codingRequired : false),
         suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? extractedData.suggestedLanguages : []),
       };
+      const extractionExperiencePayload = resolveExperiencePayload(extraction.experience);
+      setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 
       console.log('[TalentFlow] Final extracted data being set:', {
         experience: extraction.experience,
@@ -1873,8 +1937,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         must_have_comments: extraction.mustHaveComments,
         nice_to_have_comments: extraction.niceToHaveComments,
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
-        experience_min: hasExpMin ? params.experience_min : undefined,
-        experience_max: hasExpMax ? params.experience_max : undefined,
+        experience_min: hasExpMin ? params.experience_min : extractionExperiencePayload.experienceMin,
+        experience_max: hasExpMax ? params.experience_max : extractionExperiencePayload.experienceMax,
         industry_type: extraction.industryType || undefined,
         salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
@@ -1887,7 +1951,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Coding assessment fields
         coding_required: extraction.codingRequired,
         supported_languages: extraction.suggestedLanguages,
-        job_level: extraction.experience || undefined,
+        job_level: extractionExperiencePayload.jobLevel,
         locations: (extraction.locations || []).map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
@@ -2747,23 +2811,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
-      // Parse experience for saving - look up code in experienceLevels array
-      let experienceMin: number | undefined;
-      let experienceMax: number | undefined;
-      if (extractedData.experience) {
-        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
-        if (experienceLevel) {
-          experienceMin = experienceLevel.min_years;
-          experienceMax = experienceLevel.max_years || undefined;
-          console.log('[DEBUG] Experience code lookup:', {
-            code: extractedData.experience,
-            min_years: experienceMin,
-            max_years: experienceMax
-          });
-        } else {
-          console.warn('[DEBUG] Experience code not found in levels:', extractedData.experience);
-        }
-      }
+      const experiencePayload = resolveExperiencePayload(extractedData.experience);
+      const experienceMin = experiencePayload.experienceMin;
+      const experienceMax = experiencePayload.experienceMax;
 
       const jdData = {
         title: jobTitle.trim(),
@@ -2792,7 +2842,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Coding assessment fields
         coding_required: extractedData.codingRequired,
         supported_languages: extractedData.suggestedLanguages,
-        job_level: extractedData.experience || undefined,
+        job_level: experiencePayload.jobLevel,
         locations: (extractedData.locations || []).map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
@@ -2852,8 +2902,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Helper function to get experience label from master data
   const getExperienceLabel = (code: string): string => {
     if (!code) return 'Not specified';
-    const level = experienceLevels.find(l => l.code === code);
-    return level?.label || code.charAt(0).toUpperCase() + code.slice(1) + ' Level';
+    const normalized = code.trim();
+    const level = getExperienceLevelByCode(normalized);
+    return level?.label || normalized;
   };
 
   // Helper function to get education label from master data
@@ -2971,23 +3022,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsPublishing(true);
 
     try {
-      // Parse experience values - look up code in experienceLevels array
-      let experienceMin: number | undefined;
-      let experienceMax: number | undefined;
-      if (extractedData.experience) {
-        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
-        if (experienceLevel) {
-          experienceMin = experienceLevel.min_years;
-          experienceMax = experienceLevel.max_years || undefined;
-          console.log('[DEBUG] Experience code for publish:', {
-            code: extractedData.experience,
-            min_years: experienceMin,
-            max_years: experienceMax
-          });
-        } else {
-          console.warn('[DEBUG] Experience code not found for publish:', extractedData.experience);
-        }
-      }
+      const experiencePayload = resolveExperiencePayload(extractedData.experience);
+      const experienceMin = experiencePayload.experienceMin;
+      const experienceMax = experiencePayload.experienceMax;
 
       // For manual JD mode: detect if the description lacks markdown formatting
       // (e.g., user resumed an existing draft and went straight to step 3 publish).
@@ -3049,7 +3086,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
-        job_level: extractedData.experience || undefined,
+        job_level: experiencePayload.jobLevel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
@@ -3296,23 +3333,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsSavingDraft(true);
 
     try {
-      // Parse experience values - look up code in experienceLevels array
-      let experienceMin: number | undefined;
-      let experienceMax: number | undefined;
-      if (extractedData.experience) {
-        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
-        if (experienceLevel) {
-          experienceMin = experienceLevel.min_years;
-          experienceMax = experienceLevel.max_years || undefined;
-          console.log('[DEBUG] Experience code for draft:', {
-            code: extractedData.experience,
-            min_years: experienceMin,
-            max_years: experienceMax
-          });
-        } else {
-          console.warn('[DEBUG] Experience code not found for draft:', extractedData.experience);
-        }
-      }
+      const experiencePayload = resolveExperiencePayload(extractedData.experience);
+      const experienceMin = experiencePayload.experienceMin;
+      const experienceMax = experiencePayload.experienceMax;
 
       // Build the JD data for backend
       // For AI mode: use generated JD, or AI prompt as placeholder, or empty string
@@ -3341,7 +3364,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
-        job_level: extractedData.experience || undefined,
+        job_level: experiencePayload.jobLevel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
@@ -3575,6 +3598,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const experienceValue = effectiveEditingJD.job_level || mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
         // Restore industry type from saved draft
         const industryValue = effectiveEditingJD.industry_type || '';
+        setShowCustomExperienceInput(Boolean(experienceValue && !getExperienceLevelByCode(experienceValue)));
 
         console.log('[DEBUG] Loading effectiveEditingJD data:');
         console.log('[DEBUG] - experience_min from API:', effectiveEditingJD.experience_min);
@@ -4555,12 +4579,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div>
                   <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Experience <span className="text-red-500">*</span></h3>
                   <select
-                    value={extractedData.experience}
+                    value={experienceSelectValue}
                     onChange={(e) => {
-                      setExtractedData(prev => ({ ...prev, experience: e.target.value }));
+                      const nextValue = e.target.value;
+                      if (nextValue === CUSTOM_EXPERIENCE_VALUE) {
+                        setShowCustomExperienceInput(true);
+                        setExtractedData(prev => ({
+                          ...prev,
+                          experience: getExperienceLevelByCode(prev.experience) ? '' : prev.experience,
+                        }));
+                        markExtractedDataModified();
+                        return;
+                      }
+
+                      setShowCustomExperienceInput(false);
+                      setExtractedData(prev => ({ ...prev, experience: nextValue }));
                       markExtractedDataModified();
                       // Clear validation error when user makes a selection
-                      if (e.target.value) {
+                      if (nextValue) {
                         setValidationErrors(prev => ({ ...prev, experience: undefined }));
                       }
                     }}
@@ -4573,7 +4609,27 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {experienceLevels.map((level) => (
                       <option key={level.id} value={level.code}>{level.label}</option>
                     ))}
+                    <option value={CUSTOM_EXPERIENCE_VALUE}>Custom experience</option>
                   </select>
+                  {showCustomExperienceInput && (
+                    <input
+                      type="text"
+                      value={selectedExperienceLevel ? '' : extractedData.experience}
+                      onChange={(e) => {
+                        setExtractedData(prev => ({ ...prev, experience: e.target.value }));
+                        markExtractedDataModified();
+                        if (e.target.value.trim()) {
+                          setValidationErrors(prev => ({ ...prev, experience: undefined }));
+                        }
+                      }}
+                      placeholder="Enter custom experience, e.g. 3-5 years in SaaS"
+                      maxLength={50}
+                      className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
+                        validationErrors.experience ? 'border-red-500' : 'border-gray-200'
+                      } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isRegenerating}
+                    />
+                  )}
                   {validationErrors.experience && (
                     <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />

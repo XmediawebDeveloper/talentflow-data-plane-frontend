@@ -1168,7 +1168,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {job.experience && (
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span>{job.experience} years</span>
+                            <span>{job.experience}</span>
                           </div>
                         )}
                         {job.postedDate && (
@@ -1491,7 +1491,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           {job.experience && (
                             <span className="flex items-center gap-1.5">
                               <TrendingUp className="w-4 h-4 text-gray-400" />
-                              {job.experience} years
+                              {job.experience}
                             </span>
                           )}
                           {job.postedDate && (

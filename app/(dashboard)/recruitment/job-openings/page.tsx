@@ -10,6 +10,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -118,7 +119,11 @@ export default function JobOpeningsPage() {
         requiredMatch: jd.required_match || 70,
         department: jd.department,
         industry_type: jd.industry_type,
-        experience: jd.experience_required || (jd.experience_min && jd.experience_max ? `${jd.experience_min}-${jd.experience_max}` : jd.experience_min ? `${jd.experience_min}+` : undefined),
+        experience: formatJobExperienceText({
+          jobLevel: jd.job_level || jd.experience_level,
+          experienceMin: jd.experience_min,
+          experienceMax: jd.experience_max,
+        }),
         experience_min: jd.experience_min,
         experience_max: jd.experience_max,
         applicants: jd.applicants_count || 0,
@@ -133,6 +138,7 @@ export default function JobOpeningsPage() {
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
         currentVersion: jd.current_version, // For republished status
+        experience_level: jd.job_level || jd.experience_level,
       }));
 
       setJobs(convertedJobs);
