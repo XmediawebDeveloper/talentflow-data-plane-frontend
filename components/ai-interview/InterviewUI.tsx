@@ -5537,6 +5537,49 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     console.log(`[IV-DIAG] avatarReady=${avatarReady} avatarFailed=${avatarFailed} ts=${new Date().toISOString()}`);
   }, [avatarReady, avatarFailed]);
 
+  // ── AudioContext unlock safety-net ────────────────────────────────────────
+  // Chrome's autoplay policy can leave the shared 24kHz AudioContext SUSPENDED
+  // (especially on the resume entry-path, where it's created outside a gesture).
+  // A suspended context = Linda's TTS never plays → "she only speaks after a
+  // refresh". This installs a one-time listener that resumes the context on the
+  // candidate's FIRST interaction (pointer/key/touch) with the interview screen,
+  // guaranteeing it's 'running' before/at Linda's first audio. Self-removes once
+  // resumed. Polls briefly too, in case the context is created slightly later.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let done = false;
+    const tryResume = () => {
+      const ctx = (window as InterviewWindow).__interviewAudioContext as AudioContext | undefined;
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(
+          () => console.log('[IV-DIAG] AudioContext resumed via gesture, state:', ctx.state),
+          () => { /* ignore — will retry on next gesture */ },
+        );
+      }
+      if (ctx && ctx.state === 'running') {
+        done = true;
+        window.removeEventListener('pointerdown', tryResume);
+        window.removeEventListener('keydown', tryResume);
+        window.removeEventListener('touchstart', tryResume);
+      }
+    };
+    window.addEventListener('pointerdown', tryResume);
+    window.addEventListener('keydown', tryResume);
+    window.addEventListener('touchstart', tryResume);
+    // Also attempt immediately + a few times early (covers the case where the
+    // context was already unlocked by the start-button gesture).
+    tryResume();
+    const iv = setInterval(() => { if (done) { clearInterval(iv); return; } tryResume(); }, 500);
+    const stop = setTimeout(() => clearInterval(iv), 10000);
+    return () => {
+      clearInterval(iv);
+      clearTimeout(stop);
+      window.removeEventListener('pointerdown', tryResume);
+      window.removeEventListener('keydown', tryResume);
+      window.removeEventListener('touchstart', tryResume);
+    };
+  }, []);
+
   // Low-tier device → skip waiting on the heavy 3D avatar: show the static
   // Linda image immediately and let the interview connect right away (audio
   // still routes through the mounted TalkingHead). On capable devices the 3D
