@@ -42,6 +42,25 @@ export function installTfjsRejectionGuard(): void {
       event.preventDefault();
       // eslint-disable-next-line no-console
       console.warn('[TFJS-Guard] Swallowed TF.js backend crash:', msg || '(no message)');
+      return;
+    }
+
+    // Browser-EXTENSION noise (NOT our code): the classic chrome.runtime error
+    //   "A listener indicated an asynchronous response by returning true, but
+    //    the message channel closed before a response was received"
+    // thrown by password managers / ad-blockers / Grammarly etc. when their
+    // content-script message port closes before responding. It's harmless but
+    // spams the console (more so when the page is slow/reloading). We can't fix
+    // the extension, but we can stop it polluting OUR console. Matched by its
+    // exact, stable wording so we never swallow a real app rejection.
+    const looksLikeExtensionMessageChannel =
+      msg.includes('message channel closed before a response was received') ||
+      msg.includes('listener indicated an asynchronous response by returning true');
+
+    if (looksLikeExtensionMessageChannel) {
+      event.preventDefault();
+      // Silent — this is third-party extension noise, not our concern. (No
+      // console.warn, to avoid replacing one noisy line with another.)
     }
   });
 }

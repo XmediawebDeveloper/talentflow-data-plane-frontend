@@ -22,6 +22,10 @@ import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
 import type { DeviceCapability } from "@/lib/utils/deviceCapability";
+// Side-effect import: arms the global unhandledrejection guard that silences
+// TF.js backend crashes AND benign browser-extension "message channel closed"
+// noise. Idempotent — safe even though face-verification also imports it.
+import "@/lib/tfjs-rejection-guard";
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement) => void;
