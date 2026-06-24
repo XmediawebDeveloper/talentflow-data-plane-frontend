@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
 import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -94,11 +95,11 @@ function JobDetailsContent() {
         requiredMatch: 70,
         department: data.department,
         industry_type: data.industry_type,
-        experience: data.experience_min && data.experience_max
-          ? `${data.experience_min}-${data.experience_max} years`
-          : data.experience_min
-            ? `${data.experience_min}+ years`
-            : undefined,
+        experience: formatJobExperienceText({
+          jobLevel: data.job_level || data.experience_level,
+          experienceMin: data.experience_min,
+          experienceMax: data.experience_max,
+        }),
         applicants: data.applicants_count || 0,
         description: data.description,
         skills: data.must_have_skills || [],

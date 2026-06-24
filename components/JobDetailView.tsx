@@ -32,6 +32,7 @@ import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentI
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
+import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
@@ -1071,19 +1072,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Experience Level */}
                 {job.experience_level && (
                   <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
-                    {(() => {
-                      const label =
-                        job.experience_level === 'entry' || job.experience_level === 'entry_level' ? 'Entry Level' :
-                        job.experience_level === 'junior' || job.experience_level === 'junior_level' ? 'Junior' :
-                        job.experience_level === 'mid' || job.experience_level === 'mid_level' ? 'Mid Level' :
-                        job.experience_level === 'senior' || job.experience_level === 'senior_level' ? 'Senior' :
-                        job.experience_level === 'architect' || job.experience_level === 'architect_level' ? 'Architect' :
-                        job.experience_level === 'management' || job.experience_level === 'management_level' ? 'Management' :
-                        job.experience_level === 'lead' ? 'Lead' :
-                        job.experience_level === 'executive' ? 'Executive' :
-                        job.experience_level;
-                      return job.experience ? `${label} (${job.experience})` : label;
-                    })()}
+                    {formatJobExperienceBadge({
+                      jobLevel: job.experience_level,
+                      experienceText: job.experience,
+                    })}
                   </span>
                 )}
 
