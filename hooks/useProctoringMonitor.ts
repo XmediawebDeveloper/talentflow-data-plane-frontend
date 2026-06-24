@@ -518,7 +518,7 @@ export function useProctoringMonitor({
   }, []);
 
   // ==================== MULTIPLE FACES DETECTION ====================
-  const FACE_DETECTION_INTERVAL = 5000; // Check every 5 seconds
+  const FACE_DETECTION_INTERVAL = 3000; // Check every 3 seconds
   // Model weight locations — tried in order until one succeeds
   const FACE_API_MODEL_URLS = [
     '/models',                                                                           // 1. Bundled locally (public/models/) — no network needed
@@ -543,27 +543,53 @@ export function useProctoringMonitor({
 
     video.play().then(async () => {
       try {
-        // Shared face-count handler — used by both Path A and Path B
-        // Tracks consecutive "no face" frames to avoid false positives on brief
-        // occlusions (e.g. user momentarily looks away for <15 s)
+        // Shared face-count handler — used by both Path A and Path B.
+        // We still debounce brief occlusions, but the window is short enough
+        // that deliberate face covering is recorded reliably.
         let consecutiveNoFace = 0;
-        const NO_FACE_THRESHOLD = 3; // 3 × 5 s = 15 s before emitting face_missing
+        let consecutiveDetectionFailures = 0;
+        const NO_FACE_THRESHOLD = 2; // 2 × 3 s = 6 s before emitting face_missing
+        const DETECTION_FAILURE_THRESHOLD = 2; // Treat repeated detector failures as face missing
+        const MIN_FACE_SCORE = 0.7;
 
-        const handleFaceCount = (count: number, method: string) => {
-          if (count >= 2) {
+        const resetFaceMissingState = () => {
+          consecutiveNoFace = 0;
+          consecutiveDetectionFailures = 0;
+        };
+
+        const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, any>) => {
+          consecutiveNoFace++;
+          consecutiveDetectionFailures = 0;
+          if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
             consecutiveNoFace = 0;
+            emitEventRef.current('face_missing', { method, reason, ...extraDetails });
+            console.log(`[PROCTORING] Face missing (${method}, ${reason})`);
+          }
+        };
+
+        const handleFaceCount = (
+          count: number,
+          method: string,
+          extraDetails?: Record<string, any>,
+        ) => {
+          if (count >= 2) {
+            resetFaceMissingState();
             emitEventRef.current('multiple_faces', { face_count: count, method });
             console.log(`[PROCTORING] Multiple faces: ${count} (${method})`);
           } else if (count === 0) {
-            consecutiveNoFace++;
-            if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
-              consecutiveNoFace = 0; // reset so next window restarts the count
-              emitEventRef.current('face_missing', { method });
-              console.log(`[PROCTORING] Face missing (${method})`);
-            }
+            maybeEmitFaceMissing(method, extraDetails?.reason || 'no_face_detected', extraDetails);
           } else {
-            // Exactly 1 face — normal state, reset counter
-            consecutiveNoFace = 0;
+            // Exactly 1 face — normal state, reset counters
+            resetFaceMissingState();
+          }
+        };
+
+        const handleDetectionFailure = (method: string, error: unknown) => {
+          consecutiveDetectionFailures++;
+          if (consecutiveDetectionFailures >= DETECTION_FAILURE_THRESHOLD) {
+            maybeEmitFaceMissing(method, 'detection_failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         };
 
@@ -580,7 +606,9 @@ export function useProctoringMonitor({
             try {
               const faces = await detector.detect(faceVideoRef.current);
               handleFaceCount(faces.length, 'native');
-            } catch { /* low-quality frames — ignore */ }
+            } catch (error) {
+              handleDetectionFailure('native', error);
+            }
           }, FACE_DETECTION_INTERVAL);
 
           console.log('[PROCTORING] Face detection started (native FaceDetector — Chrome/Edge)');
@@ -621,8 +649,18 @@ export function useProctoringMonitor({
           if (!isMonitoringRef.current || !faceVideoRef.current) return;
           try {
             const detections = await faceapi.detectAllFaces(faceVideoRef.current, detectorOptions);
-            handleFaceCount(detections.length, 'face-api.js');
-          } catch { /* low-quality frames — ignore */ }
+            const confidentDetections = detections.filter(
+              detection => (typeof detection.score === 'number' ? detection.score >= MIN_FACE_SCORE : true),
+            );
+
+            handleFaceCount(confidentDetections.length, 'face-api.js', {
+              reason: confidentDetections.length === 0 && detections.length > 0 ? 'low_confidence_face' : 'no_face_detected',
+              raw_face_count: detections.length,
+              confident_face_count: confidentDetections.length,
+            });
+          } catch (error) {
+            handleDetectionFailure('face-api.js', error);
+          }
         }, FACE_DETECTION_INTERVAL);
 
         console.log('[PROCTORING] Face detection started (face-api.js — Firefox/Safari/Opera compatible)');
