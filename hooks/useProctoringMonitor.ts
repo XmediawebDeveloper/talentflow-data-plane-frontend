@@ -38,6 +38,12 @@ const isMobileDevice = (): boolean => {
 // ── Constants ────────────────────────────────────────────────────────────────
 const BACKEND_FLUSH_INTERVAL = 5000; // ms — batch-flush proctoring events to backend
 const VIDEO_CHECK_INTERVAL = 500;    // ms — sample video frames at 2 FPS for obstruction detection
+const FACE_DETECTION_INTERVAL = 3000; // ms — sample face visibility every 3 seconds
+const FACE_API_MODEL_URLS = [
+  '/models',                                                                         // 1. Bundled locally (public/models/) — no network needed
+  'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights',       // 2. jsDelivr CDN
+  'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/0.22.2/weights', // 3. GitHub raw fallback
+] as const;
 
 const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   tab_switch:                5000,
@@ -518,13 +524,6 @@ export function useProctoringMonitor({
   }, []);
 
   // ==================== MULTIPLE FACES DETECTION ====================
-  const FACE_DETECTION_INTERVAL = 3000; // Check every 3 seconds
-  // Model weight locations — tried in order until one succeeds
-  const FACE_API_MODEL_URLS = [
-    '/models',                                                                           // 1. Bundled locally (public/models/) — no network needed
-    'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights',         // 2. jsDelivr CDN
-    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/0.22.2/weights',   // 3. GitHub raw fallback
-  ];
 
   const setupFaceDetection = useCallback(() => {
     const currentStream = streamRef.current;
@@ -557,7 +556,7 @@ export function useProctoringMonitor({
           consecutiveDetectionFailures = 0;
         };
 
-        const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, any>) => {
+        const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, unknown>) => {
           consecutiveNoFace++;
           consecutiveDetectionFailures = 0;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
@@ -570,7 +569,7 @@ export function useProctoringMonitor({
         const handleFaceCount = (
           count: number,
           method: string,
-          extraDetails?: Record<string, any>,
+          extraDetails?: Record<string, unknown>,
         ) => {
           if (count >= 2) {
             resetFaceMissingState();
@@ -595,7 +594,19 @@ export function useProctoringMonitor({
 
         // ── Path A: Native FaceDetector (Chrome/Edge, no model download) ──
         if ('FaceDetector' in window) {
-          const FaceDetectorAPI = (window as any).FaceDetector;
+          type NativeFaceDetector = {
+            detect: (input: HTMLVideoElement) => Promise<ArrayLike<unknown>>;
+          };
+          type NativeFaceDetectorCtor = new (options: {
+            fastMode?: boolean;
+            maxDetectedFaces?: number;
+          }) => NativeFaceDetector;
+
+          const FaceDetectorAPI = (window as Window & {
+            FaceDetector?: NativeFaceDetectorCtor;
+          }).FaceDetector;
+          if (!FaceDetectorAPI) return;
+
           const detector = new FaceDetectorAPI({ fastMode: true, maxDetectedFaces: 5 });
 
           // Guard: component may have unmounted while video was preparing
