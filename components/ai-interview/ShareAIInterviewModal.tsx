@@ -104,9 +104,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     if (!isOpen) return;
     const companyName = (user as any)?.tenantName || 'Our Company';
     const jobTitle = config.jd_title || config.position || 'the role';
-    const location = (config as any).jd_location ? `\nLocation: ${(config as any).jd_location}` : '';
+    const location = (config as any).jd_location ? ` in ${(config as any).jd_location}` : '';
     setCustomMessage(
-      `Subject: Invitation to Complete Your AI Interview — ${jobTitle} at ${companyName}\n\nDear Candidate,\n\nWe are pleased to invite you to complete an AI-powered interview for the following position:\n\nRole: ${jobTitle}\nCompany: ${companyName}${location}\n\nThis interview will take approximately 20–30 minutes and must be completed in one sitting.\n\nBefore You Begin:\n\n• Ensure you have a stable internet connection\n• Find a quiet place with good lighting\n• Your camera and microphone will be required\n• Use a laptop or desktop for the best experience\n\nDuring the session, our AI interviewer will guide you through each question step-by-step.\n\nPlease complete the interview by [deadline date].\n\nIf you experience any technical issues, contact us at support@talentflow.com.\n\nWe wish you the best of luck and look forward to learning more about you!\n\nBest regards,\n${companyName} Talent Team`
+      `You have been invited to complete an AI interview for the ${jobTitle} role at ${companyName}${location}. Please use the secure link below and complete it in one sitting. Before you begin, make sure your camera, microphone, and internet connection are ready.`
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
