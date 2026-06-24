@@ -44,24 +44,6 @@ const FACE_API_MODEL_URLS = [
   'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights',       // 2. jsDelivr CDN
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/0.22.2/weights', // 3. GitHub raw fallback
 ] as const;
-
-const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
-  tab_switch:                5000,
-  copy_attempt:              2000,
-  paste_attempt:             2000,
-  voice_detected:           10000,
-  multiple_voices:          10000,
-  camera_disabled:           5000,
-  microphone_disabled:       5000,
-  camera_obstructed:        10000,
-  screenshot_attempt:        2000,
-  screen_recording_attempt:  5000,
-  window_blur:               5000,
-  fullscreen_exit:           5000,
-  face_missing:              8000,
-  multiple_faces:            8000,
-  gaze_away:                 8000,
-};
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Legacy type kept for compatibility with existing imports
@@ -293,19 +275,15 @@ export function useProctoringMonitor({
   }
   const backendQueueRef = useRef<QueuedEvent[]>([]);
 
-  // UI warning cooldown per event type
-  const lastUiWarningTimeRef = useRef<Record<string, number>>({});
-
   // ==================== CORE: emitEvent ====================
   // 1. Always queues event for backend (every event recorded)
-  // 2. Emits UI warning via EventBus (with per-type cooldown)
+  // 2. Emits UI warning via EventBus for every emitted violation
   const emitEvent = useCallback((
     eventType: ProctoringEventType,
     details?: Record<string, any>,
   ) => {
     if (!enabledRef.current) return;
 
-    const now = Date.now();
     const timestamp = new Date().toISOString();
 
     // 1. ALWAYS queue for backend — no event is ever lost
@@ -316,13 +294,8 @@ export function useProctoringMonitor({
       details: details || {},
     });
 
-    // 2. UI warning with per-type cooldown
-    const lastShown = lastUiWarningTimeRef.current[eventType] || 0;
-    const cooldown = UI_COOLDOWN_PER_TYPE[eventType] || 5000;
-    if (now - lastShown >= cooldown) {
-      lastUiWarningTimeRef.current[eventType] = now;
-      ProctoringEventBus.emit(eventType, details);
-    }
+    // 2. Show a warning for every emitted violation
+    ProctoringEventBus.emit(eventType, details);
   }, []);
 
   const emitEventRef = useRef(emitEvent);
@@ -722,9 +695,19 @@ export function useProctoringMonitor({
 
   const setupTabSwitchDetection = useCallback(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) emitEventRef.current('tab_switch', { hidden: true });
+      if (document.hidden) {
+        emitEventRef.current('tab_switch', {
+          hidden: true,
+          method: 'visibilitychange',
+        });
+      }
     };
-    const handleBlur = () => emitEventRef.current('window_blur', {});
+    const handleBlur = () => {
+      window.setTimeout(() => {
+        if (document.hidden || document.visibilityState === 'hidden') return;
+        emitEventRef.current('window_blur', { reason: 'window_focus_lost' });
+      }, 0);
+    };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
@@ -874,17 +857,13 @@ export function useProctoringMonitor({
   const setupScreenRecordingDetection = useCallback(() => {
     // Mobile browsers (iOS/Android) do not support getDisplayMedia — screen
     // recording is handled at OS level (Control Centre / Quick Settings) and
-    // is completely invisible to any browser API.  Log the limitation and
-    // report it to the backend once so the proctor is aware.
+    // is completely invisible to any browser API. Do not create a violation
+    // automatically when no attempt occurred.
     if (isMobileDevice()) {
       console.warn(
         '[PROCTORING] Screen recording detection is NOT available on mobile. ' +
         'iOS and Android handle screen recording at OS level — no browser API can intercept it.'
       );
-      emitEventRef.current('screen_recording_attempt', {
-        reason: 'mobile_unsupported',
-        message: 'Screen recording detection unavailable on this device',
-      });
       return () => {};
     }
 
@@ -929,7 +908,7 @@ export function useProctoringMonitor({
     // Only emit when relatedTarget is null (mouse went to browser chrome or outside window).
     const handleMouseLeave = (e: MouseEvent) => {
       if (e.relatedTarget === null || e.relatedTarget === undefined) {
-        emitEventRef.current('window_blur', { reason: 'mouse_left_window' });
+        emitEventRef.current('mouse_movement', { reason: 'mouse_left_window' });
       }
     };
 
@@ -941,7 +920,7 @@ export function useProctoringMonitor({
       if (e.clientY <= 3) {
         if (!topEdgeTriggered) {
           topEdgeTriggered = true;
-          emitEventRef.current('window_blur', { reason: 'mouse_at_top' });
+          emitEventRef.current('mouse_movement', { reason: 'mouse_at_top' });
         }
       } else {
         topEdgeTriggered = false;
@@ -1059,6 +1038,7 @@ function getSeverity(type: ProctoringEventType): string {
     screenshot_attempt: 'high',
     screen_recording_attempt: 'high',
     window_blur: 'low',
+    mouse_movement: 'low',
     fullscreen_exit: 'high',
     face_missing: 'high',
     multiple_faces: 'high',

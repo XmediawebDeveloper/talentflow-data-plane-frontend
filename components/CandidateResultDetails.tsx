@@ -1971,7 +1971,7 @@ export default function CandidateResultDetails({
 
                     {/* Violations Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                      {/* Mouse Movement */}
+                      {/* Window Focus Lost */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
                           ? 'bg-red-50 border-red-200 ring-red-100'
@@ -1988,13 +1988,41 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Mouse Movement</div>
+                        <div className="text-sm text-gray-600 mb-1">Window Focus Lost</div>
                         <div className={`text-3xl font-bold tracking-tight ${
                           detailedResult.proctoring_stats.window_blur_count > 0
                             ? 'text-red-600'
                             : 'text-gray-400'
                         }`}>
                           {detailedResult.proctoring_stats.window_blur_count}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">times</div>
+                      </div>
+
+                      {/* Mouse Movement */}
+                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                        (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
+                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
+                          (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
+                            ? 'bg-red-100 ring-red-200'
+                            : 'bg-slate-100 ring-slate-200'
+                        }`}>
+                          <MousePointer className={`w-6 h-6 ${
+                            (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="text-sm text-gray-600 mb-1">Mouse Movement</div>
+                        <div className={`text-3xl font-bold tracking-tight ${
+                          (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
+                            ? 'text-red-600'
+                            : 'text-gray-400'
+                        }`}>
+                          {detailedResult.proctoring_stats.mouse_movement_count || 0}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
@@ -2083,7 +2111,7 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Camera Obstructed */}
+                      {/* Camera Obstructed / Off */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                           ? 'bg-red-50 border-red-200 ring-red-100'
@@ -2100,7 +2128,7 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Camera Obstructed</div>
+                        <div className="text-sm text-gray-600 mb-1">Camera Obstructed / Off</div>
                         <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                             ? 'text-red-600'
@@ -2111,7 +2139,7 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Face Not Visible */}
+                      {/* Face Not Detected */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                           ? 'bg-red-50 border-red-200 ring-red-100'
@@ -2128,7 +2156,7 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Face Not Visible</div>
+                        <div className="text-sm text-gray-600 mb-1">Face Not Detected</div>
                         <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                             ? 'text-red-600'
@@ -2223,7 +2251,7 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Screen Capture Attempts (screenshot + screen recording) */}
+                      {/* Screen Violations (screenshot + screen recording) */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
@@ -2240,7 +2268,7 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Screen Capture</div>
+                        <div className="text-sm text-gray-600 mb-1">Screen Violation</div>
                         <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                             ? 'text-brand-orange-deep'
@@ -2334,19 +2362,20 @@ export default function CandidateResultDetails({
 
                               const cfg = (() => {
                                 switch (row.event_type) {
-                                  case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
-                                  case 'window_blur':              return { label: 'Mouse Movement',           icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'low'    };
+                                  case 'window_blur':              return { label: 'Window Focus Lost',       icon: <Monitor className="w-4 h-4" />,      color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'mouse_movement':           return { label: 'Mouse Movement',          icon: <MousePointer className="w-4 h-4" />, color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
                                   case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
-                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'critical' };
-                                  case 'face_missing':             return { label: 'Face Not Visible',         icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
-                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'critical' };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
                                   default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }

@@ -489,6 +489,7 @@ export interface ProctorEvent {
     | 'paste_attempt'
     | 'fullscreen_exit'
     | 'window_blur'
+    | 'mouse_movement'
     | 'camera_disabled'
     | 'screen_share_stopped'
     | 'voice_detected'

@@ -1,7 +1,7 @@
 'use client';
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useState, useEffect, useRef } from 'react';
@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { State as CSCState, City as CSCCity } from 'country-state-city';
@@ -47,6 +48,19 @@ const containsMeaningfulText = (text: string): boolean => {
   const meaningfulWords = cleanedText.split(/\s+/).filter(word => word.length >= 2);
   // Require at least 3 meaningful words for a valid JD
   return meaningfulWords.length >= 3;
+};
+
+const jdMarkdownComponents: Components = {
+  table: (props) => (
+    <div className="table-responsive my-4">
+      <table {...props} />
+    </div>
+  ),
+};
+
+const getDisplayJDMarkdown = (text: string, mode: CreationMode): string => {
+  const normalized = mode === 'manual' ? normalizeManualJDToMarkdown(text) : text;
+  return stripEmptyCertificationSections(normalized);
 };
 
 const containsCodePatterns = (text: string): boolean => {
@@ -2780,6 +2794,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             title: 'JD Reformatted',
             description: 'Job description has been regenerated with your changes.',
           });
+        } else if (mode === 'manual') {
+          finalDescription = normalizeManualJDToMarkdown(currentDescription);
+          setManualJD(finalDescription);
+          toast.success({
+            title: 'JD Formatted',
+            description: 'Preview updated with structured markdown formatting.',
+          });
         } else {
           console.error('[DEBUG] Cannot reformat - editingId is null.');
           toast.warning({
@@ -2798,6 +2819,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     } else {
       console.log('[DEBUG] No modifications in Step 2, skipping AI formatting');
+    }
+
+    if (mode === 'manual') {
+      const normalizedManualDescription = normalizeManualJDToMarkdown(finalDescription);
+      if (normalizedManualDescription && normalizedManualDescription !== finalDescription) {
+        finalDescription = normalizedManualDescription;
+        setManualJD(normalizedManualDescription);
+      }
     }
 
     // Go to review step to show the reformatted summary
@@ -3064,6 +3093,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         } catch (reformatErr) {
           console.error('[ERROR] Failed to reformat before publish, proceeding with raw text:', reformatErr);
         }
+      } else if (lacksMarkdownFormatting && mode === 'manual') {
+        publishDescription = normalizeManualJDToMarkdown(publishDescription);
+        setManualJD(publishDescription);
+      }
+
+      if (mode === 'manual') {
+        publishDescription = normalizeManualJDToMarkdown(publishDescription);
+        setManualJD(publishDescription);
       }
 
       // Build the JD data for backend
@@ -4058,7 +4095,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 markdown-content">
                         {generatedJD ? (
                           <>
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{generatedJD}</ReactMarkdown>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkBreaks]}
+                              components={jdMarkdownComponents}
+                            >
+                              {getDisplayJDMarkdown(generatedJD, 'ai')}
+                            </ReactMarkdown>
                             <div className="flex items-center gap-2 mt-4 text-blue-600 border-t pt-4">
                               <Loader2 className="w-4 h-4 animate-spin" />
                               <span className="text-sm font-medium">Generating...</span>
@@ -4128,13 +4170,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         />
                       ) : (
                         <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 markdown-content">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{generatedJD
-                            .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
-                              match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
-                            )
-                            .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
-                            .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
-                          }</ReactMarkdown>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                            components={jdMarkdownComponents}
+                          >
+                            {getDisplayJDMarkdown(generatedJD, 'ai')}
+                          </ReactMarkdown>
                         </div>
                       )}
                     </div>
@@ -4144,7 +4185,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
                         <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">No job description generated yet</p>
                         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 px-4">
-                          Fill in the job details and click "Generate Job Description"
+                          Fill in the job details and click &quot;Generate Job Description&quot;
                         </p>
                       </div>
                     </div>
@@ -4152,71 +4193,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ) : (
                   manualJD ? (
                     <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 markdown-content">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{(() => {
-                        const connectors = new Set(['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with', 'at', 'by', 'its', 'their']);
-                        const actionVerbRe = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Collect|Recommend|Identify|Report|Coordinate|Communicate|Drive|Define|Evaluate|Assess|Deliver|Plan|Track|Update|Resolve|Document|Oversee|Establish|Improve|Facilitate|Negotiate|Allocate|Forecast|Validate|Maintain|Respond|Develop)/i;
-
-                        const isHeader = (line: string): boolean => {
-                          const trimmed = line.trim();
-                          if (!trimmed) return false;
-                          // Already markdown header
-                          if (trimmed.startsWith('#')) return true;
-                          // Must start with uppercase
-                          if (!/^[A-Z]/.test(trimmed)) return false;
-                          const words = trimmed.split(/\s+/);
-                          // Too long to be a header
-                          if (words.length > 7 || trimmed.length > 55) return false;
-                          // Starts with action verb → bullet, not header
-                          if (actionVerbRe.test(trimmed)) return false;
-                          // If most non-connector words start with uppercase → header
-                          const contentWords = words.filter(w => !connectors.has(w.toLowerCase().replace(/[^a-z]/g, '')));
-                          const uppercaseCount = contentWords.filter(w => /^[A-Z]/.test(w)).length;
-                          return uppercaseCount >= Math.ceil(contentWords.length * 0.7);
-                        };
-
-                        const isBullet = (line: string): boolean => {
-                          const trimmed = line.trim();
-                          if (!trimmed) return false;
-                          if (trimmed.startsWith('#') || trimmed.startsWith('-') || trimmed.startsWith('*')) return false;
-                          // Long lines starting with uppercase action verbs → bullet
-                          return actionVerbRe.test(trimmed) || trimmed.length > 30;
-                        };
-
-                        const lines = manualJD.split('\n');
-                        const out: string[] = [];
-                        let prevWasHeader = false;
-
-                        for (let i = 0; i < lines.length; i++) {
-                          const raw = lines[i];
-                          const trimmed = raw.trim();
-
-                          if (!trimmed) {
-                            // Keep one blank line max
-                            if (out.length > 0 && out[out.length - 1] !== '') out.push('');
-                            prevWasHeader = false;
-                            continue;
-                          }
-
-                          if (isHeader(trimmed)) {
-                            // Ensure blank line before header (except at start)
-                            if (out.length > 0 && out[out.length - 1] !== '') out.push('');
-                            out.push(`## ${trimmed.replace(/^#+\s*/, '')}`);
-                            out.push('');
-                            prevWasHeader = true;
-                          } else if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                            out.push(raw);
-                            prevWasHeader = false;
-                          } else if (isBullet(trimmed) || prevWasHeader) {
-                            out.push(`- ${trimmed}`);
-                            prevWasHeader = false;
-                          } else {
-                            out.push(raw);
-                            prevWasHeader = false;
-                          }
-                        }
-
-                        return out.join('\n');
-                      })()}</ReactMarkdown>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                        components={jdMarkdownComponents}
+                      >
+                        {getDisplayJDMarkdown(manualJD, 'manual')}
+                      </ReactMarkdown>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-700">
@@ -6294,14 +6276,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 dark:text-slate-300 leading-relaxed">
                     {(() => { console.log('[DEBUG] Review stage showing JD, mode:', mode, 'length:', (mode === 'ai' ? generatedJD : manualJD)?.length); return null; })()}
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                      {(mode === 'ai' ? generatedJD : manualJD)
-                        .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
-                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
-                        )
-                        .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
-                        .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
-                      }
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      components={jdMarkdownComponents}
+                    >
+                      {getDisplayJDMarkdown(mode === 'ai' ? generatedJD : manualJD, mode)}
                     </ReactMarkdown>
                   </div>
                 </div>

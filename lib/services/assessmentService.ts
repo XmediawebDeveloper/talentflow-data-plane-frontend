@@ -264,8 +264,9 @@ export interface ProctoringStats {
   copy_count: number;
   paste_count: number;
   window_blur_count: number;
+  mouse_movement_count?: number;
   video_violation_count: number;
-  camera_obstructed_count?: number;  // Subset of video_violations, camera specifically obstructed
+  camera_obstructed_count?: number;  // camera_obstructed + camera_disabled summary count
   voice_violation_count: number;
   multiple_faces_count: number;
   face_not_visible_count?: number;   // face_missing events (separate from multiple_faces)

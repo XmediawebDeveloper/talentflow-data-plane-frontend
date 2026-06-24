@@ -20,6 +20,7 @@ export type ProctoringEventType =
   | 'screenshot_attempt'
   | 'screen_recording_attempt'
   | 'window_blur'
+  | 'mouse_movement'
   | 'fullscreen_exit'
   | 'face_missing'
   | 'multiple_faces'
@@ -46,7 +47,8 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
   screenshot_attempt: 'Screenshot attempt detected. Screenshots are not allowed.',
   screen_recording_attempt: 'Screen recording detected. Recording is not allowed.',
-  window_blur: 'You navigated away from the interview window.',
+  window_blur: 'Window focus was lost. Please stay on the assessment window.',
+  mouse_movement: 'Mouse moved outside the safe assessment area. Please keep it within the browser window.',
   fullscreen_exit: 'Fullscreen mode exited. Please return to fullscreen to continue.',
   face_missing: 'No face detected. Please ensure your face is visible to the camera.',
   multiple_faces: 'Multiple faces detected. Please ensure you are alone.',
@@ -66,6 +68,7 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
   screenshot_attempt: 'high',
   screen_recording_attempt: 'high',
   window_blur: 'low',
+  mouse_movement: 'low',
   fullscreen_exit: 'high',
   face_missing: 'high',
   multiple_faces: 'high',

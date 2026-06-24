@@ -7,8 +7,8 @@
  * Parent (InterviewUI) never re-renders when warnings appear/disappear.
  */
 
-import { useState, useEffect, useCallback, useRef, memo, type Dispatch, type SetStateAction } from 'react';
-import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
+import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, MousePointer } from 'lucide-react';
 import { ProctoringEventBus, ProctoringEvent, ProctoringEventType } from '@/lib/ProctoringEventBus';
 
 interface WarningItem {
@@ -34,6 +34,7 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   screenshot_attempt: <Monitor className="w-6 h-6" />,
   screen_recording_attempt: <Monitor className="w-6 h-6" />,
   window_blur: <Monitor className="w-6 h-6" />,
+  mouse_movement: <MousePointer className="w-6 h-6" />,
   fullscreen_exit: <Maximize2 className="w-6 h-6" />,
   face_missing: <UserX className="w-6 h-6" />,
   multiple_faces: <Users className="w-6 h-6" />,
@@ -52,6 +53,7 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   screenshot_attempt: 'Screenshot Attempt Blocked',
   screen_recording_attempt: 'Screen Recording Detected',
   window_blur: 'Window Focus Lost',
+  mouse_movement: 'Mouse Movement Detected',
   fullscreen_exit: 'Fullscreen Exited',
   face_missing: 'Face Not Detected',
   multiple_faces: 'Multiple Faces Detected',
@@ -78,7 +80,9 @@ const WarningCard = memo(function WarningCard({
   // (Without this, every new warning causes parent re-render → new onDismiss
   //  function → useEffect restarts → timer resets infinitely)
   const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     const timer = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
@@ -134,21 +138,54 @@ const WarningCard = memo(function WarningCard({
  */
 export function ProctoringWarningModal() {
   const [warnings, setWarnings] = useState<WarningItem[]>([]);
+  const pendingWarningsRef = useRef<WarningItem[]>([]);
+
+  const appendWarnings = useCallback((items: WarningItem[]) => {
+    if (items.length === 0) return;
+    setWarnings(prev => [...prev, ...items]);
+  }, []);
+
+  const flushPendingWarnings = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    if (document.hidden || !document.hasFocus()) return;
+    if (pendingWarningsRef.current.length === 0) return;
+    const queued = [...pendingWarningsRef.current];
+    pendingWarningsRef.current = [];
+    appendWarnings(queued);
+  }, [appendWarnings]);
 
   // Subscribe to event bus on mount
   useEffect(() => {
     const unsubscribe = ProctoringEventBus.subscribe((event: ProctoringEvent) => {
-      setWarnings(prev => [...prev, {
+      const warning: WarningItem = {
         id: event.id,
         type: event.type,
         message: event.message,
         severity: event.severity,
         timestamp: event.timestamp,
-      }]);
+      };
+
+      if (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())) {
+        pendingWarningsRef.current.push(warning);
+        return;
+      }
+
+      appendWarnings([warning]);
     });
 
-    return () => { unsubscribe(); };
-  }, []);
+    const handleVisibilityOrFocus = () => {
+      flushPendingWarnings();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [appendWarnings, flushPendingWarnings]);
 
   const dismissWarning = useCallback((id: string) => {
     setWarnings(prev => prev.filter(w => w.id !== id));
