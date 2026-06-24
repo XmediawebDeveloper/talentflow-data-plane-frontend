@@ -1150,11 +1150,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         console.error("[Recording] MediaRecorder not supported:", err);
       }
     }
-    // Start face verification if baseline is registered
-    if (faceVerification?.hasBaseline()) {
+    // Start continuous face verification — but SKIP it on low-tier devices.
+    // On weak (≤2-core) machines the face-api/TF.js loop is the dominant CPU
+    // hog: it runs neural inference every ~10s, crashes ("Swallowed TF.js
+    // backend crash" / "No face detected"), and starves the main thread
+    // (frozen timers, 5fps avatar). Skipping the CONTINUOUS loop here frees
+    // that CPU so the interview runs smoothly; the one-time identity-photo
+    // baseline registration still happened at system check, and all other
+    // proctoring (tab-switch, fullscreen, audio) stays active.
+    const lowTier = deviceCapability?.tier === 'low';
+    if (faceVerification?.hasBaseline() && !lowTier) {
       faceVerification.startVerification(video);
+    } else if (lowTier) {
+      console.log('[INTERVIEW-DEBUG] Low-tier device — continuous face verification DISABLED to save CPU');
     }
-  }, [handDetection, faceDetection, faceVerification]);
+  }, [handDetection, faceDetection, faceVerification, deviceCapability]);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
