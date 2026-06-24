@@ -6295,6 +6295,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 onReady={() => setAvatarReady(true)}
                 onFallback={() => setAvatarFailed(true)}
                 className="w-full h-full rounded-none"
+                // Low-tier devices: skip the 3D avatar entirely (no GLB/Three.js/
+                // render loop) — voice still plays via TalkingHead's Web Audio
+                // fallback, and the static Linda image shows. Silent switch.
+                audioOnly={deviceCapability?.use3DAvatar === false}
               />
             </div>
 
