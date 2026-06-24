@@ -711,9 +711,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       console.warn('[Portal] Permission pre-check failed:', permErr);
     }
 
-    // CRITICAL: Create AudioContext in user gesture context
+    // CRITICAL: Create AudioContext in user gesture context AND resume it NOW.
+    // Chrome's autoplay policy starts a new AudioContext 'suspended' even inside
+    // a gesture — it only reliably flips to 'running' if .resume() is called
+    // within the SAME gesture. Without this resume, the context stays suspended,
+    // Linda's TTS audio never plays, and the interview looks stuck ("speaks only
+    // after a refresh"). resume() here, in the click handler, unlocks it.
     try {
       const ctx = new AudioContext({ sampleRate: 24000 });
+      ctx.resume().then(
+        () => console.log('[Portal] AudioContext resumed in gesture, state:', ctx.state),
+        (e) => console.warn('[Portal] AudioContext resume failed:', e),
+      );
       (window as any).__interviewAudioContext = ctx;
     } catch (e) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
@@ -864,6 +873,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (!(window as any).__interviewAudioContext) {
         try {
           const ctx = new AudioContext({ sampleRate: 24000 });
+          // Resume in-gesture so Chrome doesn't leave it suspended (Linda silent).
+          ctx.resume().catch(() => { /* ignore */ });
           (window as any).__interviewAudioContext = ctx;
         } catch (e) {
           console.warn('[Portal] Failed to pre-create AudioContext on start:', e);
