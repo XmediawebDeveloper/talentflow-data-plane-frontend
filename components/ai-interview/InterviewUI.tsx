@@ -5328,11 +5328,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
     const wsUrl = `${protocol}//${apiUrl}/api/v1/ws/ai-interview/${token}`;
 
+    console.log('[IV-DIAG] connect() called', {
+      wsUrl,
+      nodeEnv: process.env.NODE_ENV,
+      avatarReady,
+      avatarFailed,
+      hasConnectedBefore: hasConnectedRef.current,
+      ts: new Date().toISOString(),
+    });
+
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
+    console.log('[IV-DIAG] WebSocket object created, readyState=', ws.readyState);
 
     ws.onopen = () => {
       const timestamp = new Date().toISOString();
+      console.log(`[IV-DIAG] WS OPEN (handshake completed) ts=${timestamp}`);
       console.log(`[WS ${timestamp}] WebSocket connected successfully`);
       setIsConnected(true);
       // Immediate feedback so the candidate sees SOMETHING while the backend's
@@ -5353,6 +5364,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
     ws.onclose = (event) => {
       const timestamp = new Date().toISOString();
+      console.log(`[IV-DIAG] WS CLOSE code=${event.code} reason="${event.reason}" wasClean=${event.wasClean} ts=${timestamp}`);
       console.log(`[WS ${timestamp}] WebSocket closed: code=${event.code}, reason=${event.reason}`);
       setIsConnected(false);
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
@@ -5398,6 +5410,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
     ws.onerror = (error) => {
       const timestamp = new Date().toISOString();
+      console.error(`[IV-DIAG] WS ERROR ts=${timestamp} readyState=${ws.readyState}`, error);
       console.error(`[WS ${timestamp}] WebSocket error:`, error);
       setStatus("Connection error - please refresh");
     };
@@ -5483,6 +5496,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => clearTimeout(t);
   }, [avatarReady, avatarFailed]);
 
+  // [IV-DIAG] log avatar readiness transitions — tells us whether the avatar
+  // (the heaviest client component) is what's blocking the connect trigger.
+  useEffect(() => {
+    console.log(`[IV-DIAG] avatarReady=${avatarReady} avatarFailed=${avatarFailed} ts=${new Date().toISOString()}`);
+  }, [avatarReady, avatarFailed]);
+
   // Low-tier device → skip waiting on the heavy 3D avatar: show the static
   // Linda image immediately and let the interview connect right away (audio
   // still routes through the mounted TalkingHead). On capable devices the 3D
@@ -5501,13 +5520,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // (audio + static visual), which is exactly the old-system case.
   useEffect(() => {
     if ((!avatarReady && !avatarFailed) || hasConnectedRef.current) return;
+    console.log('[IV-DIAG] connect-trigger effect firing', {
+      avatarReady, avatarFailed,
+      deviceTier: deviceCapability?.tier ?? 'none',
+      cores: deviceCapability?.cores ?? 'n/a',
+      benchmarkMs: deviceCapability?.benchmarkMs ?? 'n/a',
+      use3DAvatar: deviceCapability?.use3DAvatar ?? 'n/a',
+      nodeEnv: process.env.NODE_ENV,
+      ts: new Date().toISOString(),
+    });
     hasConnectedRef.current = true;
     isUnmountedRef.current = false;
     const timer = setTimeout(() => { connect(); }, 300);
     return () => {
       clearTimeout(timer);
     };
-  }, [avatarReady, avatarFailed, connect]);
+  }, [avatarReady, avatarFailed, connect, deviceCapability]);
 
   // Cleanup on unmount only
   useEffect(() => {
