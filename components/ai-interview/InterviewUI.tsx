@@ -21,7 +21,7 @@ import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
-import type { DeviceCapability } from "@/lib/utils/deviceCapability";
+import { detectDeviceCapability, type DeviceCapability } from "@/lib/utils/deviceCapability";
 // Side-effect import: arms the global unhandledrejection guard that silences
 // TF.js backend crashes AND benign browser-extension "message channel closed"
 // noise. Idempotent — safe even though face-verification also imports it.
@@ -381,6 +381,27 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
 export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability }: InterviewUIProps) {
+  // ── Effective device capability ──────────────────────────────────────────
+  // The portal detects this at the system-check step, but a RESUMED session (or
+  // any entry path that skips system check) arrives with deviceCapability=undefined
+  // → lite mode would never activate and a 2-core machine would load the heavy
+  // 3D avatar. Fallback: detect it HERE on first render (synchronous useState
+  // initializer, so it's ready BEFORE TalkingHead mounts and the audioOnly
+  // decision is correct from the very first frame). The ~one-time benchmark
+  // (~130ms on a slow CPU) is far cheaper than loading the 3D avatar.
+  const [fallbackDeviceCapability] = useState<DeviceCapability | undefined>(() => {
+    if (deviceCapability) return undefined; // prop provided → no fallback needed
+    if (typeof window === 'undefined') return undefined;
+    try {
+      const cap = detectDeviceCapability({ runBenchmark: true });
+      console.log('[InterviewUI] deviceCapability prop missing — detected locally:', cap.tier, `(cores=${cap.cores}, bench=${cap.benchmarkMs?.toFixed(0)}ms)`);
+      return cap;
+    } catch {
+      return undefined;
+    }
+  });
+  const effectiveDeviceCapability = deviceCapability ?? fallbackDeviceCapability;
+
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -1162,13 +1183,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // that CPU so the interview runs smoothly; the one-time identity-photo
     // baseline registration still happened at system check, and all other
     // proctoring (tab-switch, fullscreen, audio) stays active.
-    const lowTier = deviceCapability?.tier === 'low';
+    const lowTier = effectiveDeviceCapability?.tier === 'low';
     if (faceVerification?.hasBaseline() && !lowTier) {
       faceVerification.startVerification(video);
     } else if (lowTier) {
       console.log('[INTERVIEW-DEBUG] Low-tier device — continuous face verification DISABLED to save CPU');
     }
-  }, [handDetection, faceDetection, faceVerification, deviceCapability]);
+  }, [handDetection, faceDetection, faceVerification, effectiveDeviceCapability]);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
@@ -5521,10 +5542,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // still routes through the mounted TalkingHead). On capable devices the 3D
   // avatar loads normally.
   useEffect(() => {
-    if (deviceCapability && deviceCapability.use3DAvatar === false) {
+    if (effectiveDeviceCapability && effectiveDeviceCapability.use3DAvatar === false) {
       setAvatarFailed(true);
     }
-  }, [deviceCapability]);
+  }, [effectiveDeviceCapability]);
 
   // Connect once the avatar is ready OR has fallen back to the static image.
   // Previously this fired only on avatarReady — so on a low-end machine where
@@ -5536,10 +5557,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if ((!avatarReady && !avatarFailed) || hasConnectedRef.current) return;
     console.log('[IV-DIAG] connect-trigger effect firing', {
       avatarReady, avatarFailed,
-      deviceTier: deviceCapability?.tier ?? 'none',
-      cores: deviceCapability?.cores ?? 'n/a',
-      benchmarkMs: deviceCapability?.benchmarkMs ?? 'n/a',
-      use3DAvatar: deviceCapability?.use3DAvatar ?? 'n/a',
+      deviceTier: effectiveDeviceCapability?.tier ?? 'none',
+      cores: effectiveDeviceCapability?.cores ?? 'n/a',
+      benchmarkMs: effectiveDeviceCapability?.benchmarkMs ?? 'n/a',
+      use3DAvatar: effectiveDeviceCapability?.use3DAvatar ?? 'n/a',
       nodeEnv: process.env.NODE_ENV,
       ts: new Date().toISOString(),
     });
@@ -5549,7 +5570,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => {
       clearTimeout(timer);
     };
-  }, [avatarReady, avatarFailed, connect, deviceCapability]);
+  }, [avatarReady, avatarFailed, connect, effectiveDeviceCapability]);
 
   // Cleanup on unmount only
   useEffect(() => {
@@ -6298,7 +6319,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 // Low-tier devices: skip the 3D avatar entirely (no GLB/Three.js/
                 // render loop) — voice still plays via TalkingHead's Web Audio
                 // fallback, and the static Linda image shows. Silent switch.
-                audioOnly={deviceCapability?.use3DAvatar === false}
+                audioOnly={effectiveDeviceCapability?.use3DAvatar === false}
               />
             </div>
 

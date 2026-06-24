@@ -696,8 +696,6 @@ export default function StepSamplePractice({
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const MIN_RECORDING_SECONDS = 10;
-
   // Show live transcript while recording, final transcript when done
   const displayAnswer = isRecording
     ? liveTranscript
@@ -706,9 +704,8 @@ export default function StepSamplePractice({
     : typedAnswer;
   const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
-  // "Start Interview" is only enabled once the candidate has recorded ≥10 seconds of video
-  const canStartInterview = recordedDurationSeconds !== null && recordedDurationSeconds >= MIN_RECORDING_SECONDS;
-  const recordingTooShort = recordedDurationSeconds !== null && recordedDurationSeconds < MIN_RECORDING_SECONDS;
+  // Practice recording is OPTIONAL — there is no minimum-duration gate. The
+  // candidate can start the interview at any time, or skip the practice step.
 
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -834,9 +831,7 @@ export default function StepSamplePractice({
                 {isRecording ? (
                   <>
                     <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                    {recordingElapsed < MIN_RECORDING_SECONDS
-                      ? `${recordingElapsed}s / ${MIN_RECORDING_SECONDS}s`
-                      : `Recording · ${recordingElapsed}s`}
+                    {`Recording · ${recordingElapsed}s`}
                   </>
                 ) : (
                   <><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>
@@ -976,39 +971,47 @@ export default function StepSamplePractice({
           Go Back
         </button>
         <div className="flex flex-col items-end gap-1.5">
-          {/* Requirement message — shown until condition is met */}
-          {!canStartInterview && !isRecording && (
-            <p className={`text-xs font-medium ${recordingTooShort ? 'text-red-500' : 'text-gray-500'}`}>
-              {recordingTooShort
-                ? `Recording too short (${recordedDurationSeconds}s) — minimum ${MIN_RECORDING_SECONDS}s required`
-                : `Record at least ${MIN_RECORDING_SECONDS} seconds of video to continue`}
+          {/* Optional — show how long the practice answer was (not a gate) */}
+          {!isRecording && recordedDurationSeconds !== null && (
+            <p className="text-xs font-medium text-green-600">
+              ✓ Practice recorded ({recordedDurationSeconds}s)
             </p>
           )}
           {isRecording && (
-            <p className={`text-xs font-medium ${recordingElapsed >= MIN_RECORDING_SECONDS ? 'text-green-600' : 'text-amber-500'}`}>
-              {recordingElapsed >= MIN_RECORDING_SECONDS
-                ? `✓ ${recordingElapsed}s recorded — you may stop and continue`
-                : `${recordingElapsed}s / ${MIN_RECORDING_SECONDS}s — keep recording…`}
+            <p className="text-xs font-medium text-amber-500">
+              Recording · {recordingElapsed}s
             </p>
           )}
-          <button
-            type="button"
-            onClick={onStartInterview}
-            disabled={submitting || !canStartInterview}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Starting...
-              </>
-            ) : (
-              <>
-                Start Interview
-                <ChevronRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Skip the optional practice and continue straight to the interview */}
+            <button
+              type="button"
+              onClick={onStartInterview}
+              disabled={submitting}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              Skip
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onStartInterview}
+              disabled={submitting}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  Start Interview
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
