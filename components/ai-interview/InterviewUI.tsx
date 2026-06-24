@@ -634,6 +634,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // WebSocket keepalive / reconnect refs
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  // Separate fast-retry counter for the "WS connected before /start flipped the
+  // interview to in_progress" race (backend rejects 4003 "not in progress").
+  // /start usually completes within 1-3s, so we retry quickly a few times
+  // instead of giving up (which forced the candidate to manually refresh).
+  const preStartRetryRef = useRef(0);
+  const PRE_START_MAX_RETRIES = 15;
   const isUnmountedRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
 
@@ -5389,6 +5395,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
       reconnectAttemptsRef.current = 0;
+      preStartRetryRef.current = 0; // connected → reset the pre-start race counter
       // Keepalive ping every 5 s — prevents proxy/nginx from closing idle connections
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = setInterval(() => {
@@ -5412,11 +5419,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         Promise.all([flushProctoring, uploadRecording()])
           .catch(() => {})
           .finally(() => { onInterviewComplete?.(); });
+      } else if (event.code === 4003 && /not in progress|not yet|system_check|status:/i.test(event.reason || "")) {
+        // RACE: the WS connected BEFORE the candidate's /start call flipped the
+        // interview to in_progress (backend reject: "Interview not in progress
+        // (status: system_check)"). This is transient — /start completes within
+        // ~1-3s — so retry quickly instead of treating it as terminal. Without
+        // this the candidate had to manually REFRESH for Linda to start. We keep
+        // a dedicated fast counter (short backoff) separate from the network
+        // reconnect budget.
+        if (preStartRetryRef.current < PRE_START_MAX_RETRIES && !isUnmountedRef.current && !isClosingRef.current) {
+          preStartRetryRef.current++;
+          const delay = Math.min(1500, 400 + preStartRetryRef.current * 150); // 550ms → 1.5s
+          console.log(`[IV-DIAG] WS rejected (not in progress yet) — fast retry ${preStartRetryRef.current}/${PRE_START_MAX_RETRIES} in ${delay}ms`);
+          setStatus("Starting your interview...");
+          setTimeout(() => {
+            if (!isUnmountedRef.current && !isClosingRef.current) connectRef.current();
+          }, delay);
+        } else {
+          setStatus("Could not start the interview. Please refresh the page.");
+        }
       } else if (event.code === 4003) {
-        // Server rejected the (re)connect — interview is already finalized
-        // (e.g. recruiter ended it, or grace-period reaper fired). Retrying
-        // will keep hitting the same reject. Show a final message instead of
-        // burning the reconnect budget.
+        // Genuine terminal reject — interview already finalized (recruiter ended
+        // it, or grace-period reaper fired). Retrying hits the same wall.
         setStatus("Interview has ended. " + (event.reason || ""));
         uploadRecording().catch(() => {});
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
