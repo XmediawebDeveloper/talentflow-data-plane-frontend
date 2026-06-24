@@ -1613,13 +1613,17 @@ export default function StepSystemCheck({
                       </span>
                     </div>
 
-                    {/* Middle: label + detail */}
+                    {/* Middle: label + detail (hide the "Pending..." placeholder
+                        until a check actually runs) */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900">{check.label}</p>
-                      <p className="text-xs text-gray-500 truncate">{check.detail}</p>
+                      {check.detail && check.detail !== 'Pending...' && (
+                        <p className="text-xs text-gray-500 truncate">{check.detail}</p>
+                      )}
                     </div>
 
-                    {/* Right: status icon */}
+                    {/* Right: status icon — spinner only while a check is running,
+                        not in the idle pending state */}
                     <div className="flex-shrink-0">
                       {check.status === 'pass' && (
                         <CheckCircle className="w-5 h-5 text-green-500" />
@@ -1627,7 +1631,7 @@ export default function StepSystemCheck({
                       {check.status === 'fail' && (
                         <XCircle className="w-5 h-5 text-red-500" />
                       )}
-                      {(check.status === 'checking' || check.status === 'pending') && (
+                      {check.status === 'checking' && (
                         <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
                       )}
                     </div>
