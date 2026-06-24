@@ -94,13 +94,25 @@ export function detectDeviceCapability(opts: { runBenchmark?: boolean } = {}): D
   const memLow = memoryGB !== null && memoryGB <= LOW_MEMORY_GB;
   const benchSlow = benchmarkMs !== null && benchmarkMs > BENCH_SLOW_MS;
 
-  if (coreHigh && memHigh && !benchSlow) {
-    tier = 'high';
-  }
-  if (coreLow || memLow || benchSlow) {
+  // Tier is driven PRIMARILY by hardware (cores + RAM). The benchmark only
+  // refines borderline cases — it must NOT demote strong hardware on its own.
+  // BUG observed: an 8-core/16GB machine was classed 'low' because the benchmark
+  // (run during the heavy system-check: face-api + voice enroll) spiked to 19ms
+  // > the 12ms 'high' threshold. A transient benchmark blip must never force a
+  // capable machine into lite mode. New rule:
+  //   • genuinely weak hardware (≤2 cores OR ≤2GB)        → low
+  //   • strong hardware (≥8 cores AND ≥8GB) + fast bench  → high
+  //   • borderline hardware (≤4 cores) AND slow bench     → low
+  //   • everything else                                   → mid
+  if (coreLow || memLow) {
     tier = 'low';
+  } else if (coreHigh && memHigh && !benchSlow) {
+    tier = 'high';
+  } else if (benchSlow && cores <= 4) {
+    tier = 'low';
+  } else {
+    tier = 'mid';
   }
-  // (everything else stays 'mid')
 
   // Neural (Silero) VAD is judged SEPARATELY from tier because it is light
   // enough for most machines — gating it on tier==='high' would deny it to the

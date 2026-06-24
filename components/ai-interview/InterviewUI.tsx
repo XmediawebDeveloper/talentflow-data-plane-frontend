@@ -5633,11 +5633,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     });
     hasConnectedRef.current = true;
     isUnmountedRef.current = false;
-    const timer = setTimeout(() => { connect(); }, 300);
+    // Use connectRef (always points at the latest connect) and DO NOT depend on
+    // `connect` here. BUG (stuck "Connecting"): when `connect`'s identity changed
+    // within the 300ms window, this effect re-ran → its cleanup cleared the timer
+    // → on re-entry hasConnectedRef was already true → early return → connect()
+    // NEVER fired. Removing `connect` from deps means only avatarReady/avatarFailed
+    // can re-run this, so the timer can't be cancelled by a connect-identity change.
+    const timer = setTimeout(() => { connectRef.current?.(); }, 300);
     return () => {
       clearTimeout(timer);
     };
-  }, [avatarReady, avatarFailed, connect, effectiveDeviceCapability]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avatarReady, avatarFailed]);
 
   // Cleanup on unmount only
   useEffect(() => {
