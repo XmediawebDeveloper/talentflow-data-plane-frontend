@@ -137,12 +137,49 @@ const containsCodePatterns = (text: string): boolean => {
   return hasCodeKeywords || hasCodePattern || hasExcessiveSpecialChars;
 };
 
+const nonLatinPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F]/u;
+const latinAccentPattern = /[À-ÖØ-öø-ÿĀ-ž]/u;
+const latinTokenPattern = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]+/gu;
+const NON_ENGLISH_LATIN_TOKENS = new Set([
+  'experiencia', 'responsabilidades', 'requisitos', 'conocimientos',
+  'desarrollador', 'desarrollo', 'ingeniero', 'habilidades', 'trabajo',
+  'salario', 'ofrecemos', 'modalidad', 'presencial', 'hibrida', 'remoto',
+  'carrera', 'crecimiento', 'equipo', 'aplicaciones', 'nube', 'segun',
+  'anos', 'desenvolvedor', 'desenvolvimento', 'conhecimentos', 'trabalho',
+  'hibrido', 'equipe', 'developpeur', 'developpement', 'responsabilites',
+  'competences', 'salaire', 'travail', 'poste', 'entwickler', 'entwicklung',
+  'kenntnisse', 'aufgaben', 'anforderungen', 'gehalt', 'arbeit',
+  'erfahrung', 'sviluppatore', 'sviluppo', 'responsabilita', 'stipendio',
+  'lavoro', 'competenze', 'esperienza',
+]);
+
+const normalizeLatinToken = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+const hasNonEnglishLatinMarkers = (text: string): boolean => {
+  if (latinAccentPattern.test(text)) {
+    return true;
+  }
+
+  const tokens = Array.from(text.matchAll(latinTokenPattern), (match) => normalizeLatinToken(match[0]));
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  const nonEnglishMatches = tokens.filter((token) => NON_ENGLISH_LATIN_TOKENS.has(token)).length;
+  if (tokens.length <= 3) {
+    return nonEnglishMatches >= 1;
+  }
+
+  return nonEnglishMatches >= 2 || (nonEnglishMatches / tokens.length) >= 0.2;
+};
+
 const isEnglishOnly = (text: string): boolean => {
   if (!text || !text.trim()) return true;
-  // Detect characters from non-Latin scripts (Arabic, Chinese, Japanese, Korean,
-  // Devanagari/Hindi, Cyrillic, Thai, Tamil, Telugu, Malayalam, etc.)
-  const nonLatinPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F]/u;
-  return !nonLatinPattern.test(text);
+  if (nonLatinPattern.test(text)) {
+    return false;
+  }
+  return !hasNonEnglishLatinMarkers(text);
 };
 
 const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English only. Other languages are not supported.';
@@ -170,6 +207,32 @@ const validateEnglishOnlyExtractedValue = (value: string, fieldLabel: string): b
     description: `${fieldLabel} must be written in English only. Other languages are not supported.`,
   });
   return false;
+};
+
+const validateEnglishOnlyExtractedList = (values: string[], fieldLabel: string): boolean => {
+  const invalidValue = values.find((value) => value.trim() && !isEnglishOnly(value));
+  if (!invalidValue) {
+    return true;
+  }
+
+  toast.error({
+    title: 'English only',
+    description: `${fieldLabel} must be written in English only. Other languages are not supported.`,
+  });
+  return false;
+};
+
+const applyEnglishOnlyInputChange = (
+  value: string,
+  fieldLabel: string,
+  onValid: (nextValue: string) => void,
+): boolean => {
+  if (value && !validateEnglishOnlyExtractedValue(value, fieldLabel)) {
+    return false;
+  }
+
+  onValid(value);
+  return true;
 };
 
 const isPromptConflictMessage = (message: string): boolean =>
@@ -1682,6 +1745,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    if (mode === 'manual' && containsCodePatterns(jdText)) {
+      toast.error({
+        title: 'Invalid Job Description',
+        description: 'Manual job descriptions must describe a role, not contain source code or programming syntax.',
+      });
+      return;
+    }
+
     // JD extraction only supports English content, even if an AI-generated JD
     // was later edited by the recruiter.
     if (!isEnglishOnly(jdText)) {
@@ -2505,9 +2576,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const handleAddRecruiterComment = () => {
     if (newRecruiterComment.trim()) {
+      const commentToAdd = newRecruiterComment.trim();
+
+      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Internal recruiter notes')) {
+        return;
+      }
+
       setExtractedData(prev => ({
         ...prev,
-        internalRecruiterComments: [...prev.internalRecruiterComments, newRecruiterComment.trim()],
+        internalRecruiterComments: [...prev.internalRecruiterComments, commentToAdd],
       }));
       setNewRecruiterComment('');
       setEditingCategory(null);
@@ -2543,10 +2620,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const handleSaveEditRecruiterComment = () => {
     if (editingRecruiterCommentIndex !== null && editingRecruiterCommentValue.trim()) {
+      const newValue = editingRecruiterCommentValue.trim();
+
+      if (!validateEnglishOnlyExtractedValue(newValue, 'Internal recruiter notes')) {
+        return;
+      }
+
       setExtractedData(prev => ({
         ...prev,
         internalRecruiterComments: prev.internalRecruiterComments.map((comment, i) =>
-          i === editingRecruiterCommentIndex ? editingRecruiterCommentValue.trim() : comment
+          i === editingRecruiterCommentIndex ? newValue : comment
         ),
       }));
       markExtractedDataModified();
@@ -2564,6 +2647,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleAddCertification = async () => {
     if (newCertification.trim()) {
       const certToAdd = newCertification.trim();
+
+      if (!validateEnglishOnlyExtractedValue(certToAdd, 'Certifications')) {
+        return;
+      }
+
       const updatedCertifications = [...extractedData.certifications, certToAdd];
 
       setExtractedData(prev => ({
@@ -2615,6 +2703,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleAddDomainKeyword = async () => {
     if (newDomainKeyword.trim()) {
       const keywordToAdd = newDomainKeyword.trim();
+
+      if (!validateEnglishOnlyExtractedValue(keywordToAdd, 'Domain keywords')) {
+        return;
+      }
+
       const updatedKeywords = [...extractedData.domainKeywords, keywordToAdd];
 
       setExtractedData(prev => ({
@@ -2718,10 +2811,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const handleAddLocation = () => {
     if (newLocation.city.trim()) {
+      const cityToAdd = newLocation.city.trim();
+
+      if (!validateEnglishOnlyExtractedValue(cityToAdd, 'Locations')) {
+        return;
+      }
+
       setExtractedData(prev => ({
         ...prev,
         locations: [...prev.locations, {
-          city: newLocation.city.trim(),
+          city: cityToAdd,
           radius: newLocation.radius || '50',
           country: locationCountry,
         }],
@@ -2758,6 +2857,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  const validateExtractionPageEnglishOnlyFields = (): boolean => {
+    const customExperienceValue = showCustomExperienceInput ? extractedData.experience.trim() : '';
+    if (customExperienceValue && !isEnglishOnly(customExperienceValue)) {
+      setValidationErrors(prev => ({
+        ...prev,
+        experience: 'Custom experience must be written in English only.',
+      }));
+      toast.error({
+        title: 'English only',
+        description: 'Custom experience must be written in English only. Other languages are not supported.',
+      });
+      return false;
+    }
+
+    const englishOnlyChecks: Array<{ valid: boolean; fieldLabel: string }> = [
+      { valid: validateEnglishOnlyExtractedList(extractedData.mustHaveSkills, 'Must-have skills'), fieldLabel: 'Must-have skills' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.niceToHaveSkills, 'Nice-to-have skills'), fieldLabel: 'Nice-to-have skills' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.mustHaveComments, 'Must-have comments'), fieldLabel: 'Must-have comments' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.niceToHaveComments, 'Nice-to-have comments'), fieldLabel: 'Nice-to-have comments' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.internalRecruiterComments, 'Internal recruiter notes'), fieldLabel: 'Internal recruiter notes' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.certifications, 'Certifications'), fieldLabel: 'Certifications' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.domainKeywords, 'Domain keywords'), fieldLabel: 'Domain keywords' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.locations.map(location => location.city), 'Locations'), fieldLabel: 'Locations' },
+    ];
+
+    if (extractedData.assessmentGuidance.trim() && !validateEnglishOnlyExtractedValue(extractedData.assessmentGuidance.trim(), 'Assessment guidance')) {
+      return false;
+    }
+
+    return englishOnlyChecks.every(check => check.valid);
+  };
+
   const handlePublish = async () => {
     const trimmedJobTitle = jobTitle.trim();
 
@@ -2770,6 +2901,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
+    if (!validateExtractionPageEnglishOnlyFields()) {
       return;
     }
 
@@ -3173,6 +3308,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    if (!validateExtractionPageEnglishOnlyFields()) {
+      return;
+    }
+
     setIsRegenerating(true);
 
     try {
@@ -3236,6 +3375,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
+    if (!validateExtractionPageEnglishOnlyFields()) {
       return;
     }
 
@@ -3566,6 +3709,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
+    if (step !== 'create' && !validateExtractionPageEnglishOnlyFields()) {
       return;
     }
 
@@ -4233,15 +4380,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Paste or write your job description here..."
                         rows={20}
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
-                          manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || !isEnglishOnly(manualJD))
+                          manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))
                             ? 'border-red-300 bg-red-50'
                             : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${manualJD.length > 0 && ((isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && (!containsMeaningfulText(manualJD) || !isEnglishOnly(manualJD))) || !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)) ? 'text-red-500' : getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
+                        <p className={`text-xs ${manualJD.length > 0 && ((isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && (!containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))) || !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)) ? 'text-red-500' : getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
                           {manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !isEnglishOnly(manualJD)
                             ? 'Manual JD must be written in English only'
+                            : manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && containsCodePatterns(manualJD)
+                            ? 'Manual JD must describe a job role, not contain source code or programming syntax'
                             : manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !containsMeaningfulText(manualJD)
                             ? 'JD must contain meaningful text, not just symbols or special characters'
                             : manualJD.length < VALIDATION.MANUAL_JD.min && manualJD.length > 0 && `Min ${VALIDATION.MANUAL_JD.min} characters required`}
@@ -4444,7 +4593,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   !isEnglishOnly(jobTitle) ||
                   (mode === 'ai'
                     ? !generatedJD || !containsMeaningfulText(generatedJD) || !isEnglishOnly(generatedJD)
-                    : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || !isEnglishOnly(manualJD))
+                    : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))
                 }
                 className="flex items-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white px-4 py-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
@@ -4550,7 +4699,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <input
                         type="text"
                         value={newSkill}
-                        onChange={(e) => setNewSkill(e.target.value)}
+                        onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have skills', setNewSkill)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('mustHaveSkills')}
                         placeholder="Enter skill..."
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
@@ -4579,7 +4728,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onStartEdit={handleStartEditSkill}
                         isEditing={editingSkillIndex?.category === 'mustHaveSkills' && editingSkillIndex?.index === index}
                         editingValue={editingSkillValue}
-                        onEditChange={setEditingSkillValue}
+                        onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Must-have skills', setEditingSkillValue)}
                         onSaveEdit={handleSaveEditSkill}
                         onCancelEdit={handleCancelEditSkill}
                         readOnly={isRegenerating}
@@ -4613,7 +4762,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <input
                         type="text"
                         value={newSkill}
-                        onChange={(e) => setNewSkill(e.target.value)}
+                        onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Nice-to-have skills', setNewSkill)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('niceToHaveSkills')}
                         placeholder="Enter skill..."
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
@@ -4642,7 +4791,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onStartEdit={handleStartEditSkill}
                         isEditing={editingSkillIndex?.category === 'niceToHaveSkills' && editingSkillIndex?.index === index}
                         editingValue={editingSkillValue}
-                        onEditChange={setEditingSkillValue}
+                        onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Nice-to-have skills', setEditingSkillValue)}
                         onSaveEdit={handleSaveEditSkill}
                         onCancelEdit={handleCancelEditSkill}
                         readOnly={isRegenerating}
@@ -4672,7 +4821,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <input
                           type="text"
                           value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
+                          onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have comments', setNewComment)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                           placeholder="Enter comment..."
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
@@ -4701,7 +4850,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onStartEdit={handleStartEditCommentByCategory}
                           isEditing={editingCommentIndex === index}
                           editingValue={editingCommentValue}
-                          onEditChange={setEditingCommentValue}
+                          onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Must-have comments', setEditingCommentValue)}
                           onSaveEdit={handleSaveEditComment}
                           onCancelEdit={handleCancelEditComment}
                           readOnly={isRegenerating}
@@ -4736,7 +4885,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <input
                           type="text"
                           value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
+                          onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Nice-to-have comments', setNewComment)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
                           placeholder="Enter nice-to-have comment..."
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
@@ -4765,7 +4914,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onStartEdit={handleStartEditCommentByCategory}
                           isEditing={editingNiceCommentIndex === index}
                           editingValue={editingNiceCommentValue}
-                          onEditChange={setEditingNiceCommentValue}
+                          onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Nice-to-have comments', setEditingNiceCommentValue)}
                           onSaveEdit={handleSaveEditNiceComment}
                           onCancelEdit={handleCancelEditNiceComment}
                           readOnly={isRegenerating}
@@ -4819,9 +4968,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       type="text"
                       value={selectedExperienceLevel ? '' : extractedData.experience}
                       onChange={(e) => {
-                        setExtractedData(prev => ({ ...prev, experience: e.target.value }));
+                        const nextValue = e.target.value;
+                        if (nextValue && !isEnglishOnly(nextValue)) {
+                          setValidationErrors(prev => ({
+                            ...prev,
+                            experience: 'Custom experience must be written in English only.',
+                          }));
+                          toast.error({
+                            title: 'English only',
+                            description: 'Custom experience must be written in English only. Other languages are not supported.',
+                          });
+                          return;
+                        }
+
+                        setExtractedData(prev => ({ ...prev, experience: nextValue }));
                         markExtractedDataModified();
-                        if (e.target.value.trim()) {
+                        if (nextValue.trim()) {
                           setValidationErrors(prev => ({ ...prev, experience: undefined }));
                         }
                       }}
@@ -6300,7 +6462,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </p>
                   <textarea
                     value={extractedData.assessmentGuidance}
-                    onChange={(e) => { setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value.slice(0, 500) })); markExtractedDataModified(); }}
+                    onChange={(e) => {
+                      const nextValue = e.target.value.slice(0, 500);
+                      applyEnglishOnlyInputChange(nextValue, 'Assessment guidance', () => {
+                        setExtractedData(prev => ({ ...prev, assessmentGuidance: nextValue }));
+                        markExtractedDataModified();
+                      });
+                    }}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
                     className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
@@ -6323,10 +6491,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </p>
                   <textarea
                     value={extractedData.internalRecruiterComments.join('\n')}
-                    onChange={(e) => { setExtractedData(prev => ({
-                      ...prev,
-                      internalRecruiterComments: e.target.value.split('\n').filter(c => c.trim())
-                    })); markExtractedDataModified(); }}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      applyEnglishOnlyInputChange(nextValue, 'Internal recruiter notes', () => {
+                        setExtractedData(prev => ({
+                          ...prev,
+                          internalRecruiterComments: nextValue.split('\n').filter(c => c.trim())
+                        }));
+                        markExtractedDataModified();
+                      });
+                    }}
                     placeholder="Add internal notes for recruiters..."
                     className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
