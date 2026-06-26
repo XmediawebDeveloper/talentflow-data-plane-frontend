@@ -19,6 +19,7 @@ import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
+import { AssessmentWatermark } from './AssessmentWatermark';
 import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import CodingLanguagePickerStep from './CodingLanguagePickerStep';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
@@ -344,6 +345,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     enabled: isProctoringActive,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
+    screenshotBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.screenshot_blocking ?? true,
     copyPasteBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true,
     tabSwitchDetection: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true,
     reportEvent: async (tok, event) => {
@@ -1705,6 +1707,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   return (
     <>
       {renderContent()}
+      {step === 'assessment' && assessmentInfo && (
+        <AssessmentWatermark
+          candidateName={assessmentInfo.candidate_name}
+          candidateEmail={assessmentInfo.candidate_email}
+          attemptId={assessmentInfo.attempt_id || assessmentData?.attempt_id || 'attempt-pending'}
+        />
+      )}
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">

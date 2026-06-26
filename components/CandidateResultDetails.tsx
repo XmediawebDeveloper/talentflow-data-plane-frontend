@@ -2251,7 +2251,7 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Screen Violations (screenshot + screen recording) */}
+                      {/* Screenshot Violations (screenshot + screen recording) */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
@@ -2268,7 +2268,7 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Screen Violation</div>
+                        <div className="text-sm text-gray-600 mb-1">Screenshot Violation</div>
                         <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                             ? 'text-brand-orange-deep'
@@ -2374,8 +2374,8 @@ export default function CandidateResultDetails({
                                   case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
-                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'screenshot_attempt':       return { label: 'Screenshot Violation',    icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screenshot Violation',    icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
                                   default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }

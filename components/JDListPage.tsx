@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { exportToCSV, ExportColumn } from '@/lib/utils/exportUtils';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
+import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 // FIX-003: Import Sheet for inline JD creation
@@ -389,8 +390,12 @@ export default function JDListPage() {
         : jd.experience_min != null
         ? `${jd.experience_min}+ years`
         : '-',
-      salary: jd.salary_min && jd.salary_max
-        ? `${jd.salary_currency || ''} ${jd.salary_min}-${jd.salary_max}`.trim()
+      salary: jd.salary_min || jd.salary_max
+        ? formatSalaryRange({
+            min: jd.salary_min,
+            max: jd.salary_max,
+            currency: jd.salary_currency,
+          })
         : '-',
       location: jd.location || '-',
       job_level: jd.job_level || '-',

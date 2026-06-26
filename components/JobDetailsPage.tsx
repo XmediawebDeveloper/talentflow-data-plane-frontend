@@ -1,6 +1,7 @@
 'use client';
 
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatSalaryRange } from '@/lib/utils/salary';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -518,7 +519,11 @@ ${job.certifications?.join(', ') || 'N/A'}
                         <div>
                           <p className="text-xs text-gray-500">Salary Range</p>
                           <p className="text-sm font-medium text-gray-900">
-                            {job.salary_currency} {job.salary_min?.toLocaleString()} - {job.salary_max?.toLocaleString()}
+                            {formatSalaryRange({
+                              min: job.salary_min,
+                              max: job.salary_max,
+                              currency: job.salary_currency,
+                            })}
                             {job.compensation_type && ` (${job.compensation_type})`}
                           </p>
                         </div>

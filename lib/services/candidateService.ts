@@ -220,6 +220,7 @@ export interface SystemCheckResult {
   screen_share_available: boolean;
   browser_compatible: boolean;  // Must match backend field name
   internet_speed_mbps: number | null;
+  browser_info?: Record<string, unknown>;
 }
 
 export interface SystemCheckResponse {
@@ -287,6 +288,7 @@ export interface AssessmentProctoringSettings {
   proctoring_enabled: boolean;
   webcam_monitoring: boolean;
   screen_recording: boolean;
+  screenshot_blocking: boolean;
   tab_switch_detection: boolean;
   copy_paste_blocking: boolean;
   browser_lockdown: boolean;

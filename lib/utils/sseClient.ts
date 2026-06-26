@@ -41,6 +41,12 @@ export interface SSECallbacks {
   onConnected?: () => void;
 }
 
+export interface JDGenerationStreamInput {
+  jobTitle: string;
+  aiPrompt: string;
+  preGeneratedId?: string;
+}
+
 export class JDStreamClient {
   private abortController: AbortController | null = null;
   private reconnectAttempts = 0;
@@ -57,14 +63,14 @@ export class JDStreamClient {
   /**
    * Start streaming JD generation using fetch with ReadableStream
    */
-  async stream(prompt: string, callbacks: SSECallbacks): Promise<void> {
+  async stream(data: JDGenerationStreamInput, callbacks: SSECallbacks): Promise<void> {
     this.isAborted = false;
     this.reconnectAttempts = 0;
 
-    return this.connect(prompt, callbacks);
+    return this.connect(data, callbacks);
   }
 
-  private async connect(prompt: string, callbacks: SSECallbacks): Promise<void> {
+  private async connect(data: JDGenerationStreamInput, callbacks: SSECallbacks): Promise<void> {
     if (this.isAborted) {
       throw new Error('Stream aborted');
     }
@@ -72,8 +78,14 @@ export class JDStreamClient {
     this.abortController = new AbortController();
 
     try {
-      const encodedPrompt = encodeURIComponent(prompt);
-      const url = `${this.apiBaseUrl}/jd/generate-stream?prompt=${encodedPrompt}`;
+      const params = new URLSearchParams({
+        job_title: data.jobTitle,
+        ai_prompt: data.aiPrompt,
+      });
+      if (data.preGeneratedId) {
+        params.set('pre_generated_id', data.preGeneratedId);
+      }
+      const url = `${this.apiBaseUrl}/jd/generate-stream?${params.toString()}`;
 
       console.log('[Stream] Connecting to:', url);
 
@@ -87,7 +99,19 @@ export class JDStreamClient {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let message = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorBody = await response.clone().json();
+          const detail = errorBody?.detail;
+          if (typeof detail === 'string' && detail.trim()) {
+            message = detail;
+          } else if (Array.isArray(detail) && detail[0]?.msg) {
+            message = detail[0].msg;
+          }
+        } catch {
+          // Ignore parse errors and use the default HTTP message.
+        }
+        throw new Error(message);
       }
 
       if (!response.body) {
@@ -202,7 +226,7 @@ export class JDStreamClient {
         console.log(`[Stream] Retrying in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
         await new Promise(resolve => setTimeout(resolve, delay));
-        return this.connect(prompt, callbacks);
+        return this.connect(data, callbacks);
       }
 
       // All retries failed

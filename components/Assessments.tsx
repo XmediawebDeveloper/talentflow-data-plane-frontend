@@ -2151,6 +2151,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {[
                           { key: 'webcam_monitoring', name: 'Webcam Monitoring', description: 'Record and analyze candidate video during assessment', icon: Video },
                           { key: 'screen_recording', name: 'Screen Recording', description: 'Capture screen activity throughout the test', icon: Monitor },
+                          { key: 'screenshot_blocking', name: 'Screenshot Block', description: 'Detect screenshot and screen recording attempts. When enabled, apply best-effort blocking in browser.', icon: Monitor },
                           { key: 'tab_switch_detection', name: 'Tab Switch Detection', description: 'Detect when candidates switch browser tabs', icon: Eye },
                           { key: 'ai_cheating_prevention', name: 'AI Cheating Prevention', description: 'AI-powered detection of suspicious behavior', icon: Brain },
                           { key: 'copy_paste_blocking', name: 'Copy-Paste Blocking', description: 'Prevent copying questions or pasting answers', icon: Clipboard },

@@ -17,6 +17,7 @@ interface ExtendedJob extends Job {
   niceToHaveSkills?: string[];
   salaryMin?: number;
   salaryMax?: number;
+  salaryCurrency?: string;
   compensationType?: string;
   creationStage?: string;
   hasScoredResumes?: boolean;
@@ -116,6 +117,7 @@ function JobDetailsContent() {
         assessmentGuidance: data.assessment_guidance,
         salaryMin: data.salary_min,
         salaryMax: data.salary_max,
+        salaryCurrency: data.salary_currency,
         compensationType: data.compensation_type,
         creationStage: data.creation_stage,
         rawDescription: data.description,

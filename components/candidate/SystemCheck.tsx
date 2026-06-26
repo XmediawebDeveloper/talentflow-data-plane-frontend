@@ -36,6 +36,20 @@ interface CheckStatus {
   message: string;
 }
 
+interface FaceDetectorInstance {
+  detect: (source: ImageBitmapSource) => Promise<unknown[]>;
+}
+
+type FaceDetectorConstructor = new (options: {
+  fastMode: boolean;
+  maxDetectedFaces: number;
+}) => FaceDetectorInstance;
+
+type BrowserWindow = Window & typeof globalThis & {
+  FaceDetector?: FaceDetectorConstructor;
+  webkitAudioContext?: typeof AudioContext;
+};
+
 export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [micCheck, setMicCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
@@ -48,28 +62,25 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [isIOS, setIsIOS] = useState(false);
   const [browserWarning, setBrowserWarning] = useState<string | null>(null);
   const [cameraInUseError, setCameraInUseError] = useState<string>('');
+  const [hasCameraPreview, setHasCameraPreview] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const networkCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  // Face-detection failure-mode counters. We grade the two failure modes
-  // very differently:
-  //
-  //   • "Multiple faces" is a genuine proctoring concern (someone else in
-  //     the frame), so we hard-fail after 2 consecutive readings.
-  //
-  //   • "No face" usually means the detector itself is struggling — bad
-  //     lighting, glasses, head tilt, or a flaky native FaceDetector that
-  //     just returns 0. The camera is clearly working (we have a live video
-  //     track), so after several misses we soft-pass with a hint instead of
-  //     blocking the candidate forever. The actual proctoring system in
-  //     the assessment will catch face issues during the test.
+  const micCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const networkSpeedMbpsRef = useRef<number | null>(null);
+  const networkLatencyMsRef = useRef<number | null>(null);
+  const browserInfoRef = useRef<ReturnType<typeof detectBrowser> | null>(null);
+
+  // Face verification must pass before the candidate can proceed.
+  // We allow a short grace window for the detector to stabilize, but we no
+  // longer soft-pass "no face" readings.
   const noFaceCountRef = useRef(0);
   const multiFaceCountRef = useRef(0);
-  const MULTI_FACE_HARD_FAIL = 2;     // ~5s at the 2.5s polling cadence
-  const NO_FACE_SOFT_PASS = 4;        // ~10s — long enough that the user
-                                       // had a fair chance to face the cam.
+  const MULTI_FACE_HARD_FAIL = 2;
+  const NO_FACE_HARD_FAIL = 2;
 
   useEffect(() => {
     // Scroll to top when component mounts
@@ -84,6 +95,14 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       if (networkCheckIntervalRef.current) {
         clearInterval(networkCheckIntervalRef.current);
         networkCheckIntervalRef.current = null;
+      }
+      if (micCheckIntervalRef.current) {
+        clearInterval(micCheckIntervalRef.current);
+        micCheckIntervalRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
       }
       // DON'T cleanup stream on unmount - keep it alive for assessment
       // The parent (CandidateAssessmentPortal) will handle stream cleanup
@@ -103,6 +122,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // Handler for when video track ends (camera disabled)
     const handleVideoEnded = () => {
       console.log('[SYSTEM CHECK] Camera track ended - camera was disabled');
+      setHasCameraPreview(false);
       setCameraCheck({
         status: 'error',
         message: 'Camera was disabled. Please re-run checks.'
@@ -158,7 +178,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         audioTrack.removeEventListener('ended', handleAudioEnded);
       }
     };
-  }, [streamRef.current]);
+  }, [hasCameraPreview]);
 
   useEffect(() => {
     // Internet 'warning' (slow but reachable) is allowed — candidate can still proceed.
@@ -171,8 +191,118 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     setAllChecksComplete(allSuccess);
   }, [cameraCheck, micCheck, internetCheck, browserCheck]);
 
+  const stopFaceDetectionPolling = () => {
+    if (faceCheckIntervalRef.current) {
+      clearInterval(faceCheckIntervalRef.current);
+      faceCheckIntervalRef.current = null;
+    }
+  };
+
+  const stopNetworkPolling = () => {
+    if (networkCheckIntervalRef.current) {
+      clearInterval(networkCheckIntervalRef.current);
+      networkCheckIntervalRef.current = null;
+    }
+  };
+
+  const stopMicMonitoring = () => {
+    if (micCheckIntervalRef.current) {
+      clearInterval(micCheckIntervalRef.current);
+      micCheckIntervalRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+  };
+
+  const stopExistingStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setHasCameraPreview(false);
+  };
+
+  const getHealthUrl = () => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    return `${apiBaseUrl.replace(/\/api\/v1\/?$/, '')}/health`;
+  };
+
+  const getAudioRms = (analyser: AnalyserNode): number => {
+    const buffer = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(buffer);
+    const sum = buffer.reduce((acc, value) => acc + value * value, 0);
+    return Math.sqrt(sum / Math.max(buffer.length, 1));
+  };
+
+  const analyzeCurrentVideoFrame = (): { obstructed: boolean; tooDark: boolean } | null => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = Math.max(90, Math.round((video.videoHeight / video.videoWidth) * 160));
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    let total = 0;
+    let totalSq = 0;
+    let min = 255;
+    let max = 0;
+    let edgeTotal = 0;
+    let edgeSamples = 0;
+
+    const luminanceValues = new Float32Array(canvas.width * canvas.height);
+    for (let i = 0, pixel = 0; i < data.length; i += 4, pixel += 1) {
+      const luminance = (0.299 * data[i]) + (0.587 * data[i + 1]) + (0.114 * data[i + 2]);
+      luminanceValues[pixel] = luminance;
+      total += luminance;
+      totalSq += luminance * luminance;
+      min = Math.min(min, luminance);
+      max = Math.max(max, luminance);
+    }
+
+    for (let y = 0; y < canvas.height; y += 1) {
+      for (let x = 1; x < canvas.width; x += 1) {
+        const current = luminanceValues[(y * canvas.width) + x];
+        const left = luminanceValues[(y * canvas.width) + x - 1];
+        edgeTotal += Math.abs(current - left);
+        edgeSamples += 1;
+      }
+    }
+
+    const pixelCount = canvas.width * canvas.height;
+    const averageBrightness = total / Math.max(pixelCount, 1);
+    const variance = (totalSq / Math.max(pixelCount, 1)) - (averageBrightness * averageBrightness);
+    const stdDev = Math.sqrt(Math.max(variance, 0));
+    const dynamicRange = max - min;
+    const averageEdge = edgeTotal / Math.max(edgeSamples, 1);
+    const tooDark = averageBrightness < 18 || max < 28;
+    const tooUniform = stdDev < 10 && dynamicRange < 30;
+    const tooFlat = averageEdge < 5;
+
+    return {
+      obstructed: tooDark || tooUniform || tooFlat,
+      tooDark,
+    };
+  };
+
   const runAllChecks = async () => {
     setIsChecking(true);
+
+    stopFaceDetectionPolling();
+    stopNetworkPolling();
+    stopMicMonitoring();
+    stopExistingStream();
 
     // Reset all checks including camera in use error
     setCameraCheck({ status: 'checking', message: 'Checking...' });
@@ -184,6 +314,9 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // don't leak into this one.
     noFaceCountRef.current = 0;
     multiFaceCountRef.current = 0;
+    networkSpeedMbpsRef.current = null;
+    networkLatencyMsRef.current = null;
+    browserInfoRef.current = null;
 
     // Run checks
     await checkBrowser();
@@ -198,6 +331,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     try {
       const browser = detectBrowser();
       const compat = checkBrowserCompatibility();
+      browserInfoRef.current = browser;
 
       // Store browser type and iOS detection for error messaging
       setBrowserType(browser.name);
@@ -205,19 +339,19 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
       // Check for compatibility issues
       if (!compat.isCompatible) {
-        setBrowserCheck({ status: 'error', message: compat.issues.join(' ') });
+        setBrowserCheck({ status: 'error', message: `${browser.name} detected. ${compat.issues.join(' ')}` });
         setBrowserWarning(compat.warnings[0] || null);
       } else if (shouldUseAdaptiveAssessmentMode(browser)) {
-        setBrowserCheck({ status: 'success', message: `${browser.name} supported (adaptive mode)` });
+        setBrowserCheck({ status: 'success', message: `Detected browser: ${browser.name} (adaptive mode supported)` });
         setBrowserWarning(compat.warnings[0] || 'Adaptive assessment mode will be used for this browser/device.');
       } else if (browser.name === 'Safari' || browser.name === 'iOS Safari') {
-        setBrowserCheck({ status: 'success', message: 'Safari supported' });
+        setBrowserCheck({ status: 'success', message: `Detected browser: ${browser.name}` });
         setBrowserWarning(compat.warnings[0] || null);
       } else if (browser.name === 'Chrome' || browser.name === 'Edge' || browser.name === 'Firefox' || browser.name === 'Arc' || browser.name === 'Brave') {
-        setBrowserCheck({ status: 'success', message: 'Browser supported' });
+        setBrowserCheck({ status: 'success', message: `Detected browser: ${browser.name}` });
         setBrowserWarning(compat.warnings[0] || null);
       } else {
-        setBrowserCheck({ status: 'success', message: `${browser.name} detected` });
+        setBrowserCheck({ status: 'success', message: `Detected browser: ${browser.name}` });
         setBrowserWarning(compat.warnings[0] || null);
       }
     } catch {
@@ -226,19 +360,115 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
+  const measureLatencyMs = async (healthUrl: string): Promise<number | null> => {
+    const latencies: number[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const start = performance.now();
+        await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
+        latencies.push(performance.now() - start);
+      } catch {
+        // ignore and continue with the next attempt
+      }
+    }
+
+    if (!latencies.length) return null;
+    return Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length);
+  };
+
+  const measureDownloadMbps = async (): Promise<number | null> => {
+    const maxMs = 3500;
+    const maxBytes = 10_000_000;
+    const minBytes = 200_000;
+    const sourceUrl = `https://speed.cloudflare.com/__down?bytes=${maxBytes}&_=${Date.now()}`;
+
+    try {
+      const controller = new AbortController();
+      const stopTimer = setTimeout(() => controller.abort(), maxMs + 1500);
+      const start = performance.now();
+      const response = await fetch(sourceUrl, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        clearTimeout(stopTimer);
+        return null;
+      }
+
+      const reader = response.body.getReader();
+      let bytesRead = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) bytesRead += value.length;
+        if ((performance.now() - start) >= maxMs || bytesRead >= maxBytes) {
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore reader cancel errors
+          }
+          controller.abort();
+          break;
+        }
+      }
+
+      clearTimeout(stopTimer);
+      const elapsedSeconds = (performance.now() - start) / 1000;
+      if (bytesRead >= minBytes && elapsedSeconds > 0.15) {
+        return (bytesRead * 8) / (elapsedSeconds * 1_000_000);
+      }
+    } catch {
+      // ignore and fall back to latency / browser estimate below
+    }
+
+    const estimatedDownlink = (navigator as Navigator & {
+      connection?: { downlink?: number };
+    }).connection?.downlink;
+    if (typeof estimatedDownlink === 'number' && Number.isFinite(estimatedDownlink) && estimatedDownlink > 0) {
+      return estimatedDownlink;
+    }
+
+    return null;
+  };
+
   const checkInternet = async () => {
     try {
-      const startTime = Date.now();
-      await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
-      const latency = Date.now() - startTime;
+      const healthUrl = getHealthUrl();
+      const [latency, speedMbps] = await Promise.all([
+        measureLatencyMs(healthUrl),
+        measureDownloadMbps(),
+      ]);
 
-      if (latency < 200) {
-        setInternetCheck({ status: 'success', message: `Excellent connection (${latency}ms)` });
-      } else if (latency < 500) {
-        setInternetCheck({ status: 'success', message: `Good connection (${latency}ms)` });
+      networkLatencyMsRef.current = latency;
+      networkSpeedMbpsRef.current = speedMbps;
+
+      if (speedMbps !== null) {
+        if (speedMbps >= 5) {
+          setInternetCheck({
+            status: 'success',
+            message: `Speed: ${speedMbps.toFixed(1)} Mbps${latency !== null ? ` • ${latency}ms latency` : ''}`,
+          });
+        } else {
+          setInternetCheck({
+            status: 'warning',
+            message: `Speed: ${speedMbps.toFixed(1)} Mbps${latency !== null ? ` • ${latency}ms latency` : ''} — connection may be unstable`,
+          });
+        }
+      } else if (latency !== null) {
+        if (latency < 500) {
+          setInternetCheck({
+            status: 'success',
+            message: `Latency: ${latency}ms • speed test unavailable on this network`,
+          });
+        } else {
+          setInternetCheck({
+            status: 'warning',
+            message: `Latency: ${latency}ms • speed test unavailable on this network`,
+          });
+        }
       } else {
-        // Slow but reachable — warn without blocking; polling may improve it
-        setInternetCheck({ status: 'warning', message: `Slow connection (${latency}ms) — the interview may still work` });
+        setInternetCheck({ status: 'error', message: 'Unable to measure internet connection' });
       }
     } catch {
       setInternetCheck({ status: 'error', message: 'No internet connection' });
@@ -247,27 +477,14 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const startNetworkPolling = () => {
     if (networkCheckIntervalRef.current) clearInterval(networkCheckIntervalRef.current);
-    // Re-check every 5 s so the mark updates as soon as the network improves
-    networkCheckIntervalRef.current = setInterval(checkInternet, 5000);
+    // Re-check every 15 s to keep the displayed speed current without
+    // continuously consuming bandwidth with full download tests.
+    networkCheckIntervalRef.current = setInterval(checkInternet, 15000);
   };
 
   // GitHub CDN hosts the actual weight files (npm package does not include them)
   const FACE_API_MODEL_URL = '/models/';
 
-  // Apply face-count rules with separate handling for the two failure modes.
-  //
-  // 1 face            → ✅ pass immediately, reset both counters.
-  // 0 faces           → soft path. Keep "checking" for a few cycles to give
-  //                     the candidate a chance to settle, then soft-pass —
-  //                     the camera is working, the detector just can't see
-  //                     a face reliably (common with glasses, low light, or
-  //                     a flaky native FaceDetector). Proctoring during the
-  //                     assessment will still catch face-missing events.
-  // 2+ faces          → hard fail after 2 consecutive readings, since this
-  //                     is a real "someone else in the frame" signal.
-  //
-  // Polling continues regardless of state, so the mark recovers automatically
-  // the moment a "1 face" reading comes through.
   const applyFaceCountResult = (count: number) => {
     if (count === 1) {
       noFaceCountRef.current = 0;
@@ -294,17 +511,24 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       return;
     }
 
-    // count === 0 — lenient path.
+    // count === 0 — the candidate must be visible before system check can pass.
     multiFaceCountRef.current = 0;
     noFaceCountRef.current += 1;
-    if (noFaceCountRef.current >= NO_FACE_SOFT_PASS) {
-      // Detector can't see a face after several attempts. Don't block the
-      // candidate — the camera stream is alive (otherwise we wouldn't be
-      // here), so treat it as a soft success. Subsequent polls still run,
-      // so if the face becomes detectable later we'll upgrade the message.
+    const frameAnalysis = analyzeCurrentVideoFrame();
+    if (frameAnalysis?.obstructed) {
       setCameraCheck({
-        status: 'success',
-        message: 'Camera working (face check unavailable — please ensure good lighting during the assessment)',
+        status: 'error',
+        message: frameAnalysis.tooDark
+          ? 'Camera appears too dark, covered, or blank. Please uncover the camera and improve lighting.'
+          : 'Camera appears covered or obstructed. Please clear the lens and face the camera.',
+      });
+      return;
+    }
+
+    if (noFaceCountRef.current >= NO_FACE_HARD_FAIL) {
+      setCameraCheck({
+        status: 'error',
+        message: 'No face detected. Position your face clearly in front of the camera.',
       });
     } else {
       setCameraCheck({
@@ -318,7 +542,10 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const runFaceDetection = async () => {
     if (!videoRef.current) return;
     try {
-      const FaceDetector = (window as any).FaceDetector;
+      const FaceDetector = (window as BrowserWindow).FaceDetector;
+      if (!FaceDetector) {
+        throw new Error('native_face_detector_unavailable');
+      }
       const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
       const faces = await detector.detect(videoRef.current);
       applyFaceCountResult(faces.length);
@@ -348,7 +575,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     } catch (err) {
       // Model load failed or inference error — camera is accessible but we can't verify face
       console.warn('[SYSTEM CHECK] face-api.js detection failed:', err);
-      setCameraCheck({ status: 'success', message: 'Camera working (face check unavailable on this browser)' });
+      setCameraCheck({ status: 'error', message: 'Unable to verify your face. Please refresh the page and re-run the checks.' });
     }
   };
 
@@ -367,6 +594,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       // Use enhanced getUserMedia with cross-browser support
       const stream = await getUserMedia({ video: true, audio: true });
       streamRef.current = stream;
+      setHasCameraPreview(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -398,19 +626,84 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
           startFaceDetectionPolling(true);
         }
       } else {
+        setHasCameraPreview(false);
         setCameraCheck({ status: 'error', message: 'No video track available' });
       }
 
       if (audioTracks.length > 0) {
-        setMicCheck({ status: 'success', message: 'Microphone working' });
+        const AudioContextImpl: typeof AudioContext | undefined =
+          window.AudioContext || (window as BrowserWindow).webkitAudioContext;
+
+        if (!AudioContextImpl) {
+          setMicCheck({ status: 'error', message: 'This browser cannot verify microphone input.' });
+          return;
+        }
+
+        const audioContext = new AudioContextImpl();
+        audioContextRef.current = audioContext;
+
+        try {
+          await audioContext.resume();
+        } catch {
+          // ignore resume errors; state polling below handles delayed startup
+        }
+
+        let waitMs = 0;
+        while (audioContext.state !== 'running' && waitMs < 2000) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          waitMs += 100;
+        }
+
+        const micOnlyStream = new MediaStream(audioTracks);
+        const source = audioContext.createMediaStreamSource(micOnlyStream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        setMicCheck({ status: 'checking', message: 'Listening — say something to confirm your microphone...' });
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+
+        let ambientLevel = getAudioRms(analyser);
+        if (ambientLevel < 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          ambientLevel = getAudioRms(analyser);
+        }
+
+        const voiceThreshold = Math.max(ambientLevel * 1.8, 8);
+        let voiceDetected = false;
+
+        if (micCheckIntervalRef.current) {
+          clearInterval(micCheckIntervalRef.current);
+        }
+        micCheckIntervalRef.current = setInterval(() => {
+          const level = getAudioRms(analyser);
+          if (level >= voiceThreshold) {
+            voiceDetected = true;
+            if (micCheckIntervalRef.current) {
+              clearInterval(micCheckIntervalRef.current);
+              micCheckIntervalRef.current = null;
+            }
+            setMicCheck({ status: 'success', message: 'Voice detected — microphone working correctly' });
+            return;
+          }
+
+          if (!voiceDetected) {
+            setMicCheck(
+              level >= 1
+                ? { status: 'checking', message: 'Listening — say something to confirm your microphone...' }
+                : { status: 'checking', message: 'No audio detected — speak clearly or unmute your microphone.' },
+            );
+          }
+        }, 150);
       } else {
         setMicCheck({ status: 'error', message: 'No audio track available' });
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error('Unknown media device error');
       console.error('[SYSTEM CHECK] Media device error:', {
-        name: err.name,
-        message: err.message,
+        name: error.name,
+        message: error.message,
         browser: browserType,
         isIOS: isIOS,
         fullError: err
@@ -418,7 +711,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
       // Get browser info for error messages
       const browser = detectBrowser();
-      const errorMessage = err.message || '';
+      const errorMessage = error.message || '';
 
       // Handle standardized error codes from getUserMedia
       if (errorMessage === 'PERMISSION_DENIED') {
@@ -444,6 +737,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         setMicCheck({ status: 'error', message: msg });
       } else {
         // For unknown errors, show user-friendly message
+        setHasCameraPreview(false);
         setCameraCheck({ status: 'error', message: 'Camera error - please check if camera is available' });
         setMicCheck({ status: 'error', message: 'Microphone error - please check if microphone is available' });
       }
@@ -461,7 +755,17 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         microphone_available: micCheck.status === 'success',
         screen_share_available: false,
         browser_compatible: browserCheck.status === 'success',
-        internet_speed_mbps: null
+        internet_speed_mbps: networkSpeedMbpsRef.current,
+        browser_info: browserInfoRef.current
+          ? {
+              name: browserInfoRef.current.name,
+              is_ios: browserInfoRef.current.isIOS,
+              is_mobile: browserInfoRef.current.isMobile,
+              supports_media_devices: browserInfoRef.current.supportsMediaDevices,
+              supports_fullscreen: browserInfoRef.current.supportsFullscreen,
+              measured_latency_ms: networkLatencyMsRef.current,
+            }
+          : undefined,
       };
 
       await candidateService.submitSystemCheck(token, results);
@@ -615,7 +919,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         <div className="w-full px-6 lg:px-12 text-center">
           <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">System Check</h1>
           <p className="text-blue-100 text-lg">
-            Let's make sure your system is ready for the assessment
+            Let&apos;s make sure your system is ready for the assessment
           </p>
         </div>
       </div>
@@ -635,7 +939,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                   muted
                   className="w-full h-full object-cover"
                 />
-                {cameraCheck.status !== 'success' && (
+                {!hasCameraPreview && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Camera className="w-20 h-20 text-gray-600" />
                   </div>
@@ -720,7 +1024,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
               {allChecksComplete && (
                 <div className="mt-6 p-5 bg-green-50 rounded-xl flex items-center gap-4">
                   <CheckCircle className="w-6 h-6 text-green-600" />
-                  <p className="text-green-700 font-semibold">All checks passed! You're ready to start.</p>
+                  <p className="text-green-700 font-semibold">All checks passed! You&apos;re ready to start.</p>
                 </div>
               )}
 
@@ -774,7 +1078,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                             <li>In Safari: Check Safari → Preferences → Websites → Camera permissions</li>
                           )}
                           <li>If problems persist, restart your browser</li>
-                          <li>Click "Run Checks" again once you've closed other apps</li>
+                          <li>Click &quot;Run Checks&quot; again once you&apos;ve closed other apps</li>
                         </ol>
                       </div>
                     </div>

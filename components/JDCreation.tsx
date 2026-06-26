@@ -13,6 +13,7 @@ import { jdService, masterDataService, ExperienceLevel, EducationLevel, Industry
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
+import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency } from '@/lib/utils/salary';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { State as CSCState, City as CSCCity } from 'country-state-city';
@@ -143,6 +144,36 @@ const isEnglishOnly = (text: string): boolean => {
   const nonLatinPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F]/u;
   return !nonLatinPattern.test(text);
 };
+
+const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English only. Other languages are not supported.';
+
+const validateEnglishOnlyJobTitle = (value: string): boolean => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue || isEnglishOnly(trimmedValue)) {
+    return true;
+  }
+
+  toast.error({
+    title: 'English Only',
+    description: JOB_TITLE_ENGLISH_ONLY_MESSAGE,
+  });
+  return false;
+};
+
+const validateEnglishOnlyExtractedValue = (value: string, fieldLabel: string): boolean => {
+  if (isEnglishOnly(value)) {
+    return true;
+  }
+
+  toast.error({
+    title: 'English only',
+    description: `${fieldLabel} must be written in English only. Other languages are not supported.`,
+  });
+  return false;
+};
+
+const isPromptConflictMessage = (message: string): boolean =>
+  /conflicts with the job title|different role|change the job title/i.test(message);
 
 interface ExtractedData {
   mustHaveSkills: string[];
@@ -897,8 +928,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     // Both are filled - validate range
-    if (minSalary >= maxSalary) {
-      return 'Maximum salary must be greater than minimum salary.';
+    if (minSalary > maxSalary) {
+      return 'Maximum salary cannot be less than minimum salary.';
     }
 
     return undefined;
@@ -1200,7 +1231,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (step !== 'create') return;
 
     // Need at least 1 non-space character in job title
-    if (!jobTitle.trim()) return;
+    const trimmedJobTitle = jobTitle.trim();
+    if (!trimmedJobTitle) return;
+    if (!isEnglishOnly(trimmedJobTitle)) {
+      setAutosaveStatus('idle');
+      return;
+    }
 
     const autosaveTimer = setTimeout(async () => {
       // Don't autosave if currently saving via another action or already published
@@ -1216,7 +1252,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           : manualJD;
 
         const jdData = {
-          title: jobTitle.trim(),  // Trim spaces before saving
+          title: trimmedJobTitle,
           description: description,
           creation_stage: 'create' as const,
           creation_method: (mode === 'ai' ? 'ai_generated' : 'manual') as 'ai_generated' | 'manual',
@@ -1322,6 +1358,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   }, []);
 
   const handleGenerateJD = async () => {
+    const trimmedJobTitle = jobTitle.trim();
+
+    if (!trimmedJobTitle) {
+      toast.error({
+        title: 'Job Title Required',
+        description: 'Please enter a job title before generating the JD.',
+      });
+      return;
+    }
+
+    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
     // Validate AI prompt before proceeding
     const promptLength = aiPrompt.trim().length;
     if (promptLength < VALIDATION.AI_PROMPT.min) {
@@ -1358,10 +1408,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     // Validate AI prompt is in English only
-    if (!isEnglishOnly(jobTitle) || !isEnglishOnly(aiPrompt)) {
+    if (!isEnglishOnly(aiPrompt)) {
       toast.error({
         title: 'English Only',
-        description: 'Job title and AI prompt must be written in English. Other languages are not supported.',
+        description: 'AI prompt must be written in English only. Other languages are not supported.',
       });
       return;
     }
@@ -1392,7 +1442,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setStreamError(null);
     setGeneratedJD(''); // Clear previous content
 
-    const prompt = `${jobTitle}${aiPrompt ? ` - ${aiPrompt}` : ''}`;
+    const generationInput = {
+      jobTitle: trimmedJobTitle,
+      aiPrompt: aiPrompt.trim(),
+    };
 
     // Helper function to process extracted params from generation response
     // This pre-fills step 2 form with salary, skills, etc. extracted by backend
@@ -1421,6 +1474,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Pre-fill salary from AI extraction
         salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || prev.salaryFrom || '') : (prev.salaryFrom || ''),
         salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || prev.salaryTo || '') : (prev.salaryTo || ''),
+        salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -1444,10 +1498,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     };
 
     // Fallback function for non-streaming
-    const fallbackToNonStreaming = async (prompt: string) => {
+    const fallbackToNonStreaming = async () => {
       try {
         console.log('[TalentFlow] Falling back to non-streaming API');
-        const response = await jdService.generate(prompt);
+        const response = await jdService.generate(generationInput);
 
         if (response?.description) {
           if (response.title) {
@@ -1477,6 +1531,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             title: 'OpenAI Quota Exceeded',
             description: 'The AI service is temporarily unavailable. Please try again later or contact support.'
           });
+        } else if (error instanceof Error && error.message) {
+          toast.error({
+            title: 'Generation Failed',
+            description: error.message,
+          });
         } else {
           toast.error({
             title: 'Generation Failed',
@@ -1489,7 +1548,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     try {
       // Try streaming first
-      await jdService.generateStream(prompt, {
+      await jdService.generateStream(generationInput, {
         onChunk: (content: string) => {
           // Accumulate markdown chunks progressively and display them
           setStreamedContent((prev) => prev + content);
@@ -1551,8 +1610,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             return;
           }
 
+          if (isPromptConflictMessage(message)) {
+            toast.error({
+              title: 'Prompt Conflict',
+              description: message,
+            });
+            setIsGenerating(false);
+            return;
+          }
+
           // Fall back to non-streaming for other errors
-          fallbackToNonStreaming(prompt).catch(() => {
+          fallbackToNonStreaming().catch(() => {
             // Error already handled in fallback function
           });
         }
@@ -1561,8 +1629,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.error('[TalentFlow] Streaming failed, falling back:', streamErr);
       setIsStreaming(false);
 
+      if (streamErr instanceof Error && isPromptConflictMessage(streamErr.message)) {
+        toast.error({
+          title: 'Prompt Conflict',
+          description: streamErr.message,
+        });
+        setIsGenerating(false);
+        return;
+      }
+
       // Fall back to non-streaming API
-      await fallbackToNonStreaming(prompt).catch(() => {
+      await fallbackToNonStreaming().catch(() => {
         // Error already handled in fallback function
       });
     } finally {
@@ -1572,7 +1649,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   const handleNext = async () => {
+    const trimmedJobTitle = jobTitle.trim();
     const jdText = mode === 'ai' ? generatedJD : manualJD;
+
+    if (!trimmedJobTitle) {
+      toast.error({
+        title: 'Job Title Required',
+        description: 'Please enter a valid job title before moving to the next step.',
+      });
+      return;
+    }
+
+    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
 
     // Validate JD input is not empty
     if (!jdText || jdText.trim().length < 50) {
@@ -1588,6 +1678,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       toast.error({
         title: 'Please enter a valid Job Description',
         description: 'JD must contain meaningful text, not just symbols or special characters.',
+      });
+      return;
+    }
+
+    // JD extraction only supports English content, even if an AI-generated JD
+    // was later edited by the recruiter.
+    if (!isEnglishOnly(jdText)) {
+      toast.error({
+        title: 'English Only',
+        description: mode === 'ai'
+          ? 'AI-generated job descriptions must remain in English. Other languages are not supported for extraction.'
+          : 'Manual job descriptions must be written in English. Other languages are not supported for extraction.',
       });
       return;
     }
@@ -1873,7 +1975,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || extractedData.salaryFrom || '') : (extractedData.salaryFrom || ''),
         salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || extractedData.salaryTo || '') : (extractedData.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
-        salaryCurrency: (params.salary_currency as 'INR' | 'USD') || extractedData.salaryCurrency || 'INR',
+        salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
           radius: '50'  // Default radius
@@ -1941,7 +2043,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // Save JD with creation_stage: 'extract' so refresh preserves the stage
       console.log('[TalentFlow] Saving JD with extract stage, editingId:', editingId);
       const jdData = {
-        title: jobTitle.trim(),
+        title: trimmedJobTitle,
         description: jdText,
         creation_stage: 'extract' as const,
         creation_method: (mode === 'ai' ? 'ai_generated' : 'manual') as 'ai_generated' | 'manual',
@@ -2047,6 +2149,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleAddSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
     if (newSkill.trim()) {
       const skillToAdd = newSkill.trim();
+      const fieldLabel = category === 'mustHaveSkills' ? 'Must-have skills' : 'Nice-to-have skills';
+
+      if (!validateEnglishOnlyExtractedValue(skillToAdd, fieldLabel)) {
+        return;
+      }
+
       console.log('[Add] Adding skill:', skillToAdd, 'to', category);
 
       // Calculate updated arrays
@@ -2175,6 +2283,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleAddComment = async () => {
     if (newComment.trim()) {
       const commentToAdd = newComment.trim();
+
+      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Must-have comments')) {
+        return;
+      }
+
       const updatedComments = [...extractedData.mustHaveComments, commentToAdd];
 
       setExtractedData(prev => ({
@@ -2233,6 +2346,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (editingSkillIndex && editingSkillValue.trim()) {
       const { category, index } = editingSkillIndex;
       const newValue = editingSkillValue.trim();
+      const fieldLabel = category === 'mustHaveSkills' ? 'Must-have skills' : 'Nice-to-have skills';
+
+      if (!validateEnglishOnlyExtractedValue(newValue, fieldLabel)) {
+        return;
+      }
 
       // Calculate updated arrays
       const updatedMustHave = category === 'mustHaveSkills'
@@ -2279,6 +2397,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleSaveEditComment = async () => {
     if (editingCommentIndex !== null && editingCommentValue.trim()) {
       const newValue = editingCommentValue.trim();
+
+      if (!validateEnglishOnlyExtractedValue(newValue, 'Must-have comments')) {
+        return;
+      }
+
       const updatedComments = extractedData.mustHaveComments.map((comment, i) =>
         i === editingCommentIndex ? newValue : comment
       );
@@ -2313,9 +2436,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Nice-to-Have Comments handlers
   const handleAddNiceComment = () => {
     if (newComment.trim()) {
+      const commentToAdd = newComment.trim();
+
+      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Nice-to-have comments')) {
+        return;
+      }
+
       setExtractedData(prev => ({
         ...prev,
-        niceToHaveComments: [...(prev.niceToHaveComments || []), newComment.trim()],
+        niceToHaveComments: [...(prev.niceToHaveComments || []), commentToAdd],
       }));
       setNewComment('');
       setEditingCategory(null);
@@ -2351,10 +2480,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const handleSaveEditNiceComment = () => {
     if (editingNiceCommentIndex !== null && editingNiceCommentValue.trim()) {
+      const newValue = editingNiceCommentValue.trim();
+
+      if (!validateEnglishOnlyExtractedValue(newValue, 'Nice-to-have comments')) {
+        return;
+      }
+
       setExtractedData(prev => ({
         ...prev,
         niceToHaveComments: (prev.niceToHaveComments || []).map((comment, i) =>
-          i === editingNiceCommentIndex ? editingNiceCommentValue.trim() : comment
+          i === editingNiceCommentIndex ? newValue : comment
         ),
       }));
       markExtractedDataModified(); // Mark as modified for regeneration
@@ -2624,6 +2759,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   const handlePublish = async () => {
+    const trimmedJobTitle = jobTitle.trim();
+
+    if (!trimmedJobTitle) {
+      toast.error({
+        title: 'Job Title Required',
+        description: 'Please enter a valid job title before continuing.',
+      });
+      return;
+    }
+
+    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
     // Debug logging for validation
     console.log('[TalentFlow] handlePublish validation check:', {
       education: extractedData.education,
@@ -2775,6 +2924,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             supported_languages: extractedData.suggestedLanguages,
             salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
             salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
 
@@ -2845,7 +2995,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const experienceMax = experiencePayload.experienceMax;
 
       const jdData = {
-        title: jobTitle.trim(),
+        title: trimmedJobTitle,
         description: finalDescription,  // Use finalDescription to avoid React state async issues
         creation_stage: 'review' as const,
         creation_method: (mode === 'ai' ? 'ai_generated' : 'manual') as 'ai_generated' | 'manual',
@@ -2953,6 +3103,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // JD12: Compute validation status for review screen
   const getValidationStatus = () => {
     const missingFields: string[] = [];
+    const trimmedJobTitle = jobTitle.trim();
+
+    if (!trimmedJobTitle) {
+      missingFields.push('Job Title');
+    } else if (!isEnglishOnly(trimmedJobTitle)) {
+      missingFields.push('Job Title must be written in English only');
+    }
 
     if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
       missingFields.push('At least one Must-Have Skill');
@@ -3003,6 +3160,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Handle regenerating JD based on modified extracted data
   const handleRegenerateFromExtractedData = async () => {
+    const trimmedJobTitle = jobTitle.trim();
+    if (!trimmedJobTitle) {
+      toast.error({
+        title: 'Job Title Required',
+        description: 'Please enter a valid job title before regenerating the JD.',
+      });
+      return;
+    }
+
+    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
     setIsRegenerating(true);
 
     try {
@@ -3022,9 +3192,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         ? `Location: ${extractedData.locations.map(l => l.city).join(', ')}`
         : '';
 
-      const regeneratePrompt = `${jobTitle} - Skills: ${skillsText}. ${requirementsText}. ${locationsText}`;
+      const regenerateDetailsPrompt = [
+        skillsText ? `Skills: ${skillsText}` : '',
+        requirementsText,
+        locationsText,
+      ].filter(Boolean).join('. ') || 'Regenerate the JD using the extracted details.';
 
-      const response = await jdService.generate(regeneratePrompt);
+      const response = await jdService.generate({
+        jobTitle: trimmedJobTitle,
+        aiPrompt: regenerateDetailsPrompt,
+      });
 
       if (response?.description) {
         setGeneratedJD(response.description);
@@ -3047,7 +3224,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   const handleConfirmPublish = async () => {
+    const trimmedJobTitle = jobTitle.trim();
     console.log('[DEBUG] handleConfirmPublish called');
+
+    if (!trimmedJobTitle) {
+      toast.error({
+        title: 'Job Title Required',
+        description: 'Please enter a valid job title before publishing.',
+      });
+      return;
+    }
+
+    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+      return;
+    }
+
     setIsPublishing(true);
 
     try {
@@ -3084,6 +3275,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             supported_languages: extractedData.suggestedLanguages,
             salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
             salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
@@ -3105,7 +3297,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       // Build the JD data for backend
       const jdData = {
-        title: jobTitle.trim(),  // Trim spaces before saving
+        title: trimmedJobTitle,
         description: publishDescription,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
@@ -3186,7 +3378,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (onPublish) {
         const newJob = {
           id: publishedJd.id,
-          title: jobTitle.trim(),
+          title: trimmedJobTitle,
           department: extractedData.department || '',
           location: extractedData.locations.length > 0
             ? extractedData.locations[0].city
@@ -3203,8 +3395,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           niceToHaveSkills: extractedData.niceToHaveSkills,
           education: extractedData.education,
           experience: extractedData.experience,
-          salary: extractedData.salaryFrom && extractedData.salaryTo
-            ? `${extractedData.salaryFrom} - ${extractedData.salaryTo} (${extractedData.compensationType})`
+          salary: extractedData.salaryFrom || extractedData.salaryTo
+            ? `${formatSalaryRange({
+                min: extractedData.salaryFrom,
+                max: extractedData.salaryTo,
+                currency: extractedData.salaryCurrency,
+              })} (${extractedData.compensationType})`
             : undefined,
         } as unknown as Job;
 
@@ -3358,12 +3554,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Save JD as draft
   const handleSaveDraft = async () => {
+    const trimmedJobTitle = jobTitle.trim();
+
     // Validate job title has at least 1 non-space character
-    if (!jobTitle.trim()) {
+    if (!trimmedJobTitle) {
       toast.warning({
         title: 'Cannot save draft',
         description: 'Please enter a job title',
       });
+      return;
+    }
+
+    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
       return;
     }
 
@@ -3383,7 +3585,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.log('[DEBUG] handleSaveDraft - descriptionToSave:', descriptionToSave?.substring(0, 100));
 
       const jdData = {
-        title: jobTitle.trim(),  // Trim spaces before saving
+        title: trimmedJobTitle,
         description: descriptionToSave,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
@@ -3662,7 +3864,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           salaryFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
           salaryTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
           compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
-          salaryCurrency: (effectiveEditingJD.salary_currency === 'USD' ? 'USD' : 'INR'),
+          salaryCurrency: normalizeSalaryCurrency(effectiveEditingJD.salary_currency),
           assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: effectiveEditingJD.must_have_comments || [],
@@ -3850,17 +4052,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || !isEnglishOnly(jobTitle))
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
-                          {jobTitle.length > 0 && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
+                          {jobTitle.length > 0 && !isEnglishOnly(jobTitle) && 'Job title must be written in English only'}
+                          {jobTitle.length > 0 && isEnglishOnly(jobTitle) && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
                         </p>
-                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -3937,6 +4140,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         return (
                           isJDInUse ||
                           !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
+                          !isEnglishOnly(jobTitle) ||
                           // Always require AI prompt with min/max length validation (for both generate and regenerate)
                           promptLength < VALIDATION.AI_PROMPT.min ||
                           promptLength > VALIDATION.AI_PROMPT.max ||
@@ -4002,16 +4206,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || !isEnglishOnly(jobTitle))
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
-                          {jobTitle.length < VALIDATION.JOB_TITLE.min && jobTitle.length > 0 && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                          {jobTitle.length > 0 && !isEnglishOnly(jobTitle) && 'Job title must be written in English only'}
+                          {jobTitle.length > 0 && isEnglishOnly(jobTitle) && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
                         </p>
-                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -4028,14 +4233,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Paste or write your job description here..."
                         rows={20}
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
-                          manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
+                          manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || !isEnglishOnly(manualJD))
                             ? 'border-red-300 bg-red-50'
                             : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !containsMeaningfulText(manualJD) ? 'text-red-500' : getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
-                          {manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !containsMeaningfulText(manualJD)
+                        <p className={`text-xs ${manualJD.length > 0 && ((isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && (!containsMeaningfulText(manualJD) || !isEnglishOnly(manualJD))) || !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)) ? 'text-red-500' : getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
+                          {manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !isEnglishOnly(manualJD)
+                            ? 'Manual JD must be written in English only'
+                            : manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !containsMeaningfulText(manualJD)
                             ? 'JD must contain meaningful text, not just symbols or special characters'
                             : manualJD.length < VALIDATION.MANUAL_JD.min && manualJD.length > 0 && `Min ${VALIDATION.MANUAL_JD.min} characters required`}
                         </p>
@@ -4162,12 +4369,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </div>
 
                       {isEditingJD ? (
-                        <textarea
-                          value={generatedJD}
-                          onChange={(e) => setGeneratedJD(e.target.value)}
-                          readOnly={isJDInUse}
-                          className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-xs sm:text-sm text-black ${isJDInUse ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''}`}
-                        />
+                        <>
+                          <textarea
+                            value={generatedJD}
+                            onChange={(e) => setGeneratedJD(e.target.value)}
+                            readOnly={isJDInUse}
+                            className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-xs sm:text-sm text-black ${
+                              generatedJD.length > 0 && !isEnglishOnly(generatedJD)
+                                ? 'border-red-300 bg-red-50'
+                                : 'border-gray-200 dark:border-slate-700'
+                            } ${isJDInUse ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''}`}
+                          />
+                          {generatedJD.length > 0 && !isEnglishOnly(generatedJD) && (
+                            <p className="mt-1 text-xs text-red-500">
+                              AI-generated JD must remain in English only before moving to the next step.
+                            </p>
+                          )}
+                        </>
                       ) : (
                         <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 markdown-content">
                           <ReactMarkdown
@@ -4223,7 +4441,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   isStreaming ||
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                  (mode === 'ai' ? !generatedJD || !containsMeaningfulText(generatedJD) : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
+                  !isEnglishOnly(jobTitle) ||
+                  (mode === 'ai'
+                    ? !generatedJD || !containsMeaningfulText(generatedJD) || !isEnglishOnly(generatedJD)
+                    : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || !isEnglishOnly(manualJD))
                 }
                 className="flex items-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white px-4 py-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
@@ -4746,7 +4967,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{extractedData.salaryCurrency === 'USD' ? '$' : '₹'}</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{getSalaryCurrencySymbol(extractedData.salaryCurrency)}</span>
                       <input
                         type="text"
                         value={extractedData.salaryFrom || ''}
@@ -4768,7 +4989,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                     <span className="text-gray-400 dark:text-slate-500 hidden sm:block">–</span>
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{extractedData.salaryCurrency === 'USD' ? '$' : '₹'}</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{getSalaryCurrencySymbol(extractedData.salaryCurrency)}</span>
                       <input
                         type="text"
                         value={extractedData.salaryTo || ''}
@@ -6268,7 +6489,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                     {(extractedData.salaryFrom || extractedData.salaryTo) && (
                       <div className="mt-3 text-sm text-green-700 font-medium">
-                        💰 ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} - ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'} / {extractedData.compensationType}
+                        💰 {formatSalaryRange({
+                          min: extractedData.salaryFrom,
+                          max: extractedData.salaryTo,
+                          currency: extractedData.salaryCurrency,
+                        })} / {extractedData.compensationType}
                       </div>
                     )}
                   </div>
@@ -6457,8 +6682,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
                 <div className="bg-green-50 p-3 sm:p-4 rounded-lg inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <span className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
-                    ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} -
-                    ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'}
+                    {formatSalaryRange({
+                      min: extractedData.salaryFrom,
+                      max: extractedData.salaryTo,
+                      currency: extractedData.salaryCurrency,
+                    })}
                   </span>
                   <span className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">/ {extractedData.compensationType}</span>
                 </div>
