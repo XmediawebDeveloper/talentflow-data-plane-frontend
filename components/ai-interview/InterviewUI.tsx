@@ -1414,6 +1414,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const audioEndReceivedRef = useRef(false);
   const currentAiTextRef = useRef("");
   const recognitionRef = useRef<BrowserSpeechRecognitionLike | null>(null);
+  // Preemptive-restart timer — fires at 55s to stop the session cleanly before
+  // Chrome/Edge's 60s hard kill or Safari's 15-30s kill causes a forced gap.
+  const webSpeechPreemptiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBrowserTranscriptTextRef = useRef("");
   const lastBrowserTranscriptUpdateAtRef = useRef<number | null>(null);
   const lastLiveTranscriptTextRef = useRef("");
@@ -2569,9 +2572,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // the same stop event (Safari behaviour — see onerror below).
     let _restartScheduled = false;
 
+    // Arms a 55s preemptive-stop so we cleanly restart before Chrome/Edge's
+    // 60s hard kill (or Safari's 15-30s kill). onend fires from the clean stop
+    // → _scheduleRestart() → 150ms → recognition.start() → re-arm.
+    const _armPreemptiveTimer = () => {
+      if (webSpeechPreemptiveTimerRef.current !== null) {
+        clearTimeout(webSpeechPreemptiveTimerRef.current);
+      }
+      webSpeechPreemptiveTimerRef.current = setTimeout(() => {
+        webSpeechPreemptiveTimerRef.current = null;
+        if (recognitionRef.current === recognition && isRecordingRef.current && !isAiSpeakingRef.current) {
+          try { recognition.stop(); } catch {}
+        }
+      }, 55_000);
+    };
+
     const _scheduleRestart = () => {
       if (_restartScheduled) return;          // already queued — don't double-fire
       _restartScheduled = true;
+      // Clear any pending preemptive timer — the new session will re-arm it.
+      if (webSpeechPreemptiveTimerRef.current !== null) {
+        clearTimeout(webSpeechPreemptiveTimerRef.current);
+        webSpeechPreemptiveTimerRef.current = null;
+      }
       setTimeout(() => {
         _restartScheduled = false;
         if (
@@ -2581,29 +2604,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         ) {
           return;
         }
-        try { recognition.start(); } catch {}
+        try {
+          recognition.start();
+          _armPreemptiveTimer();
+        } catch {}
       }, 150);
     };
+
+    // Counts not-allowed/service-not-allowed occurrences for this recognition instance.
+    // Chrome fires service-not-allowed transiently on the very first Web Speech API
+    // call in a session (service cold-start). One retry fixes Q1; a second occurrence
+    // means genuine permission denial and we mark fatal.
+    let _permissionErrorCount = 0;
 
     recognition.onerror = (event: { error: string }) => {
       const err = (event?.error || '');
       if (err === 'not-allowed' || err === 'service-not-allowed') {
-        // Permission denied — no point retrying; onend will check _fatalError.
-        _fatalError = true;
-        console.warn('[WebSpeech] Permission denied — disabling browser recognition');
-      } else if (err === 'aborted') {
-        // Safari / iOS: recognition is aborted before it starts (common on first
-        // call or after a brief mic-unavailability window). Unlike Chrome, Safari
-        // does not reliably fire onend after an aborted error — so we schedule
-        // the restart directly here as a safety net. _scheduleRestart() is
-        // idempotent: if onend also fires (Chrome/Edge path), the second call is
-        // a no-op and no double-start occurs.
+        _permissionErrorCount++;
+        if (_permissionErrorCount === 1 && isRecordingRef.current && !isAiSpeakingRef.current) {
+          // First occurrence may be transient (Chrome service cold-start on Q1).
+          // Retry once with a longer delay so the service has time to initialize.
+          console.warn('[WebSpeech] Permission/service error on first call — retrying once:', err);
+          setTimeout(() => {
+            if (recognitionRef.current === recognition && isRecordingRef.current && !isAiSpeakingRef.current) {
+              try { recognition.start(); _armPreemptiveTimer(); } catch {}
+            }
+          }, 500);
+        } else {
+          // Second occurrence or not recording — genuine denial, stop retrying.
+          _fatalError = true;
+          console.warn('[WebSpeech] Permission denied — disabling browser recognition:', err);
+        }
+      } else {
+        // aborted (Safari/iOS), no-speech, network, audio-capture — all transient.
+        // _scheduleRestart() is idempotent: onend still fires on Chrome/Edge after
+        // onerror, so the second call is a no-op. On Safari, onend may NOT fire
+        // after these errors — so schedule here as a safety net for all browsers.
         if (!_fatalError && isRecordingRef.current && !isAiSpeakingRef.current) {
           _scheduleRestart();
         }
       }
-      // All other errors (no-speech, network, audio-capture) are transient.
-      // onend fires after onerror on Chrome/Edge and handles the restart there.
     };
 
     recognition.onend = () => {
@@ -2632,10 +2672,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       _scheduleRestart();
     };
     recognitionRef.current = recognition;
-    try { recognition.start(); } catch {}
+    try {
+      recognition.start();
+      _armPreemptiveTimer();
+    } catch {}
   }, [buildStableLiveTranscriptPreview, flushPreSpeechAudioToBackend, sendLiveTranscriptBatch, isFlexibleMode, isNewFlexibleMode]);
 
   const stopWebSpeechRecognition = useCallback(() => {
+    if (webSpeechPreemptiveTimerRef.current !== null) {
+      clearTimeout(webSpeechPreemptiveTimerRef.current);
+      webSpeechPreemptiveTimerRef.current = null;
+    }
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); recognitionRef.current = null; } catch {}
     }
