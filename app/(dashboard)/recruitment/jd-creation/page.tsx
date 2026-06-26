@@ -336,6 +336,7 @@ function JDCreationContent() {
       industry_type: editingJD.industry_type,
       salary_min: editingJD.salary_min,
       salary_max: editingJD.salary_max,
+      salary_currency: editingJD.salary_currency,
       compensation_type: editingJD.compensation_type,
       employment_type: editingJD.employment_type,
       remote_type: editingJD.remote_type,

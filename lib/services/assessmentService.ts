@@ -271,7 +271,7 @@ export interface ProctoringStats {
   multiple_faces_count: number;
   face_not_visible_count?: number;   // face_missing events (separate from multiple_faces)
   fullscreen_exit_count: number;
-  screen_capture_count?: number;     // screenshot_attempt + screen_recording_attempt combined
+  screen_capture_count?: number;     // screenshot violation summary (screenshots + recording attempts)
   other_violation_count?: number;    // Uncategorized events
   total_violations: number;
   integrity_status: 'clean' | 'flagged' | 'suspicious';

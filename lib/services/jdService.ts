@@ -129,6 +129,12 @@ export interface JDGenerateResponse {
   extracted_params?: JDExtractedParams;
 }
 
+export interface JDGenerateInput {
+  jobTitle: string;
+  aiPrompt: string;
+  preGeneratedId?: string;
+}
+
 export interface JDVersion {
   id: string;
   jd_id: string;
@@ -404,9 +410,13 @@ export const jdService = {
   /**
    * Generate JD with AI
    */
-  async generate(prompt: string): Promise<JDGenerateResponse> {
+  async generate(data: JDGenerateInput): Promise<JDGenerateResponse> {
     try {
-      const response = await api.post<JDGenerateResponse>('/jd/generate', { prompt });
+      const response = await api.post<JDGenerateResponse>('/jd/generate', {
+        job_title: data.jobTitle,
+        ai_prompt: data.aiPrompt,
+        pre_generated_id: data.preGeneratedId,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -417,7 +427,7 @@ export const jdService = {
    * Generate JD with AI using SSE streaming for real-time text display
    */
   async generateStream(
-    prompt: string,
+    data: JDGenerateInput,
     callbacks: {
       onChunk: (content: string) => void;
       onTitle?: (title: string) => void;
@@ -438,7 +448,7 @@ export const jdService = {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       const client = new JDStreamClient(apiBaseUrl, accessToken);
 
-      await client.stream(prompt, {
+      await client.stream(data, {
         onConnected: () => {
           console.log('[JD Service] Stream connected');
         },
@@ -455,7 +465,10 @@ export const jdService = {
         onError: callbacks.onError
       });
     } catch (error) {
-      throw new Error(handleApiError(error));
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Streaming failed');
     }
   },
 

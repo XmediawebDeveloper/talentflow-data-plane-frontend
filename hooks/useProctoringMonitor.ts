@@ -35,6 +35,16 @@ const isMobileDevice = (): boolean => {
     .test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && !/Macintosh/.test(navigator.userAgent));
 };
 
+const isFullscreenActive = (): boolean => {
+  if (typeof document === 'undefined') return false;
+  return !!(
+    document.fullscreenElement ||
+    (document as any).webkitFullscreenElement ||
+    (document as any).mozFullScreenElement ||
+    (document as any).msFullscreenElement
+  );
+};
+
 // ── Constants ────────────────────────────────────────────────────────────────
 const BACKEND_FLUSH_INTERVAL = 5000; // ms — batch-flush proctoring events to backend
 const VIDEO_CHECK_INTERVAL = 500;    // ms — sample video frames at 2 FPS for obstruction detection
@@ -63,6 +73,7 @@ interface UseProctoringMonitorOptions {
   obstructionThreshold?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; details: Record<string, any> }) => Promise<any>;
   // Per-feature flags from tenant proctoring settings
+  screenshotBlocking?: boolean;
   copyPasteBlocking?: boolean;
   tabSwitchDetection?: boolean;
 }
@@ -85,11 +96,12 @@ const getVideoWorkerCode = () => `
   let isObstructed = false;
   let consecutiveObstructed = 0;
   let consecutiveClear = 0;
-  const OBSTRUCT_THRESHOLD = 15;  // frames to confirm obstruction
-  const CLEAR_THRESHOLD = 5;      // frames to confirm clear
+  const OBSTRUCT_THRESHOLD = 6;   // 6 × 500 ms = ~3 s to confirm obstruction
+  const CLEAR_THRESHOLD = 3;      // 3 × 500 ms = ~1.5 s to confirm clear
 
   function analyze(imageData, width, height, threshold) {
     let totalBrightness = 0;
+    let totalBrightnessSquared = 0;
     let minBrightness = 255;
     let maxBrightness = 0;
     const step = 16;
@@ -100,17 +112,21 @@ const getVideoWorkerCode = () => `
       const b = imageData[i + 2];
       const brightness = (r + g + b) / 3;
       totalBrightness += brightness;
+      totalBrightnessSquared += brightness * brightness;
       minBrightness = Math.min(minBrightness, brightness);
       maxBrightness = Math.max(maxBrightness, brightness);
     }
 
     const sampledPixels = Math.floor(imageData.length / (step * 4));
     const avgBrightness = totalBrightness / sampledPixels;
+    const variance = Math.max(0, (totalBrightnessSquared / sampledPixels) - (avgBrightness * avgBrightness));
+    const brightnessStdDev = Math.sqrt(variance);
     const brightnessRange = maxBrightness - minBrightness;
     const isDark = avgBrightness < threshold;
-    const isUniform = brightnessRange < 20;
+    const isUniform = brightnessRange < 35 || brightnessStdDev < 12;
+    const isLowTexture = brightnessRange < 45 && brightnessStdDev < 18;
 
-    return { isDark, isUniform, avgBrightness, brightnessRange };
+    return { isDark, isUniform, isLowTexture, avgBrightness, brightnessRange, brightnessStdDev };
   }
 
   self.onmessage = function(e) {
@@ -121,7 +137,7 @@ const getVideoWorkerCode = () => `
         new Uint8ClampedArray(data.imageData),
         data.width, data.height, data.threshold
       );
-      const frameObstructed = result.isDark || result.isUniform;
+      const frameObstructed = result.isDark || result.isUniform || result.isLowTexture;
 
       if (frameObstructed) {
         consecutiveObstructed++;
@@ -130,8 +146,13 @@ const getVideoWorkerCode = () => `
           isObstructed = true;
           self.postMessage({
             type: 'STATE_CHANGE',
-            data: { obstructed: true, reason: result.isDark ? 'too_dark' : 'too_uniform',
-                    avgBrightness: result.avgBrightness, brightnessRange: result.brightnessRange }
+            data: {
+              obstructed: true,
+              reason: result.isDark ? 'too_dark' : (result.isUniform ? 'too_uniform' : 'low_texture'),
+              avgBrightness: result.avgBrightness,
+              brightnessRange: result.brightnessRange,
+              brightnessStdDev: result.brightnessStdDev,
+            }
           });
         }
       } else {
@@ -141,7 +162,12 @@ const getVideoWorkerCode = () => `
           isObstructed = false;
           self.postMessage({
             type: 'STATE_CHANGE',
-            data: { obstructed: false, avgBrightness: result.avgBrightness }
+            data: {
+              obstructed: false,
+              avgBrightness: result.avgBrightness,
+              brightnessRange: result.brightnessRange,
+              brightnessStdDev: result.brightnessStdDev,
+            }
           });
         }
       }
@@ -222,6 +248,7 @@ export function useProctoringMonitor({
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
   reportEvent,
+  screenshotBlocking = true,
   copyPasteBlocking = true,
   tabSwitchDetection = true,
 }: UseProctoringMonitorOptions) {
@@ -241,6 +268,7 @@ export function useProctoringMonitor({
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
   const obstructionThresholdRef = useRef(obstructionThreshold);
   const isMonitoringRef = useRef(false);
+  const isCameraObstructedRef = useRef(false);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { streamRef.current = stream; }, [stream]);
@@ -274,6 +302,13 @@ export function useProctoringMonitor({
     details: Record<string, any>;
   }
   const backendQueueRef = useRef<QueuedEvent[]>([]);
+  const navigationSuppressionUntilRef = useRef(0);
+  const lastTabSwitchEventAtRef = useRef(0);
+  const screenshotSuppressionUntilRef = useRef(0);
+  const lastScreenshotEventAtRef = useRef(0);
+  const lastMetaKeyAtRef = useRef(0);
+  const lastShiftKeyAtRef = useRef(0);
+  const lastSKeyAtRef = useRef(0);
 
   // ==================== CORE: emitEvent ====================
   // 1. Always queues event for backend (every event recorded)
@@ -300,6 +335,63 @@ export function useProctoringMonitor({
 
   const emitEventRef = useRef(emitEvent);
   useEffect(() => { emitEventRef.current = emitEvent; }, [emitEvent]);
+
+  const beginNavigationSequence = useCallback((durationMs = 1500) => {
+    navigationSuppressionUntilRef.current = Date.now() + durationMs;
+  }, []);
+
+  const isNavigationSequenceActive = useCallback(() => {
+    return Date.now() < navigationSuppressionUntilRef.current;
+  }, []);
+
+  const emitTabSwitchEvent = useCallback((details?: Record<string, any>) => {
+    const now = Date.now();
+    beginNavigationSequence();
+
+    // Keyboard shortcut + visibilitychange/blur often fire as one OS-level
+    // sequence. Count that as a single tab switch violation.
+    if (now - lastTabSwitchEventAtRef.current < 1200) {
+      return false;
+    }
+
+    lastTabSwitchEventAtRef.current = now;
+    emitEventRef.current('tab_switch', details);
+    return true;
+  }, [beginNavigationSequence]);
+
+  const emitScreenshotEvent = useCallback((details?: Record<string, any>) => {
+    const now = Date.now();
+    screenshotSuppressionUntilRef.current = now + 1500;
+
+    if (now - lastScreenshotEventAtRef.current < 1200) {
+      return false;
+    }
+
+    lastScreenshotEventAtRef.current = now;
+    emitEventRef.current('screenshot_attempt', details);
+    return true;
+  }, []);
+
+  const maybeEmitScreenshotFromBlur = useCallback(() => {
+    const now = Date.now();
+    const sawWindowsSnipShortcut =
+      now - lastMetaKeyAtRef.current < 900 &&
+      now - lastShiftKeyAtRef.current < 900;
+    const sawScreenshotChord =
+      sawWindowsSnipShortcut &&
+      now - lastSKeyAtRef.current < 900;
+
+    if (!sawWindowsSnipShortcut) {
+      return false;
+    }
+
+    return emitScreenshotEvent({
+      key: sawScreenshotChord ? 'Win+Shift+S' : 'Win+Shift based capture',
+      capture_type: 'screenshot',
+      source: 'blur_heuristic',
+      enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+    });
+  }, [emitScreenshotEvent, screenshotBlocking]);
 
   // ==================== BACKEND BATCH FLUSH ====================
   const flushBackendQueue = useCallback(async () => {
@@ -357,6 +449,7 @@ export function useProctoringMonitor({
         const { type, data } = e.data;
         if (type === 'STATE_CHANGE') {
           if (data.obstructed) {
+            isCameraObstructedRef.current = true;
             setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
             emitEventRef.current('camera_obstructed', {
               reason: data.reason,
@@ -364,6 +457,7 @@ export function useProctoringMonitor({
               brightnessRange: data.brightnessRange,
             });
           } else {
+            isCameraObstructedRef.current = false;
             setState(prev => !prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: false });
           }
         }
@@ -530,6 +624,10 @@ export function useProctoringMonitor({
         };
 
         const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, unknown>) => {
+          if (isCameraObstructedRef.current) {
+            resetFaceMissingState();
+            return;
+          }
           consecutiveNoFace++;
           consecutiveDetectionFailures = 0;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
@@ -544,12 +642,19 @@ export function useProctoringMonitor({
           method: string,
           extraDetails?: Record<string, unknown>,
         ) => {
+          if (isCameraObstructedRef.current) {
+            resetFaceMissingState();
+            return;
+          }
           if (count >= 2) {
             resetFaceMissingState();
             emitEventRef.current('multiple_faces', { face_count: count, method });
             console.log(`[PROCTORING] Multiple faces: ${count} (${method})`);
           } else if (count === 0) {
-            maybeEmitFaceMissing(method, extraDetails?.reason || 'no_face_detected', extraDetails);
+            const reason = typeof extraDetails?.reason === 'string'
+              ? extraDetails.reason
+              : 'no_face_detected';
+            maybeEmitFaceMissing(method, reason, extraDetails);
           } else {
             // Exactly 1 face — normal state, reset counters
             resetFaceMissingState();
@@ -557,6 +662,10 @@ export function useProctoringMonitor({
         };
 
         const handleDetectionFailure = (method: string, error: unknown) => {
+          if (isCameraObstructedRef.current) {
+            resetFaceMissingState();
+            return;
+          }
           consecutiveDetectionFailures++;
           if (consecutiveDetectionFailures >= DETECTION_FAILURE_THRESHOLD) {
             maybeEmitFaceMissing(method, 'detection_failed', {
@@ -696,7 +805,7 @@ export function useProctoringMonitor({
   const setupTabSwitchDetection = useCallback(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        emitEventRef.current('tab_switch', {
+        emitTabSwitchEvent({
           hidden: true,
           method: 'visibilitychange',
         });
@@ -704,7 +813,9 @@ export function useProctoringMonitor({
     };
     const handleBlur = () => {
       window.setTimeout(() => {
-        if (document.hidden || document.visibilityState === 'hidden') return;
+        if (document.hidden || document.visibilityState === 'hidden' || isNavigationSequenceActive()) return;
+        if (maybeEmitScreenshotFromBlur()) return;
+        if (Date.now() < screenshotSuppressionUntilRef.current) return;
         emitEventRef.current('window_blur', { reason: 'window_focus_lost' });
       }, 0);
     };
@@ -717,7 +828,7 @@ export function useProctoringMonitor({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
     };
-  }, []);
+  }, [emitTabSwitchEvent, isNavigationSequenceActive, maybeEmitScreenshotFromBlur]);
 
   const setupCopyPasteDetection = useCallback(() => {
     const block = (e: Event, type: ProctoringEventType, details?: Record<string, any>) => {
@@ -767,11 +878,37 @@ export function useProctoringMonitor({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'alt_tab' });
-      if (e.altKey && e.key === 'F4') return block(e, 'window_blur', { method: 'alt_f4' });
-      if (e.metaKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'cmd_tab' });
-      if (e.ctrlKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'ctrl_tab' });
-      if (e.key === 'Meta' || e.key === 'OS') return block(e, 'window_blur', { method: 'windows_key' });
+      if (e.altKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        emitTabSwitchEvent({ method: 'alt_tab', source: 'keyboard' });
+        return false;
+      }
+      if (e.altKey && e.key === 'F4') {
+        beginNavigationSequence();
+        return block(e, 'window_blur', { method: 'alt_f4' });
+      }
+      if (e.metaKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        emitTabSwitchEvent({ method: 'cmd_tab', source: 'keyboard' });
+        return false;
+      }
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        emitTabSwitchEvent({ method: 'ctrl_tab', source: 'keyboard' });
+        return false;
+      }
+      if (e.key === 'Meta' || e.key === 'OS') {
+        // Allow the OS/meta key event to reach the screenshot monitor.
+        // Blocking it here would prevent Win+Shift+S style attempts from
+        // being classified correctly when screenshot blocking is disabled.
+        return true;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
         lastCopyKeyTime = Date.now();
         return block(e, 'copy_attempt', { method: 'keyboard' });
@@ -804,7 +941,7 @@ export function useProctoringMonitor({
       document.removeEventListener('contextmenu', handleContextMenu, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, []);
+  }, [beginNavigationSequence, emitTabSwitchEvent]);
 
   const setupScreenshotDetection = useCallback(() => {
     // Mobile browsers never receive keyboard events for hardware screenshot
@@ -819,40 +956,91 @@ export function useProctoringMonitor({
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      if (e.key === 'Meta' || e.key === 'OS') {
+        lastMetaKeyAtRef.current = now;
+      }
+      if (e.key === 'Shift') {
+        lastShiftKeyAtRef.current = now;
+      }
+      if (e.key.toLowerCase() === 's') {
+        lastSKeyAtRef.current = now;
+      }
+
       if (e.key === 'PrintScreen') {
-        e.preventDefault();
-        emitEventRef.current('screenshot_attempt', { key: 'PrintScreen' });
-        navigator.clipboard?.writeText('').catch(() => {});
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: 'PrintScreen',
+          capture_type: 'screenshot',
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
+        if (screenshotBlocking) {
+          navigator.clipboard?.writeText('').catch(() => {});
+        }
       }
       if ((e.ctrlKey || e.altKey) && e.key === 'PrintScreen') {
-        e.preventDefault();
-        emitEventRef.current('screenshot_attempt', { key: 'Ctrl/Alt+PrintScreen' });
-        navigator.clipboard?.writeText('').catch(() => {});
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: 'Ctrl/Alt+PrintScreen',
+          capture_type: 'screenshot',
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
+        if (screenshotBlocking) {
+          navigator.clipboard?.writeText('').catch(() => {});
+        }
       }
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        emitEventRef.current('screenshot_attempt', { key: 'Win+Shift+S' });
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: 'Win+Shift+S',
+          capture_type: 'screenshot',
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
       }
       if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
-        e.preventDefault();
-        emitEventRef.current('screenshot_attempt', { key: `Cmd+Shift+${e.key}` });
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: `Cmd+Shift+${e.key}`,
+          capture_type: 'screenshot',
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
       }
       // macOS Cmd+Shift+5 — screenshot toolbar (macOS 10.14+)
       if (e.metaKey && e.shiftKey && e.key === '5') {
-        e.preventDefault();
-        emitEventRef.current('screenshot_attempt', { key: 'Cmd+Shift+5' });
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: 'Cmd+Shift+5',
+          capture_type: 'screenshot',
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
       }
       // macOS Cmd+Ctrl+Shift+3/4 — copy screenshot to clipboard
       if (e.metaKey && e.ctrlKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
-        e.preventDefault();
-        emitEventRef.current('screenshot_attempt', { key: `Cmd+Ctrl+Shift+${e.key}` });
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: `Cmd+Ctrl+Shift+${e.key}`,
+          capture_type: 'screenshot',
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     console.log('[PROCTORING] Screenshot detection started');
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, []);
+  }, [emitScreenshotEvent, screenshotBlocking]);
 
   const setupScreenRecordingDetection = useCallback(() => {
     // Mobile browsers (iOS/Android) do not support getDisplayMedia — screen
@@ -867,20 +1055,53 @@ export function useProctoringMonitor({
       return () => {};
     }
 
-    const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
-    if (originalGetDisplayMedia) {
-      navigator.mediaDevices.getDisplayMedia = async function () {
-        emitEventRef.current('screen_recording_attempt', {});
-        throw new Error('Screen recording is not allowed during the interview');
+    const reportScreenCapture = (details?: Record<string, any>) => {
+      emitScreenshotEvent({
+        capture_type: 'screen_recording',
+        enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        ...details,
+      });
+    };
+
+    const mediaDevices = navigator.mediaDevices;
+    const originalGetDisplayMedia = mediaDevices?.getDisplayMedia;
+    const originalNavigatorGetDisplayMedia = (navigator as any).getDisplayMedia as
+      | ((constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>)
+      | undefined;
+
+    if (mediaDevices && originalGetDisplayMedia) {
+      mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        reportScreenCapture({ source: 'mediaDevices.getDisplayMedia' });
+        if (screenshotBlocking) {
+          throw new Error('Screen recording is not allowed during the assessment');
+        }
+        return originalGetDisplayMedia.call(mediaDevices, constraints);
       };
-    } else {
+    }
+
+    if (originalNavigatorGetDisplayMedia) {
+      (navigator as any).getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        reportScreenCapture({ source: 'navigator.getDisplayMedia' });
+        if (screenshotBlocking) {
+          throw new Error('Screen recording is not allowed during the assessment');
+        }
+        return originalNavigatorGetDisplayMedia.call(navigator, constraints);
+      };
+    }
+
+    if (!originalGetDisplayMedia && !originalNavigatorGetDisplayMedia) {
       console.warn('[PROCTORING] getDisplayMedia not available in this browser — screen recording detection skipped.');
     }
     console.log('[PROCTORING] Screen recording detection started');
     return () => {
-      if (originalGetDisplayMedia) navigator.mediaDevices.getDisplayMedia = originalGetDisplayMedia;
+      if (mediaDevices && originalGetDisplayMedia) {
+        mediaDevices.getDisplayMedia = originalGetDisplayMedia;
+      }
+      if (originalNavigatorGetDisplayMedia) {
+        (navigator as any).getDisplayMedia = originalNavigatorGetDisplayMedia;
+      }
     };
-  }, []);
+  }, [emitScreenshotEvent, screenshotBlocking]);
 
   const setupFullscreenDetection = useCallback(() => {
     let eventName = 'fullscreenchange';
@@ -888,12 +1109,7 @@ export function useProctoringMonitor({
     else if ('onmozfullscreenchange' in document) eventName = 'mozfullscreenchange';
 
     const handler = () => {
-      const isFs = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
-      );
+      const isFs = isFullscreenActive();
       if (!isFs) emitEventRef.current('fullscreen_exit', {});
     };
 
@@ -903,39 +1119,37 @@ export function useProctoringMonitor({
   }, []);
 
   const setupMouseTracking = useCallback(() => {
-    // Use document.documentElement (<html> element) instead of document —
-    // more reliable across Chrome, Firefox, and Safari for mouseleave events.
-    // Only emit when relatedTarget is null (mouse went to browser chrome or outside window).
-    const handleMouseLeave = (e: MouseEvent) => {
-      if (e.relatedTarget === null || e.relatedTarget === undefined) {
-        emitEventRef.current('mouse_movement', { reason: 'mouse_left_window' });
-      }
-    };
-
-    // mousemove tracking: detect mouse approaching the very top edge of the viewport
-    // (entering browser chrome / address bar area) — catches cases where mouseleave
-    // doesn't fire reliably (e.g. Safari, Firefox in some configurations).
+    // Only treat movement into the top fullscreen chrome area as a violation.
+    // Normal mouse movement inside the assessment is allowed.
     let topEdgeTriggered = false;
     const handleMouseMove = (e: MouseEvent) => {
+      if (isNavigationSequenceActive()) {
+        topEdgeTriggered = false;
+        return;
+      }
+
+      if (!isFullscreenActive()) {
+        topEdgeTriggered = false;
+        return;
+      }
+
       if (e.clientY <= 3) {
         if (!topEdgeTriggered) {
           topEdgeTriggered = true;
-          emitEventRef.current('mouse_movement', { reason: 'mouse_at_top' });
+          emitEventRef.current('mouse_movement', { reason: 'fullscreen_header_hover' });
         }
       } else {
         topEdgeTriggered = false;
       }
     };
 
-    document.documentElement.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('mousemove', handleMouseMove);
     console.log('[PROCTORING] Mouse tracking started');
 
     return () => {
-      document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, []);
+  }, [isNavigationSequenceActive]);
 
   // ==================== LOAD SHEDDING ====================
   const setReducedFrequency = useCallback((reduced: boolean) => {

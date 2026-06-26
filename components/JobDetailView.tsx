@@ -33,6 +33,7 @@ import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandi
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
@@ -95,6 +96,7 @@ interface ExtendedJob extends Job {
   niceToHaveSkills?: string[];
   salaryMin?: number;
   salaryMax?: number;
+  salaryCurrency?: string;
   compensationType?: string;
   creationStage?: string;
   hasScoredResumes?: boolean;
@@ -1123,11 +1125,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Salary */}
                 {(job.salaryMin || job.salaryMax) && (
                   <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium">
-                    {job.salaryMin && job.salaryMax
-                      ? `₹${Number(job.salaryMin).toLocaleString('en-IN')} – ₹${Number(job.salaryMax).toLocaleString('en-IN')}`
-                      : job.salaryMin
-                        ? `From ₹${Number(job.salaryMin).toLocaleString('en-IN')}`
-                        : `Up to ₹${Number(job.salaryMax).toLocaleString('en-IN')}`}
+                    {formatSalaryRange({
+                      min: job.salaryMin,
+                      max: job.salaryMax,
+                      currency: job.salaryCurrency,
+                    })}
                     {job.compensationType ? ` / ${job.compensationType}` : ''}
                   </span>
                 )}

@@ -56,6 +56,7 @@ interface ProctoringSettings {
   proctoring_enabled: boolean;
   webcam_monitoring: boolean;
   screen_recording: boolean;
+  screenshot_blocking: boolean;
   tab_switch_detection: boolean;
   copy_paste_blocking: boolean;
   browser_lockdown: boolean;
