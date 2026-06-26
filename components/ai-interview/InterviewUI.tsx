@@ -112,6 +112,7 @@ interface BrowserSpeechRecognitionLike {
   lang: string;
   onresult: ((event: BrowserSpeechRecognitionEventLike) => void) | null;
   onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
   start: () => void;
   stop: () => void;
 }
@@ -2560,19 +2561,75 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         noResponseRetryRef.current = 0;
       }
     };
-    recognition.onend = () => {
-      // Only auto-restart if the candidate's mic is truly open AND Linda is
-      // not speaking AND we're past the echo-guard window. Otherwise a
-      // restart here resurrects the recognition mid-Linda-speech and picks
-      // her TTS back up — which is how the live transcript ended up
-      // showing Linda's own question text.
-      if (
-        isRecordingRef.current &&
-        !isAiSpeakingRef.current &&
-        Date.now() >= playbackEchoGuardUntilRef.current
-      ) {
+    // Track fatal errors (permission denied) that should suppress restart.
+    // Local to this recognition instance — reset automatically when
+    // startWebSpeechRecognition creates a fresh recognition object.
+    let _fatalError = false;
+    // Prevents a double-restart when both onerror(aborted) AND onend fire for
+    // the same stop event (Safari behaviour — see onerror below).
+    let _restartScheduled = false;
+
+    const _scheduleRestart = () => {
+      if (_restartScheduled) return;          // already queued — don't double-fire
+      _restartScheduled = true;
+      setTimeout(() => {
+        _restartScheduled = false;
+        if (
+          recognitionRef.current !== recognition ||
+          !isRecordingRef.current ||
+          isAiSpeakingRef.current
+        ) {
+          return;
+        }
         try { recognition.start(); } catch {}
+      }, 150);
+    };
+
+    recognition.onerror = (event: { error: string }) => {
+      const err = (event?.error || '');
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        // Permission denied — no point retrying; onend will check _fatalError.
+        _fatalError = true;
+        console.warn('[WebSpeech] Permission denied — disabling browser recognition');
+      } else if (err === 'aborted') {
+        // Safari / iOS: recognition is aborted before it starts (common on first
+        // call or after a brief mic-unavailability window). Unlike Chrome, Safari
+        // does not reliably fire onend after an aborted error — so we schedule
+        // the restart directly here as a safety net. _scheduleRestart() is
+        // idempotent: if onend also fires (Chrome/Edge path), the second call is
+        // a no-op and no double-start occurs.
+        if (!_fatalError && isRecordingRef.current && !isAiSpeakingRef.current) {
+          _scheduleRestart();
+        }
       }
+      // All other errors (no-speech, network, audio-capture) are transient.
+      // onend fires after onerror on Chrome/Edge and handles the restart there.
+    };
+
+    recognition.onend = () => {
+      // Only auto-restart if:
+      //   • no fatal (permission) error
+      //   • candidate mic is open
+      //   • Linda is not speaking (avoids picking up her TTS)
+      //   • past the post-Linda echo-guard window
+      //   • this recognition object is still the active one (not replaced by
+      //     stopWebSpeechRecognition/startWebSpeechRecognition)
+      if (
+        _fatalError ||
+        !isRecordingRef.current ||
+        isAiSpeakingRef.current ||
+        Date.now() < playbackEchoGuardUntilRef.current
+      ) {
+        return;
+      }
+      // Delay restart by 150 ms so Chrome/Edge's engine fully tears down before
+      // start() is called. Without this, start() throws InvalidStateError
+      // synchronously inside onend — caught silently — and recognition never
+      // resumes, causing the live transcript to freeze mid-speech for all
+      // batch ASR providers (Gemini, Whisper, Sarvam, etc.).
+      // _scheduleRestart() is idempotent: if onerror(aborted) already queued a
+      // restart (Safari path), this is a no-op.
+      _scheduleRestart();
     };
     recognitionRef.current = recognition;
     try { recognition.start(); } catch {}
