@@ -56,8 +56,61 @@ function isReservedSubdomain(sub: string): boolean {
   return /^(api|internal)([-.]|$)/.test(s);
 }
 
+function stripPortAndQuotes(host: string): string {
+  const trimmed = host.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) return '';
+
+  // IPv6 hosts are enclosed in brackets when a port is present: [::1]:3000
+  if (trimmed.startsWith('[')) {
+    const end = trimmed.indexOf(']');
+    return end === -1 ? trimmed : trimmed.slice(1, end);
+  }
+
+  return trimmed.replace(/:\d+$/, '');
+}
+
+function getForwardedHostname(forwardedHeader: string | null): string | null {
+  if (!forwardedHeader) return null;
+
+  for (const entry of forwardedHeader.split(',')) {
+    for (const part of entry.split(';')) {
+      const [rawKey, rawValue] = part.split('=');
+      if (rawKey?.trim().toLowerCase() !== 'host') continue;
+
+      const hostname = stripPortAndQuotes(rawValue || '');
+      if (hostname) return hostname.toLowerCase();
+    }
+  }
+
+  return null;
+}
+
+function getRequestHostname(request: NextRequest): { hostname: string; source: string } {
+  const xForwardedHost = request.headers.get('x-forwarded-host');
+  const firstForwardedHost = xForwardedHost?.split(',')[0] || '';
+  const candidates = [
+    { source: 'x-forwarded-host', hostname: stripPortAndQuotes(firstForwardedHost).toLowerCase() },
+    { source: 'forwarded', hostname: getForwardedHostname(request.headers.get('forwarded')) || '' },
+    { source: 'nextUrl.hostname', hostname: stripPortAndQuotes(request.nextUrl.hostname).toLowerCase() },
+    { source: 'host', hostname: stripPortAndQuotes(request.headers.get('host') || '').toLowerCase() },
+  ].filter((candidate) => candidate.hostname);
+
+  const preferred = candidates.find(({ hostname }) => {
+    return (
+      hostname === BASE_DOMAIN ||
+      hostname.endsWith(`.${BASE_DOMAIN}`) ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)
+    );
+  });
+
+  return preferred || candidates[0] || { hostname: '', source: 'none' };
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isDocumentRequest = request.method === 'GET' || request.method === 'HEAD';
 
   // Public assets in /public (e.g. /linda-3.png, /linda-avatar.webp) must never
   // flow through org/auth routing. If they do, subdomain-only route guards can
@@ -68,9 +121,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // --- Extract tenant subdomain ---
-  const host = request.headers.get('host') || '';
-  const hostname = host.split(':')[0]; // strip port for localhost:3000
-  const hostParts = hostname.split('.');
+  const { hostname, source: hostnameSource } = getRequestHostname(request);
   let tenantSubdomain: string | null = null;
   let isRealSubdomain = false; // true = from actual hostname (not ?org= dev param)
 
@@ -106,6 +157,14 @@ export async function proxy(request: NextRequest) {
   // Permanent fix: any request on a non-base-domain, non-localhost host
   // (e.g. stgdata.talentflow.mo.vc) redirects to the main site unconditionally.
   if (!isOnBaseDomain && !isLocalhost) {
+    // Redirecting framework POSTs (especially Server Actions) returns HTML to the
+    // client fetch, which then surfaces as "Failed to find Server Action".
+    if (!isDocumentRequest) {
+      console.log(
+        `[MIDDLEWARE] Non-document request on unexpected host "${hostname}" from ${hostnameSource}; allowing through`
+      );
+      return NextResponse.next();
+    }
     return NextResponse.redirect(`https://${BASE_DOMAIN}`);
   }
   // --- End subdomain extraction ---
@@ -129,8 +188,16 @@ export async function proxy(request: NextRequest) {
 
         if (!resp.ok) {
           if (resp.status === 404) {
+            if (!isDocumentRequest) {
+              console.log(
+                `[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}" on ${hostname} (${hostnameSource}) during non-document request; allowing through`
+              );
+              return NextResponse.next();
+            }
             // Subdomain not found → redirect to root domain
-            console.log(`[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}", redirecting to root`);
+            console.log(
+              `[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}" on ${hostname} (${hostnameSource}), redirecting to root`
+            );
             return NextResponse.redirect(`https://${BASE_DOMAIN}`);
           }
           // For non-404 errors (5xx, 503, etc.) — allow through rather than blocking all traffic
