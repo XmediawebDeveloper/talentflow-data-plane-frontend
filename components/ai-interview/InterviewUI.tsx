@@ -2686,7 +2686,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); recognitionRef.current = null; } catch {}
     }
-    webSpeechFinalizedRef.current = "";
+    // Do NOT clear webSpeechFinalizedRef here — stopRecording() reads it for the
+    // final flexible-mode batch send (line ~4413) and snapshotVisibleLiveTranscript()
+    // falls back to it for browser_transcript. Clearing it here wipes speech captured
+    // before a silence nudge restarts the recognizer, causing second-round speech to
+    // be lost from browser_transcript. webSpeechFinalizedRef is reset in two places:
+    //   • startWebSpeechRecognition() — new question, intentional fresh start
+    //   • explicitly in the "Linda starts speaking" handler — clears stale display text
     liveTranscriptDisplayRef.current = "";
     lastBrowserTranscriptTextRef.current = "";
     lastBrowserTranscriptUpdateAtRef.current = null;
