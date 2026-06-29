@@ -41,7 +41,12 @@ export function buildSkipReasoner(
   for (const m of rawTranscript || []) {
     if (m?.role !== 'assistant') continue;
     const c = (m.content || '').toLowerCase().trim();
-    if (c.startsWith('are you there') || m.kind === 'silence_nudge') {
+    if (
+      c.startsWith('are you there') ||
+      m.kind === 'silence_nudge' ||
+      m.kind === 'silence_follow_up' ||
+      m.kind === 'silence_move_on'
+    ) {
       if (lastQKey) silenceNudgedKeys.add(lastQKey);
     } else if (c && !c.startsWith('welcome back') && !c.startsWith('thank you') && !c.startsWith('thanks for')) {
       lastQKey = _key(m.content || '');
@@ -74,7 +79,7 @@ export function buildSkipReasoner(
     if (src === 'candidate') {
       return { text: 'Skipped — candidate clicked “Next Question”', tone: 'amber' };
     }
-    if (wasNudged(content) || src === 'silence_skip' || src === 'silence') {
+    if (wasNudged(content) || src === 'silence_skip' || src === 'silence_skip_announced' || src === 'silence') {
       return { text: 'No response — auto-skipped after the “Are you there?” prompt', tone: 'gray' };
     }
     if (src === 'timer_expired' || rt === 'timeout') {
@@ -106,7 +111,13 @@ const _isClarificationMsg = (m: any): boolean => {
 const _isNonQuestionAssistant = (m: any): boolean => {
   // Greeting / silence nudge / closing — these don't open a new question
   // group, so a clarification after one still belongs to the prior main Q.
-  if (m?.kind === 'silence_nudge' || m?.is_closing === true || m?.kind === 'closing') return true;
+  if (
+    m?.kind === 'silence_nudge' ||
+    m?.kind === 'silence_follow_up' ||
+    m?.kind === 'silence_move_on' ||
+    m?.is_closing === true ||
+    m?.kind === 'closing'
+  ) return true;
   const t = (m?.content || '').toLowerCase().trim();
   return (
     t.startsWith('are you there') ||

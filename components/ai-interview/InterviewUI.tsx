@@ -2880,7 +2880,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
-        if (data.kind === "silence_nudge") {
+        if (["silence_nudge", "silence_follow_up", "silence_move_on"].includes(String(data.kind || ""))) {
           isSilencePromptRef.current = true;
         }
         setStatus("Linda is speaking...");
@@ -3994,13 +3994,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         });
         break;
       case "silence_detected": {
-        // Backend detected 8 s of silence. Show a banner telling the candidate
-        // Linda is about to prompt them. The BACKEND drives the actual auto-skip
-        // via its Phase 2 flow (Linda says "Are you there?" → 5 s wait → send
-        // question_timer_expired). We previously ran our OWN 5 s countdown here
-        // and sent skip_question — that raced with Linda's TTS and caused
-        // multiple "Are you there?" messages to stack up because the client
-        // skipped before she finished speaking.
+        // Backend detected the first silence threshold. Show a banner telling
+        // the candidate Linda is about to prompt them. The BACKEND drives the
+        // actual silence ladder and auto-skip from here. We previously ran our
+        // OWN countdown on the client and sent skip_question — that raced with
+        // Linda's TTS and caused multiple "Are you there?" messages to stack up
+        // because the client skipped before she finished speaking.
         //
         // Banner is dismissed by:
         //   - speaking_started  (candidate responded)
@@ -5251,7 +5250,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         startWebSpeechRecognition();
       }
 
-      // No-response detection fallback — fire after 8s of total silence with no
+      // No-response detection fallback — fire after 5s of total silence with no
       // speech. The backend normally drives the canonical silence-nudge flow,
       // but the client fallback should match the same threshold.
       clearNoResponseTimer();
@@ -5259,7 +5258,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 8000);
+      }, 5000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a
