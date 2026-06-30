@@ -92,18 +92,18 @@ export default function CreateAssessmentPage() {
   const handleBack = () => {
     // If returnUrl is provided, go back to that page
     if (returnUrl) {
-      router.push(returnUrl);
+      router.replace(returnUrl);
     } else {
-      router.push('/recruitment/assessments');
+      router.replace('/recruitment/assessments');
     }
   };
 
   const handleCreateAssessment = async (assessment: any) => {
     // Navigate back to returnUrl if provided, otherwise to assessments list
     if (returnUrl) {
-      router.push(returnUrl);
+      router.replace(returnUrl);
     } else {
-      router.push('/recruitment/assessments');
+      router.replace('/recruitment/assessments');
     }
   };
 

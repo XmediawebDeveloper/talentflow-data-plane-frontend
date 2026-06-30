@@ -163,7 +163,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     // When going back to select-jd, clear all params
     if (newStep === 'select-jd') {
-      router.push('/recruitment/assessments/create', { scroll: false });
+      router.replace('/recruitment/assessments/create', { scroll: false });
       return;
     }
 
@@ -172,7 +172,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       params.set('jd_id', jobId || selectedJob?.id || '');
     }
     const queryString = params.toString();
-    router.push(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
+    router.replace(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
   };
 
   // Calculate Technical vs Coding percentage based on skills and experience
@@ -221,122 +221,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const handleCreateNewJD = () => {
     router.push('/recruitment/jd-creation?from=assessment');
   };
-
-  // Auto-select job if preSelectedJobId or urlJdId is provided
-  useEffect(() => {
-    const jdIdToSelect = preSelectedJobId || urlJdId;
-    if (jdIdToSelect && jobs.length > 0 && !selectedJob) {
-      const job = jobs.find(j => j.id === jdIdToSelect);
-      if (job) {
-        // Configure sections properly based on JD coding requirements
-        const jdRequiresCoding = job.coding_required === true;
-        const hasLanguages = job.supported_languages && job.supported_languages.length > 0;
-        let codingLanguages: string[] = hasLanguages ? job.supported_languages! : [];
-
-        // Inline language detection for URL-based selection.
-        // NOTE: C++, C#, .NET cannot use `\b...\b` because `+`, `#`, `.` are
-        // non-word characters — the trailing `\b` never matches. Use explicit
-        // non-letter boundaries instead.
-        const detectLanguages = (skills: string[]): string[] => {
-          const skillsText = skills.join(' ').toLowerCase();
-          const detected = new Set<string>();
-          if (/\b(java|spring|hibernate|maven)\b/i.test(skillsText)) detected.add('Java');
-          if (/\b(python|django|flask|fastapi|pandas)\b/i.test(skillsText)) detected.add('Python');
-          if (/\b(javascript|node|react|angular|vue|express)\b/i.test(skillsText)) detected.add('JavaScript');
-          if (/\b(typescript)\b/i.test(skillsText)) detected.add('TypeScript');
-          if (/(^|[^a-z0-9#])c#(?![a-z0-9#])/i.test(skillsText) ||
-              /\b(csharp|dotnet)\b/i.test(skillsText) ||
-              /(^|[^a-z0-9.])\.net(?![a-z0-9])/i.test(skillsText) ||
-              /(^|[^a-z0-9.])asp\.net(?![a-z0-9])/i.test(skillsText)) detected.add('C#');
-          if (/(^|[^a-z0-9+])c\+\+(?![a-z0-9+])/i.test(skillsText) ||
-              /\bcpp\b/i.test(skillsText)) detected.add('C++');
-          if (/\b(golang|go\s*lang)\b/i.test(skillsText)) detected.add('Go');
-          if (/\b(ruby|rails)\b/i.test(skillsText)) detected.add('Ruby');
-          if (/\b(php|laravel)\b/i.test(skillsText)) detected.add('PHP');
-          if (/\b(kotlin|android)\b/i.test(skillsText)) detected.add('Kotlin');
-          if (/\b(swift|ios)\b/i.test(skillsText)) detected.add('Swift');
-          if (/\b(rust)\b/i.test(skillsText)) detected.add('Rust');
-          if (/\b(scala)\b/i.test(skillsText)) detected.add('Scala');
-          if (/\b(r\s*programming|r\s*language|rstudio|tidyverse|ggplot)\b/i.test(skillsText) ||
-              (/\br\b/i.test(skillsText) && /\b(statistics|data\s*science|analytics)\b/i.test(skillsText))) detected.add('R');
-          if (/\b(sql|pl\/?sql|t-sql|mysql|postgresql|oracle|database)\b/i.test(skillsText)) detected.add('SQL');
-          return Array.from(detected);
-        };
-
-        const checkCodingRole = (j: Job): boolean => {
-          const patterns = [/developer/i, /engineer/i, /programmer/i, /sdet/i, /software/i, /devops/i];
-          const text = `${j.title} ${j.description || ''}`;
-          return patterns.some(p => p.test(text));
-        };
-
-        // Include title + description so a JD like "Junior C++ Developer"
-        // is detected even when its structured skills list omits the language.
-        const detectionInput: string[] = [
-          ...((job.skills as string[]) || []),
-          job.title || '',
-          job.description || '',
-        ];
-
-        // Detect languages from skills if JD requires coding but no languages specified
-        if (jdRequiresCoding && !hasLanguages && detectionInput.length > 0) {
-          const detectedLangs = detectLanguages(detectionInput);
-          if (detectedLangs.length > 0) {
-            codingLanguages = detectedLangs;
-          }
-        }
-
-        // Check for dynamic detection from skills
-        let shouldEnableCoding = jdRequiresCoding;
-        if (!jdRequiresCoding && detectionInput.length > 0) {
-          const detectedLangs = detectLanguages(detectionInput);
-          if (detectedLangs.length > 0 && checkCodingRole(job)) {
-            shouldEnableCoding = true;
-            codingLanguages = detectedLangs;
-          }
-        }
-
-        // Store JD-extracted languages — strip non-compilable ones (SQL, etc.)
-        // so they never appear in the coding-round language list.
-        codingLanguages = filterCompilable(codingLanguages);
-        setJdExtractedLanguages(codingLanguages);
-
-        // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
-        // No smart config lock - users can toggle manually
-        setIsCodingLockedBySmartConfig(false);
-        setCodingLockReason('');
-
-        // Only auto-enable if JD has languages we support
-        const hasValidLanguages = codingLanguages.length > 0;
-
-        if (hasValidLanguages) {
-          const split = calculateTimeSplit(job, true);
-          setSections([
-            { name: 'HR', percentage: 0, topics: [], enabled: true },
-            { name: 'Technical', percentage: split.technical, topics: [], enabled: true },
-            { name: 'Coding', percentage: split.coding, topics: [], enabled: true },
-          ]);
-          setSelectedCodingLanguages(codingLanguages);
-          console.log(`[TalentFlow] Coding auto-enabled: Technical ${split.technical}%, Coding ${split.coding}%`);
-        } else {
-          setSections([
-            { name: 'HR', percentage: 0, topics: [], enabled: true },
-            { name: 'Technical', percentage: 100, topics: [], enabled: true },
-            { name: 'Coding', percentage: 0, topics: [], enabled: false },
-          ]);
-          setSelectedCodingLanguages([]);
-          console.log('[TalentFlow] No supported languages detected - coding disabled');
-        }
-
-        setSelectedJob(job);
-        if (urlStep === 'configure' || urlStep === 'preview') {
-          setStepState(urlStep);
-        } else {
-          setStep('configure', job.id);
-        }
-        console.log('[TalentFlow] Auto-selected JD for assessment:', job.title, 'Coding required:', shouldEnableCoding);
-      }
-    }
-  }, [preSelectedJobId, urlJdId, jobs, selectedJob, urlStep]);
 
   // Load assessment data when in edit mode
   useEffect(() => {
@@ -444,6 +328,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // 1:1 JD-Assessment: Track which JDs already have assessments
   const [jdsWithAssessments, setJdsWithAssessments] = useState<Set<string>>(new Set());
+  const [hasLoadedAssessmentEligibility, setHasLoadedAssessmentEligibility] = useState(false);
 
   // Auto-save draft state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -736,6 +621,147 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // appear in the Technical round as MCQ / text-based questions.
   const programmingLanguages = [...COMPILABLE_LANGUAGES];
 
+  const redirectForExistingAssessment = () => {
+    router.replace('/recruitment/assessments');
+  };
+
+  // Auto-select job if preSelectedJobId or urlJdId is provided
+  useEffect(() => {
+    const jdIdToSelect = preSelectedJobId || urlJdId;
+    const jobsForSelection = localJobs.length > 0 ? localJobs : jobs;
+
+    if (!hasLoadedAssessmentEligibility || !jdIdToSelect || jobsForSelection.length === 0 || selectedJob) {
+      return;
+    }
+
+    const job = jobsForSelection.find(j => j.id === jdIdToSelect);
+    if (!job) {
+      return;
+    }
+
+    if (!editAssessmentId && jdsWithAssessments.has(job.id)) {
+      redirectForExistingAssessment();
+      return;
+    }
+
+    // Configure sections properly based on JD coding requirements
+    const jdRequiresCoding = job.coding_required === true;
+    const hasLanguages = job.supported_languages && job.supported_languages.length > 0;
+    let codingLanguages: string[] = hasLanguages ? job.supported_languages! : [];
+
+    // Inline language detection for URL-based selection.
+    // NOTE: C++, C#, .NET cannot use `\b...\b` because `+`, `#`, `.` are
+    // non-word characters — the trailing `\b` never matches. Use explicit
+    // non-letter boundaries instead.
+    const detectLanguages = (skills: string[]): string[] => {
+      const skillsText = skills.join(' ').toLowerCase();
+      const detected = new Set<string>();
+      if (/\b(java|spring|hibernate|maven)\b/i.test(skillsText)) detected.add('Java');
+      if (/\b(python|django|flask|fastapi|pandas)\b/i.test(skillsText)) detected.add('Python');
+      if (/\b(javascript|node|react|angular|vue|express)\b/i.test(skillsText)) detected.add('JavaScript');
+      if (/\b(typescript)\b/i.test(skillsText)) detected.add('TypeScript');
+      if (/(^|[^a-z0-9#])c#(?![a-z0-9#])/i.test(skillsText) ||
+          /\b(csharp|dotnet)\b/i.test(skillsText) ||
+          /(^|[^a-z0-9.])\.net(?![a-z0-9])/i.test(skillsText) ||
+          /(^|[^a-z0-9.])asp\.net(?![a-z0-9])/i.test(skillsText)) detected.add('C#');
+      if (/(^|[^a-z0-9+])c\+\+(?![a-z0-9+])/i.test(skillsText) ||
+          /\bcpp\b/i.test(skillsText)) detected.add('C++');
+      if (/\b(golang|go\s*lang)\b/i.test(skillsText)) detected.add('Go');
+      if (/\b(ruby|rails)\b/i.test(skillsText)) detected.add('Ruby');
+      if (/\b(php|laravel)\b/i.test(skillsText)) detected.add('PHP');
+      if (/\b(kotlin|android)\b/i.test(skillsText)) detected.add('Kotlin');
+      if (/\b(swift|ios)\b/i.test(skillsText)) detected.add('Swift');
+      if (/\b(rust)\b/i.test(skillsText)) detected.add('Rust');
+      if (/\b(scala)\b/i.test(skillsText)) detected.add('Scala');
+      if (/\b(r\s*programming|r\s*language|rstudio|tidyverse|ggplot)\b/i.test(skillsText) ||
+          (/\br\b/i.test(skillsText) && /\b(statistics|data\s*science|analytics)\b/i.test(skillsText))) detected.add('R');
+      if (/\b(sql|pl\/?sql|t-sql|mysql|postgresql|oracle|database)\b/i.test(skillsText)) detected.add('SQL');
+      return Array.from(detected);
+    };
+
+    const checkCodingRole = (j: Job): boolean => {
+      const patterns = [/developer/i, /engineer/i, /programmer/i, /sdet/i, /software/i, /devops/i];
+      const text = `${j.title} ${j.description || ''}`;
+      return patterns.some(p => p.test(text));
+    };
+
+    // Include title + description so a JD like "Junior C++ Developer"
+    // is detected even when its structured skills list omits the language.
+    const detectionInput: string[] = [
+      ...((job.skills as string[]) || []),
+      job.title || '',
+      job.description || '',
+    ];
+
+    // Detect languages from skills if JD requires coding but no languages specified
+    if (jdRequiresCoding && !hasLanguages && detectionInput.length > 0) {
+      const detectedLangs = detectLanguages(detectionInput);
+      if (detectedLangs.length > 0) {
+        codingLanguages = detectedLangs;
+      }
+    }
+
+    // Check for dynamic detection from skills
+    let shouldEnableCoding = jdRequiresCoding;
+    if (!jdRequiresCoding && detectionInput.length > 0) {
+      const detectedLangs = detectLanguages(detectionInput);
+      if (detectedLangs.length > 0 && checkCodingRole(job)) {
+        shouldEnableCoding = true;
+        codingLanguages = detectedLangs;
+      }
+    }
+
+    // Store JD-extracted languages — strip non-compilable ones (SQL, etc.)
+    // so they never appear in the coding-round language list.
+    codingLanguages = filterCompilable(codingLanguages);
+    setJdExtractedLanguages(codingLanguages);
+
+    // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
+    // No smart config lock - users can toggle manually
+    setIsCodingLockedBySmartConfig(false);
+    setCodingLockReason('');
+
+    // Only auto-enable if JD has languages we support
+    const hasValidLanguages = codingLanguages.length > 0;
+
+    if (hasValidLanguages) {
+      const split = calculateTimeSplit(job, true);
+      setSections([
+        { name: 'HR', percentage: 0, topics: [], enabled: true },
+        { name: 'Technical', percentage: split.technical, topics: [], enabled: true },
+        { name: 'Coding', percentage: split.coding, topics: [], enabled: true },
+      ]);
+      setSelectedCodingLanguages(codingLanguages);
+      console.log(`[TalentFlow] Coding auto-enabled: Technical ${split.technical}%, Coding ${split.coding}%`);
+    } else {
+      setSections([
+        { name: 'HR', percentage: 0, topics: [], enabled: true },
+        { name: 'Technical', percentage: 100, topics: [], enabled: true },
+        { name: 'Coding', percentage: 0, topics: [], enabled: false },
+      ]);
+      setSelectedCodingLanguages([]);
+      console.log('[TalentFlow] No supported languages detected - coding disabled');
+    }
+
+    setSelectedJob(job);
+    if (urlStep === 'configure' || urlStep === 'preview') {
+      setStepState(urlStep);
+    } else {
+      setStep('configure', job.id);
+    }
+    console.log('[TalentFlow] Auto-selected JD for assessment:', job.title, 'Coding required:', shouldEnableCoding);
+  }, [
+    preSelectedJobId,
+    urlJdId,
+    localJobs,
+    jobs,
+    selectedJob,
+    urlStep,
+    editAssessmentId,
+    jdsWithAssessments,
+    hasLoadedAssessmentEligibility,
+  ]);
+
   // Handle when JD is published from the modal
   const handleJDPublished = async (publishedJob: Job) => {
     // Close the modal
@@ -827,6 +853,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         // Fall back to props if API fails
         setLocalJobs(jobs);
       } finally {
+        setHasLoadedAssessmentEligibility(true);
         setIsLoadingJobs(false);
       }
     };
@@ -1009,6 +1036,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const handleJobSelect = (job: Job) => {
+    if (jdsWithAssessments.has(job.id)) {
+      redirectForExistingAssessment();
+      return;
+    }
+
     setSelectedJob(job);
 
     // Check if JD explicitly requires coding (from JD configuration)

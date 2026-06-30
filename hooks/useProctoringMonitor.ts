@@ -304,6 +304,7 @@ export function useProctoringMonitor({
   const backendQueueRef = useRef<QueuedEvent[]>([]);
   const navigationSuppressionUntilRef = useRef(0);
   const lastTabSwitchEventAtRef = useRef(0);
+  const lastMouseMovementEventAtRef = useRef(0);
   const screenshotSuppressionUntilRef = useRef(0);
   const lastScreenshotEventAtRef = useRef(0);
   const lastMetaKeyAtRef = useRef(0);
@@ -369,6 +370,17 @@ export function useProctoringMonitor({
 
     lastScreenshotEventAtRef.current = now;
     emitEventRef.current('screenshot_attempt', details);
+    return true;
+  }, []);
+
+  const emitMouseMovementEvent = useCallback((details?: Record<string, any>) => {
+    const now = Date.now();
+    if (now - lastMouseMovementEventAtRef.current < 1200) {
+      return false;
+    }
+
+    lastMouseMovementEventAtRef.current = now;
+    emitEventRef.current('mouse_movement', details);
     return true;
   }, []);
 
@@ -813,11 +825,23 @@ export function useProctoringMonitor({
     };
     const handleBlur = () => {
       window.setTimeout(() => {
-        if (document.hidden || document.visibilityState === 'hidden' || isNavigationSequenceActive()) return;
+        // A real browser tab switch frequently fires `blur` first and only then
+        // flips `document.hidden`. Give visibility state a brief grace window,
+        // then classify any now-hidden page as a tab switch rather than a
+        // generic focus-loss event. `emitTabSwitchEvent` already deduplicates
+        // against the visibilitychange path, so this safely acts as a fallback.
+        if (document.hidden || document.visibilityState === 'hidden') {
+          emitTabSwitchEvent({
+            hidden: true,
+            method: 'blur_visibility_fallback',
+          });
+          return;
+        }
+        if (isNavigationSequenceActive()) return;
         if (maybeEmitScreenshotFromBlur()) return;
         if (Date.now() < screenshotSuppressionUntilRef.current) return;
         emitEventRef.current('window_blur', { reason: 'window_focus_lost' });
-      }, 0);
+      }, 150);
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1119,37 +1143,116 @@ export function useProctoringMonitor({
   }, []);
 
   const setupMouseTracking = useCallback(() => {
-    // Only treat movement into the top fullscreen chrome area as a violation.
-    // Normal mouse movement inside the assessment is allowed.
+    // Keep normal in-assessment movement allowed. Only flag attempts to push
+    // the cursor out of the fullscreen assessment viewport or into the top
+    // browser-chrome reveal zone.
     let topEdgeTriggered = false;
-    const handleMouseMove = (e: MouseEvent) => {
+    let lastPointerX = -1;
+    let lastPointerY = -1;
+
+    const classifyViewportEdge = (x: number, y: number): 'top' | 'right' | 'bottom' | 'left' | null => {
+      if (y <= 3) return 'top';
+      if (x <= 1) return 'left';
+      if (x >= window.innerWidth - 1) return 'right';
+      if (y >= window.innerHeight - 1) return 'bottom';
+      return null;
+    };
+
+    const shouldIgnoreMouseViolation = () => {
       if (isNavigationSequenceActive()) {
         topEdgeTriggered = false;
-        return;
+        return true;
       }
 
       if (!isFullscreenActive()) {
         topEdgeTriggered = false;
+        return true;
+      }
+
+      if (document.hidden || document.visibilityState === 'hidden') {
+        return true;
+      }
+
+      return false;
+    };
+
+    const getExitSnapshot = (e: MouseEvent) => {
+      const pointerX = Number.isFinite(e.clientX) ? e.clientX : lastPointerX;
+      const pointerY = Number.isFinite(e.clientY) ? e.clientY : lastPointerY;
+      const edge =
+        classifyViewportEdge(pointerX, pointerY) ??
+        classifyViewportEdge(lastPointerX, lastPointerY) ??
+        'unknown';
+
+      return {
+        edge,
+        clientX: pointerX,
+        clientY: pointerY,
+      };
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+
+      if (shouldIgnoreMouseViolation()) {
         return;
       }
 
-      if (e.clientY <= 3) {
+      const edge = classifyViewportEdge(e.clientX, e.clientY);
+      if (edge === 'top') {
         if (!topEdgeTriggered) {
           topEdgeTriggered = true;
-          emitEventRef.current('mouse_movement', { reason: 'fullscreen_header_hover' });
+          emitMouseMovementEvent({
+            reason: 'fullscreen_header_hover',
+            edge: 'top',
+            source: 'mousemove',
+            clientX: e.clientX,
+            clientY: e.clientY,
+          });
         }
       } else {
         topEdgeTriggered = false;
       }
     };
 
+    const handleMouseOut = (e: MouseEvent) => {
+      if (shouldIgnoreMouseViolation()) {
+        return;
+      }
+
+      // `relatedTarget === null` indicates the pointer left the document,
+      // which is the strongest browser-visible signal that the candidate is
+      // steering toward another app or off-window destination.
+      if (e.relatedTarget || (e as MouseEvent & { toElement?: EventTarget | null }).toElement) {
+        return;
+      }
+
+      const snapshot = getExitSnapshot(e);
+      if (snapshot.edge === 'top' && topEdgeTriggered) {
+        return;
+      }
+
+      if (snapshot.edge !== 'top') {
+        topEdgeTriggered = false;
+      }
+
+      emitMouseMovementEvent({
+        reason: 'viewport_exit',
+        source: 'mouseout',
+        ...snapshot,
+      });
+    };
+
     document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseout', handleMouseOut);
     console.log('[PROCTORING] Mouse tracking started');
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseout', handleMouseOut);
     };
-  }, [isNavigationSequenceActive]);
+  }, [emitMouseMovementEvent, isNavigationSequenceActive]);
 
   // ==================== LOAD SHEDDING ====================
   const setReducedFrequency = useCallback((reduced: boolean) => {
