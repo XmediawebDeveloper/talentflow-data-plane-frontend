@@ -113,6 +113,9 @@ interface BrowserSpeechRecognitionLike {
   onresult: ((event: BrowserSpeechRecognitionEventLike) => void) | null;
   onend: (() => void) | null;
   onerror: ((event: { error: string }) => void) | null;
+  // Fires when the engine actually begins capturing mic audio. Used to sync the
+  // "Your turn — speak now" popup with the moment live transcription is truly live.
+  onaudiostart?: (() => void) | null;
   start: () => void;
   stop: () => void;
 }
@@ -718,6 +721,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // "Now Speak" banner — shown when mic opens for candidate after Linda stops
   const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
+  // Sync gates for the "Your turn — speak now" popup. The banner shows only once
+  // BOTH the local capture pipeline (mic + worklet) is live AND — on the Web
+  // Speech (batch) path — the browser recognizer is actually capturing audio
+  // (onaudiostart). This keeps the popup, the listening bubble and the live
+  // transcript appearing together instead of the popup leading by 2-5s.
+  const turnPipelineReadyRef = useRef(false);    // mic + worklet connected this turn
+  const webSpeechListeningRef = useRef(false);   // recognizer onaudiostart fired this turn
+  const nowSpeakBannerFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
   // Gate the whole overlay + its /debug/system-stats polling behind an opt-in
@@ -849,13 +860,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // "Now Speak" banner — visible for the ENTIRE candidate-turn window.
   //
-  // It is shown at the exact moment the mic becomes active inside
-  // startRecordingInternal(), so the popup and the right-side listening
-  // bubble appear together. This effect only resets state when the turn ends.
+  // It is shown in sync with REAL listening: once the capture pipeline is live
+  // AND (on the Web Speech path) the recognizer is actually capturing audio
+  // (onaudiostart) — see markListeningStarted(). So the popup and the right-side
+  // listening bubble appear together. This effect resets the per-turn sync gates
+  // when the turn ends.
   useEffect(() => {
     if (!isRecording) {
       // Reset for next recording session
       nowSpeakShownForSessionRef.current = false;
+      turnPipelineReadyRef.current = false;
+      webSpeechListeningRef.current = false;
+      if (nowSpeakBannerFallbackTimerRef.current) {
+        clearTimeout(nowSpeakBannerFallbackTimerRef.current);
+        nowSpeakBannerFallbackTimerRef.current = null;
+      }
       setShowNowSpeakBanner(false);
     }
   }, [isRecording]);
@@ -1917,7 +1936,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechDetectedAtRef = useRef<number | null>(null);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.005);
-  const silenceDurationMsRef = useRef(5000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env
+  const silenceDurationMsRef = useRef(8000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env (8s)
   const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
   const POSSIBLE_SPEECH_LEVEL = 0.0018;
   const MIN_POSSIBLE_SPEECH_FRAMES = 6;
@@ -2438,11 +2457,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return webSpeechFinalizedRef.current.replace(/\s+/g, ' ').trim();
   }, []);
 
+  // Idempotent "now listening" trigger for the "Your turn — speak now" popup.
+  // Gated so the popup surfaces in sync with REAL listening: the capture
+  // pipeline must be live, and on the Web Speech (batch) path the recognizer
+  // must have fired onaudiostart (it is actually capturing). Backend-live
+  // providers have no Web Speech engine, so pipeline-ready alone gates them.
+  const markListeningStarted = useCallback(() => {
+    if (
+      nowSpeakShownForSessionRef.current ||
+      !isRecordingRef.current ||
+      isAiSpeakingRef.current ||
+      isProcessingRef.current ||
+      isClosingRef.current ||
+      !turnPipelineReadyRef.current
+    ) {
+      return;
+    }
+    if (!backendLiveTranscriptEnabled && !webSpeechListeningRef.current) {
+      return;
+    }
+    nowSpeakShownForSessionRef.current = true;
+    setShowNowSpeakBanner(true);
+  }, [backendLiveTranscriptEnabled]);
+
   const startWebSpeechRecognition = useCallback(() => {
     // Frontend-only live transcript for batch/final-only ASR models. This is
     // UI feedback only — the backend transcript still remains the canonical
     // answer for evaluation and final chat save.
     webSpeechFinalizedRef.current = "";
+    webSpeechListeningRef.current = false;
     liveBatchSentCharsRef.current = 0;
     liveBatchIndexRef.current = 0;
     liveBatchStopRequestedRef.current = false;
@@ -2468,6 +2511,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
+    // Engine has begun capturing mic audio → live transcription is truly live.
+    // Surface the "Your turn — speak now" popup in sync with the listening bubble.
+    // markListeningStarted is idempotent and also gated on the capture pipeline
+    // being ready, so this can't show the banner prematurely.
+    recognition.onaudiostart = () => {
+      webSpeechListeningRef.current = true;
+      markListeningStarted();
+    };
     recognition.onresult = (event: BrowserSpeechRecognitionEventLike) => {
       // HARD GUARD: if Linda is currently speaking (or the post-playback echo
       // guard is still armed), whatever the Web Speech API picked up is almost
@@ -2676,7 +2727,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       recognition.start();
       _armPreemptiveTimer();
     } catch {}
-  }, [buildStableLiveTranscriptPreview, flushPreSpeechAudioToBackend, sendLiveTranscriptBatch, isFlexibleMode, isNewFlexibleMode]);
+  }, [buildStableLiveTranscriptPreview, flushPreSpeechAudioToBackend, sendLiveTranscriptBatch, isFlexibleMode, isNewFlexibleMode, markListeningStarted]);
 
   const stopWebSpeechRecognition = useCallback(() => {
     if (webSpeechPreemptiveTimerRef.current !== null) {
@@ -3918,6 +3969,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setQuestionTimerExpired(true);
         questionTimerExpiredRef.current = true;
         setQuestionTimerSeconds(0);
+        // Also zero the REF, not just the state. stopRecording() (called via
+        // stopRecordingSilentRef below) freezes the response-bubble "X left"
+        // badge from questionTimerSecondsRef.current — if we leave the ref at
+        // its last 200ms-tick value (e.g. 2, since the backend's expiry fires a
+        // beat before the local countdown visibly hits 0) the badge shows
+        // "00:02 left" instead of "00:00" on a genuine time's-up.
+        questionTimerSecondsRef.current = 0;
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
@@ -3947,6 +4005,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setQuestionTimerExpired(true);
         questionTimerExpiredRef.current = true;
         setQuestionTimerSeconds(0);
+        // Zero the REF too (see question_timer_expired above): stopRecording
+        // freezes the "X left" badge from questionTimerSecondsRef.current, so a
+        // stale last-tick value here makes a 2:00 hard-cap show "00:02 left".
+        questionTimerSecondsRef.current = 0;
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
@@ -4682,6 +4744,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isProcessing: isProcessingRef.current,
       isAiSpeaking: isAiSpeakingRef.current,
     });
+    // ── Pre-warm the browser Web Speech recognizer EARLY ──────────────────
+    // For batch ASR providers (no backend live_transcript) the on-screen live
+    // transcript comes from the browser Web Speech API. recognition.start() has
+    // a 1-3 s engine connect / cold-start latency during which the engine
+    // captures NO audio of its own. Starting it only AFTER the async
+    // getUserMedia + AudioWorklet setup below (itself ~1-2 s) stacked on top of
+    // that latency was dropping the candidate's first 2-5 s of speech from the
+    // DISPLAYED transcript (the SCORED answer is unaffected — preSpeechPCMRingRef
+    // flushes those words to the backend). Kick the recognizer off here instead:
+    // isRecordingRef is already true (so the onend/onerror auto-restart guards
+    // pass) and isAiSpeaking is already false, so the connect latency now overlaps
+    // the mic/worklet setup and the engine is live by the time the candidate
+    // speaks. onresult still drops Linda's TTS tail via the echo guard. The old
+    // call site (after the worklet setup) is removed so we don't reset/reconnect.
+    // Reset the per-turn "now listening" sync gates before (re)starting the
+    // recognizer; the popup stays hidden until BOTH the pipeline is ready and
+    // the recognizer is capturing.
+    turnPipelineReadyRef.current = false;
+    webSpeechListeningRef.current = false;
+    if (!backendLiveTranscriptEnabled) {
+      startWebSpeechRecognition();
+    }
     console.log(`[Recording ${timestamp}] Starting recording...`);
     try {
       // Prefer a dedicated per-turn answer-capture microphone for VAD + ASR so
@@ -5235,20 +5319,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
       setIsRecording(true);
       startPendingQuestionTimer("candidate_turn_open");
-      if (
-        !nowSpeakShownForSessionRef.current &&
-        !isAiSpeakingRef.current &&
-        !isProcessingRef.current &&
-        !isClosingRef.current
-      ) {
-        nowSpeakShownForSessionRef.current = true;
-        setShowNowSpeakBanner(true);
+      // Capture pipeline (mic + worklet) is now live — gate the "Your turn"
+      // popup on this so it can never appear before we can actually record.
+      turnPipelineReadyRef.current = true;
+      // Try to show now: succeeds immediately for backend-live providers; for the
+      // Web Speech (batch) path it shows only once the recognizer's onaudiostart
+      // has fired (set in startWebSpeechRecognition) so the popup, the listening
+      // bubble and the live transcript all light up together.
+      markListeningStarted();
+      if (!backendLiveTranscriptEnabled) {
+        // Fallback: if onaudiostart never fires (browser quirk), don't strand the
+        // candidate without a prompt — surface the popup after a short ceiling.
+        if (nowSpeakBannerFallbackTimerRef.current) {
+          clearTimeout(nowSpeakBannerFallbackTimerRef.current);
+        }
+        nowSpeakBannerFallbackTimerRef.current = setTimeout(() => {
+          webSpeechListeningRef.current = true;
+          markListeningStarted();
+        }, 1200);
       }
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
-      if (!backendLiveTranscriptEnabled) {
-        startWebSpeechRecognition();
-      }
+      // NOTE: Web Speech recognizer is now pre-warmed earlier (right after
+      // isRecordingRef flips true, before the mic/worklet setup) so its connect
+      // latency overlaps that setup and the opening words aren't dropped from the
+      // live transcript. See the startWebSpeechRecognition() call above.
 
       // No-response detection fallback — fire after 5s of total silence with no
       // speech. The backend normally drives the canonical silence-nudge flow,
@@ -5285,6 +5380,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Reset recording flag — we set it early to prevent races; undo on failure.
       isRecordingRef.current = false;
       setIsRecording(false);
+      // The Web Speech recognizer is now pre-warmed before this try block, so a
+      // mic-acquisition failure here could leave it running with no recording
+      // session behind it (its onend/onerror auto-restart guards check
+      // isRecordingRef, now false, so it won't loop — but stop it explicitly to
+      // release the engine cleanly).
+      stopWebSpeechRecognition();
       const errName = getErrorName(err);
       if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
         if (isBraveBrowser) {
