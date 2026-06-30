@@ -487,9 +487,12 @@ export const jdService = {
   /**
    * Extract parameters from JD text using LLM (for manual mode)
    */
-  async extractParamsFromText(description: string): Promise<JDExtractedParams> {
+  async extractParamsFromText(description: string, jobTitle?: string): Promise<JDExtractedParams> {
     try {
-      const response = await api.post<JDExtractedParams>('/jd/extract-params-text', { description });
+      const response = await api.post<JDExtractedParams>('/jd/extract-params-text', {
+        description,
+        job_title: jobTitle,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

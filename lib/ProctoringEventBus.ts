@@ -37,17 +37,17 @@ export interface ProctoringEvent {
 
 // Warning messages
 const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
-  tab_switch: 'Tab switching detected. Please stay on the interview page.',
-  copy_attempt: 'Copying is not allowed during the interview.',
-  paste_attempt: 'Pasting is not allowed during the interview.',
-  voice_detected: 'Voice activity detected. Please maintain silence during the interview.',
+  tab_switch: 'Tab switching detected. Please stay on the assessment page.',
+  copy_attempt: 'Copying is not allowed during the assessment.',
+  paste_attempt: 'Pasting is not allowed during the assessment.',
+  voice_detected: 'Voice activity detected. Please maintain silence during the assessment.',
   multiple_voices: 'Multiple voices detected. Please ensure you are alone.',
   camera_disabled: 'Camera has been disabled. Please enable your camera to continue.',
   microphone_disabled: 'Microphone has been disabled. Please enable your microphone.',
   camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
   screenshot_attempt: 'Screenshot violation detected. Screenshots and screen recording are not allowed.',
   screen_recording_attempt: 'Screenshot violation detected. Screenshots and screen recording are not allowed.',
-  window_blur: 'Window focus was lost. Please stay on the assessment window.',
+  window_blur: 'The assessment window lost focus. Please return to the assessment window.',
   mouse_movement: 'Mouse moved outside the safe assessment area. Please keep it within the browser window.',
   fullscreen_exit: 'Fullscreen mode exited. Please return to fullscreen to continue.',
   face_missing: 'No face detected. Please ensure your face is visible to the camera.',

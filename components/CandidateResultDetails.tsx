@@ -2363,8 +2363,11 @@ export default function CandidateResultDetails({
                               const cfg = (() => {
                                 switch (row.event_type) {
                                   case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'low'    };
-                                  case 'window_blur':              return { label: 'Window Focus Lost',       icon: <Monitor className="w-4 h-4" />,      color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'window_blur':              return { label: 'Assessment Window Lost Focus', icon: <Monitor className="w-4 h-4" />,  color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
                                   case 'mouse_movement':           return { label: 'Mouse Movement',          icon: <MousePointer className="w-4 h-4" />, color: 'text-slate-600',         bg: 'bg-slate-50',        severity: 'low'    };
+                                  case 'navigation_attempt':       return { label: 'Navigation Attempt',      icon: <AlertCircle className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'shortcut_attempt':         return { label: 'Blocked Shortcut Attempt', icon: <AlertCircle className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'devtools_detected':        return { label: 'DevTools Attempt',        icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };

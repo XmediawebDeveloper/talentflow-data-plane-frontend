@@ -52,7 +52,7 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   camera_obstructed: 'Camera Obstructed',
   screenshot_attempt: 'Screenshot Violation Detected',
   screen_recording_attempt: 'Screenshot Violation Detected',
-  window_blur: 'Window Focus Lost',
+  window_blur: 'Assessment Window Lost Focus',
   mouse_movement: 'Mouse Movement Detected',
   fullscreen_exit: 'Fullscreen Exited',
   face_missing: 'Face Not Detected',

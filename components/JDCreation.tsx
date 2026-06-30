@@ -1837,7 +1837,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     try {
       // Call real API to extract parameters using AI
       console.log('[TalentFlow] Extracting parameters from JD, length:', jdText.length);
-      const params = await jdService.extractParamsFromText(jdText);
+      const params = await jdService.extractParamsFromText(jdText, trimmedJobTitle);
 
       // Debug: Log API response to see what's being extracted
       console.log('[TalentFlow] Extraction API response:', params);
@@ -2209,7 +2209,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         toast.error({
           title: 'Extraction Failed',
-          description: 'Could not extract parameters from JD. Please try again.'
+          description: errorMessage || 'Could not extract parameters from JD. Please try again.',
         });
       }
     } finally {

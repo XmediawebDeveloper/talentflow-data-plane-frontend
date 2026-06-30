@@ -329,11 +329,42 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     heartbeatRef.current = setInterval(onTick, 3000);
   }, [stopHeartbeatWorker]);
 
+  const reportAssessmentShellViolation = useCallback((
+    type: 'refresh' | 'hard_refresh' | 'back' | 'close' | 'fullscreen_toggle' | 'devtools' | 'view_source',
+    details?: {
+      source: 'keyboard' | 'history' | 'browser';
+      shortcut?: string;
+      category?: 'navigation' | 'devtools' | 'inspection';
+    }
+  ) => {
+    if (!token) return;
+
+    const event_type =
+      type === 'devtools'
+        ? 'devtools_detected'
+        : type === 'view_source' || type === 'fullscreen_toggle'
+          ? 'shortcut_attempt'
+          : 'navigation_attempt';
+
+    candidateService.reportProctorEvent(token, {
+      event_type,
+      timestamp: new Date().toISOString(),
+      details: {
+        action: type,
+        ...details,
+        step: stepRef.current,
+      },
+    }).catch(error => {
+      console.error('[PROCTORING] Failed to report blocked shell action:', error);
+    });
+  }, [token]);
+
   useRefreshPrevention({
     enabled: isAssessmentActive,
     message: 'You have an ongoing assessment. Leaving this page will end your session.',
-    onAttempt: (type) => {
-      console.log(`[PROCTORING] Blocked ${type} attempt during assessment`);
+    onAttempt: (type, details) => {
+      console.log('[PROCTORING] Blocked assessment shell action', { type, details });
+      reportAssessmentShellViolation(type, details);
     },
   });
 

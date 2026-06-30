@@ -2,10 +2,25 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 
+type RefreshAttemptType =
+  | 'refresh'
+  | 'hard_refresh'
+  | 'back'
+  | 'close'
+  | 'fullscreen_toggle'
+  | 'devtools'
+  | 'view_source';
+
+interface RefreshAttemptDetails {
+  source: 'keyboard' | 'history' | 'browser';
+  shortcut?: string;
+  category?: 'navigation' | 'devtools' | 'inspection';
+}
+
 interface UseRefreshPreventionOptions {
   enabled?: boolean;
   message?: string;
-  onAttempt?: (type: 'refresh' | 'back' | 'close') => void;
+  onAttempt?: (type: RefreshAttemptType, details?: RefreshAttemptDetails) => void;
   allowDevTools?: boolean;
 }
 
@@ -36,7 +51,7 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
   // Track if we've already pushed initial history state to prevent repeated calls
   const hasInitializedHistoryRef = useRef(false);
 
-  // Handle keyboard shortcuts (F5, Ctrl+R, Ctrl+Shift+R, Ctrl+W)
+  // Handle keyboard shortcuts (F5, F11, Ctrl+R, Ctrl+Shift+R, Ctrl+W)
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return;
@@ -45,7 +60,19 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
       if (event.key === 'F5' || event.keyCode === 116) {
         event.preventDefault();
         event.stopPropagation();
-        onAttempt?.('refresh');
+        onAttempt?.('refresh', { source: 'keyboard', shortcut: 'F5', category: 'navigation' });
+        return false;
+      }
+
+      // F11 - Browser fullscreen toggle
+      if (event.key === 'F11' || event.keyCode === 122) {
+        event.preventDefault();
+        event.stopPropagation();
+        onAttempt?.('fullscreen_toggle', {
+          source: 'keyboard',
+          shortcut: 'F11',
+          category: 'navigation',
+        });
         return false;
       }
 
@@ -53,7 +80,11 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
       if ((event.ctrlKey || event.metaKey) && (event.key === 'r' || event.keyCode === 82)) {
         event.preventDefault();
         event.stopPropagation();
-        onAttempt?.('refresh');
+        onAttempt?.('refresh', {
+          source: 'keyboard',
+          shortcut: event.metaKey ? 'Cmd+R' : 'Ctrl+R',
+          category: 'navigation',
+        });
         return false;
       }
 
@@ -61,7 +92,11 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'r' || event.keyCode === 82)) {
         event.preventDefault();
         event.stopPropagation();
-        onAttempt?.('refresh');
+        onAttempt?.('hard_refresh', {
+          source: 'keyboard',
+          shortcut: event.metaKey ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
+          category: 'navigation',
+        });
         return false;
       }
 
@@ -69,7 +104,11 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
       if ((event.ctrlKey || event.metaKey) && (event.key === 'w' || event.keyCode === 87)) {
         event.preventDefault();
         event.stopPropagation();
-        onAttempt?.('close');
+        onAttempt?.('close', {
+          source: 'keyboard',
+          shortcut: event.metaKey ? 'Cmd+W' : 'Ctrl+W',
+          category: 'navigation',
+        });
         return false;
       }
 
@@ -79,6 +118,7 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
         if (event.key === 'F12' || event.keyCode === 123) {
           event.preventDefault();
           event.stopPropagation();
+          onAttempt?.('devtools', { source: 'keyboard', shortcut: 'F12', category: 'devtools' });
           return false;
         }
 
@@ -86,6 +126,11 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
         if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'i' || event.keyCode === 73)) {
           event.preventDefault();
           event.stopPropagation();
+          onAttempt?.('devtools', {
+            source: 'keyboard',
+            shortcut: event.metaKey ? 'Cmd+Shift+I' : 'Ctrl+Shift+I',
+            category: 'devtools',
+          });
           return false;
         }
 
@@ -93,6 +138,11 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
         if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'j' || event.keyCode === 74)) {
           event.preventDefault();
           event.stopPropagation();
+          onAttempt?.('devtools', {
+            source: 'keyboard',
+            shortcut: event.metaKey ? 'Cmd+Shift+J' : 'Ctrl+Shift+J',
+            category: 'devtools',
+          });
           return false;
         }
 
@@ -100,6 +150,11 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
         if ((event.ctrlKey || event.metaKey) && (event.key === 'u' || event.keyCode === 85)) {
           event.preventDefault();
           event.stopPropagation();
+          onAttempt?.('view_source', {
+            source: 'keyboard',
+            shortcut: event.metaKey ? 'Cmd+U' : 'Ctrl+U',
+            category: 'inspection',
+          });
           return false;
         }
       }
@@ -113,7 +168,7 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
     (event: BeforeUnloadEvent) => {
       if (!enabled) return;
 
-      onAttempt?.('close');
+      onAttempt?.('close', { source: 'browser', category: 'navigation' });
     },
     [enabled, onAttempt]
   );
@@ -125,7 +180,7 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
 
       // Push state back to prevent navigation
       window.history.pushState(null, '', window.location.href);
-      onAttempt?.('back');
+      onAttempt?.('back', { source: 'history', category: 'navigation' });
     },
     [enabled, onAttempt]
   );

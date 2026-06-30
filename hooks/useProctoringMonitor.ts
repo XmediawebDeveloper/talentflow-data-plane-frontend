@@ -305,6 +305,15 @@ export function useProctoringMonitor({
   const navigationSuppressionUntilRef = useRef(0);
   const lastTabSwitchEventAtRef = useRef(0);
   const lastMouseMovementEventAtRef = useRef(0);
+  const lastViewportExitAtRef = useRef(0);
+  const lastAltKeyAtRef = useRef(0);
+  const lastCtrlKeyAtRef = useRef(0);
+  const lastTabKeyAtRef = useRef(0);
+  const focusSwitchSignalUntilRef = useRef(0);
+  const focusSwitchSignalLabelRef = useRef<string | null>(null);
+  const lastPrintScreenKeyAtRef = useRef(0);
+  const screenshotChordUntilRef = useRef(0);
+  const screenshotChordLabelRef = useRef<string | null>(null);
   const screenshotSuppressionUntilRef = useRef(0);
   const lastScreenshotEventAtRef = useRef(0);
   const lastMetaKeyAtRef = useRef(0);
@@ -384,26 +393,82 @@ export function useProctoringMonitor({
     return true;
   }, []);
 
-  const maybeEmitScreenshotFromBlur = useCallback(() => {
-    const now = Date.now();
-    const sawWindowsSnipShortcut =
-      now - lastMetaKeyAtRef.current < 900 &&
-      now - lastShiftKeyAtRef.current < 900;
-    const sawScreenshotChord =
-      sawWindowsSnipShortcut &&
-      now - lastSKeyAtRef.current < 900;
+  const armFocusSwitchSignal = useCallback((label: string, windowMs = 1400) => {
+    focusSwitchSignalUntilRef.current = Date.now() + windowMs;
+    focusSwitchSignalLabelRef.current = label;
+  }, []);
 
-    if (!sawWindowsSnipShortcut) {
-      return false;
+  const getRecentFocusSwitchSignal = useCallback(() => {
+    const now = Date.now();
+
+    if (now < focusSwitchSignalUntilRef.current && focusSwitchSignalLabelRef.current) {
+      return focusSwitchSignalLabelRef.current;
     }
 
-    return emitScreenshotEvent({
-      key: sawScreenshotChord ? 'Win+Shift+S' : 'Win+Shift based capture',
+    if (now - lastAltKeyAtRef.current < 450) {
+      return 'alt_focus_switch';
+    }
+
+    if (now - lastTabKeyAtRef.current < 450 && now - lastMetaKeyAtRef.current < 450) {
+      return 'cmd_tab_partial';
+    }
+
+    if (now - lastTabKeyAtRef.current < 450 && now - lastCtrlKeyAtRef.current < 450) {
+      return 'ctrl_tab_partial';
+    }
+
+    return null;
+  }, []);
+
+  const armScreenshotChord = useCallback((label: string, windowMs = 1200) => {
+    screenshotChordUntilRef.current = Date.now() + windowMs;
+    screenshotChordLabelRef.current = label;
+  }, []);
+
+  const getRecentScreenshotSignal = useCallback(() => {
+    const now = Date.now();
+    if (now - lastPrintScreenKeyAtRef.current < 1200) {
+      return 'PrintScreen';
+    }
+
+    if (now < screenshotChordUntilRef.current && screenshotChordLabelRef.current) {
+      return screenshotChordLabelRef.current;
+    }
+
+    const sawExplicitWindowsSnipShortcut =
+      now - lastMetaKeyAtRef.current < 900 &&
+      now - lastShiftKeyAtRef.current < 900 &&
+      now - lastSKeyAtRef.current < 900;
+    if (sawExplicitWindowsSnipShortcut) {
+      return 'Win+Shift+S';
+    }
+
+    const sawSoftWindowsSnipShortcut =
+      now - lastMetaKeyAtRef.current < 700 &&
+      now - lastShiftKeyAtRef.current < 700;
+    if (sawSoftWindowsSnipShortcut) {
+      return 'Win+Shift based capture';
+    }
+
+    return null;
+  }, []);
+
+  const maybeHandleRecentScreenshotSignal = useCallback((source: string, details?: Record<string, any>) => {
+    const signalKey = getRecentScreenshotSignal();
+
+    if (!signalKey) {
+      return Date.now() < screenshotSuppressionUntilRef.current;
+    }
+
+    emitScreenshotEvent({
+      key: signalKey,
       capture_type: 'screenshot',
-      source: 'blur_heuristic',
+      source,
       enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+      ...details,
     });
-  }, [emitScreenshotEvent, screenshotBlocking]);
+    return true;
+  }, [emitScreenshotEvent, getRecentScreenshotSignal, screenshotBlocking]);
 
   // ==================== BACKEND BATCH FLUSH ====================
   const flushBackendQueue = useCallback(async () => {
@@ -817,6 +882,11 @@ export function useProctoringMonitor({
   const setupTabSwitchDetection = useCallback(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        if (maybeHandleRecentScreenshotSignal('visibilitychange_heuristic', {
+          hidden: true,
+        })) {
+          return;
+        }
         emitTabSwitchEvent({
           hidden: true,
           method: 'visibilitychange',
@@ -825,22 +895,33 @@ export function useProctoringMonitor({
     };
     const handleBlur = () => {
       window.setTimeout(() => {
+        if (maybeHandleRecentScreenshotSignal('blur_heuristic', {
+          hidden: document.hidden,
+          visibilityState: document.visibilityState,
+        })) {
+          return;
+        }
+
         // A real browser tab switch frequently fires `blur` first and only then
         // flips `document.hidden`. Give visibility state a brief grace window,
         // then classify any now-hidden page as a tab switch rather than a
         // generic focus-loss event. `emitTabSwitchEvent` already deduplicates
         // against the visibilitychange path, so this safely acts as a fallback.
-        if (document.hidden || document.visibilityState === 'hidden') {
+        const recentFocusSwitch = getRecentFocusSwitchSignal();
+        const recentlyExitedViewport = Date.now() - lastViewportExitAtRef.current < 250;
+
+        if (document.hidden || document.visibilityState === 'hidden' || recentFocusSwitch || recentlyExitedViewport) {
           emitTabSwitchEvent({
-            hidden: true,
-            method: 'blur_visibility_fallback',
+            hidden: document.hidden || document.visibilityState === 'hidden',
+            method: recentFocusSwitch ? 'blur_focus_switch_heuristic' : 'blur_visibility_fallback',
+            source: recentlyExitedViewport ? 'viewport_exit' : 'blur',
+            shortcut: recentFocusSwitch || undefined,
           });
           return;
         }
         if (isNavigationSequenceActive()) return;
-        if (maybeEmitScreenshotFromBlur()) return;
         if (Date.now() < screenshotSuppressionUntilRef.current) return;
-        emitEventRef.current('window_blur', { reason: 'window_focus_lost' });
+        emitEventRef.current('window_blur', { reason: 'assessment_window_focus_lost' });
       }, 150);
     };
 
@@ -852,7 +933,7 @@ export function useProctoringMonitor({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [emitTabSwitchEvent, isNavigationSequenceActive, maybeEmitScreenshotFromBlur]);
+  }, [emitTabSwitchEvent, getRecentFocusSwitchSignal, isNavigationSequenceActive, maybeHandleRecentScreenshotSignal]);
 
   const setupCopyPasteDetection = useCallback(() => {
     const block = (e: Event, type: ProctoringEventType, details?: Record<string, any>) => {
@@ -902,10 +983,24 @@ export function useProctoringMonitor({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const normalizedKey = e.key.toLowerCase();
+
+      if (normalizedKey === 'alt') {
+        lastAltKeyAtRef.current = now;
+      }
+      if (normalizedKey === 'control') {
+        lastCtrlKeyAtRef.current = now;
+      }
+      if (normalizedKey === 'tab') {
+        lastTabKeyAtRef.current = now;
+      }
+
       if (e.altKey && e.key === 'Tab') {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        armFocusSwitchSignal('alt_tab_keyboard');
         emitTabSwitchEvent({ method: 'alt_tab', source: 'keyboard' });
         return false;
       }
@@ -917,6 +1012,7 @@ export function useProctoringMonitor({
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        armFocusSwitchSignal('cmd_tab_keyboard');
         emitTabSwitchEvent({ method: 'cmd_tab', source: 'keyboard' });
         return false;
       }
@@ -924,6 +1020,7 @@ export function useProctoringMonitor({
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        armFocusSwitchSignal('ctrl_tab_keyboard');
         emitTabSwitchEvent({ method: 'ctrl_tab', source: 'keyboard' });
         return false;
       }
@@ -965,7 +1062,7 @@ export function useProctoringMonitor({
       document.removeEventListener('contextmenu', handleContextMenu, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [beginNavigationSequence, emitTabSwitchEvent]);
+  }, [armFocusSwitchSignal, beginNavigationSequence, emitTabSwitchEvent]);
 
   const setupScreenshotDetection = useCallback(() => {
     // Mobile browsers never receive keyboard events for hardware screenshot
@@ -979,54 +1076,106 @@ export function useProctoringMonitor({
       return () => {};
     }
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const normalizeKeyValue = (value: string | undefined | null) => {
+      return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    };
+
+    const isPrintScreenEvent = (e: KeyboardEvent) => {
+      const normalizedKey = normalizeKeyValue(e.key);
+      const normalizedCode = normalizeKeyValue(e.code);
+      return (
+        normalizedKey === 'printscreen' ||
+        normalizedKey === 'print screen' ||
+        normalizedKey === 'prtsc' ||
+        normalizedKey === 'prtscr' ||
+        normalizedKey === 'prtscn' ||
+        normalizedKey === 'snapshot' ||
+        normalizedKey === 'sysrq' ||
+        normalizedCode === 'printscreen' ||
+        e.keyCode === 44 ||
+        e.which === 44
+      );
+    };
+
+    const buildPrintScreenLabel = (e: KeyboardEvent) => {
+      const modifiers = [
+        e.ctrlKey ? 'Ctrl' : '',
+        e.altKey ? 'Alt' : '',
+        e.shiftKey ? 'Shift' : '',
+      ].filter(Boolean);
+      return `${modifiers.length > 0 ? `${modifiers.join('+')}+` : ''}PrintScreen`;
+    };
+
+    const trackScreenshotShortcutState = (e: KeyboardEvent) => {
       const now = Date.now();
-      if (e.key === 'Meta' || e.key === 'OS') {
+      const normalizedKey = normalizeKeyValue(e.key);
+
+      if (normalizedKey === 'meta' || normalizedKey === 'os' || normalizedKey === 'super') {
         lastMetaKeyAtRef.current = now;
       }
-      if (e.key === 'Shift') {
+      if (normalizedKey === 'shift') {
         lastShiftKeyAtRef.current = now;
       }
-      if (e.key.toLowerCase() === 's') {
+      if (normalizedKey === 's') {
         lastSKeyAtRef.current = now;
       }
 
-      if (e.key === 'PrintScreen') {
+      const sawWindowsSnipChord =
+        (e.metaKey || normalizedKey === 'meta' || normalizedKey === 'os' || normalizedKey === 'super') &&
+        (e.shiftKey || normalizedKey === 'shift') &&
+        (
+          normalizedKey === 's' ||
+          now - lastSKeyAtRef.current < 250
+        );
+
+      if (sawWindowsSnipChord) {
+        armScreenshotChord('Win+Shift+S');
+      } else if (
+        (e.metaKey || normalizedKey === 'meta' || normalizedKey === 'os' || normalizedKey === 'super') &&
+        (e.shiftKey || normalizedKey === 'shift')
+      ) {
+        armScreenshotChord('Win+Shift based capture', 900);
+      }
+    };
+
+    const clearClipboardIfPossible = () => {
+      if (screenshotBlocking) {
+        navigator.clipboard?.writeText('').catch(() => {});
+      }
+    };
+
+    const handleScreenshotKeyEvent = (e: KeyboardEvent, phase: 'keydown' | 'keyup') => {
+      trackScreenshotShortcutState(e);
+      const normalizedKey = normalizeKeyValue(e.key);
+
+      if (isPrintScreenEvent(e)) {
+        lastPrintScreenKeyAtRef.current = Date.now();
         if (screenshotBlocking) {
           e.preventDefault();
         }
         emitScreenshotEvent({
-          key: 'PrintScreen',
+          key: buildPrintScreenLabel(e),
           capture_type: 'screenshot',
+          phase,
           enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
         });
-        if (screenshotBlocking) {
-          navigator.clipboard?.writeText('').catch(() => {});
-        }
+        clearClipboardIfPossible();
+        return;
       }
-      if ((e.ctrlKey || e.altKey) && e.key === 'PrintScreen') {
-        if (screenshotBlocking) {
-          e.preventDefault();
-        }
-        emitScreenshotEvent({
-          key: 'Ctrl/Alt+PrintScreen',
-          capture_type: 'screenshot',
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
-        });
-        if (screenshotBlocking) {
-          navigator.clipboard?.writeText('').catch(() => {});
-        }
-      }
-      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 's') {
+
+      if (e.metaKey && e.shiftKey && normalizedKey === 's') {
         if (screenshotBlocking) {
           e.preventDefault();
         }
         emitScreenshotEvent({
           key: 'Win+Shift+S',
           capture_type: 'screenshot',
+          phase,
           enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
         });
+        return;
       }
+
       if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
         if (screenshotBlocking) {
           e.preventDefault();
@@ -1034,9 +1183,12 @@ export function useProctoringMonitor({
         emitScreenshotEvent({
           key: `Cmd+Shift+${e.key}`,
           capture_type: 'screenshot',
+          phase,
           enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
         });
+        return;
       }
+
       // macOS Cmd+Shift+5 — screenshot toolbar (macOS 10.14+)
       if (e.metaKey && e.shiftKey && e.key === '5') {
         if (screenshotBlocking) {
@@ -1045,9 +1197,12 @@ export function useProctoringMonitor({
         emitScreenshotEvent({
           key: 'Cmd+Shift+5',
           capture_type: 'screenshot',
+          phase,
           enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
         });
+        return;
       }
+
       // macOS Cmd+Ctrl+Shift+3/4 — copy screenshot to clipboard
       if (e.metaKey && e.ctrlKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
         if (screenshotBlocking) {
@@ -1056,15 +1211,23 @@ export function useProctoringMonitor({
         emitScreenshotEvent({
           key: `Cmd+Ctrl+Shift+${e.key}`,
           capture_type: 'screenshot',
+          phase,
           enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
         });
       }
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => handleScreenshotKeyEvent(e, 'keydown');
+    const handleKeyUp = (e: KeyboardEvent) => handleScreenshotKeyEvent(e, 'keyup');
+
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     console.log('[PROCTORING] Screenshot detection started');
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [emitScreenshotEvent, screenshotBlocking]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, [armScreenshotChord, emitScreenshotEvent, screenshotBlocking]);
 
   const setupScreenRecordingDetection = useCallback(() => {
     // Mobile browsers (iOS/Android) do not support getDisplayMedia — screen
@@ -1134,13 +1297,20 @@ export function useProctoringMonitor({
 
     const handler = () => {
       const isFs = isFullscreenActive();
-      if (!isFs) emitEventRef.current('fullscreen_exit', {});
+      if (!isFs) {
+        if (maybeHandleRecentScreenshotSignal('fullscreenchange_heuristic', {
+          fullscreenActive: false,
+        })) {
+          return;
+        }
+        emitEventRef.current('fullscreen_exit', {});
+      }
     };
 
     document.addEventListener(eventName, handler);
     console.log('[PROCTORING] Fullscreen detection started');
     return () => document.removeEventListener(eventName, handler);
-  }, []);
+  }, [maybeHandleRecentScreenshotSignal]);
 
   const setupMouseTracking = useCallback(() => {
     // Keep normal in-assessment movement allowed. Only flag attempts to push
@@ -1221,6 +1391,12 @@ export function useProctoringMonitor({
         return;
       }
 
+      if (maybeHandleRecentScreenshotSignal('mouseout_heuristic', {
+        relatedTargetNull: !e.relatedTarget,
+      })) {
+        return;
+      }
+
       // `relatedTarget === null` indicates the pointer left the document,
       // which is the strongest browser-visible signal that the candidate is
       // steering toward another app or off-window destination.
@@ -1228,20 +1404,52 @@ export function useProctoringMonitor({
         return;
       }
 
+      lastViewportExitAtRef.current = Date.now();
       const snapshot = getExitSnapshot(e);
-      if (snapshot.edge === 'top' && topEdgeTriggered) {
-        return;
-      }
+      window.setTimeout(() => {
+        if (isNavigationSequenceActive() || !isFullscreenActive()) {
+          topEdgeTriggered = false;
+          return;
+        }
 
-      if (snapshot.edge !== 'top') {
-        topEdgeTriggered = false;
-      }
+        if (maybeHandleRecentScreenshotSignal('mouseout_heuristic', {
+          relatedTargetNull: true,
+          ...snapshot,
+        })) {
+          return;
+        }
 
-      emitMouseMovementEvent({
-        reason: 'viewport_exit',
-        source: 'mouseout',
-        ...snapshot,
-      });
+        const pageHidden = document.hidden || document.visibilityState === 'hidden';
+        const pageLostFocus = typeof document.hasFocus === 'function' ? !document.hasFocus() : false;
+        const recentFocusSwitch = getRecentFocusSwitchSignal();
+
+        if (pageHidden || pageLostFocus || recentFocusSwitch) {
+          topEdgeTriggered = false;
+          emitTabSwitchEvent({
+            method: recentFocusSwitch ? 'mouseout_focus_switch_heuristic' : 'mouseout_focusloss_fallback',
+            source: 'mouseout',
+            shortcut: recentFocusSwitch || undefined,
+            hidden: pageHidden,
+            focusLost: pageLostFocus,
+            ...snapshot,
+          });
+          return;
+        }
+
+        if (snapshot.edge === 'top' && topEdgeTriggered) {
+          return;
+        }
+
+        if (snapshot.edge !== 'top') {
+          topEdgeTriggered = false;
+        }
+
+        emitMouseMovementEvent({
+          reason: 'viewport_exit',
+          source: 'mouseout',
+          ...snapshot,
+        });
+      }, 120);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -1252,7 +1460,7 @@ export function useProctoringMonitor({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseout', handleMouseOut);
     };
-  }, [emitMouseMovementEvent, isNavigationSequenceActive]);
+  }, [emitMouseMovementEvent, emitTabSwitchEvent, getRecentFocusSwitchSignal, isNavigationSequenceActive, maybeHandleRecentScreenshotSignal]);
 
   // ==================== LOAD SHEDDING ====================
   const setReducedFrequency = useCallback((reduced: boolean) => {
