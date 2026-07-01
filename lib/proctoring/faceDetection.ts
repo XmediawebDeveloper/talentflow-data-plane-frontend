@@ -12,6 +12,13 @@ const MIN_ABSOLUTE_FACE_AREA_RATIO = 0.008;
 const MIN_RELATIVE_FACE_AREA_RATIO = 0.25;
 const MIN_FACE_WIDTH_RATIO = 0.08;
 const MIN_FACE_HEIGHT_RATIO = 0.12;
+const MIN_CANDIDATE_FACE_AREA_RATIO = 0.02;
+const MIN_CANDIDATE_FACE_WIDTH_RATIO = 0.13;
+const MIN_CANDIDATE_FACE_HEIGHT_RATIO = 0.16;
+const MIN_CANDIDATE_FACE_CENTER_X_RATIO = 0.18;
+const MAX_CANDIDATE_FACE_CENTER_X_RATIO = 0.82;
+const MIN_CANDIDATE_FACE_CENTER_Y_RATIO = 0.16;
+const MAX_CANDIDATE_FACE_CENTER_Y_RATIO = 0.84;
 
 export interface FaceRegion {
   x: number;
@@ -19,6 +26,20 @@ export interface FaceRegion {
   width: number;
   height: number;
   score?: number | null;
+}
+
+export interface FaceVisibilityMetrics {
+  areaRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+  centerXRatio: number;
+  centerYRatio: number;
+}
+
+export interface FaceVisibilityAssessment {
+  visible: boolean;
+  reason: 'ok' | 'face_too_small' | 'face_off_center' | 'invalid_frame';
+  metrics: FaceVisibilityMetrics;
 }
 
 interface LoadableFaceApiNet {
@@ -67,6 +88,82 @@ export function getFrameDimensions(source: FrameSource): { width: number; height
 
   if (source.width <= 0 || source.height <= 0) return null;
   return { width: source.width, height: source.height };
+}
+
+export function getFaceVisibilityMetrics(
+  region: FaceRegion,
+  frameWidth: number,
+  frameHeight: number,
+): FaceVisibilityMetrics {
+  const safeFrameWidth = Math.max(frameWidth, 1);
+  const safeFrameHeight = Math.max(frameHeight, 1);
+  const centerX = region.x + (region.width / 2);
+  const centerY = region.y + (region.height / 2);
+
+  return {
+    areaRatio: getRegionArea(region) / Math.max(safeFrameWidth * safeFrameHeight, 1),
+    widthRatio: region.width / safeFrameWidth,
+    heightRatio: region.height / safeFrameHeight,
+    centerXRatio: centerX / safeFrameWidth,
+    centerYRatio: centerY / safeFrameHeight,
+  };
+}
+
+export function assessCandidateFaceVisibility(
+  region: FaceRegion | null,
+  frameWidth: number,
+  frameHeight: number,
+): FaceVisibilityAssessment {
+  const fallbackMetrics: FaceVisibilityMetrics = {
+    areaRatio: 0,
+    widthRatio: 0,
+    heightRatio: 0,
+    centerXRatio: 0,
+    centerYRatio: 0,
+  };
+
+  const normalized = normalizeRegion(region);
+  if (!normalized || frameWidth <= 0 || frameHeight <= 0) {
+    return {
+      visible: false,
+      reason: 'invalid_frame',
+      metrics: fallbackMetrics,
+    };
+  }
+
+  const metrics = getFaceVisibilityMetrics(normalized, frameWidth, frameHeight);
+  const sizeVisible =
+    metrics.areaRatio >= MIN_CANDIDATE_FACE_AREA_RATIO &&
+    metrics.widthRatio >= MIN_CANDIDATE_FACE_WIDTH_RATIO &&
+    metrics.heightRatio >= MIN_CANDIDATE_FACE_HEIGHT_RATIO;
+
+  if (!sizeVisible) {
+    return {
+      visible: false,
+      reason: 'face_too_small',
+      metrics,
+    };
+  }
+
+  const centeredVisible =
+    metrics.centerXRatio >= MIN_CANDIDATE_FACE_CENTER_X_RATIO &&
+    metrics.centerXRatio <= MAX_CANDIDATE_FACE_CENTER_X_RATIO &&
+    metrics.centerYRatio >= MIN_CANDIDATE_FACE_CENTER_Y_RATIO &&
+    metrics.centerYRatio <= MAX_CANDIDATE_FACE_CENTER_Y_RATIO;
+
+  if (!centeredVisible) {
+    return {
+      visible: false,
+      reason: 'face_off_center',
+      metrics,
+    };
+  }
+
+  return {
+    visible: true,
+    reason: 'ok',
+    metrics,
+  };
 }
 
 export function createVideoFrameCanvas(

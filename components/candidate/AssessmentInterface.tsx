@@ -1806,25 +1806,13 @@ export function AssessmentInterface({
                 </div>
               </div>
 
-              {/* Auto-Save Indicator */}
-              {autoSaveStatus !== 'idle' && (
+              {/* Auto-save warnings only. Success/saving badges are intentionally hidden to avoid constant flashing. */}
+              {(autoSaveStatus === 'offline' || autoSaveStatus === 'retrying' || autoSaveStatus === 'error') && (
                 <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${
                   autoSaveStatus === 'offline' ? 'bg-amber-50 border border-amber-200' :
                   autoSaveStatus === 'error' ? 'bg-red-50 border border-red-200' :
                   'bg-gray-50 border border-gray-200'
                 }`}>
-                  {autoSaveStatus === 'saving' && (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" />
-                      <span className="text-xs text-gray-600">Saving...</span>
-                    </>
-                  )}
-                  {autoSaveStatus === 'saved' && (
-                    <>
-                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                      <span className="text-xs text-green-700">Saved</span>
-                    </>
-                  )}
                   {autoSaveStatus === 'offline' && (
                     <>
                       <WifiOff className="w-3.5 h-3.5 text-amber-500" />

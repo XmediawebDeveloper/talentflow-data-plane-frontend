@@ -20,6 +20,7 @@ import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBu
 import '@/lib/tfjs-rejection-guard';
 import { loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
 import {
+  assessCandidateFaceVisibility,
   createVideoFrameCanvas,
   FACE_API_MODEL_URLS,
   filterSignificantFaces,
@@ -67,6 +68,7 @@ const IDENTITY_MISMATCH_CONFIRMATIONS = 2;
 const IDENTITY_EVENT_COOLDOWN_MS = 15000;
 const GAZE_AWAY_CONFIRMATIONS = 3;
 const GAZE_RESTORED_CONFIRMATIONS = 2;
+const FACE_MISSING_EVENT_COOLDOWN_MS = 4000;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Legacy type kept for compatibility with existing imports
@@ -412,6 +414,7 @@ export function useProctoringMonitor({
   const screenshotSuppressionUntilRef = useRef(0);
   const lastScreenshotEventAtRef = useRef(0);
   const lastIdentityMismatchEventAtRef = useRef(0);
+  const lastFaceMissingEventAtRef = useRef(0);
   const lastMetaKeyAtRef = useRef(0);
   const lastShiftKeyAtRef = useRef(0);
   const lastSKeyAtRef = useRef(0);
@@ -648,6 +651,17 @@ export function useProctoringMonitor({
               avgBrightness: data.avgBrightness,
               brightnessRange: data.brightnessRange,
             });
+            const now = Date.now();
+            if (now - lastFaceMissingEventAtRef.current >= FACE_MISSING_EVENT_COOLDOWN_MS) {
+              lastFaceMissingEventAtRef.current = now;
+              emitEventRef.current('face_missing', {
+                method: 'video_worker',
+                reason: 'camera_obstructed',
+                obstruction_reason: data.reason,
+                avgBrightness: data.avgBrightness,
+                brightnessRange: data.brightnessRange,
+              });
+            }
           } else if (data.kind === 'obstruction') {
             isCameraObstructedRef.current = false;
             setState(prev => !prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: false });
@@ -845,6 +859,12 @@ export function useProctoringMonitor({
           consecutiveNoFace++;
           consecutiveDetectionFailures = 0;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
+            const now = Date.now();
+            if (now - lastFaceMissingEventAtRef.current < FACE_MISSING_EVENT_COOLDOWN_MS) {
+              consecutiveNoFace = 0;
+              return;
+            }
+            lastFaceMissingEventAtRef.current = now;
             consecutiveNoFace = 0;
             resetAdvancedStates();
             emitEventRef.current('face_missing', {
@@ -867,6 +887,12 @@ export function useProctoringMonitor({
             resetFaceMissingState();
             resetAdvancedStates();
             emitEventRef.current('multiple_faces', { face_count: count, method });
+            if (extraDetails?.candidate_visible === false) {
+              const reason = typeof extraDetails?.reason === 'string'
+                ? extraDetails.reason
+                : 'candidate_not_visible';
+              maybeEmitFaceMissing(method, reason, extraDetails);
+            }
             console.log(`[PROCTORING] Multiple faces: ${count} (${method})`);
           } else if (count === 0) {
             const reason = typeof extraDetails?.reason === 'string'
@@ -1059,6 +1085,28 @@ export function useProctoringMonitor({
               frameWidth,
               frameHeight,
             );
+            const primaryVisibility = assessCandidateFaceVisibility(
+              detection
+                ? {
+                    x: detection.detection.box.x,
+                    y: detection.detection.box.y,
+                    width: detection.detection.box.width,
+                    height: detection.detection.box.height,
+                    score: detection.detection.score,
+                  }
+                : null,
+              frameWidth,
+              frameHeight,
+            );
+
+            if (!primaryVisibility.visible) {
+              maybeEmitFaceMissing('face-api.js-advanced', primaryVisibility.reason, {
+                detector_hint_face_count: lastKnownFaceCount,
+                primary_face_metrics: primaryVisibility.metrics,
+              });
+              resetAdvancedStates();
+              return;
+            }
 
             if (!detection?.descriptor || !detection.landmarks) {
               if (lastKnownFaceCount === 1) {
@@ -1187,7 +1235,37 @@ export function useProctoringMonitor({
                 faceVideoRef.current.videoWidth,
                 faceVideoRef.current.videoHeight,
               );
-              handleFaceCount(significantFaces.length, 'native');
+              const primaryFace = pickPrimaryFace(
+                significantFaces,
+                (face) => {
+                  const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
+                  return box
+                    ? { x: box.x, y: box.y, width: box.width, height: box.height }
+                    : null;
+                },
+                faceVideoRef.current.videoWidth,
+                faceVideoRef.current.videoHeight,
+              );
+              const primaryVisibility = assessCandidateFaceVisibility(
+                primaryFace
+                  ? (() => {
+                      const box = (primaryFace as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
+                      return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null;
+                    })()
+                  : null,
+                faceVideoRef.current.videoWidth,
+                faceVideoRef.current.videoHeight,
+              );
+              const visibleCount =
+                significantFaces.length > 1
+                  ? significantFaces.length
+                  : (primaryVisibility.visible ? 1 : 0);
+              handleFaceCount(visibleCount, 'native', {
+                reason: primaryVisibility.visible ? 'ok' : primaryVisibility.reason,
+                candidate_visible: primaryVisibility.visible,
+                significant_face_count: significantFaces.length,
+                primary_face_metrics: primaryVisibility.metrics,
+              });
             } catch (error) {
               handleDetectionFailure('native', error);
             }
@@ -1267,12 +1345,45 @@ export function useProctoringMonitor({
               frameWidth,
               frameHeight,
             );
+            const primaryDetection = pickPrimaryFace(
+              significantDetections,
+              (detection) => ({
+                x: detection.box.x,
+                y: detection.box.y,
+                width: detection.box.width,
+                height: detection.box.height,
+                score: detection.score,
+              }),
+              frameWidth,
+              frameHeight,
+            );
+            const primaryVisibility = assessCandidateFaceVisibility(
+              primaryDetection
+                ? {
+                    x: primaryDetection.box.x,
+                    y: primaryDetection.box.y,
+                    width: primaryDetection.box.width,
+                    height: primaryDetection.box.height,
+                    score: primaryDetection.score,
+                  }
+                : null,
+              frameWidth,
+              frameHeight,
+            );
+            const visibleCount =
+              significantDetections.length > 1
+                ? significantDetections.length
+                : (primaryVisibility.visible ? 1 : 0);
 
-            handleFaceCount(significantDetections.length, 'face-api.js', {
-              reason: significantDetections.length === 0 && detections.length > 0 ? 'low_confidence_face' : 'no_face_detected',
+            handleFaceCount(visibleCount, 'face-api.js', {
+              reason: significantDetections.length === 0 && detections.length > 0
+                ? 'low_confidence_face'
+                : (primaryVisibility.visible ? 'ok' : primaryVisibility.reason),
+              candidate_visible: primaryVisibility.visible,
               raw_face_count: detections.length,
               confident_face_count: confidentDetections.length,
               significant_face_count: significantDetections.length,
+              primary_face_metrics: primaryVisibility.metrics,
             });
           } catch (error) {
             handleDetectionFailure('face-api.js', error);

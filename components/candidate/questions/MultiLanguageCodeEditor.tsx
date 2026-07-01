@@ -1084,11 +1084,6 @@ export function MultiLanguageCodeEditor({
               Run
             </Button>
 
-            {/* Auto-save indicator */}
-            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-400">
-              <CheckCircle className="w-3 h-3 text-green-500" />
-              <span>Auto-saving...</span>
-            </div>
           </div>
         </div>
 
