@@ -23,7 +23,7 @@ import {
   assessCandidateFaceVisibility,
   createVideoFrameCanvas,
   FACE_API_MODEL_URLS,
-  filterSignificantFaces,
+  filterMultipleFaceCandidates,
   loadFaceApiNetWithFallback,
   MIN_CONFIDENT_FACE_SCORE,
   pickPrimaryFace,
@@ -1224,7 +1224,7 @@ export function useProctoringMonitor({
             if (!isMonitoringRef.current || !faceVideoRef.current) return;
             try {
               const faces = await detector.detect(faceVideoRef.current);
-              const significantFaces = filterSignificantFaces(
+              const multipleFaceCandidates = filterMultipleFaceCandidates(
                 Array.from(faces),
                 (face) => {
                   const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
@@ -1236,7 +1236,7 @@ export function useProctoringMonitor({
                 faceVideoRef.current.videoHeight,
               );
               const primaryFace = pickPrimaryFace(
-                significantFaces,
+                multipleFaceCandidates,
                 (face) => {
                   const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
                   return box
@@ -1257,13 +1257,13 @@ export function useProctoringMonitor({
                 faceVideoRef.current.videoHeight,
               );
               const visibleCount =
-                significantFaces.length > 1
-                  ? significantFaces.length
+                multipleFaceCandidates.length > 1
+                  ? multipleFaceCandidates.length
                   : (primaryVisibility.visible ? 1 : 0);
               handleFaceCount(visibleCount, 'native', {
                 reason: primaryVisibility.visible ? 'ok' : primaryVisibility.reason,
                 candidate_visible: primaryVisibility.visible,
-                significant_face_count: significantFaces.length,
+                significant_face_count: multipleFaceCandidates.length,
                 primary_face_metrics: primaryVisibility.metrics,
               });
             } catch (error) {
@@ -1333,7 +1333,7 @@ export function useProctoringMonitor({
             const confidentDetections = typedDetections.filter(
               detection => (typeof detection.score === 'number' ? detection.score >= MIN_CONFIDENT_FACE_SCORE : true),
             );
-            const significantDetections = filterSignificantFaces(
+            const multipleFaceDetections = filterMultipleFaceCandidates(
               confidentDetections,
               (detection) => ({
                 x: detection.box.x,
@@ -1346,7 +1346,7 @@ export function useProctoringMonitor({
               frameHeight,
             );
             const primaryDetection = pickPrimaryFace(
-              significantDetections,
+              multipleFaceDetections,
               (detection) => ({
                 x: detection.box.x,
                 y: detection.box.y,
@@ -1371,18 +1371,18 @@ export function useProctoringMonitor({
               frameHeight,
             );
             const visibleCount =
-              significantDetections.length > 1
-                ? significantDetections.length
+              multipleFaceDetections.length > 1
+                ? multipleFaceDetections.length
                 : (primaryVisibility.visible ? 1 : 0);
 
             handleFaceCount(visibleCount, 'face-api.js', {
-              reason: significantDetections.length === 0 && detections.length > 0
+              reason: multipleFaceDetections.length === 0 && detections.length > 0
                 ? 'low_confidence_face'
                 : (primaryVisibility.visible ? 'ok' : primaryVisibility.reason),
               candidate_visible: primaryVisibility.visible,
               raw_face_count: detections.length,
               confident_face_count: confidentDetections.length,
-              significant_face_count: significantDetections.length,
+              significant_face_count: multipleFaceDetections.length,
               primary_face_metrics: primaryVisibility.metrics,
             });
           } catch (error) {

@@ -12,6 +12,10 @@ const MIN_ABSOLUTE_FACE_AREA_RATIO = 0.008;
 const MIN_RELATIVE_FACE_AREA_RATIO = 0.25;
 const MIN_FACE_WIDTH_RATIO = 0.08;
 const MIN_FACE_HEIGHT_RATIO = 0.12;
+const MIN_MULTI_FACE_ABSOLUTE_AREA_RATIO = 0.0035;
+const MIN_MULTI_FACE_RELATIVE_AREA_RATIO = 0.1;
+const MIN_MULTI_FACE_WIDTH_RATIO = 0.055;
+const MIN_MULTI_FACE_HEIGHT_RATIO = 0.085;
 const MIN_CANDIDATE_FACE_AREA_RATIO = 0.02;
 const MIN_CANDIDATE_FACE_WIDTH_RATIO = 0.13;
 const MIN_CANDIDATE_FACE_HEIGHT_RATIO = 0.16;
@@ -45,6 +49,13 @@ export interface FaceVisibilityAssessment {
 interface LoadableFaceApiNet {
   isLoaded: boolean;
   loadFromUri: (uri: string) => Promise<void>;
+}
+
+interface FaceFilterOptions {
+  minAbsoluteAreaRatio?: number;
+  minRelativeAreaRatio?: number;
+  minWidthRatio?: number;
+  minHeightRatio?: number;
 }
 
 type FrameSource = HTMLVideoElement | HTMLCanvasElement;
@@ -196,6 +207,35 @@ export function filterSignificantFaces<T>(
   frameWidth: number,
   frameHeight: number,
 ): T[] {
+  return filterFacesByThresholds(items, getRegion, frameWidth, frameHeight, {
+    minAbsoluteAreaRatio: MIN_ABSOLUTE_FACE_AREA_RATIO,
+    minRelativeAreaRatio: MIN_RELATIVE_FACE_AREA_RATIO,
+    minWidthRatio: MIN_FACE_WIDTH_RATIO,
+    minHeightRatio: MIN_FACE_HEIGHT_RATIO,
+  });
+}
+
+export function filterMultipleFaceCandidates<T>(
+  items: T[],
+  getRegion: (item: T) => FaceRegion | null,
+  frameWidth: number,
+  frameHeight: number,
+): T[] {
+  return filterFacesByThresholds(items, getRegion, frameWidth, frameHeight, {
+    minAbsoluteAreaRatio: MIN_MULTI_FACE_ABSOLUTE_AREA_RATIO,
+    minRelativeAreaRatio: MIN_MULTI_FACE_RELATIVE_AREA_RATIO,
+    minWidthRatio: MIN_MULTI_FACE_WIDTH_RATIO,
+    minHeightRatio: MIN_MULTI_FACE_HEIGHT_RATIO,
+  });
+}
+
+function filterFacesByThresholds<T>(
+  items: T[],
+  getRegion: (item: T) => FaceRegion | null,
+  frameWidth: number,
+  frameHeight: number,
+  options: FaceFilterOptions,
+): T[] {
   if (frameWidth <= 0 || frameHeight <= 0) return [];
 
   const normalized = items
@@ -211,13 +251,17 @@ export function filterSignificantFaces<T>(
   const largestArea = normalized.reduce((largest, { region }) => {
     return Math.max(largest, getRegionArea(region));
   }, 0);
+  const minAbsoluteAreaRatio = options.minAbsoluteAreaRatio ?? MIN_ABSOLUTE_FACE_AREA_RATIO;
+  const minRelativeAreaRatio = options.minRelativeAreaRatio ?? MIN_RELATIVE_FACE_AREA_RATIO;
+  const minWidthRatio = options.minWidthRatio ?? MIN_FACE_WIDTH_RATIO;
+  const minHeightRatio = options.minHeightRatio ?? MIN_FACE_HEIGHT_RATIO;
 
   const minArea = Math.max(
-    frameArea * MIN_ABSOLUTE_FACE_AREA_RATIO,
-    largestArea * MIN_RELATIVE_FACE_AREA_RATIO,
+    frameArea * minAbsoluteAreaRatio,
+    largestArea * minRelativeAreaRatio,
   );
-  const minWidth = frameWidth * MIN_FACE_WIDTH_RATIO;
-  const minHeight = frameHeight * MIN_FACE_HEIGHT_RATIO;
+  const minWidth = frameWidth * minWidthRatio;
+  const minHeight = frameHeight * minHeightRatio;
 
   return normalized
     .filter(({ region }) => {
