@@ -48,6 +48,12 @@ const isMobileDevice = (): boolean => {
     .test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && !/Macintosh/.test(navigator.userAgent));
 };
 
+const isLinuxDesktop = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const userAgent = navigator.userAgent || '';
+  return /Linux/i.test(userAgent) && !/Android/i.test(userAgent);
+};
+
 const isFullscreenActive = (): boolean => {
   if (typeof document === 'undefined') return false;
   return !!(
@@ -782,12 +788,15 @@ export function useProctoringMonitor({
       return 'Win+Shift+S';
     }
 
-    const sawExplicitLinuxSnipShortcut =
-      now - lastAltKeyAtRef.current < 900 &&
-      now - lastShiftKeyAtRef.current < 900 &&
-      now - lastSKeyAtRef.current < 900;
-    if (sawExplicitLinuxSnipShortcut) {
-      return 'Alt+Shift+S';
+    const allowLinuxShortcutInference = screenshotBlocking || !isLinuxDesktop();
+    if (allowLinuxShortcutInference) {
+      const sawExplicitLinuxSnipShortcut =
+        now - lastAltKeyAtRef.current < 900 &&
+        now - lastShiftKeyAtRef.current < 900 &&
+        now - lastSKeyAtRef.current < 900;
+      if (sawExplicitLinuxSnipShortcut) {
+        return 'Alt+Shift+S';
+      }
     }
 
     const sawSoftWindowsSnipShortcut =
@@ -798,7 +807,7 @@ export function useProctoringMonitor({
     }
 
     return null;
-  }, []);
+  }, [screenshotBlocking]);
 
   const maybeHandleRecentScreenshotSignal = useCallback((source: string, details?: Record<string, any>) => {
     const signalKey = getRecentScreenshotSignal();
@@ -885,19 +894,7 @@ export function useProctoringMonitor({
               centerBrightnessStdDev: data.centerBrightnessStdDev,
               centerAdjacentDelta: data.centerAdjacentDelta,
             });
-            syncContinuousViolation('face_missing', true, {
-              method: 'video_worker',
-              reason: 'camera_obstructed',
-              obstruction_reason: data.reason,
-              camera_obstructed: true,
-              avgBrightness: data.avgBrightness,
-              brightnessRange: data.brightnessRange,
-              brightnessStdDev: data.brightnessStdDev,
-              centerAvgBrightness: data.centerAvgBrightness,
-              centerBrightnessRange: data.centerBrightnessRange,
-              centerBrightnessStdDev: data.centerBrightnessStdDev,
-              centerAdjacentDelta: data.centerAdjacentDelta,
-            });
+            clearContinuousViolation('face_missing');
           } else if (data.kind === 'obstruction') {
             isCameraObstructedRef.current = false;
             setState(prev => !prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: false });
@@ -1105,6 +1102,11 @@ export function useProctoringMonitor({
         };
 
         const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, unknown>) => {
+          if (isCameraObstructedRef.current) {
+            clearContinuousViolation('face_missing');
+            return;
+          }
+
           consecutiveNoFace++;
           consecutiveDetectionFailures = 0;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
@@ -1353,20 +1355,11 @@ export function useProctoringMonitor({
             );
 
             if (!primaryVisibility.visible) {
-              maybeEmitFaceMissing('face-api.js-advanced', primaryVisibility.reason, {
-                detector_hint_face_count: lastKnownFaceCount,
-                primary_face_metrics: primaryVisibility.metrics,
-              });
               resetAdvancedStates();
               return;
             }
 
             if (!detection?.descriptor || !detection.landmarks) {
-              if (lastKnownFaceCount === 1) {
-                maybeEmitFaceMissing('face-api.js-advanced', 'advanced_face_missing', {
-                  detector_hint_face_count: lastKnownFaceCount,
-                });
-              }
               resetAdvancedStates();
               return;
             }
@@ -1489,7 +1482,7 @@ export function useProctoringMonitor({
                 faceVideoRef.current.videoHeight,
               );
               const primaryFace = pickPrimaryFace(
-                multipleFaceCandidates,
+                Array.from(faces),
                 (face) => {
                   const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
                   return box
@@ -1599,7 +1592,7 @@ export function useProctoringMonitor({
               frameHeight,
             );
             const primaryDetection = pickPrimaryFace(
-              multipleFaceDetections,
+              confidentDetections,
               (detection) => ({
                 x: detection.box.x,
                 y: detection.box.y,
@@ -1938,6 +1931,8 @@ export function useProctoringMonitor({
     const normalizeKeyValue = (value: string | undefined | null) => {
       return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     };
+    const screenshotMode = screenshotBlocking ? 'best_effort_block' : 'detect_only';
+    const passThroughLinuxShortcut = !screenshotBlocking && isLinuxDesktop();
 
     const isPrintScreenEvent = (e: KeyboardEvent) => {
       const normalizedKey = normalizeKeyValue(e.key);
@@ -1999,6 +1994,7 @@ export function useProctoringMonitor({
       if (sawWindowsSnipChord) {
         armScreenshotChord('Win+Shift+S');
       } else if (
+        !passThroughLinuxShortcut &&
         e.altKey &&
         (e.shiftKey || normalizedKey === 'shift') &&
         (
@@ -2034,13 +2030,21 @@ export function useProctoringMonitor({
           key: buildPrintScreenLabel(e),
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: buildPrintScreenLabel(e),
+          phase,
         });
         clearClipboardIfPossible();
         return;
       }
 
       if (e.altKey && e.shiftKey && normalizedKey === 's') {
+        if (passThroughLinuxShortcut) {
+          return;
+        }
         if (screenshotBlocking) {
           e.preventDefault();
         }
@@ -2048,7 +2052,12 @@ export function useProctoringMonitor({
           key: 'Alt+Shift+S',
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: 'Alt+Shift+S',
+          phase,
         });
         return;
       }
@@ -2061,7 +2070,12 @@ export function useProctoringMonitor({
           key: 'Win+Shift+S',
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: 'Win+Shift+S',
+          phase,
         });
         return;
       }
@@ -2074,7 +2088,12 @@ export function useProctoringMonitor({
           key: `Cmd+Shift+${e.key}`,
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: `Cmd+Shift+${e.key}`,
+          phase,
         });
         return;
       }
@@ -2088,7 +2107,12 @@ export function useProctoringMonitor({
           key: 'Cmd+Shift+5',
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: 'Cmd+Shift+5',
+          phase,
         });
         return;
       }
@@ -2102,7 +2126,12 @@ export function useProctoringMonitor({
           key: `Cmd+Ctrl+Shift+${e.key}`,
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: `Cmd+Ctrl+Shift+${e.key}`,
+          phase,
         });
       }
     };
@@ -2112,7 +2141,7 @@ export function useProctoringMonitor({
 
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp, true);
-    console.log('[PROCTORING] Screenshot detection started');
+    console.log(`[PROCTORING] Screenshot detection started (${screenshotMode})`);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
@@ -2132,10 +2161,15 @@ export function useProctoringMonitor({
       return () => {};
     }
 
+    const screenRecordingMode = screenshotBlocking ? 'best_effort_block' : 'detect_only';
     const reportScreenCapture = (details?: Record<string, any>) => {
       emitScreenshotEvent({
         capture_type: 'screen_recording',
-        enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        enforcement_mode: screenRecordingMode,
+        ...details,
+      });
+      console.info('[PROCTORING] Screen recording attempt detected', {
+        mode: screenRecordingMode,
         ...details,
       });
     };

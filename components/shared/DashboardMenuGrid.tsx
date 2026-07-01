@@ -62,6 +62,7 @@ export default function DashboardMenuGrid() {
                   <li key={item.id}>
                     <Link
                       href={href}
+                      prefetch={false}
                       aria-current={isCurrent ? 'page' : undefined}
                       className={`group flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-all hover:-translate-y-0.5 hover:shadow-md ${
                         isCurrent

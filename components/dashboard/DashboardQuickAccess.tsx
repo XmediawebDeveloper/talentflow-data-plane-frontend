@@ -129,6 +129,7 @@ function TileCard({ item, sectionId }: { item: NavItem; sectionId: string }) {
   return (
     <Link
       href={href}
+      prefetch={false}
       className="group relative flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white p-3 transition-[border-color,box-shadow,color] hover:border-brand-blue/60 hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] sm:gap-3 sm:p-4"
     >
       <span

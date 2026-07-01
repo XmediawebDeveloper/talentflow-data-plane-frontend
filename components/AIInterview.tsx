@@ -344,6 +344,7 @@ export default function AIInterview() {
       const result = await aiInterviewService.getConfigInvitations(configId, {
         page: 1,
         page_size: 1,
+        compact: true,
       });
       setInvitationOverview({
         total: result.total || 0,
@@ -370,6 +371,7 @@ export default function AIInterview() {
         invite_date_to: filters.dateTo || undefined,
         page,
         page_size: INVITATION_PAGE_SIZE,
+        compact: true,
       });
       setInvitations(result.items);
       setInvitationTotal(result.total);

@@ -130,6 +130,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
     date_to: dateTo || undefined,
     page: currentPage,
     page_size: PAGE_SIZE,
+    compact: true,
   }), [searchQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage]);
 
   const loadSessions = useCallback(async () => {
