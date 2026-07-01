@@ -85,6 +85,7 @@ export default function DashboardHero() {
           {canRunMatch && (
             <Link
               href="/recruitment/ai-talent-match"
+              prefetch={false}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
             >
               AI Talent Match
@@ -94,6 +95,7 @@ export default function DashboardHero() {
           {canCreateJob && (
             <Link
               href="/recruitment/jd-creation"
+              prefetch={false}
               className="group inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
               <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />

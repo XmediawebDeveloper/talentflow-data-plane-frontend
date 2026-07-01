@@ -16,10 +16,14 @@ import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/
 import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency } from '@/lib/utils/salary';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
-import { State as CSCState, City as CSCCity } from 'country-state-city';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
+
+interface USStateOption {
+  name: string;
+  isoCode: string;
+}
 
 // Validation constants
 const VALIDATION = {
@@ -1067,6 +1071,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     codingRequired: false,
     suggestedLanguages: [],
   });
+  const [experienceYearsExplicit, setExperienceYearsExplicit] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [newComment, setNewComment] = useState('');
@@ -1077,6 +1082,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const [locationStateFilter, setLocationStateFilter] = useState<string>('all');
   const [locationCountry, setLocationCountry] = useState<'IN' | 'US'>('IN');
+  const [usStates, setUsStates] = useState<USStateOption[]>([]);
+  const [usCitiesByState, setUsCitiesByState] = useState<Record<string, string[]>>({});
+  const [isLoadingUsLocations, setIsLoadingUsLocations] = useState(false);
   
   // Inline editing states
   const [editingSkillIndex, setEditingSkillIndex] = useState<{ category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number } | null>(null);
@@ -1093,6 +1101,49 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [isPublished, setIsPublished] = useState(false);
   const [publishedJdId, setPublishedJdId] = useState<string | null>(null);
   const [publishedJobCode, setPublishedJobCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (locationCountry !== 'US' || usStates.length > 0 || isLoadingUsLocations) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadUSLocations = async () => {
+      setIsLoadingUsLocations(true);
+
+      try {
+        const { State, City } = await import('country-state-city');
+        const states = State.getStatesOfCountry('US').map((state) => ({
+          name: state.name,
+          isoCode: state.isoCode,
+        }));
+        const citiesByState = Object.fromEntries(
+          states.map((state) => [
+            state.isoCode,
+            City.getCitiesOfState('US', state.isoCode).map((city) => city.name),
+          ])
+        );
+
+        if (!cancelled) {
+          setUsStates(states);
+          setUsCitiesByState(citiesByState);
+        }
+      } catch (error) {
+        console.error('[JD-CREATION] Failed to load US location data:', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingUsLocations(false);
+        }
+      }
+    };
+
+    loadUSLocations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoadingUsLocations, locationCountry, usStates.length]);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
   const [extractedDataModified, setExtractedDataModified] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -1352,6 +1403,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       experienceMin,
       experienceMax,
       isCustom: true,
+    };
+  };
+
+  const resolvePersistedExperiencePayload = (
+    value?: string | null,
+    yearsWereExplicit: boolean = experienceYearsExplicit
+  ) => {
+    const payload = resolveExperiencePayload(value);
+    const customHasExplicitYears = payload.isCustom
+      && (payload.experienceMin !== undefined || payload.experienceMax !== undefined);
+    const shouldPersistYears = yearsWereExplicit || customHasExplicitYears;
+
+    return {
+      ...payload,
+      experienceMin: shouldPersistYears ? payload.experienceMin : undefined,
+      experienceMax: shouldPersistYears ? payload.experienceMax : undefined,
+      yearsWereExplicit: shouldPersistYears,
     };
   };
 
@@ -1725,12 +1793,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.log('[TalentFlow] Processing extracted params from generation:', params);
 
       const expValue = mapExtractedExperienceValue(params, experienceSourceText);
+      const hasExplicitExperienceYears = (
+        params.experience_min !== null
+        && params.experience_min !== undefined
+        && !Number.isNaN(Number(params.experience_min))
+      ) || (
+        params.experience_max !== null
+        && params.experience_max !== undefined
+        && !Number.isNaN(Number(params.experience_max))
+      );
 
       // When in edit mode, preserve existing values if extraction returns empty arrays
       const isEditMode = !!editingId;
       const nextExperienceValue = expValue || (isEditMode ? extractedData.experience : '');
 
       setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
+      setExperienceYearsExplicit(hasExplicitExperienceYears);
 
       setExtractedData(prev => ({
         ...prev,
@@ -2232,6 +2310,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
       // Don't let AI extraction overwrite user's manual edits
       const preserveUserEdits = isEditMode && extractedDataModified;
+      const nextExperienceYearsExplicit = (hasExpMin || hasExpMax)
+        || (preserveUserEdits && resolvePersistedExperiencePayload(extractedData.experience).yearsWereExplicit);
+      setExperienceYearsExplicit(nextExperienceYearsExplicit);
 
       const extraction: ExtractedData = {
         mustHaveSkills: preserveUserEdits ? extractedData.mustHaveSkills : (params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills || [] : [])),
@@ -2270,7 +2351,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         codingRequired: params.coding_required === true || (isEditMode ? extractedData.codingRequired : false),
         suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? extractedData.suggestedLanguages : []),
       };
-      const extractionExperiencePayload = resolveExperiencePayload(extraction.experience);
+      const extractionExperiencePayload = resolvePersistedExperiencePayload(extraction.experience, nextExperienceYearsExplicit);
       setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 
       console.log('[TalentFlow] Final extracted data being set:', {
@@ -2333,8 +2414,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         must_have_comments: extraction.mustHaveComments,
         nice_to_have_comments: extraction.niceToHaveComments,
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
-        experience_min: hasExpMin ? params.experience_min : extractionExperiencePayload.experienceMin,
-        experience_max: hasExpMax ? params.experience_max : extractionExperiencePayload.experienceMax,
+        experience_min: extractionExperiencePayload.experienceMin,
+        experience_max: extractionExperiencePayload.experienceMax,
         industry_type: extraction.industryType || undefined,
         salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
@@ -3233,16 +3314,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const niceToHaveComments = extractedData.niceToHaveComments || [];
 
         if (editingId) {
-          // Parse experience for reformat API - look up code in experienceLevels array
-          let experienceMin: number | undefined;
-          let experienceMax: number | undefined;
-          if (extractedData.experience) {
-            const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
-            if (experienceLevel) {
-              experienceMin = experienceLevel.min_years;
-              experienceMax = experienceLevel.max_years || undefined;
-            }
-          }
+          const persistedExperiencePayload = resolvePersistedExperiencePayload(extractedData.experience);
+          const experienceMin = persistedExperiencePayload.experienceMin;
+          const experienceMax = persistedExperiencePayload.experienceMax;
 
           // Convert education to proper format if it's a string
           let educationRequirements = null;
@@ -3262,6 +3336,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             nice_to_have_comments: niceToHaveComments,
             experience_min: experienceMin,
             experience_max: experienceMax,
+            job_level: persistedExperiencePayload.jobLevel,
             education_requirements: educationRequirements,
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
@@ -3334,7 +3409,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
-      const experiencePayload = resolveExperiencePayload(extractedData.experience);
+      const experiencePayload = resolvePersistedExperiencePayload(extractedData.experience);
       const experienceMin = experiencePayload.experienceMin;
       const experienceMax = experiencePayload.experienceMax;
 
@@ -3594,7 +3669,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsPublishing(true);
 
     try {
-      const experiencePayload = resolveExperiencePayload(extractedData.experience);
+      const experiencePayload = resolvePersistedExperiencePayload(extractedData.experience);
       const experienceMin = experiencePayload.experienceMin;
       const experienceMax = experiencePayload.experienceMax;
 
@@ -3619,6 +3694,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             nice_to_have_comments: extractedData.niceToHaveComments || [],
             experience_min: experienceMin,
             experience_max: experienceMax,
+            job_level: experiencePayload.jobLevel,
             education_requirements: extractedData.education
               ? (typeof extractedData.education === 'string' ? { degree: extractedData.education } : extractedData.education)
               : null,
@@ -3928,7 +4004,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsSavingDraft(true);
 
     try {
-      const experiencePayload = resolveExperiencePayload(extractedData.experience);
+      const experiencePayload = resolvePersistedExperiencePayload(extractedData.experience);
       const experienceMin = experiencePayload.experienceMin;
       const experienceMax = experiencePayload.experienceMax;
 
@@ -4191,9 +4267,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         };
 
         const experienceValue = effectiveEditingJD.job_level || mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
+        const hasPersistedExperienceYears = (
+          effectiveEditingJD.experience_min !== null
+          && effectiveEditingJD.experience_min !== undefined
+        ) || (
+          effectiveEditingJD.experience_max !== null
+          && effectiveEditingJD.experience_max !== undefined
+        );
         // Restore industry type from saved draft
         const industryValue = effectiveEditingJD.industry_type || '';
         setShowCustomExperienceInput(Boolean(experienceValue && !getExperienceLevelByCode(experienceValue)));
+        setExperienceYearsExplicit(hasPersistedExperienceYears);
 
         console.log('[DEBUG] Loading effectiveEditingJD data:');
         console.log('[DEBUG] - experience_min from API:', effectiveEditingJD.experience_min);
@@ -5150,6 +5234,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       const nextValue = e.target.value;
                       if (nextValue === CUSTOM_EXPERIENCE_VALUE) {
                         setShowCustomExperienceInput(true);
+                        setExperienceYearsExplicit(false);
                         setExtractedData(prev => ({
                           ...prev,
                           experience: getExperienceLevelByCode(prev.experience) ? '' : prev.experience,
@@ -5159,6 +5244,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       }
 
                       setShowCustomExperienceInput(false);
+                      setExperienceYearsExplicit(false);
                       setExtractedData(prev => ({ ...prev, experience: nextValue }));
                       markExtractedDataModified();
                       // Clear validation error when user makes a selection
@@ -5196,6 +5282,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         }
 
                         setExtractedData(prev => ({ ...prev, experience: nextValue }));
+                        const customRange = inferExperienceRangeFromCustomValue(nextValue);
+                        setExperienceYearsExplicit(
+                          customRange.experienceMin !== undefined || customRange.experienceMax !== undefined
+                        );
                         markExtractedDataModified();
                         if (nextValue.trim()) {
                           setValidationErrors(prev => ({ ...prev, experience: undefined }));
@@ -5454,7 +5544,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
                     >
                       <option value="all">All States</option>
-                      {locationCountry === 'US' && CSCState.getStatesOfCountry('US').map((s) => (
+                      {locationCountry === 'US' && usStates.map((s) => (
                         <option key={s.isoCode} value={s.name}>{s.name}</option>
                       ))}
                       {locationCountry === 'IN' && (<>
@@ -5510,18 +5600,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     >
                       <option value="">Select a city</option>
                       {locationCountry === 'US' && (() => {
-                        const usStates = CSCState.getStatesOfCountry('US');
                         const selectedUsState = locationStateFilter === 'all'
                           ? null
                           : usStates.find((s) => s.name === locationStateFilter);
                         const statesToShow = selectedUsState ? [selectedUsState] : usStates;
                         return statesToShow.map((s) => {
-                          const cities = CSCCity.getCitiesOfState('US', s.isoCode);
+                          const cities = usCitiesByState[s.isoCode] || [];
                           if (!cities.length) return null;
                           return (
                             <optgroup key={s.isoCode} label={s.name}>
-                              {cities.map((c, idx) => (
-                                <option key={`${s.isoCode}-${idx}`} value={`${c.name}, ${s.name}`}>{c.name}</option>
+                              {cities.map((city, idx) => (
+                                <option key={`${s.isoCode}-${idx}`} value={`${city}, ${s.name}`}>{city}</option>
                               ))}
                             </optgroup>
                           );

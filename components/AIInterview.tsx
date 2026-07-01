@@ -62,6 +62,8 @@ const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
   { value: 'scheduled', label: 'Scheduled' },
 ];
 
+const CONFIG_FETCH_PAGE_SIZE = 20;
+
 export default function AIInterview() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -214,38 +216,70 @@ export default function AIInterview() {
   }, [quotaData]);
 
   // Load configs and stats
+  const loadAllConfigs = useCallback(async (): Promise<AIInterviewResponse[]> => {
+    const firstPage = await aiInterviewService.listConfigs({
+      page: 1,
+      page_size: CONFIG_FETCH_PAGE_SIZE,
+      compact: true,
+    });
+    if (firstPage.total <= firstPage.items.length) {
+      return firstPage.items;
+    }
+
+    const totalPages = Math.max(
+      1,
+      firstPage.total_pages || Math.ceil(firstPage.total / CONFIG_FETCH_PAGE_SIZE),
+    );
+
+    const remainingPages = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) =>
+        aiInterviewService.listConfigs({
+          page: index + 2,
+          page_size: CONFIG_FETCH_PAGE_SIZE,
+          compact: true,
+        })
+      )
+    );
+
+    return [
+      ...firstPage.items,
+      ...remainingPages.flatMap((page) => page.items),
+    ];
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [configsRes, statsRes] = await Promise.allSettled([
-        aiInterviewService.listConfigs({ page_size: 1 }).then((probe) =>
-          probe.total > probe.items.length
-            ? aiInterviewService.listConfigs({ page_size: probe.total })
-            : probe
-        ),
-        aiInterviewService.getConfigStats(),
-      ]);
-
-      if (configsRes.status === 'fulfilled') {
-        setConfigs(configsRes.value.items);
-      } else {
-        setConfigs([]);
-        console.error('Failed to load AI interview configs:', configsRes.reason);
-        toast.error('AI interview configurations failed to load.');
+      let configItems: AIInterviewResponse[] = [];
+      try {
+        configItems = await loadAllConfigs();
+      } catch (firstError) {
+        // Retry once: this avoids a rare auth-refresh race where one concurrent
+        // request refreshes the token and the sibling request needs one more hit.
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+        configItems = await loadAllConfigs();
       }
+      setConfigs(configItems);
 
-      if (statsRes.status === 'fulfilled') {
-        setStats(statsRes.value);
-      } else {
-        console.error('Failed to load AI interview stats:', statsRes.reason);
+      try {
+        const statsRes = await aiInterviewService.getConfigStats();
+        setStats(statsRes);
+      } catch (statsError) {
+        console.error('Failed to load AI interview stats:', statsError);
       }
     } catch (error) {
-      console.error('Failed to load AI interview data:', error);
-      toast.error('Failed to load data. Please refresh.');
+      setConfigs([]);
+      if (error instanceof Error) {
+        console.error('Failed to load AI interview configs:', error);
+        toast.error(error.message || 'AI interview configurations failed to load.');
+      } else {
+        console.error('Failed to load AI interview data:', error);
+        toast.error('Failed to load data. Please refresh.');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadAllConfigs]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -263,9 +297,9 @@ export default function AIInterview() {
 
   const loadArchivedConfigs = useCallback(async () => {
     try {
-      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1 });
+      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
       const result = probe.total > probe.items.length
-        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total })
+        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total, compact: true })
         : probe;
       setArchivedConfigs(result.items);
     } catch (error) {
@@ -310,6 +344,7 @@ export default function AIInterview() {
       const result = await aiInterviewService.getConfigInvitations(configId, {
         page: 1,
         page_size: 1,
+        compact: true,
       });
       setInvitationOverview({
         total: result.total || 0,
@@ -336,6 +371,7 @@ export default function AIInterview() {
         invite_date_to: filters.dateTo || undefined,
         page,
         page_size: INVITATION_PAGE_SIZE,
+        compact: true,
       });
       setInvitations(result.items);
       setInvitationTotal(result.total);

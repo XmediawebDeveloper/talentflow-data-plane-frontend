@@ -158,6 +158,7 @@ export interface AIInterviewResponse {
   // Computed at interview completion (AIU-82)
   proctoring_score?: number;
   risk_level?: string;  // "none" | "low" | "medium" | "high"
+  unit_consumed?: boolean;
   recording_url?: string;
   introduction_video_url?: string;
   identity_name?: string;
@@ -548,6 +549,7 @@ export const aiInterviewService = {
     search?: string;
     page?: number;
     page_size?: number;
+    compact?: boolean;
   }): Promise<AIInterviewListResponse> {
     try {
       const response = await api.get<AIInterviewListResponse>('/ai-interview/configs', { params });
@@ -654,6 +656,7 @@ export const aiInterviewService = {
     invite_date_to?: string;
     page?: number;
     page_size?: number;
+    compact?: boolean;
   }): Promise<AIInterviewInvitationListResponse> {
     try {
       const response = await api.get<AIInterviewInvitationListResponse>(

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
+import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback } from '@/lib/proctoring/faceDetection';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 
@@ -63,6 +64,7 @@ export default function StepIdentity({
   const livenessFaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Loaded face-api.js module + options for face detection fallback
   const faceApiRef = useRef<{ module: any; options: any } | null>(null);
+  const faceApiLoadPromiseRef = useRef<Promise<typeof faceApiRef.current> | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid && otpVerified;
@@ -134,19 +136,37 @@ export default function StepIdentity({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load face-api.js in the background so it's ready when the user starts the liveness check
-  useEffect(() => {
-    const FACE_API_MODEL_URL = '/models/';
-    loadFaceApiWithCpuBackend().then(async (fa) => {
-      if (!fa.nets.tinyFaceDetector.isLoaded) {
-        await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
-      }
-      faceApiRef.current = {
-        module: fa,
-        options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }),
-      };
-    }).catch(() => { /* model unavailable — face checks will be soft */ });
+  const ensureFaceApiFallback = useCallback(async () => {
+    if (faceApiRef.current) return faceApiRef.current;
+    if (!faceApiLoadPromiseRef.current) {
+      faceApiLoadPromiseRef.current = loadFaceApiWithCpuBackend()
+        .then(async (fa) => {
+          if (!fa.nets.tinyFaceDetector.isLoaded) {
+            await loadFaceApiNetWithFallback(fa.nets.tinyFaceDetector, FACE_API_MODEL_URLS);
+          }
+          const loaded = {
+            module: fa,
+            options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }),
+          };
+          faceApiRef.current = loaded;
+          return loaded;
+        })
+        .catch(() => null)
+        .finally(() => {
+          faceApiLoadPromiseRef.current = null;
+        });
+    }
+    const loaded = await faceApiLoadPromiseRef.current;
+    return loaded ?? faceApiRef.current;
   }, []);
+
+  // Only preload the face-api fallback on browsers that lack native FaceDetector.
+  useEffect(() => {
+    const hasNativeFaceDetector = typeof window !== 'undefined' && 'FaceDetector' in window;
+    if (!hasNativeFaceDetector) {
+      void ensureFaceApiFallback();
+    }
+  }, [ensureFaceApiFallback]);
 
   // Helper: detect number of faces from canvas snapshot (works cross-browser)
   const detectFaceCount = useCallback(async (): Promise<number | null> => {
@@ -167,7 +187,11 @@ export default function StepIdentity({
         const faces = await detector.detect(bitmap);
         bitmap.close();
         return faces.length;
-      } catch { /* fall through */ }
+      } catch {
+        await ensureFaceApiFallback();
+      }
+    } else if (!faceApiRef.current) {
+      await ensureFaceApiFallback();
     }
     // Path B: face-api.js TinyFaceDetector
     if (faceApiRef.current) {
@@ -178,7 +202,7 @@ export default function StepIdentity({
       } catch { /* fall through */ }
     }
     return null; // model not available — skip check
-  }, []);
+  }, [ensureFaceApiFallback]);
 
   const startCamera = useCallback(async () => {
     try {

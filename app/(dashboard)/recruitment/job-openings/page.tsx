@@ -30,6 +30,8 @@ const MASTER_DATA_LINKS = [
   { id: 'industry-types', label: 'Industry Types', href: '/masters/industry-types', icon: Factory },
 ];
 
+const JD_BATCH_SIZE = 100;
+
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,12 +103,34 @@ export default function JobOpeningsPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      // Fetch user's jobs - filtering is done client-side in JobsListing.
-      // Probe for total then pull every record so the count reflects the DB.
-      const probe = await jdService.list({ page_size: 1, source: 'my-jds' });
-      const response = probe.total > probe.items.length
-        ? await jdService.list({ page_size: probe.total, source: 'my-jds' })
-        : probe;
+      // Pull "my JDs" in smaller pages. The previous page_size=total request
+      // produced oversized responses and browser transport failures upstream.
+      const firstPage = await jdService.list({
+        page: 1,
+        page_size: JD_BATCH_SIZE,
+        source: 'my-jds',
+      });
+      const items = [...firstPage.items];
+      const totalPages = Math.max(
+        firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
+        1
+      );
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const nextPage = await jdService.list({
+          page,
+          page_size: JD_BATCH_SIZE,
+          source: 'my-jds',
+        });
+        items.push(...nextPage.items);
+      }
+
+      const response = {
+        ...firstPage,
+        items,
+        page: 1,
+        page_size: JD_BATCH_SIZE,
+      };
 
       // Convert API JD to component Job type
       const convertedJobs: Job[] = response.items.map((jd: any) => ({

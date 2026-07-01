@@ -25,7 +25,7 @@ import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import {
   createVideoFrameCanvas,
   FACE_API_MODEL_URLS,
-  filterSignificantFaces,
+  filterMultipleFaceCandidates,
   loadFaceApiNetWithFallback,
   MIN_CONFIDENT_FACE_SCORE,
 } from '@/lib/proctoring/faceDetection';
@@ -562,7 +562,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       }
       const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
       const faces = await detector.detect(videoRef.current);
-      const significantFaces = filterSignificantFaces(
+      const significantFaces = filterMultipleFaceCandidates(
         Array.from(faces),
         (face) => {
           const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
@@ -641,7 +641,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       const confidentDetections = typedDetections.filter(
         (detection) => (typeof detection.score !== 'number' ? true : detection.score >= MIN_CONFIDENT_FACE_SCORE),
       );
-      const significantDetections = filterSignificantFaces(
+      const significantDetections = filterMultipleFaceCandidates(
         confidentDetections,
         (detection) => ({
           x: detection.box.x,

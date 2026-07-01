@@ -8,6 +8,7 @@ import QuickActions from './QuickActions';
 import GlobalSearch from './GlobalSearch';
 // FIX-010: Import Tooltip for icon buttons
 import { Tooltip } from '@/components/ui/tooltip';
+import brandLogo from '@/assets/brand/talent-flow-logo-header.webp';
 import { useQuota } from '@/contexts/QuotaContext';
 import notificationService, { Notification } from '@/lib/services/notificationService';
 import { useRouter } from 'next/navigation';
@@ -516,7 +517,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       {/* Brand logo — shown in the header so the dashboard route (where the sidebar is hidden) still has a brand mark. */}
       <Link href="/dashboard" prefetch={false} aria-label="TalentFlow home" className="flex items-center mr-3 sm:mr-4 lg:mr-6 shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logos/talent_flow_logo.png" alt="TalentFlow" className="h-8 sm:h-10 lg:h-12 w-auto" />
+        <img
+          src={brandLogo.src}
+          alt="TalentFlow"
+          width={brandLogo.width}
+          height={brandLogo.height}
+          className="h-8 sm:h-10 lg:h-12 w-auto"
+        />
       </Link>
 
       {/* Global Search Bar - Hidden on mobile, visible on desktop */}

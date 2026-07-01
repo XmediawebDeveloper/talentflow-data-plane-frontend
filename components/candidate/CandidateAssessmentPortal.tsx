@@ -384,7 +384,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     maxTabSwitches: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.max_tab_switches ?? 3,
-    screenshotBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.screenshot_blocking ?? true,
+    screenshotBlocking: false,
     copyPasteBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true,
     tabSwitchDetection: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true,
     reportEvent: async (tok, event) => {
@@ -1408,8 +1408,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         await candidateService.completeAssessment(token);
         console.log('[DEBUG] completeAssessment API called successfully');
       } catch (err) {
-        // Ignore if already completed - scoring will still run
-        console.log('[DEBUG] completeAssessment error (may be already completed):', err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const alreadySubmitted = /already submitted|already completed/i.test(errorMessage);
+        if (!alreadySubmitted) {
+          throw err;
+        }
+        console.log('[DEBUG] completeAssessment already submitted:', err);
       }
 
       // IMMEDIATELY show completed screen - NO waiting for scoring

@@ -23,7 +23,7 @@ import {
   assessCandidateFaceVisibility,
   createVideoFrameCanvas,
   FACE_API_MODEL_URLS,
-  filterSignificantFaces,
+  filterMultipleFaceCandidates,
   loadFaceApiNetWithFallback,
   MIN_CONFIDENT_FACE_SCORE,
   pickPrimaryFace,
@@ -48,6 +48,12 @@ const isMobileDevice = (): boolean => {
     .test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && !/Macintosh/.test(navigator.userAgent));
 };
 
+const isLinuxDesktop = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const userAgent = navigator.userAgent || '';
+  return /Linux/i.test(userAgent) && !/Android/i.test(userAgent);
+};
+
 const isFullscreenActive = (): boolean => {
   if (typeof document === 'undefined') return false;
   return !!(
@@ -68,7 +74,7 @@ const IDENTITY_MISMATCH_CONFIRMATIONS = 2;
 const IDENTITY_EVENT_COOLDOWN_MS = 15000;
 const GAZE_AWAY_CONFIRMATIONS = 3;
 const GAZE_RESTORED_CONFIRMATIONS = 2;
-const FACE_MISSING_EVENT_COOLDOWN_MS = 4000;
+const CONTINUOUS_WARNING_INTERVAL_MS = 3000;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Legacy type kept for compatibility with existing imports
@@ -101,6 +107,17 @@ interface ProctoringState {
   isCameraActive: boolean;
 }
 
+type ContinuousViolationType =
+  | 'camera_obstructed'
+  | 'face_missing'
+  | 'multiple_faces'
+  | 'multiple_voices';
+
+interface ContinuousViolationState {
+  timer: ReturnType<typeof setInterval> | null;
+  details: Record<string, any> | null;
+}
+
 // Voice detection specific settings
 const VOICE_CHECK_INTERVAL = 1000;   // Sample every 1 s
 
@@ -128,17 +145,43 @@ const getVideoWorkerCode = () => `
     let maxBrightness = 0;
     const step = 16;
     const brightnessSample = [];
+    const centerMinX = width * 0.2;
+    const centerMaxX = width * 0.8;
+    const centerMinY = height * 0.12;
+    const centerMaxY = height * 0.82;
+    let centerTotalBrightness = 0;
+    let centerTotalBrightnessSquared = 0;
+    let centerMinBrightness = 255;
+    let centerMaxBrightness = 0;
+    let centerSampleCount = 0;
+    let previousCenterBrightness = null;
+    let centerAdjacentDeltaSum = 0;
 
     for (let i = 0; i < imageData.length; i += step * 4) {
       const r = imageData[i];
       const g = imageData[i + 1];
       const b = imageData[i + 2];
       const brightness = (r + g + b) / 3;
+      const pixelIndex = i / 4;
+      const x = pixelIndex % width;
+      const y = Math.floor(pixelIndex / width);
       totalBrightness += brightness;
       totalBrightnessSquared += brightness * brightness;
       minBrightness = Math.min(minBrightness, brightness);
       maxBrightness = Math.max(maxBrightness, brightness);
       brightnessSample.push(brightness);
+
+      if (x >= centerMinX && x <= centerMaxX && y >= centerMinY && y <= centerMaxY) {
+        centerTotalBrightness += brightness;
+        centerTotalBrightnessSquared += brightness * brightness;
+        centerMinBrightness = Math.min(centerMinBrightness, brightness);
+        centerMaxBrightness = Math.max(centerMaxBrightness, brightness);
+        if (previousCenterBrightness !== null) {
+          centerAdjacentDeltaSum += Math.abs(brightness - previousCenterBrightness);
+        }
+        previousCenterBrightness = brightness;
+        centerSampleCount += 1;
+      }
     }
 
     const sampledPixels = Math.floor(imageData.length / (step * 4));
@@ -146,9 +189,27 @@ const getVideoWorkerCode = () => `
     const variance = Math.max(0, (totalBrightnessSquared / sampledPixels) - (avgBrightness * avgBrightness));
     const brightnessStdDev = Math.sqrt(variance);
     const brightnessRange = maxBrightness - minBrightness;
+    const centerAvgBrightness = centerSampleCount > 0 ? (centerTotalBrightness / centerSampleCount) : avgBrightness;
+    const centerVariance = centerSampleCount > 0
+      ? Math.max(0, (centerTotalBrightnessSquared / centerSampleCount) - (centerAvgBrightness * centerAvgBrightness))
+      : variance;
+    const centerBrightnessStdDev = Math.sqrt(centerVariance);
+    const centerBrightnessRange = centerSampleCount > 0
+      ? (centerMaxBrightness - centerMinBrightness)
+      : brightnessRange;
+    const centerAdjacentDelta = centerSampleCount > 1
+      ? (centerAdjacentDeltaSum / (centerSampleCount - 1))
+      : brightnessStdDev;
     const isDark = avgBrightness < threshold;
     const isUniform = brightnessRange < 35 || brightnessStdDev < 12;
     const isLowTexture = brightnessRange < 45 && brightnessStdDev < 18;
+    const isCenterOccluded =
+      centerSampleCount > 12 &&
+      (
+        centerAvgBrightness < (threshold + 6) ||
+        (centerBrightnessRange < 28 && centerBrightnessStdDev < 11) ||
+        (centerAdjacentDelta < 6.5 && centerBrightnessStdDev < 13)
+      );
 
     let meanFrameDelta = null;
     if (previousBrightnessSample && previousBrightnessSample.length === brightnessSample.length) {
@@ -161,7 +222,20 @@ const getVideoWorkerCode = () => `
 
     previousBrightnessSample = brightnessSample;
 
-    return { isDark, isUniform, isLowTexture, avgBrightness, brightnessRange, brightnessStdDev, meanFrameDelta };
+    return {
+      isDark,
+      isUniform,
+      isLowTexture,
+      isCenterOccluded,
+      avgBrightness,
+      brightnessRange,
+      brightnessStdDev,
+      centerAvgBrightness,
+      centerBrightnessRange,
+      centerBrightnessStdDev,
+      centerAdjacentDelta,
+      meanFrameDelta,
+    };
   }
 
   self.onmessage = function(e) {
@@ -172,7 +246,7 @@ const getVideoWorkerCode = () => `
         new Uint8ClampedArray(data.imageData),
         data.width, data.height, data.threshold
       );
-      const frameObstructed = result.isDark || result.isUniform || result.isLowTexture;
+      const frameObstructed = result.isDark || result.isUniform || result.isLowTexture || result.isCenterOccluded;
 
       if (frameObstructed) {
         consecutiveObstructed++;
@@ -184,10 +258,16 @@ const getVideoWorkerCode = () => `
             data: {
               kind: 'obstruction',
               obstructed: true,
-              reason: result.isDark ? 'too_dark' : (result.isUniform ? 'too_uniform' : 'low_texture'),
+              reason: result.isDark
+                ? 'too_dark'
+                : (result.isUniform ? 'too_uniform' : (result.isCenterOccluded ? 'center_occluded' : 'low_texture')),
               avgBrightness: result.avgBrightness,
               brightnessRange: result.brightnessRange,
               brightnessStdDev: result.brightnessStdDev,
+              centerAvgBrightness: result.centerAvgBrightness,
+              centerBrightnessRange: result.centerBrightnessRange,
+              centerBrightnessStdDev: result.centerBrightnessStdDev,
+              centerAdjacentDelta: result.centerAdjacentDelta,
             }
           });
         }
@@ -204,6 +284,10 @@ const getVideoWorkerCode = () => `
               avgBrightness: result.avgBrightness,
               brightnessRange: result.brightnessRange,
               brightnessStdDev: result.brightnessStdDev,
+              centerAvgBrightness: result.centerAvgBrightness,
+              centerBrightnessRange: result.centerBrightnessRange,
+              centerBrightnessStdDev: result.centerBrightnessStdDev,
+              centerAdjacentDelta: result.centerAdjacentDelta,
             }
           });
         }
@@ -276,33 +360,98 @@ const getVideoWorkerCode = () => `
 const getAudioWorkerCode = () => `
   // Voice detection — runs in worker, posts only state changes
   let isVoiceActive = false;
+  let isMultipleVoices = false;
   let consecutiveVoice = 0;
   let consecutiveSilent = 0;
+  let consecutiveMultipleVoices = 0;
+  let consecutiveSingleVoice = 0;
   const VOICE_THRESHOLD_FRAMES = 2;
   const SILENCE_THRESHOLD_FRAMES = 3;
+  const MULTI_VOICE_THRESHOLD_FRAMES = 3;
+  const MULTI_VOICE_CLEAR_FRAMES = 2;
 
-  function analyzeVoice(frequencyData, threshold, sampleRate) {
+  function analyzeVoice(frequencyData, sampleRate) {
     const bufferLength = frequencyData.length;
     const binSize = sampleRate / (bufferLength * 2);
     const speechStartBin = Math.floor(300 / binSize);
     const speechEndBin = Math.min(Math.floor(3000 / binSize), bufferLength);
-
+    const smoothed = [];
     let sum = 0;
+
     for (let i = speechStartBin; i < speechEndBin; i++) {
-      sum += frequencyData[i];
+      const current = frequencyData[i];
+      const previous = i > speechStartBin ? frequencyData[i - 1] : current;
+      const next = (i + 1) < speechEndBin ? frequencyData[i + 1] : current;
+      const value = (previous + current + next) / 3;
+      smoothed.push(value);
+      sum += value;
     }
-    return sum / (speechEndBin - speechStartBin);
+
+    const averageVolume = smoothed.length > 0 ? (sum / smoothed.length) : 0;
+    if (smoothed.length === 0 || averageVolume <= 0) {
+      return {
+        averageVolume: 0,
+        peakCount: 0,
+        spectralSpread: 0,
+        spectralFlatness: 0,
+      };
+    }
+
+    let weightedSum = 0;
+    let weightedSqSum = 0;
+    let logSum = 0;
+    for (let i = 0; i < smoothed.length; i++) {
+      const value = Math.max(smoothed[i], 1);
+      const frequency = (speechStartBin + i) * binSize;
+      weightedSum += frequency * value;
+      weightedSqSum += frequency * frequency * value;
+      logSum += Math.log(value);
+    }
+
+    const centroid = weightedSum / Math.max(sum, 1);
+    const spectralSpread = Math.sqrt(Math.max(0, (weightedSqSum / Math.max(sum, 1)) - (centroid * centroid)));
+    const spectralFlatness = Math.exp(logSum / smoothed.length) / Math.max(averageVolume, 1);
+    const peakThreshold = Math.max(averageVolume * 1.45, 16);
+    let peakCount = 0;
+    let lastPeakFrequency = -Infinity;
+
+    for (let i = 1; i < smoothed.length - 1; i++) {
+      const value = smoothed[i];
+      if (value < peakThreshold || value < smoothed[i - 1] || value < smoothed[i + 1]) {
+        continue;
+      }
+
+      const frequency = (speechStartBin + i) * binSize;
+      if ((frequency - lastPeakFrequency) < 250) {
+        continue;
+      }
+
+      peakCount++;
+      lastPeakFrequency = frequency;
+    }
+
+    return {
+      averageVolume,
+      peakCount,
+      spectralSpread,
+      spectralFlatness,
+    };
   }
 
   self.onmessage = function(e) {
     const { type, data } = e.data;
 
     if (type === 'ANALYZE_VOICE') {
-      const avg = analyzeVoice(
+      const metrics = analyzeVoice(
         new Uint8Array(data.frequencyData),
-        data.threshold, data.sampleRate
+        data.sampleRate
       );
-      const detected = avg > data.threshold;
+      const detected = metrics.averageVolume > data.threshold;
+      const multipleVoicesLikely =
+        detected &&
+        metrics.peakCount >= 4 &&
+        metrics.spectralSpread >= 700 &&
+        metrics.spectralFlatness >= 0.5;
 
       if (detected) {
         consecutiveVoice++;
@@ -311,8 +460,37 @@ const getAudioWorkerCode = () => `
           isVoiceActive = true;
           self.postMessage({
             type: 'STATE_CHANGE',
-            data: { voiceDetected: true, averageVolume: avg, threshold: data.threshold }
+            data: { voiceDetected: true, averageVolume: metrics.averageVolume, threshold: data.threshold }
           });
+        }
+
+        if (multipleVoicesLikely) {
+          consecutiveMultipleVoices++;
+          consecutiveSingleVoice = 0;
+          if (!isMultipleVoices && consecutiveMultipleVoices >= MULTI_VOICE_THRESHOLD_FRAMES) {
+            isMultipleVoices = true;
+            self.postMessage({
+              type: 'MULTI_VOICE_STATE_CHANGE',
+              data: {
+                multipleVoices: true,
+                averageVolume: metrics.averageVolume,
+                threshold: data.threshold,
+                peakCount: metrics.peakCount,
+                spectralSpread: metrics.spectralSpread,
+                spectralFlatness: metrics.spectralFlatness,
+              }
+            });
+          }
+        } else {
+          consecutiveSingleVoice++;
+          consecutiveMultipleVoices = 0;
+          if (isMultipleVoices && consecutiveSingleVoice >= MULTI_VOICE_CLEAR_FRAMES) {
+            isMultipleVoices = false;
+            self.postMessage({
+              type: 'MULTI_VOICE_STATE_CHANGE',
+              data: { multipleVoices: false }
+            });
+          }
         }
       } else {
         consecutiveSilent++;
@@ -320,11 +498,23 @@ const getAudioWorkerCode = () => `
         if (isVoiceActive && consecutiveSilent >= SILENCE_THRESHOLD_FRAMES) {
           isVoiceActive = false;
         }
+        consecutiveSingleVoice++;
+        consecutiveMultipleVoices = 0;
+        if (isMultipleVoices && consecutiveSingleVoice >= MULTI_VOICE_CLEAR_FRAMES) {
+          isMultipleVoices = false;
+          self.postMessage({
+            type: 'MULTI_VOICE_STATE_CHANGE',
+            data: { multipleVoices: false }
+          });
+        }
       }
     } else if (type === 'RESET') {
       isVoiceActive = false;
+      isMultipleVoices = false;
       consecutiveVoice = 0;
       consecutiveSilent = 0;
+      consecutiveMultipleVoices = 0;
+      consecutiveSingleVoice = 0;
     }
   };
   self.postMessage({ type: 'READY' });
@@ -414,10 +604,15 @@ export function useProctoringMonitor({
   const screenshotSuppressionUntilRef = useRef(0);
   const lastScreenshotEventAtRef = useRef(0);
   const lastIdentityMismatchEventAtRef = useRef(0);
-  const lastFaceMissingEventAtRef = useRef(0);
   const lastMetaKeyAtRef = useRef(0);
   const lastShiftKeyAtRef = useRef(0);
   const lastSKeyAtRef = useRef(0);
+  const continuousViolationStateRef = useRef<Record<ContinuousViolationType, ContinuousViolationState>>({
+    camera_obstructed: { timer: null, details: null },
+    face_missing: { timer: null, details: null },
+    multiple_faces: { timer: null, details: null },
+    multiple_voices: { timer: null, details: null },
+  });
 
   // ==================== CORE: emitEvent ====================
   // 1. Always queues event for backend (every event recorded)
@@ -444,6 +639,46 @@ export function useProctoringMonitor({
 
   const emitEventRef = useRef(emitEvent);
   useEffect(() => { emitEventRef.current = emitEvent; }, [emitEvent]);
+
+  const clearContinuousViolation = useCallback((eventType: ContinuousViolationType) => {
+    const state = continuousViolationStateRef.current[eventType];
+    if (state.timer) {
+      clearInterval(state.timer);
+      state.timer = null;
+    }
+    state.details = null;
+  }, []);
+
+  const syncContinuousViolation = useCallback((
+    eventType: ContinuousViolationType,
+    active: boolean,
+    details?: Record<string, any>,
+  ) => {
+    if (!active) {
+      clearContinuousViolation(eventType);
+      return;
+    }
+
+    const state = continuousViolationStateRef.current[eventType];
+    state.details = details || {};
+
+    if (state.timer) {
+      return;
+    }
+
+    emitEventRef.current(eventType, state.details);
+    state.timer = setInterval(() => {
+      if (!isMonitoringRef.current) return;
+      const latest = continuousViolationStateRef.current[eventType].details;
+      if (!latest) return;
+      emitEventRef.current(eventType, latest);
+    }, CONTINUOUS_WARNING_INTERVAL_MS);
+  }, [clearContinuousViolation]);
+
+  const clearAllContinuousViolations = useCallback(() => {
+    (Object.keys(continuousViolationStateRef.current) as ContinuousViolationType[])
+      .forEach(clearContinuousViolation);
+  }, [clearContinuousViolation]);
 
   const beginNavigationSequence = useCallback((durationMs = 1500) => {
     navigationSuppressionUntilRef.current = Date.now() + durationMs;
@@ -553,12 +788,15 @@ export function useProctoringMonitor({
       return 'Win+Shift+S';
     }
 
-    const sawExplicitLinuxSnipShortcut =
-      now - lastAltKeyAtRef.current < 900 &&
-      now - lastShiftKeyAtRef.current < 900 &&
-      now - lastSKeyAtRef.current < 900;
-    if (sawExplicitLinuxSnipShortcut) {
-      return 'Alt+Shift+S';
+    const allowLinuxShortcutInference = screenshotBlocking || !isLinuxDesktop();
+    if (allowLinuxShortcutInference) {
+      const sawExplicitLinuxSnipShortcut =
+        now - lastAltKeyAtRef.current < 900 &&
+        now - lastShiftKeyAtRef.current < 900 &&
+        now - lastSKeyAtRef.current < 900;
+      if (sawExplicitLinuxSnipShortcut) {
+        return 'Alt+Shift+S';
+      }
     }
 
     const sawSoftWindowsSnipShortcut =
@@ -569,7 +807,7 @@ export function useProctoringMonitor({
     }
 
     return null;
-  }, []);
+  }, [screenshotBlocking]);
 
   const maybeHandleRecentScreenshotSignal = useCallback((source: string, details?: Record<string, any>) => {
     const signalKey = getRecentScreenshotSignal();
@@ -646,25 +884,21 @@ export function useProctoringMonitor({
           if (data.kind === 'obstruction' && data.obstructed) {
             isCameraObstructedRef.current = true;
             setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
-            emitEventRef.current('camera_obstructed', {
+            syncContinuousViolation('camera_obstructed', true, {
               reason: data.reason,
               avgBrightness: data.avgBrightness,
               brightnessRange: data.brightnessRange,
+              brightnessStdDev: data.brightnessStdDev,
+              centerAvgBrightness: data.centerAvgBrightness,
+              centerBrightnessRange: data.centerBrightnessRange,
+              centerBrightnessStdDev: data.centerBrightnessStdDev,
+              centerAdjacentDelta: data.centerAdjacentDelta,
             });
-            const now = Date.now();
-            if (now - lastFaceMissingEventAtRef.current >= FACE_MISSING_EVENT_COOLDOWN_MS) {
-              lastFaceMissingEventAtRef.current = now;
-              emitEventRef.current('face_missing', {
-                method: 'video_worker',
-                reason: 'camera_obstructed',
-                obstruction_reason: data.reason,
-                avgBrightness: data.avgBrightness,
-                brightnessRange: data.brightnessRange,
-              });
-            }
+            clearContinuousViolation('face_missing');
           } else if (data.kind === 'obstruction') {
             isCameraObstructedRef.current = false;
             setState(prev => !prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: false });
+            clearContinuousViolation('camera_obstructed');
           } else if (data.kind === 'freeze' && data.frozen) {
             emitEventRef.current('camera_frozen', {
               meanFrameDelta: data.meanFrameDelta,
@@ -751,6 +985,18 @@ export function useProctoringMonitor({
             averageVolume: data.averageVolume,
             threshold: data.threshold,
           });
+        } else if (type === 'MULTI_VOICE_STATE_CHANGE') {
+          if (data.multipleVoices) {
+            syncContinuousViolation('multiple_voices', true, {
+              averageVolume: data.averageVolume,
+              threshold: data.threshold,
+              peakCount: data.peakCount,
+              spectralSpread: data.spectralSpread,
+              spectralFlatness: data.spectralFlatness,
+            });
+          } else {
+            clearContinuousViolation('multiple_voices');
+          }
         }
       };
 
@@ -856,18 +1102,17 @@ export function useProctoringMonitor({
         };
 
         const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, unknown>) => {
+          if (isCameraObstructedRef.current) {
+            clearContinuousViolation('face_missing');
+            return;
+          }
+
           consecutiveNoFace++;
           consecutiveDetectionFailures = 0;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
-            const now = Date.now();
-            if (now - lastFaceMissingEventAtRef.current < FACE_MISSING_EVENT_COOLDOWN_MS) {
-              consecutiveNoFace = 0;
-              return;
-            }
-            lastFaceMissingEventAtRef.current = now;
             consecutiveNoFace = 0;
             resetAdvancedStates();
-            emitEventRef.current('face_missing', {
+            syncContinuousViolation('face_missing', true, {
               method,
               reason,
               camera_obstructed: isCameraObstructedRef.current,
@@ -886,15 +1131,22 @@ export function useProctoringMonitor({
           if (count >= 2) {
             resetFaceMissingState();
             resetAdvancedStates();
-            emitEventRef.current('multiple_faces', { face_count: count, method });
+            syncContinuousViolation('multiple_faces', true, {
+              face_count: count,
+              method,
+              ...extraDetails,
+            });
             if (extraDetails?.candidate_visible === false) {
               const reason = typeof extraDetails?.reason === 'string'
                 ? extraDetails.reason
                 : 'candidate_not_visible';
               maybeEmitFaceMissing(method, reason, extraDetails);
+            } else {
+              clearContinuousViolation('face_missing');
             }
             console.log(`[PROCTORING] Multiple faces: ${count} (${method})`);
           } else if (count === 0) {
+            clearContinuousViolation('multiple_faces');
             const reason = typeof extraDetails?.reason === 'string'
               ? extraDetails.reason
               : 'no_face_detected';
@@ -904,6 +1156,8 @@ export function useProctoringMonitor({
             });
           } else {
             resetFaceMissingState();
+            clearContinuousViolation('multiple_faces');
+            clearContinuousViolation('face_missing');
           }
         };
 
@@ -911,6 +1165,7 @@ export function useProctoringMonitor({
           lastKnownFaceCount = 0;
           consecutiveDetectionFailures++;
           if (consecutiveDetectionFailures >= DETECTION_FAILURE_THRESHOLD) {
+            clearContinuousViolation('multiple_faces');
             maybeEmitFaceMissing(method, 'detection_failed', {
               camera_obstructed: isCameraObstructedRef.current,
               error: error instanceof Error ? error.message : String(error),
@@ -1100,20 +1355,11 @@ export function useProctoringMonitor({
             );
 
             if (!primaryVisibility.visible) {
-              maybeEmitFaceMissing('face-api.js-advanced', primaryVisibility.reason, {
-                detector_hint_face_count: lastKnownFaceCount,
-                primary_face_metrics: primaryVisibility.metrics,
-              });
               resetAdvancedStates();
               return;
             }
 
             if (!detection?.descriptor || !detection.landmarks) {
-              if (lastKnownFaceCount === 1) {
-                maybeEmitFaceMissing('face-api.js-advanced', 'advanced_face_missing', {
-                  detector_hint_face_count: lastKnownFaceCount,
-                });
-              }
               resetAdvancedStates();
               return;
             }
@@ -1215,7 +1461,7 @@ export function useProctoringMonitor({
           }).FaceDetector;
           if (!FaceDetectorAPI) return;
 
-          const detector = new FaceDetectorAPI({ fastMode: true, maxDetectedFaces: 5 });
+          const detector = new FaceDetectorAPI({ fastMode: false, maxDetectedFaces: 8 });
 
           // Guard: component may have unmounted while video was preparing
           if (faceDetectionCancelledRef.current) return;
@@ -1224,7 +1470,7 @@ export function useProctoringMonitor({
             if (!isMonitoringRef.current || !faceVideoRef.current) return;
             try {
               const faces = await detector.detect(faceVideoRef.current);
-              const significantFaces = filterSignificantFaces(
+              const multipleFaceCandidates = filterMultipleFaceCandidates(
                 Array.from(faces),
                 (face) => {
                   const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
@@ -1236,7 +1482,7 @@ export function useProctoringMonitor({
                 faceVideoRef.current.videoHeight,
               );
               const primaryFace = pickPrimaryFace(
-                significantFaces,
+                Array.from(faces),
                 (face) => {
                   const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
                   return box
@@ -1257,13 +1503,13 @@ export function useProctoringMonitor({
                 faceVideoRef.current.videoHeight,
               );
               const visibleCount =
-                significantFaces.length > 1
-                  ? significantFaces.length
+                multipleFaceCandidates.length > 1
+                  ? multipleFaceCandidates.length
                   : (primaryVisibility.visible ? 1 : 0);
               handleFaceCount(visibleCount, 'native', {
                 reason: primaryVisibility.visible ? 'ok' : primaryVisibility.reason,
                 candidate_visible: primaryVisibility.visible,
-                significant_face_count: significantFaces.length,
+                significant_face_count: multipleFaceCandidates.length,
                 primary_face_metrics: primaryVisibility.metrics,
               });
             } catch (error) {
@@ -1333,7 +1579,7 @@ export function useProctoringMonitor({
             const confidentDetections = typedDetections.filter(
               detection => (typeof detection.score === 'number' ? detection.score >= MIN_CONFIDENT_FACE_SCORE : true),
             );
-            const significantDetections = filterSignificantFaces(
+            const multipleFaceDetections = filterMultipleFaceCandidates(
               confidentDetections,
               (detection) => ({
                 x: detection.box.x,
@@ -1346,7 +1592,7 @@ export function useProctoringMonitor({
               frameHeight,
             );
             const primaryDetection = pickPrimaryFace(
-              significantDetections,
+              confidentDetections,
               (detection) => ({
                 x: detection.box.x,
                 y: detection.box.y,
@@ -1371,18 +1617,18 @@ export function useProctoringMonitor({
               frameHeight,
             );
             const visibleCount =
-              significantDetections.length > 1
-                ? significantDetections.length
+              multipleFaceDetections.length > 1
+                ? multipleFaceDetections.length
                 : (primaryVisibility.visible ? 1 : 0);
 
             handleFaceCount(visibleCount, 'face-api.js', {
-              reason: significantDetections.length === 0 && detections.length > 0
+              reason: multipleFaceDetections.length === 0 && detections.length > 0
                 ? 'low_confidence_face'
                 : (primaryVisibility.visible ? 'ok' : primaryVisibility.reason),
               candidate_visible: primaryVisibility.visible,
               raw_face_count: detections.length,
               confident_face_count: confidentDetections.length,
-              significant_face_count: significantDetections.length,
+              significant_face_count: multipleFaceDetections.length,
               primary_face_metrics: primaryVisibility.metrics,
             });
           } catch (error) {
@@ -1685,6 +1931,8 @@ export function useProctoringMonitor({
     const normalizeKeyValue = (value: string | undefined | null) => {
       return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     };
+    const screenshotMode = screenshotBlocking ? 'best_effort_block' : 'detect_only';
+    const passThroughLinuxShortcut = !screenshotBlocking && isLinuxDesktop();
 
     const isPrintScreenEvent = (e: KeyboardEvent) => {
       const normalizedKey = normalizeKeyValue(e.key);
@@ -1746,6 +1994,7 @@ export function useProctoringMonitor({
       if (sawWindowsSnipChord) {
         armScreenshotChord('Win+Shift+S');
       } else if (
+        !passThroughLinuxShortcut &&
         e.altKey &&
         (e.shiftKey || normalizedKey === 'shift') &&
         (
@@ -1781,13 +2030,21 @@ export function useProctoringMonitor({
           key: buildPrintScreenLabel(e),
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: buildPrintScreenLabel(e),
+          phase,
         });
         clearClipboardIfPossible();
         return;
       }
 
       if (e.altKey && e.shiftKey && normalizedKey === 's') {
+        if (passThroughLinuxShortcut) {
+          return;
+        }
         if (screenshotBlocking) {
           e.preventDefault();
         }
@@ -1795,7 +2052,12 @@ export function useProctoringMonitor({
           key: 'Alt+Shift+S',
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: 'Alt+Shift+S',
+          phase,
         });
         return;
       }
@@ -1808,7 +2070,12 @@ export function useProctoringMonitor({
           key: 'Win+Shift+S',
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: 'Win+Shift+S',
+          phase,
         });
         return;
       }
@@ -1821,7 +2088,12 @@ export function useProctoringMonitor({
           key: `Cmd+Shift+${e.key}`,
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: `Cmd+Shift+${e.key}`,
+          phase,
         });
         return;
       }
@@ -1835,7 +2107,12 @@ export function useProctoringMonitor({
           key: 'Cmd+Shift+5',
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: 'Cmd+Shift+5',
+          phase,
         });
         return;
       }
@@ -1849,7 +2126,12 @@ export function useProctoringMonitor({
           key: `Cmd+Ctrl+Shift+${e.key}`,
           capture_type: 'screenshot',
           phase,
-          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+          enforcement_mode: screenshotMode,
+        });
+        console.info('[PROCTORING] Screenshot shortcut detected', {
+          mode: screenshotMode,
+          key: `Cmd+Ctrl+Shift+${e.key}`,
+          phase,
         });
       }
     };
@@ -1859,7 +2141,7 @@ export function useProctoringMonitor({
 
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp, true);
-    console.log('[PROCTORING] Screenshot detection started');
+    console.log(`[PROCTORING] Screenshot detection started (${screenshotMode})`);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
@@ -1879,10 +2161,15 @@ export function useProctoringMonitor({
       return () => {};
     }
 
+    const screenRecordingMode = screenshotBlocking ? 'best_effort_block' : 'detect_only';
     const reportScreenCapture = (details?: Record<string, any>) => {
       emitScreenshotEvent({
         capture_type: 'screen_recording',
-        enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        enforcement_mode: screenRecordingMode,
+        ...details,
+      });
+      console.info('[PROCTORING] Screen recording attempt detected', {
+        mode: screenRecordingMode,
         ...details,
       });
     };
@@ -2150,6 +2437,7 @@ export function useProctoringMonitor({
       // Cleanup intervals
       // Cancel any in-flight async face detection setup (model download / video.play)
       faceDetectionCancelledRef.current = true;
+      clearAllContinuousViolations();
       if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
       if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
