@@ -22,12 +22,20 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
+import {
+  createVideoFrameCanvas,
+  FACE_API_MODEL_URLS,
+  filterSignificantFaces,
+  loadFaceApiNetWithFallback,
+  MIN_CONFIDENT_FACE_SCORE,
+} from '@/lib/proctoring/faceDetection';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
 import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
 interface SystemCheckProps {
   token: string;
   onComplete: (stream?: MediaStream) => void; // Pass stream to parent to keep it alive
+  onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
   onBack: () => void;
 }
 
@@ -50,7 +58,9 @@ type BrowserWindow = Window & typeof globalThis & {
   webkitAudioContext?: typeof AudioContext;
 };
 
-export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
+const FACE_REGISTRATION_TIMEOUT_MS = 8000;
+
+export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [micCheck, setMicCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [internetCheck, setInternetCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
@@ -73,6 +83,8 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const networkSpeedMbpsRef = useRef<number | null>(null);
   const networkLatencyMsRef = useRef<number | null>(null);
   const browserInfoRef = useRef<ReturnType<typeof detectBrowser> | null>(null);
+  const faceDetectionBusyRef = useRef(false);
+  const faceDetectionFailureCountRef = useRef(0);
 
   // Face verification must pass before the candidate can proceed.
   // We allow a short grace window for the detector to stabilize, but we no
@@ -314,6 +326,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // don't leak into this one.
     noFaceCountRef.current = 0;
     multiFaceCountRef.current = 0;
+    faceDetectionFailureCountRef.current = 0;
     networkSpeedMbpsRef.current = null;
     networkLatencyMsRef.current = null;
     browserInfoRef.current = null;
@@ -482,13 +495,11 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     networkCheckIntervalRef.current = setInterval(checkInternet, 15000);
   };
 
-  // GitHub CDN hosts the actual weight files (npm package does not include them)
-  const FACE_API_MODEL_URL = '/models/';
-
   const applyFaceCountResult = (count: number) => {
     if (count === 1) {
       noFaceCountRef.current = 0;
       multiFaceCountRef.current = 0;
+      faceDetectionFailureCountRef.current = 0;
       setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
       return;
     }
@@ -541,6 +552,9 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   // Path A — native FaceDetector API (Chrome / Edge)
   const runFaceDetection = async () => {
     if (!videoRef.current) return;
+    if (faceDetectionBusyRef.current) return;
+
+    faceDetectionBusyRef.current = true;
     try {
       const FaceDetector = (window as BrowserWindow).FaceDetector;
       if (!FaceDetector) {
@@ -548,21 +562,44 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       }
       const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
       const faces = await detector.detect(videoRef.current);
-      applyFaceCountResult(faces.length);
+      const significantFaces = filterSignificantFaces(
+        Array.from(faces),
+        (face) => {
+          const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
+          return box
+            ? { x: box.x, y: box.y, width: box.width, height: box.height }
+            : null;
+        },
+        videoRef.current.videoWidth,
+        videoRef.current.videoHeight,
+      );
+      applyFaceCountResult(significantFaces.length);
     } catch {
       // Native API failed — caller will switch to face-api.js path
       throw new Error('native_face_detector_unavailable');
+    } finally {
+      faceDetectionBusyRef.current = false;
     }
   };
 
   // Path B — face-api.js TinyFaceDetector (Firefox / Safari)
   const runFaceDetectionFaceApi = async () => {
     if (!videoRef.current) return;
+    if (faceDetectionBusyRef.current) return;
+
+    faceDetectionBusyRef.current = true;
     try {
-      const faceapi = await loadFaceApiWithCpuBackend();
-      if (!faceapi.nets.tinyFaceDetector.isLoaded) {
-        await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+        setCameraCheck({
+          status: 'checking',
+          message: 'Initializing camera preview… please keep your face centered.',
+        });
+        return;
       }
+
+      const faceapi = await loadFaceApiWithCpuBackend();
+      await loadFaceApiNetWithFallback(faceapi.nets.tinyFaceDetector, FACE_API_MODEL_URLS);
       // 0.5 is the face-api.js default. We tried 0.7 to suppress false
       // "multiple faces" hits from posters/monitors, but at 0.7 the actual
       // candidate's face was getting rejected too — especially with glasses
@@ -570,12 +607,77 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       // faces in; the multi-face false positives are now handled by the
       // 2-strike buffer in applyFaceCountResult instead.
       const options = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-      const detections = await faceapi.detectAllFaces(videoRef.current, options);
-      applyFaceCountResult(detections.length);
+      let frameWidth = video.videoWidth;
+      let frameHeight = video.videoHeight;
+      let usedSnapshot = false;
+      let detections;
+
+      try {
+        detections = await faceapi.detectAllFaces(video, options);
+      } catch (videoError) {
+        const snapshot = createVideoFrameCanvas(video);
+        if (!snapshot) {
+          throw videoError;
+        }
+        detections = await faceapi.detectAllFaces(snapshot, options);
+        frameWidth = snapshot.width;
+        frameHeight = snapshot.height;
+        usedSnapshot = true;
+      }
+
+      if (!detections.length && !usedSnapshot) {
+        const snapshot = createVideoFrameCanvas(video);
+        if (snapshot) {
+          detections = await faceapi.detectAllFaces(snapshot, options);
+          frameWidth = snapshot.width;
+          frameHeight = snapshot.height;
+        }
+      }
+
+      const typedDetections = detections as Array<{
+        box: { x: number; y: number; width: number; height: number };
+        score?: number;
+      }>;
+      const confidentDetections = typedDetections.filter(
+        (detection) => (typeof detection.score !== 'number' ? true : detection.score >= MIN_CONFIDENT_FACE_SCORE),
+      );
+      const significantDetections = filterSignificantFaces(
+        confidentDetections,
+        (detection) => ({
+          x: detection.box.x,
+          y: detection.box.y,
+          width: detection.box.width,
+          height: detection.box.height,
+          score: detection.score,
+        }),
+        frameWidth,
+        frameHeight,
+      );
+      applyFaceCountResult(significantDetections.length);
     } catch (err) {
-      // Model load failed or inference error — camera is accessible but we can't verify face
+      faceDetectionFailureCountRef.current += 1;
       console.warn('[SYSTEM CHECK] face-api.js detection failed:', err);
-      setCameraCheck({ status: 'error', message: 'Unable to verify your face. Please refresh the page and re-run the checks.' });
+      const frameAnalysis = analyzeCurrentVideoFrame();
+      if (frameAnalysis?.obstructed) {
+        setCameraCheck({
+          status: 'error',
+          message: frameAnalysis.tooDark
+            ? 'Camera appears too dark, covered, or blank. Please uncover the camera and improve lighting.'
+            : 'Camera appears covered or obstructed. Please clear the lens and face the camera.',
+        });
+      } else if (faceDetectionFailureCountRef.current < 3) {
+        setCameraCheck({
+          status: 'checking',
+          message: 'Stabilizing face verification… keep only your face clearly visible.',
+        });
+      } else {
+        setCameraCheck({
+          status: 'error',
+          message: 'Face verification could not stabilize. Keep only your face clearly visible and re-run checks.',
+        });
+      }
+    } finally {
+      faceDetectionBusyRef.current = false;
     }
   };
 
@@ -750,6 +852,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const handleProceed = async () => {
     setIsSubmitting(true);
     try {
+      stopFaceDetectionPolling();
+
+      const faceDetectionWaitDeadline = Date.now() + 3000;
+      while (faceDetectionBusyRef.current && Date.now() < faceDetectionWaitDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
       const results: SystemCheckResult = {
         camera_available: cameraCheck.status === 'success',
         microphone_available: micCheck.status === 'success',
@@ -809,6 +918,17 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
           }
         } else {
           console.log('[SYSTEM CHECK] Stream is healthy and live');
+        }
+      }
+
+      if (onRegisterFace && videoRef.current) {
+        try {
+          await Promise.race([
+            onRegisterFace(videoRef.current).catch(() => false),
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), FACE_REGISTRATION_TIMEOUT_MS)),
+          ]);
+        } catch (error) {
+          console.warn('[SYSTEM CHECK] Face baseline registration failed:', error);
         }
       }
 

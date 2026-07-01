@@ -24,7 +24,9 @@ export type ProctoringEventType =
   | 'fullscreen_exit'
   | 'face_missing'
   | 'multiple_faces'
-  | 'gaze_away';
+  | 'gaze_away'
+  | 'camera_frozen'
+  | 'identity_mismatch';
 
 export interface ProctoringEvent {
   id: string;
@@ -53,6 +55,8 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   face_missing: 'No face detected. Please ensure your face is visible to the camera.',
   multiple_faces: 'Multiple faces detected. Please ensure you are alone.',
   gaze_away: 'Looking away detected. Please keep your attention on the screen.',
+  camera_frozen: 'Camera feed appears frozen. Please restore your live camera feed.',
+  identity_mismatch: 'Identity mismatch detected. Please ensure the registered candidate remains on camera.',
 };
 
 // Severity mapping
@@ -73,6 +77,8 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
   face_missing: 'high',
   multiple_faces: 'high',
   gaze_away: 'medium',
+  camera_frozen: 'high',
+  identity_mismatch: 'high',
 };
 
 type Listener = (event: ProctoringEvent) => void;

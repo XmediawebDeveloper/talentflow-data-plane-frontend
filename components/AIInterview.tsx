@@ -226,8 +226,19 @@ export default function AIInterview() {
         aiInterviewService.getConfigStats(),
       ]);
 
-      if (configsRes.status === 'fulfilled') setConfigs(configsRes.value.items);
-      if (statsRes.status === 'fulfilled') setStats(statsRes.value);
+      if (configsRes.status === 'fulfilled') {
+        setConfigs(configsRes.value.items);
+      } else {
+        setConfigs([]);
+        console.error('Failed to load AI interview configs:', configsRes.reason);
+        toast.error('AI interview configurations failed to load.');
+      }
+
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value);
+      } else {
+        console.error('Failed to load AI interview stats:', statsRes.reason);
+      }
     } catch (error) {
       console.error('Failed to load AI interview data:', error);
       toast.error('Failed to load data. Please refresh.');
@@ -660,7 +671,7 @@ export default function AIInterview() {
             .toLowerCase();
           return haystack.includes(q);
         })
-      : byMode;
+      : byDate;
     const sorted = [...bySearch].sort((a, b) => {
       if (sortBy === 'active') {
         const aw = normalizeConfigStatus(a.status) === 'published' ? 0 : 1;
@@ -720,7 +731,7 @@ export default function AIInterview() {
 
   useEffect(() => {
     setConfigListPage(1);
-  }, [activeTab, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
+  }, [activeTab, invitedOnly, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
 
   useEffect(() => {
     setProcessingPage(1);

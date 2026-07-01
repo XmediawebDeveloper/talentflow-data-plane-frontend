@@ -31,6 +31,7 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   camera_disabled: <Camera className="w-6 h-6" />,
   microphone_disabled: <Mic className="w-6 h-6" />,
   camera_obstructed: <Eye className="w-6 h-6" />,
+  camera_frozen: <Camera className="w-6 h-6" />,
   screenshot_attempt: <Monitor className="w-6 h-6" />,
   screen_recording_attempt: <Monitor className="w-6 h-6" />,
   window_blur: <Monitor className="w-6 h-6" />,
@@ -39,6 +40,7 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   face_missing: <UserX className="w-6 h-6" />,
   multiple_faces: <Users className="w-6 h-6" />,
   gaze_away: <ScanEye className="w-6 h-6" />,
+  identity_mismatch: <UserX className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -50,6 +52,7 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   camera_disabled: 'Camera Disabled',
   microphone_disabled: 'Microphone Disabled',
   camera_obstructed: 'Camera Obstructed',
+  camera_frozen: 'Camera Feed Frozen',
   screenshot_attempt: 'Screenshot Violation Detected',
   screen_recording_attempt: 'Screenshot Violation Detected',
   window_blur: 'Assessment Window Lost Focus',
@@ -58,6 +61,7 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   face_missing: 'Face Not Detected',
   multiple_faces: 'Multiple Faces Detected',
   gaze_away: 'Looking Away Detected',
+  identity_mismatch: 'Identity Mismatch Detected',
 };
 
 const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {

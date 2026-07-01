@@ -194,6 +194,7 @@ export interface AssessmentInfo {
   attempt_id: string | null;
   attempt_status: string | null;
   attempt_started_at: string | null;  // When attempt started - for timer resume on page refresh
+  system_check_passed?: boolean;
   can_start: boolean;
   can_resume: boolean;
   message: string;
@@ -498,11 +499,13 @@ export interface ProctorEvent {
     | 'multiple_voices'
     | 'microphone_disabled'
     | 'camera_obstructed'
+    | 'camera_frozen'
     | 'screenshot_attempt'
     | 'screen_recording_attempt'
     | 'multiple_faces'
     | 'face_missing'
     | 'gaze_away'
+    | 'identity_mismatch'
     | string; // allow future event types without breaking the type
   event_data?: Record<string, unknown>;
   timestamp?: string;
@@ -568,7 +571,7 @@ export interface HRAnswersSubmitResponse {
 }
 
 export interface GenerationStatusResponse {
-  status: 'not_started' | 'generating' | 'ready' | 'failed';
+  status: 'not_started' | 'pending_lang_choice' | 'generating' | 'ready' | 'failed';
   questions_ready: boolean;
   total_questions: number;
   message: string;

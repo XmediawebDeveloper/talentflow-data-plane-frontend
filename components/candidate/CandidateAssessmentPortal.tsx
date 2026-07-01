@@ -19,15 +19,15 @@ import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
-import { AssessmentWatermark } from './AssessmentWatermark';
 import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import CodingLanguagePickerStep from './CodingLanguagePickerStep';
+import { useAssessmentFaceBaseline } from '@/hooks/useAssessmentFaceBaseline';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
+import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode, lockKeyboardShortcuts, unlockKeyboardShortcuts } from '@/lib/utils/browserCompat';
 
 // ============================================
 // FULLSCREEN PROMPT SCREEN COMPONENT
@@ -48,6 +48,7 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
     setIsEnteringFullscreen(true);
     try {
       await requestFullscreen();
+      await lockKeyboardShortcuts(['F11']);
       console.log('[FULLSCREEN] Entered fullscreen mode');
     } catch (fsErr) {
       // Proceed even if fullscreen is denied (iframe, browser policy, etc.)
@@ -227,7 +228,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // sessionStorage key for this assessment's in-progress step
   const ASSESS_SESSION_KEY = `tf_assess_step_${token}`;
   // Steps that aren't re-derivable from backend on refresh and must be persisted
-  const ASSESS_PERSIST_STEPS: AssessmentStep[] = ['system_check', 'hr_questions', 'fullscreen_prompt'];
+  const ASSESS_PERSIST_STEPS: AssessmentStep[] = ['system_check', 'choose_coding_language', 'hr_questions', 'fullscreen_prompt'];
 
   // Custom setStep that updates both state, ref, and sessionStorage
   const setStepSafe = useCallback((newStep: AssessmentStep) => {
@@ -259,6 +260,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const isAssessmentActive = step === 'assessment' || step === 'completing';
   // Proctoring should stop when assessment is completed
   const isProctoringActive = step === 'assessment';
+  const {
+    clearBaseline: clearAssessmentFaceBaseline,
+    hasBaseline: hasAssessmentFaceBaseline,
+    registerFace: registerAssessmentFaceBaseline,
+  } = useAssessmentFaceBaseline(token);
 
   // Fullscreen state for pre-assessment fullscreen prompt
   const [isReadyToStart, setIsReadyToStart] = useState(false);
@@ -266,6 +272,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // Fullscreen enforcement — tracks whether assessment is running in fullscreen
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
   const [useAdaptiveAssessmentMode, setUseAdaptiveAssessmentMode] = useState(false);
+  const fullscreenReentryAttemptRef = useRef(false);
 
   // Tracks remaining time reported by AssessmentInterface — shown in fullscreen overlay
   const [overlayTimeRemaining, setOverlayTimeRemaining] = useState<number | null>(null);
@@ -376,6 +383,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     enabled: isProctoringActive,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
+    maxTabSwitches: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.max_tab_switches ?? 3,
     screenshotBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.screenshot_blocking ?? true,
     copyPasteBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true,
     tabSwitchDetection: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true,
@@ -387,6 +395,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       });
     },
   });
+
+  useEffect(() => {
+    if (step === 'completed' || step === 'results') {
+      clearAssessmentFaceBaseline();
+    }
+  }, [clearAssessmentFaceBaseline, step]);
 
   // ============================================
   // LIFECYCLE EFFECTS
@@ -471,25 +485,82 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     if (adaptiveMode) {
       setIsFullscreenActive(true);
+      unlockKeyboardShortcuts();
       return;
     }
 
     const eventName = getFullscreenChangeEvent();
     const handleFullscreenChange = () => {
-      setIsFullscreenActive(isFullscreen());
+      const currentlyFullscreen = isFullscreen();
+      setIsFullscreenActive(currentlyFullscreen);
+      if (currentlyFullscreen) {
+        void lockKeyboardShortcuts(['F11']);
+      } else {
+        unlockKeyboardShortcuts();
+      }
     };
 
     // When assessment starts, sync the current state immediately
     if (step === 'assessment') {
-      setIsFullscreenActive(isFullscreen());
+      const currentlyFullscreen = isFullscreen();
+      setIsFullscreenActive(currentlyFullscreen);
+      if (currentlyFullscreen) {
+        void lockKeyboardShortcuts(['F11']);
+      } else {
+        unlockKeyboardShortcuts();
+      }
     }
 
     document.addEventListener(eventName, handleFullscreenChange);
 
     return () => {
+      unlockKeyboardShortcuts();
       document.removeEventListener(eventName, handleFullscreenChange);
     };
   }, [step]);
+
+  useEffect(() => {
+    const shouldProtectFullscreen =
+      !useAdaptiveAssessmentMode &&
+      (step === 'fullscreen_prompt' || step === 'assessment') &&
+      isFullscreenActive;
+
+    if (!shouldProtectFullscreen) {
+      unlockKeyboardShortcuts();
+      return;
+    }
+
+    void lockKeyboardShortcuts(['F11']);
+    return () => {
+      unlockKeyboardShortcuts();
+    };
+  }, [step, isFullscreenActive, useAdaptiveAssessmentMode]);
+
+  useEffect(() => {
+    if (useAdaptiveAssessmentMode || step !== 'assessment' || isFullscreenActive) {
+      fullscreenReentryAttemptRef.current = false;
+      return;
+    }
+
+    const restoreTimer = window.setTimeout(() => {
+      if (fullscreenReentryAttemptRef.current) return;
+      if (document.visibilityState !== 'visible' || isFullscreen()) return;
+
+      fullscreenReentryAttemptRef.current = true;
+      requestFullscreen()
+        .then(() => lockKeyboardShortcuts(['F11']))
+        .catch(error => {
+          console.warn('[FULLSCREEN] Auto-restore blocked after fullscreen exit:', error);
+        })
+        .finally(() => {
+          fullscreenReentryAttemptRef.current = false;
+        });
+    }, 80);
+
+    return () => {
+      window.clearTimeout(restoreTimer);
+    };
+  }, [step, isFullscreenActive, useAdaptiveAssessmentMode]);
 
   // ============================================
   // LOAD ASSESSMENT INFO - WITH MULTIPLE GUARDS
@@ -577,14 +648,20 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
       // Pre-assessment language picker. When the candidate returns to a
       // link whose attempt is still awaiting a language pick, send them
-      // through system check first — the picker now sits AFTER the system
-      // check (it appears as a modal-style card before HR / assessment
-      // start). The pending flag is set so handleSystemCheckComplete knows
-      // to route into the picker once the system check passes.
+      // through system check first unless that check was already passed.
+      // The picker now sits AFTER the system check (it appears as a
+      // modal-style card before HR / assessment start). The pending flag
+      // is set so handleSystemCheckComplete knows to route into the picker
+      // once the system check passes.
       if (info.attempt_status === 'pending_lang_choice') {
-        console.log('[DEBUG] Attempt awaiting coding language pick — routing through system check first');
+        const savedStep = sessionStorage.getItem(ASSESS_SESSION_KEY) as AssessmentStep | null;
+        const canResumePicker = info.system_check_passed || savedStep === 'choose_coding_language';
+        console.log(
+          '[DEBUG] Attempt awaiting coding language pick',
+          { system_check_passed: info.system_check_passed, savedStep, canResumePicker }
+        );
         setNeedsLanguagePick(true);
-        setStepSafe('system_check');
+        setStepSafe(canResumePicker ? 'choose_coding_language' : 'system_check');
         return;
       }
 
@@ -691,7 +768,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       } else if (info.can_start) {
         // Check if candidate was mid-flow before refresh (system_check, hr_questions, fullscreen_prompt)
         const savedStep = sessionStorage.getItem(ASSESS_SESSION_KEY) as AssessmentStep | null;
-        if (savedStep && ASSESS_PERSIST_STEPS.includes(savedStep)) {
+        const canRestoreSavedStep =
+          !!savedStep &&
+          ASSESS_PERSIST_STEPS.includes(savedStep) &&
+          savedStep !== 'choose_coding_language';
+        if (canRestoreSavedStep) {
           if (savedStep === 'fullscreen_prompt' && shouldUseAdaptiveAssessmentMode(detectBrowser())) {
             isFlowActiveRef.current = true;
             await continueToAssessmentStart();
@@ -995,6 +1076,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       const status = await candidateService.getGenerationStatus(token);
       console.log('[PORTAL] Generation status:', status);
 
+      if (status.status === 'pending_lang_choice') {
+        console.log('[PORTAL] Generation is blocked pending coding language selection');
+        setNeedsLanguagePick(true);
+        setStepSafe('choose_coding_language');
+        return;
+      }
+
       if (status.status === 'ready' && status.questions_ready) {
         // Questions are ready! Start immediately
         console.log('[PORTAL] Questions ready, starting assessment immediately');
@@ -1040,6 +1128,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
             await new Promise(resolve => setTimeout(resolve, 2000));
             const checkStatus = await candidateService.getGenerationStatus(token);
+
+            if (checkStatus.status === 'pending_lang_choice') {
+              console.log('[PORTAL] Poll detected pending language selection - returning to picker');
+              setNeedsLanguagePick(true);
+              setStepSafe('choose_coding_language');
+              return;
+            }
 
             if (checkStatus.status === 'ready' && checkStatus.questions_ready) {
               console.log('[PORTAL] Questions now ready!');
@@ -1131,7 +1226,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         try {
           // Call prepare to trigger background generation
           console.log('[PORTAL] Calling prepareAssessment as fallback...');
-          await candidateService.prepareAssessment(token);
+          const prepareResponse = await candidateService.prepareAssessment(token);
+          if (prepareResponse?.status === 'pending_lang_choice') {
+            console.log('[PORTAL] Fallback prepare requires coding language selection');
+            setNeedsLanguagePick(true);
+            setStepSafe('choose_coding_language');
+            return;
+          }
           console.log('[PORTAL] Prepare called, waiting for generation...');
 
           // Wait for generation to complete
@@ -1143,6 +1244,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
             await new Promise(resolve => setTimeout(resolve, 2000));
             const checkStatus = await candidateService.getGenerationStatus(token);
+
+            if (checkStatus.status === 'pending_lang_choice') {
+              console.log('[PORTAL] Fallback poll detected pending language selection - returning to picker');
+              setNeedsLanguagePick(true);
+              setStepSafe('choose_coding_language');
+              return;
+            }
 
             if (checkStatus.status === 'ready' && checkStatus.questions_ready) {
               console.log('[PORTAL] Questions ready after fallback prepare!');
@@ -1502,6 +1610,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         <SystemCheck
           token={token}
           onComplete={handleSystemCheckComplete}
+          onRegisterFace={async (videoElement) => {
+            if (hasAssessmentFaceBaseline()) {
+              return true;
+            }
+            return registerAssessmentFaceBaseline(videoElement);
+          }}
           onBack={() => {
             isFlowActiveRef.current = false;
             setStepSafe('landing');
@@ -1738,13 +1852,6 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   return (
     <>
       {renderContent()}
-      {step === 'assessment' && assessmentInfo && (
-        <AssessmentWatermark
-          candidateName={assessmentInfo.candidate_name}
-          candidateEmail={assessmentInfo.candidate_email}
-          attemptId={assessmentInfo.attempt_id || assessmentData?.attempt_id || 'attempt-pending'}
-        />
-      )}
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
@@ -1764,9 +1871,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             )}
             <button
               onClick={() => {
-                const el = document.documentElement as any;
-                const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
-                if (req) req.call(el).catch(() => {});
+                requestFullscreen()
+                  .then(() => lockKeyboardShortcuts(['F11']))
+                  .catch(() => {});
               }}
               className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-xl font-bold text-white transition-colors w-full"
             >

@@ -50,29 +50,43 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
 
   // Track if we've already pushed initial history state to prevent repeated calls
   const hasInitializedHistoryRef = useRef(false);
+  const lastFullscreenToggleAttemptAtRef = useRef(0);
+
+  const blockFullscreenToggle = useCallback((event: KeyboardEvent) => {
+    if (!(event.key === 'F11' || event.keyCode === 122)) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+
+    const now = Date.now();
+    if (now - lastFullscreenToggleAttemptAtRef.current > 300) {
+      onAttempt?.('fullscreen_toggle', {
+        source: 'keyboard',
+        shortcut: 'F11',
+        category: 'navigation',
+      });
+    }
+    lastFullscreenToggleAttemptAtRef.current = now;
+    return true;
+  }, [onAttempt]);
 
   // Handle keyboard shortcuts (F5, F11, Ctrl+R, Ctrl+Shift+R, Ctrl+W)
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return;
 
+      if (blockFullscreenToggle(event)) {
+        return false;
+      }
+
       // F5 - Refresh
       if (event.key === 'F5' || event.keyCode === 116) {
         event.preventDefault();
         event.stopPropagation();
         onAttempt?.('refresh', { source: 'keyboard', shortcut: 'F5', category: 'navigation' });
-        return false;
-      }
-
-      // F11 - Browser fullscreen toggle
-      if (event.key === 'F11' || event.keyCode === 122) {
-        event.preventDefault();
-        event.stopPropagation();
-        onAttempt?.('fullscreen_toggle', {
-          source: 'keyboard',
-          shortcut: 'F11',
-          category: 'navigation',
-        });
         return false;
       }
 
@@ -159,8 +173,15 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
         }
       }
     },
-    [enabled, onAttempt, allowDevTools]
+    [enabled, onAttempt, allowDevTools, blockFullscreenToggle]
   );
+
+  const handleKeyUp = useCallback((event: KeyboardEvent) => {
+    if (!enabled) return;
+    if (blockFullscreenToggle(event)) {
+      return false;
+    }
+  }, [enabled, blockFullscreenToggle]);
 
   // Handle beforeunload (browser close, refresh, navigate away)
   // Only fires the callback — does NOT show a browser warning dialog
@@ -211,19 +232,25 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
 
     // Add event listeners
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('popstate', handlePopState);
     document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('keyup', handleKeyUp, true);
 
     // Cleanup
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keyup', handleKeyUp, true);
     };
     // Only run when enabled changes or handlers change
-  }, [enabled, handleKeyDown, handleBeforeUnload, handlePopState, handleContextMenu]);
+  }, [enabled, handleKeyDown, handleKeyUp, handleBeforeUnload, handlePopState, handleContextMenu]);
 
   return {
     enabled,

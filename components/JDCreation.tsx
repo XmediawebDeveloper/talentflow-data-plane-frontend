@@ -156,6 +156,205 @@ const NON_ENGLISH_LATIN_TOKENS = new Set([
 const normalizeLatinToken = (value: string): string =>
   value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+const TITLE_ROLE_HEADWORDS = new Set([
+  'engineer', 'developer', 'analyst', 'manager', 'architect', 'consultant',
+  'designer', 'administrator', 'specialist', 'scientist', 'technician',
+  'coordinator', 'director', 'officer', 'executive', 'recruiter', 'tester',
+  'strategist', 'writer', 'editor', 'accountant', 'auditor', 'lawyer',
+  'attorney', 'nurse', 'doctor', 'physician', 'surgeon', 'pharmacist',
+  'therapist', 'iconologist', 'teacher', 'professor', 'lecturer', 'tutor',
+  'trainer', 'instructor', 'owner', 'master', 'representative', 'supervisor',
+  'advisor', 'adviser', 'operator', 'planner', 'agent', 'associate',
+  'assistant', 'controller', 'producer', 'marketer', 'salesperson',
+  'president', 'ceo', 'cto', 'cfo', 'coo', 'cio', 'cmo',
+]);
+
+const TITLE_ROLE_BOUNDARY_STOPWORDS = new Set([
+  'with', 'and', 'or', 'for', 'to', 'of', 'in', 'on', 'at', 'from', 'by',
+  'using', 'need', 'needs', 'needed', 'require', 'requires', 'required',
+  'must', 'musthave', 'should', 'preferred', 'prefer', 'experience', 'years',
+  'year', 'yrs', 'salary', 'package', 'ctc', 'remote', 'hybrid', 'onsite',
+  'full', 'time', 'part', 'contract', 'internship', 'temporary', 'monthly',
+  'yearly', 'hourly', 'daily', 'domain', 'industry',
+]);
+
+const TITLE_ROLE_GENERIC_MODIFIERS = new Set([
+  'senior', 'junior', 'lead', 'principal', 'staff', 'expert', 'chief',
+]);
+
+const TITLE_ROLE_TERMINALS = new Set([
+  ...TITLE_ROLE_HEADWORDS,
+  'lead', 'head', 'fellow', 'investigator', 'inspector', 'buyer', 'clerk',
+  'cashier', 'dispatcher',
+]);
+
+const PLACEHOLDER_TOKENS = new Set([
+  'asdf', 'asdfg', 'asdfgh', 'asdfghj', 'qwerty', 'qwertyuiop', 'zxcv',
+  'zxcvb', 'zxcvbn', 'lorem', 'ipsum', 'foobar', 'placeholder',
+]);
+
+const PROMPT_DETAIL_STOPWORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'for', 'to', 'of', 'in', 'on', 'at',
+  'with', 'role', 'job', 'position', 'details', 'description', 'candidate',
+  'need', 'needs', 'required', 'requirement', 'requirements', 'must', 'have',
+  'years', 'year', 'yrs', 'experience', 'exp',
+]);
+
+const roleTokenPattern = /[A-Za-z][A-Za-z0-9#+./-]*/g;
+
+const normalizeRoleToken = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9#+./-]/g, '').trim();
+
+const extractRoleTokens = (text: string): string[] =>
+  Array.from(text.matchAll(roleTokenPattern), (match) => normalizeRoleToken(match[0])).filter(Boolean);
+
+const isPlaceholderLikeToken = (token: string): boolean => {
+  const normalized = normalizeRoleToken(token);
+  if (!normalized) {
+    return false;
+  }
+
+  return PLACEHOLDER_TOKENS.has(normalized) || (normalized.length >= 4 && new Set(normalized).size === 1);
+};
+
+const isRoleHeadToken = (token: string): boolean =>
+  TITLE_ROLE_HEADWORDS.has(token) || token.endsWith('ologist');
+
+const extractRolePhrases = (text: string): Array<{ phrase: string }> => {
+  const tokens = extractRoleTokens(text);
+  const phrases: Array<{ phrase: string }> = [];
+  const seen = new Set<string>();
+
+  tokens.forEach((token, idx) => {
+    if (!isRoleHeadToken(token)) {
+      return;
+    }
+
+    let start = idx;
+    while (start > 0) {
+      const previous = tokens[start - 1];
+      if (!previous || TITLE_ROLE_BOUNDARY_STOPWORDS.has(previous) || idx - start >= 3) {
+        break;
+      }
+      start -= 1;
+    }
+
+    const phraseTokens = tokens
+      .slice(start, idx + 1)
+      .filter((currentToken) => !TITLE_ROLE_GENERIC_MODIFIERS.has(currentToken));
+    if (phraseTokens.length === 0) {
+      return;
+    }
+
+    const phrase = phraseTokens.join(' ');
+    if (seen.has(phrase)) {
+      return;
+    }
+
+    seen.add(phrase);
+    phrases.push({ phrase });
+  });
+
+  return phrases;
+};
+
+const looksLikeValidJobTitle = (value: string): boolean => {
+  const tokens = extractRoleTokens(value);
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  if (tokens.some((token) => isPlaceholderLikeToken(token))) {
+    return false;
+  }
+
+  if (extractRolePhrases(value).length > 0) {
+    return true;
+  }
+
+  const distinctTokens = new Set(
+    tokens.filter((token) => !TITLE_ROLE_BOUNDARY_STOPWORDS.has(token))
+  );
+  const lastToken = tokens[tokens.length - 1];
+
+  return TITLE_ROLE_TERMINALS.has(lastToken) && distinctTokens.size >= 2;
+};
+
+const getJobTitleValidationError = (value: string): string => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return '';
+  }
+
+  if (trimmedValue.length < VALIDATION.JOB_TITLE.min) {
+    return '';
+  }
+
+  if (!isEnglishOnly(trimmedValue)) {
+    return JOB_TITLE_ENGLISH_ONLY_MESSAGE;
+  }
+
+  if (!looksLikeValidJobTitle(trimmedValue)) {
+    return 'Please enter a real job title such as "Java Developer" or "HR Executive".';
+  }
+
+  return '';
+};
+
+const getAIPromptValidationError = (value: string): string => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return '';
+  }
+
+  if (trimmedValue.length < VALIDATION.AI_PROMPT.min) {
+    return '';
+  }
+
+  const tokens = extractRoleTokens(trimmedValue);
+  if (tokens.length === 0) {
+    return '';
+  }
+
+  const placeholderTokens = tokens.filter((token) => isPlaceholderLikeToken(token));
+  if (placeholderTokens.length === 0) {
+    return '';
+  }
+
+  const detailTokens = tokens.filter(
+    (token) => !PROMPT_DETAIL_STOPWORDS.has(token) && !isPlaceholderLikeToken(token)
+  );
+  const distinctDetailCount = new Set(detailTokens).size;
+  const tokenCounts = new Map<string, number>();
+
+  tokens.forEach((token) => {
+    tokenCounts.set(token, (tokenCounts.get(token) || 0) + 1);
+  });
+
+  let mostCommonToken = '';
+  let mostCommonCount = 0;
+  tokenCounts.forEach((count, token) => {
+    if (count > mostCommonCount) {
+      mostCommonToken = token;
+      mostCommonCount = count;
+    }
+  });
+
+  if (
+    (placeholderTokens.length >= 2 && distinctDetailCount < 4) ||
+    (
+      isPlaceholderLikeToken(mostCommonToken) &&
+      mostCommonCount >= 2 &&
+      (mostCommonCount / tokens.length) >= 0.3 &&
+      distinctDetailCount < 4
+    )
+  ) {
+    return 'AI prompt contains repetitive placeholder text. Please describe actual skills, experience, salary, location, or responsibilities.';
+  }
+
+  return '';
+};
+
 const hasNonEnglishLatinMarkers = (text: string): boolean => {
   if (latinAccentPattern.test(text)) {
     return true;
@@ -186,13 +385,14 @@ const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English onl
 
 const validateEnglishOnlyJobTitle = (value: string): boolean => {
   const trimmedValue = value.trim();
-  if (!trimmedValue || isEnglishOnly(trimmedValue)) {
+  const validationError = getJobTitleValidationError(trimmedValue);
+  if (!trimmedValue || !validationError) {
     return true;
   }
 
   toast.error({
-    title: 'English Only',
-    description: JOB_TITLE_ENGLISH_ONLY_MESSAGE,
+    title: validationError === JOB_TITLE_ENGLISH_ONLY_MESSAGE ? 'English Only' : 'Invalid Job Title',
+    description: validationError,
   });
   return false;
 };
@@ -1296,7 +1496,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Need at least 1 non-space character in job title
     const trimmedJobTitle = jobTitle.trim();
     if (!trimmedJobTitle) return;
-    if (!isEnglishOnly(trimmedJobTitle)) {
+    if (getJobTitleValidationError(trimmedJobTitle)) {
       setAutosaveStatus('idle');
       return;
     }
@@ -1475,6 +1675,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       toast.error({
         title: 'English Only',
         description: 'AI prompt must be written in English only. Other languages are not supported.',
+      });
+      return;
+    }
+
+    const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
+    if (aiPromptValidationError) {
+      toast.error({
+        title: 'Invalid AI Prompt',
+        description: aiPromptValidationError,
       });
       return;
     }
@@ -3242,8 +3451,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     if (!trimmedJobTitle) {
       missingFields.push('Job Title');
-    } else if (!isEnglishOnly(trimmedJobTitle)) {
-      missingFields.push('Job Title must be written in English only');
+    } else if (getJobTitleValidationError(trimmedJobTitle)) {
+      missingFields.push(getJobTitleValidationError(trimmedJobTitle));
     }
 
     if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
@@ -4060,6 +4269,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     );
   }
 
+  const jobTitleValidationError = getJobTitleValidationError(jobTitle);
+  const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
+
   return (
     <>
       <div className="h-full overflow-x-hidden overflow-y-auto bg-slate-50">
@@ -4199,18 +4411,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || !isEnglishOnly(jobTitle))
+                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || Boolean(jobTitleValidationError))
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
-                          {jobTitle.length > 0 && !isEnglishOnly(jobTitle) && 'Job title must be written in English only'}
-                          {jobTitle.length > 0 && isEnglishOnly(jobTitle) && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
+                          {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
+                          {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
                         </p>
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -4234,17 +4446,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max
+                            : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max || Boolean(aiPromptValidationError)
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min ? 'text-red-500' : 'text-gray-500'}`}>
+                        <p className={`text-xs ${aiPromptValidationError || (aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min) ? 'text-red-500' : 'text-gray-500'}`}>
                           {aiPrompt.trim().length === 0 && `Min ${VALIDATION.AI_PROMPT.min} characters required`}
                           {aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min && `${VALIDATION.AI_PROMPT.min - aiPrompt.trim().length} more characters needed`}
+                          {aiPrompt.trim().length >= VALIDATION.AI_PROMPT.min && aiPromptValidationError && aiPromptValidationError}
                         </p>
-                        <p className={`text-xs ${aiPrompt.trim().length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
+                        <p className={`text-xs ${aiPrompt.trim().length > VALIDATION.AI_PROMPT.max || aiPromptValidationError ? 'text-red-500' : 'text-gray-500'}`}>
                           {aiPrompt.trim().length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
@@ -4287,10 +4500,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         return (
                           isJDInUse ||
                           !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                          !isEnglishOnly(jobTitle) ||
+                          Boolean(jobTitleValidationError) ||
                           // Always require AI prompt with min/max length validation (for both generate and regenerate)
                           promptLength < VALIDATION.AI_PROMPT.min ||
                           promptLength > VALIDATION.AI_PROMPT.max ||
+                          Boolean(aiPromptValidationError) ||
                           isGenerating ||
                           hasProceededToExtract
                         );
@@ -4353,17 +4567,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || !isEnglishOnly(jobTitle))
+                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || Boolean(jobTitleValidationError))
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
-                          {jobTitle.length > 0 && !isEnglishOnly(jobTitle) && 'Job title must be written in English only'}
-                          {jobTitle.length > 0 && isEnglishOnly(jobTitle) && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                          {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
+                          {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
                         </p>
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || !isEnglishOnly(jobTitle)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -4590,7 +4804,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   isStreaming ||
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                  !isEnglishOnly(jobTitle) ||
+                  Boolean(jobTitleValidationError) ||
                   (mode === 'ai'
                     ? !generatedJD || !containsMeaningfulText(generatedJD) || !isEnglishOnly(generatedJD)
                     : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Editor, { OnMount, OnChange } from '@monaco-editor/react';
 import {
   Play,
@@ -13,15 +13,14 @@ import {
   ChevronDown,
   Terminal,
   Loader2,
-  Settings,
   RotateCcw,
   Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/enhanced-toast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { CurrentQuestion, candidateService, CodeSubmissionResult, TestCaseResult } from '@/lib/services/candidateService';
+import { CurrentQuestion, candidateService, CodeSubmissionResult } from '@/lib/services/candidateService';
 import {
-  LANGUAGE_CONFIGS,
   AVAILABLE_LANGUAGES,
   getLanguageConfig,
   getMonacoLanguage,
@@ -30,6 +29,7 @@ import {
   resolveLanguageAlias,
   LanguageConfig,
 } from '@/lib/constants/languageTemplates';
+import { isEnglishOnlyText } from '@/lib/utils/englishText';
 
 interface MultiLanguageCodeEditorProps {
   question: CurrentQuestion;
@@ -77,6 +77,12 @@ interface ExecutionOutput {
   error?: string;
   compile_error?: string;
 }
+
+const PROGRAM_INPUT_ENGLISH_ONLY_ERROR =
+  'Program input (stdin) must use English text, numbers, and standard symbols only. Other languages are not allowed.';
+
+const getProgramInputValidationError = (value: string): string =>
+  isEnglishOnlyText(value) ? '' : PROGRAM_INPUT_ENGLISH_ONLY_ERROR;
 
 const buildSavedExecutionOutput = (
   previousAnswer: CurrentQuestion['previous_answer']
@@ -197,6 +203,9 @@ export function MultiLanguageCodeEditor({
   const initialEditorState = buildInitialEditorState(question, answer, getInitialLanguage());
   const [code, setCode] = useState<string>(initialEditorState.code);
   const [customInput, setCustomInput] = useState<string>(initialEditorState.input);
+  const [programInputError, setProgramInputError] = useState<string>(
+    getProgramInputValidationError(initialEditorState.input)
+  );
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(initialEditorState.executionOutput);
@@ -243,6 +252,7 @@ export function MultiLanguageCodeEditor({
 
     setCode(nextEditorState.code);
     setCustomInput(nextEditorState.input);
+    setProgramInputError(getProgramInputValidationError(nextEditorState.input));
     setExecutionOutput(nextEditorState.executionOutput);
     setSubmissionResult(null);
     setTestResults(null);
@@ -394,6 +404,24 @@ export function MultiLanguageCodeEditor({
     });
   };
 
+  const updateProgramInput = (nextInput: string) => {
+    const nextError = getProgramInputValidationError(nextInput);
+    setCustomInput(nextInput);
+    setProgramInputError(nextError);
+    setExecutionOutput(null);
+    onAnswerChange({
+      ...answer,
+      question_id: question.question_id,
+      code_submission: code,
+      code_input: nextInput,
+      language: selectedLanguage,
+      code_execution_status: undefined,
+      code_execution_output: undefined,
+      code_execution_error: undefined,
+    });
+    return nextError;
+  };
+
   const handleLanguageChange = async (langId: string) => {
     if (!allowLanguageChange || isLocked) return;
 
@@ -452,6 +480,29 @@ export function MultiLanguageCodeEditor({
   };
 
   const handleRunCode = async () => {
+    const inputToUse = customInput;
+    const inputError = getProgramInputValidationError(inputToUse);
+
+    if (inputError) {
+      setProgramInputError(inputError);
+      setExecutionOutput({
+        success: false,
+        error: inputError,
+      });
+      onAnswerChange({
+        ...answer,
+        question_id: question.question_id,
+        code_submission: code,
+        code_input: inputToUse,
+        language: selectedLanguage,
+        code_execution_status: 'failed',
+        code_execution_output: undefined,
+        code_execution_error: inputError,
+      });
+      return;
+    }
+
+    setProgramInputError('');
     setIsRunning(true);
     setExecutionOutput(null);
     setTestResults(null);
@@ -459,9 +510,6 @@ export function MultiLanguageCodeEditor({
     try {
       const langConfig = getLanguageConfig(selectedLanguage);
       const compilerLang = langConfig?.compilerName || selectedLanguage;
-
-      // Always use the custom input field value
-      const inputToUse = customInput;
 
       // Check if code expects input but none is provided
       const codeExpectsInput = detectsInputRequired(code, selectedLanguage);
@@ -543,23 +591,35 @@ export function MultiLanguageCodeEditor({
 
   const handleSubmitCode = async () => {
     if (!attemptId) {
-      dialog.showDialog({
+      await dialog.alert({
         title: 'Submission Error',
         message: 'Unable to submit: Missing attempt ID',
-        type: 'error',
+        variant: 'error',
       });
       return;
     }
 
     if (!code.trim()) {
-      dialog.showDialog({
+      await dialog.alert({
         title: 'Empty Code',
         message: 'Please write some code before submitting',
-        type: 'error',
+        variant: 'error',
       });
       return;
     }
 
+    const inputError = getProgramInputValidationError(customInput);
+    if (inputError) {
+      setProgramInputError(inputError);
+      await dialog.alert({
+        title: 'Invalid Program Input',
+        message: inputError,
+        variant: 'error',
+      });
+      return;
+    }
+
+    setProgramInputError('');
     setIsSubmitting(true);
     setSubmissionResult(null);
 
@@ -577,32 +637,32 @@ export function MultiLanguageCodeEditor({
 
       if (result.success) {
         if (result.syntax_valid === false || result.execution_status === 'syntax_error') {
-          dialog.showDialog({
+          await dialog.alert({
             title: 'Syntax Error',
             message: result.error || result.message || 'Invalid code syntax. Execution was blocked.',
-            type: 'error',
+            variant: 'error',
           });
         } else {
           const passRate = (result.tests_passed / result.tests_total * 100).toFixed(0);
-          dialog.showDialog({
+          await dialog.alert({
             title: 'Submission Complete',
             message: `${result.tests_passed}/${result.tests_total} test cases passed (${passRate}%)`,
-            type: result.score_percentage >= 50 ? 'success' : 'error',
+            variant: result.score_percentage >= 50 ? 'success' : 'error',
           });
         }
       } else {
-        dialog.showDialog({
+        await dialog.alert({
           title: 'Submission Failed',
           message: result.error || 'Failed to submit code',
-          type: 'error',
+          variant: 'error',
         });
       }
     } catch (error) {
       console.error('Code submission error:', error);
-      dialog.showDialog({
+      await dialog.alert({
         title: 'Submission Error',
         message: error instanceof Error ? error.message : 'Failed to submit code',
-        type: 'error',
+        variant: 'error',
       });
     } finally {
       setIsSubmitting(false);
@@ -615,8 +675,6 @@ export function MultiLanguageCodeEditor({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const passedTests = testResults?.filter((r) => r.passed).length || 0;
-  const totalTests = testResults?.length || 0;
   const currentLangConfig = getLanguageConfig(selectedLanguage);
 
   return (
@@ -910,10 +968,13 @@ export function MultiLanguageCodeEditor({
           <div className="relative" ref={dropdownRef}>
             {/* Show locked language indicator when only one language (compiler mode) */}
             {availableLanguages.length === 1 ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg text-sm font-medium text-gray-200 cursor-default">
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg text-sm font-medium text-gray-200 cursor-default"
+                title="Language locked (compiler mode)"
+              >
                 <Code className="w-4 h-4" />
                 <span>{currentLangConfig?.name || selectedLanguage}</span>
-                <Lock className="w-3.5 h-3.5 text-gray-400" title="Language locked (compiler mode)" />
+                <Lock className="w-3.5 h-3.5 text-gray-400" />
               </div>
             ) : (
               <button
@@ -1076,18 +1137,7 @@ export function MultiLanguageCodeEditor({
                 <button
                   onClick={() => {
                     const nextInput = question.sample_input || '';
-                    setCustomInput(nextInput);
-                    setExecutionOutput(null);
-                    onAnswerChange({
-                      ...answer,
-                      question_id: question.question_id,
-                      code_submission: code,
-                      code_input: nextInput,
-                      language: selectedLanguage,
-                      code_execution_status: undefined,
-                      code_execution_output: undefined,
-                      code_execution_error: undefined,
-                    });
+                    updateProgramInput(nextInput);
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300"
                 >
@@ -1099,28 +1149,38 @@ export function MultiLanguageCodeEditor({
               value={customInput}
               readOnly={isLocked}
               disabled={isLocked}
+              onPaste={(event) => {
+                if (isLocked) return;
+                const pastedText = event.clipboardData.getData('text');
+                if (isEnglishOnlyText(pastedText)) {
+                  return;
+                }
+
+                event.preventDefault();
+                setProgramInputError(PROGRAM_INPUT_ENGLISH_ONLY_ERROR);
+                toast.error({
+                  title: 'English only',
+                  description: PROGRAM_INPUT_ENGLISH_ONLY_ERROR,
+                });
+              }}
               onChange={(e) => {
                 if (isLocked) return; // Cannot edit input after submission
                 const nextInput = e.target.value;
-                setCustomInput(nextInput);
-                setExecutionOutput(null);
-                onAnswerChange({
-                  ...answer,
-                  question_id: question.question_id,
-                  code_submission: code,
-                  code_input: nextInput,
-                  language: selectedLanguage,
-                  code_execution_status: undefined,
-                  code_execution_output: undefined,
-                  code_execution_error: undefined,
-                });
+                updateProgramInput(nextInput);
               }}
               placeholder="Enter the program input here, then click Run."
-              className={`w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+              aria-invalid={programInputError ? 'true' : 'false'}
+              className={`w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 ${programInputError ? 'focus:ring-red-500 border border-red-500' : 'focus:ring-blue-500'} ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
-            <p className="text-xs text-gray-400 mt-1">
-              Provide the input your program should read, then run it to check the output.
-            </p>
+            {programInputError ? (
+              <p className="text-xs text-red-400 mt-1">
+                {programInputError}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">
+                Provide the input your program should read, then run it to check the output.
+              </p>
+            )}
           </div>
         )}
 

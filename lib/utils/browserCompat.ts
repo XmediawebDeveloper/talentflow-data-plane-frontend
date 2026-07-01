@@ -301,6 +301,41 @@ export function getFullscreenChangeEvent(): string {
   return 'fullscreenchange';
 }
 
+type KeyboardLockCapableNavigator = Navigator & {
+  keyboard?: {
+    lock?: (keyCodes?: string[]) => Promise<void>;
+    unlock?: () => void;
+  };
+};
+
+/**
+ * Best-effort lock for reserved browser shortcuts while in fullscreen.
+ * Chrome/Edge support Keyboard Lock for keys like F11; unsupported browsers
+ * simply no-op and continue using normal key prevention.
+ */
+export async function lockKeyboardShortcuts(keyCodes: string[] = ['F11']): Promise<boolean> {
+  try {
+    const capableNavigator = navigator as KeyboardLockCapableNavigator;
+    if (!capableNavigator.keyboard?.lock) {
+      return false;
+    }
+    await capableNavigator.keyboard.lock(keyCodes);
+    return true;
+  } catch (error) {
+    console.warn('[KEYBOARD LOCK] Failed to lock shortcuts:', error);
+    return false;
+  }
+}
+
+export function unlockKeyboardShortcuts(): void {
+  try {
+    const capableNavigator = navigator as KeyboardLockCapableNavigator;
+    capableNavigator.keyboard?.unlock?.();
+  } catch (error) {
+    console.warn('[KEYBOARD LOCK] Failed to unlock shortcuts:', error);
+  }
+}
+
 // ============================================
 // VIDEO AUTOPLAY
 // ============================================
@@ -401,6 +436,16 @@ export interface CompatibilityReport {
   warnings: string[];
 }
 
+const SUPPORTED_ASSESSMENT_BROWSERS = new Set<BrowserInfo['name']>([
+  'Chrome',
+  'Edge',
+  'Firefox',
+  'Safari',
+  'iOS Safari',
+  'Arc',
+  'Brave',
+]);
+
 export function shouldUseAdaptiveAssessmentMode(browser: BrowserInfo = detectBrowser()): boolean {
   return browser.isIOS || browser.isMobile || !browser.supportsFullscreen;
 }
@@ -409,6 +454,10 @@ export function checkBrowserCompatibility(): CompatibilityReport {
   const browser = detectBrowser();
   const issues: string[] = [];
   const warnings: string[] = [];
+
+  if (!SUPPORTED_ASSESSMENT_BROWSERS.has(browser.name)) {
+    issues.push('Unsupported browser. Please use Chrome, Edge, Firefox, Safari, Arc, or Brave.');
+  }
 
   // Check MediaDevices API
   if (!browser.supportsMediaDevices) {
@@ -423,10 +472,6 @@ export function checkBrowserCompatibility(): CompatibilityReport {
   // Browser-specific warnings
   if (shouldUseAdaptiveAssessmentMode(browser)) {
     warnings.push('Adaptive assessment mode will be used on this browser/device so the test can run reliably without depending on fullscreen support.');
-  }
-
-  if (browser.name === 'Unknown') {
-    warnings.push('Your browser may not be fully supported. For best experience, use Chrome, Firefox, Edge, or Safari.');
   }
 
   return {

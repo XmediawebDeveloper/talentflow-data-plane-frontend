@@ -18,7 +18,19 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBus';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
-import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
+import { loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
+import {
+  createVideoFrameCanvas,
+  FACE_API_MODEL_URLS,
+  filterSignificantFaces,
+  loadFaceApiNetWithFallback,
+  MIN_CONFIDENT_FACE_SCORE,
+  pickPrimaryFace,
+} from '@/lib/proctoring/faceDetection';
+import {
+  readAssessmentFaceBaseline,
+  writeAssessmentFaceBaseline,
+} from '@/lib/proctoring/assessmentFaceBaseline';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from '@/lib/ProctoringEventBus';
@@ -49,11 +61,12 @@ const isFullscreenActive = (): boolean => {
 const BACKEND_FLUSH_INTERVAL = 5000; // ms — batch-flush proctoring events to backend
 const VIDEO_CHECK_INTERVAL = 500;    // ms — sample video frames at 2 FPS for obstruction detection
 const FACE_DETECTION_INTERVAL = 3000; // ms — sample face visibility every 3 seconds
-const FACE_API_MODEL_URLS = [
-  '/models',                                                                         // 1. Bundled locally (public/models/) — no network needed
-  'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights',       // 2. jsDelivr CDN
-  'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/0.22.2/weights', // 3. GitHub raw fallback
-] as const;
+const IDENTITY_BOOTSTRAP_CAPTURES = 3;
+const IDENTITY_MISMATCH_THRESHOLD = 0.8;
+const IDENTITY_MISMATCH_CONFIRMATIONS = 2;
+const IDENTITY_EVENT_COOLDOWN_MS = 15000;
+const GAZE_AWAY_CONFIRMATIONS = 3;
+const GAZE_RESTORED_CONFIRMATIONS = 2;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Legacy type kept for compatibility with existing imports
@@ -71,6 +84,7 @@ interface UseProctoringMonitorOptions {
   enabled?: boolean;
   voiceDetectionSensitivity?: number;
   obstructionThreshold?: number;
+  maxTabSwitches?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; details: Record<string, any> }) => Promise<any>;
   // Per-feature flags from tenant proctoring settings
   screenshotBlocking?: boolean;
@@ -94,10 +108,16 @@ const VOICE_CHECK_INTERVAL = 1000;   // Sample every 1 s
 const getVideoWorkerCode = () => `
   // Camera obstruction analysis — runs in worker, posts only state changes
   let isObstructed = false;
+  let isFrozen = false;
   let consecutiveObstructed = 0;
   let consecutiveClear = 0;
+  let consecutiveFrozen = 0;
+  let consecutiveLive = 0;
+  let previousBrightnessSample = null;
   const OBSTRUCT_THRESHOLD = 6;   // 6 × 500 ms = ~3 s to confirm obstruction
   const CLEAR_THRESHOLD = 3;      // 3 × 500 ms = ~1.5 s to confirm clear
+  const FROZEN_THRESHOLD = 16;    // 16 × 500 ms = ~8 s to confirm freeze
+  const LIVE_THRESHOLD = 3;       // 3 × 500 ms = ~1.5 s to clear freeze
 
   function analyze(imageData, width, height, threshold) {
     let totalBrightness = 0;
@@ -105,6 +125,7 @@ const getVideoWorkerCode = () => `
     let minBrightness = 255;
     let maxBrightness = 0;
     const step = 16;
+    const brightnessSample = [];
 
     for (let i = 0; i < imageData.length; i += step * 4) {
       const r = imageData[i];
@@ -115,6 +136,7 @@ const getVideoWorkerCode = () => `
       totalBrightnessSquared += brightness * brightness;
       minBrightness = Math.min(minBrightness, brightness);
       maxBrightness = Math.max(maxBrightness, brightness);
+      brightnessSample.push(brightness);
     }
 
     const sampledPixels = Math.floor(imageData.length / (step * 4));
@@ -126,7 +148,18 @@ const getVideoWorkerCode = () => `
     const isUniform = brightnessRange < 35 || brightnessStdDev < 12;
     const isLowTexture = brightnessRange < 45 && brightnessStdDev < 18;
 
-    return { isDark, isUniform, isLowTexture, avgBrightness, brightnessRange, brightnessStdDev };
+    let meanFrameDelta = null;
+    if (previousBrightnessSample && previousBrightnessSample.length === brightnessSample.length) {
+      let deltaSum = 0;
+      for (let i = 0; i < brightnessSample.length; i += 1) {
+        deltaSum += Math.abs(brightnessSample[i] - previousBrightnessSample[i]);
+      }
+      meanFrameDelta = deltaSum / brightnessSample.length;
+    }
+
+    previousBrightnessSample = brightnessSample;
+
+    return { isDark, isUniform, isLowTexture, avgBrightness, brightnessRange, brightnessStdDev, meanFrameDelta };
   }
 
   self.onmessage = function(e) {
@@ -147,6 +180,7 @@ const getVideoWorkerCode = () => `
           self.postMessage({
             type: 'STATE_CHANGE',
             data: {
+              kind: 'obstruction',
               obstructed: true,
               reason: result.isDark ? 'too_dark' : (result.isUniform ? 'too_uniform' : 'low_texture'),
               avgBrightness: result.avgBrightness,
@@ -163,6 +197,7 @@ const getVideoWorkerCode = () => `
           self.postMessage({
             type: 'STATE_CHANGE',
             data: {
+              kind: 'obstruction',
               obstructed: false,
               avgBrightness: result.avgBrightness,
               brightnessRange: result.brightnessRange,
@@ -171,12 +206,66 @@ const getVideoWorkerCode = () => `
           });
         }
       }
+
+      const canEvaluateFreeze =
+        !frameObstructed &&
+        result.avgBrightness >= Math.max(20, data.threshold + 2) &&
+        typeof result.meanFrameDelta === 'number';
+
+      if (!canEvaluateFreeze) {
+        consecutiveFrozen = 0;
+        consecutiveLive = 0;
+        if (isFrozen) {
+          isFrozen = false;
+          self.postMessage({
+            type: 'STATE_CHANGE',
+            data: {
+              kind: 'freeze',
+              frozen: false,
+              meanFrameDelta: result.meanFrameDelta,
+            }
+          });
+        }
+      } else if (result.meanFrameDelta < 0.75) {
+        consecutiveFrozen++;
+        consecutiveLive = 0;
+        if (!isFrozen && consecutiveFrozen >= FROZEN_THRESHOLD) {
+          isFrozen = true;
+          self.postMessage({
+            type: 'STATE_CHANGE',
+            data: {
+              kind: 'freeze',
+              frozen: true,
+              meanFrameDelta: result.meanFrameDelta,
+              durationMs: consecutiveFrozen * 500,
+            }
+          });
+        }
+      } else {
+        consecutiveLive++;
+        consecutiveFrozen = 0;
+        if (isFrozen && consecutiveLive >= LIVE_THRESHOLD) {
+          isFrozen = false;
+          self.postMessage({
+            type: 'STATE_CHANGE',
+            data: {
+              kind: 'freeze',
+              frozen: false,
+              meanFrameDelta: result.meanFrameDelta,
+            }
+          });
+        }
+      }
     } else if (type === 'SET_FREQUENCY') {
       // reserved for load-shedding
     } else if (type === 'RESET') {
       isObstructed = false;
+      isFrozen = false;
       consecutiveObstructed = 0;
       consecutiveClear = 0;
+      consecutiveFrozen = 0;
+      consecutiveLive = 0;
+      previousBrightnessSample = null;
     }
   };
   self.postMessage({ type: 'READY' });
@@ -247,6 +336,7 @@ export function useProctoringMonitor({
   enabled = true,
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
+  maxTabSwitches = 3,
   reportEvent,
   screenshotBlocking = true,
   copyPasteBlocking = true,
@@ -267,6 +357,7 @@ export function useProctoringMonitor({
   const reportEventRef = useRef(reportEvent);
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
   const obstructionThresholdRef = useRef(obstructionThreshold);
+  const maxTabSwitchesRef = useRef(maxTabSwitches);
   const isMonitoringRef = useRef(false);
   const isCameraObstructedRef = useRef(false);
 
@@ -276,6 +367,7 @@ export function useProctoringMonitor({
   useEffect(() => { reportEventRef.current = reportEvent; }, [reportEvent]);
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
+  useEffect(() => { maxTabSwitchesRef.current = maxTabSwitches; }, [maxTabSwitches]);
 
   // Worker refs
   const videoWorkerRef = useRef<Worker | null>(null);
@@ -286,6 +378,7 @@ export function useProctoringMonitor({
   const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const batchFlushIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const faceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const faceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const faceDetectionCancelledRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -304,6 +397,8 @@ export function useProctoringMonitor({
   const backendQueueRef = useRef<QueuedEvent[]>([]);
   const navigationSuppressionUntilRef = useRef(0);
   const lastTabSwitchEventAtRef = useRef(0);
+  const tabSwitchCountRef = useRef(0);
+  const tabSwitchThresholdReachedRef = useRef(false);
   const lastMouseMovementEventAtRef = useRef(0);
   const lastViewportExitAtRef = useRef(0);
   const lastAltKeyAtRef = useRef(0);
@@ -316,6 +411,7 @@ export function useProctoringMonitor({
   const screenshotChordLabelRef = useRef<string | null>(null);
   const screenshotSuppressionUntilRef = useRef(0);
   const lastScreenshotEventAtRef = useRef(0);
+  const lastIdentityMismatchEventAtRef = useRef(0);
   const lastMetaKeyAtRef = useRef(0);
   const lastShiftKeyAtRef = useRef(0);
   const lastSKeyAtRef = useRef(0);
@@ -365,7 +461,18 @@ export function useProctoringMonitor({
     }
 
     lastTabSwitchEventAtRef.current = now;
-    emitEventRef.current('tab_switch', details);
+    tabSwitchCountRef.current += 1;
+    const maxAllowed = Math.max(1, maxTabSwitchesRef.current || 3);
+    const thresholdReached = tabSwitchCountRef.current >= maxAllowed;
+    if (thresholdReached) {
+      tabSwitchThresholdReachedRef.current = true;
+    }
+    emitEventRef.current('tab_switch', {
+      ...details,
+      tab_switch_count: tabSwitchCountRef.current,
+      max_tab_switches: maxAllowed,
+      threshold_reached: thresholdReached,
+    });
     return true;
   }, [beginNavigationSequence]);
 
@@ -405,8 +512,8 @@ export function useProctoringMonitor({
       return focusSwitchSignalLabelRef.current;
     }
 
-    if (now - lastAltKeyAtRef.current < 450) {
-      return 'alt_focus_switch';
+    if (now - lastTabKeyAtRef.current < 450 && now - lastAltKeyAtRef.current < 450) {
+      return 'alt_tab_partial';
     }
 
     if (now - lastTabKeyAtRef.current < 450 && now - lastMetaKeyAtRef.current < 450) {
@@ -441,6 +548,14 @@ export function useProctoringMonitor({
       now - lastSKeyAtRef.current < 900;
     if (sawExplicitWindowsSnipShortcut) {
       return 'Win+Shift+S';
+    }
+
+    const sawExplicitLinuxSnipShortcut =
+      now - lastAltKeyAtRef.current < 900 &&
+      now - lastShiftKeyAtRef.current < 900 &&
+      now - lastSKeyAtRef.current < 900;
+    if (sawExplicitLinuxSnipShortcut) {
+      return 'Alt+Shift+S';
     }
 
     const sawSoftWindowsSnipShortcut =
@@ -525,7 +640,7 @@ export function useProctoringMonitor({
       videoWorkerRef.current.onmessage = (e) => {
         const { type, data } = e.data;
         if (type === 'STATE_CHANGE') {
-          if (data.obstructed) {
+          if (data.kind === 'obstruction' && data.obstructed) {
             isCameraObstructedRef.current = true;
             setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
             emitEventRef.current('camera_obstructed', {
@@ -533,9 +648,14 @@ export function useProctoringMonitor({
               avgBrightness: data.avgBrightness,
               brightnessRange: data.brightnessRange,
             });
-          } else {
+          } else if (data.kind === 'obstruction') {
             isCameraObstructedRef.current = false;
             setState(prev => !prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: false });
+          } else if (data.kind === 'freeze' && data.frozen) {
+            emitEventRef.current('camera_frozen', {
+              meanFrameDelta: data.meanFrameDelta,
+              durationMs: data.durationMs,
+            });
           }
         }
       };
@@ -560,6 +680,16 @@ export function useProctoringMonitor({
       videoRef.current.onloadedmetadata = () => {
         videoIntervalRef.current = setInterval(() => {
           if (!isMonitoringRef.current || !videoRef.current || !canvasRef.current || !videoWorkerRef.current) return;
+          if (
+            document.hidden ||
+            document.visibilityState === 'hidden' ||
+            videoRef.current.paused ||
+            videoRef.current.readyState < 2 ||
+            videoRef.current.videoWidth === 0
+          ) {
+            videoWorkerRef.current.postMessage({ type: 'RESET' });
+            return;
+          }
 
           ctx.drawImage(videoRef.current, 0, 0, 160, 120);
           const imageData = ctx.getImageData(0, 0, 160, 120);
@@ -686,30 +816,43 @@ export function useProctoringMonitor({
 
     video.play().then(async () => {
       try {
-        // Shared face-count handler — used by both Path A and Path B.
-        // We still debounce brief occlusions, but the window is short enough
-        // that deliberate face covering is recorded reliably.
         let consecutiveNoFace = 0;
         let consecutiveDetectionFailures = 0;
-        const NO_FACE_THRESHOLD = 2; // 2 × 3 s = 6 s before emitting face_missing
+        let consecutiveGazeAway = 0;
+        let consecutiveGazeRestored = 0;
+        let consecutiveIdentityMismatch = 0;
+        let faceApiBusy = false;
+        let lastKnownFaceCount = 0;
+        let identityBaseline = readAssessmentFaceBaseline(tokenRef.current);
+        const bootstrapDescriptors: Float32Array[] = [];
+        const NO_FACE_THRESHOLD = 1; // 1 × 3 s = 3 s before emitting face_missing
         const DETECTION_FAILURE_THRESHOLD = 2; // Treat repeated detector failures as face missing
-        const MIN_FACE_SCORE = 0.7;
+        let advancedFaceApi: FaceApiModule | null = null;
+        let advancedLoadPromise: Promise<FaceApiModule | null> | null = null;
 
         const resetFaceMissingState = () => {
           consecutiveNoFace = 0;
           consecutiveDetectionFailures = 0;
         };
 
+        const resetAdvancedStates = () => {
+          consecutiveGazeAway = 0;
+          consecutiveGazeRestored = 0;
+          consecutiveIdentityMismatch = 0;
+        };
+
         const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, unknown>) => {
-          if (isCameraObstructedRef.current) {
-            resetFaceMissingState();
-            return;
-          }
           consecutiveNoFace++;
           consecutiveDetectionFailures = 0;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
             consecutiveNoFace = 0;
-            emitEventRef.current('face_missing', { method, reason, ...extraDetails });
+            resetAdvancedStates();
+            emitEventRef.current('face_missing', {
+              method,
+              reason,
+              camera_obstructed: isCameraObstructedRef.current,
+              ...extraDetails,
+            });
             console.log(`[PROCTORING] Face missing (${method}, ${reason})`);
           }
         };
@@ -719,36 +862,294 @@ export function useProctoringMonitor({
           method: string,
           extraDetails?: Record<string, unknown>,
         ) => {
-          if (isCameraObstructedRef.current) {
-            resetFaceMissingState();
-            return;
-          }
+          lastKnownFaceCount = count;
           if (count >= 2) {
             resetFaceMissingState();
+            resetAdvancedStates();
             emitEventRef.current('multiple_faces', { face_count: count, method });
             console.log(`[PROCTORING] Multiple faces: ${count} (${method})`);
           } else if (count === 0) {
             const reason = typeof extraDetails?.reason === 'string'
               ? extraDetails.reason
               : 'no_face_detected';
-            maybeEmitFaceMissing(method, reason, extraDetails);
+            maybeEmitFaceMissing(method, reason, {
+              camera_obstructed: isCameraObstructedRef.current,
+              ...extraDetails,
+            });
           } else {
-            // Exactly 1 face — normal state, reset counters
             resetFaceMissingState();
           }
         };
 
         const handleDetectionFailure = (method: string, error: unknown) => {
-          if (isCameraObstructedRef.current) {
-            resetFaceMissingState();
-            return;
-          }
+          lastKnownFaceCount = 0;
           consecutiveDetectionFailures++;
           if (consecutiveDetectionFailures >= DETECTION_FAILURE_THRESHOLD) {
             maybeEmitFaceMissing(method, 'detection_failed', {
+              camera_obstructed: isCameraObstructedRef.current,
               error: error instanceof Error ? error.message : String(error),
             });
           }
+        };
+
+        const ensureAdvancedFaceApi = async (): Promise<FaceApiModule | null> => {
+          if (advancedFaceApi) return advancedFaceApi;
+          if (advancedLoadPromise) return advancedLoadPromise;
+
+          advancedLoadPromise = (async () => {
+            try {
+              const faceapi = await loadFaceApiWithCpuBackend();
+              await Promise.all([
+                loadFaceApiNetWithFallback(faceapi.nets.tinyFaceDetector, FACE_API_MODEL_URLS),
+                loadFaceApiNetWithFallback(faceapi.nets.faceLandmark68Net, FACE_API_MODEL_URLS),
+                loadFaceApiNetWithFallback(faceapi.nets.faceRecognitionNet, FACE_API_MODEL_URLS),
+              ]);
+
+              advancedFaceApi = faceapi;
+              return faceapi;
+            } catch (error) {
+              console.warn('[PROCTORING] Advanced face analysis models unavailable:', error);
+              return null;
+            } finally {
+              advancedLoadPromise = null;
+            }
+          })();
+
+          return advancedLoadPromise;
+        };
+
+        const averageDescriptors = (descriptors: Float32Array[]): Float32Array => {
+          const average = new Float32Array(descriptors[0].length);
+          for (const descriptor of descriptors) {
+            for (let i = 0; i < descriptor.length; i += 1) {
+              average[i] += descriptor[i];
+            }
+          }
+          for (let i = 0; i < average.length; i += 1) {
+            average[i] /= descriptors.length;
+          }
+          return average;
+        };
+
+        const classifyGazeDirection = (
+          landmarkPositions: Array<{ x: number; y: number }>,
+        ): { lookingAway: boolean; direction: string; noseOffsetX: number; noseOffsetY: number } | null => {
+          const noseTip = landmarkPositions[30];
+          const leftEyeOuter = landmarkPositions[36];
+          const rightEyeOuter = landmarkPositions[45];
+          const bridgeTop = landmarkPositions[27];
+          const chin = landmarkPositions[8];
+          if (!noseTip || !leftEyeOuter || !rightEyeOuter || !bridgeTop || !chin) return null;
+
+          const faceWidth = Math.max(Math.abs(rightEyeOuter.x - leftEyeOuter.x), 1);
+          const faceHeight = Math.max(Math.abs(chin.y - bridgeTop.y), 1);
+          const eyeMidX = (leftEyeOuter.x + rightEyeOuter.x) / 2;
+          const faceMidY = (bridgeTop.y + chin.y) / 2;
+          const noseOffsetX = (noseTip.x - eyeMidX) / faceWidth;
+          const noseOffsetY = (noseTip.y - faceMidY) / faceHeight;
+
+          const horizontalAway = Math.abs(noseOffsetX) > 0.16;
+          const upwardAway = noseOffsetY < -0.12;
+          const downwardAway = noseOffsetY > 0.2;
+          const lookingAway = horizontalAway || upwardAway || downwardAway;
+
+          let direction = 'center';
+          if (horizontalAway) {
+            direction = noseOffsetX > 0 ? 'right' : 'left';
+          }
+          if (upwardAway) {
+            direction = direction === 'center' ? 'up' : `${direction}_up`;
+          } else if (downwardAway) {
+            direction = direction === 'center' ? 'down' : `${direction}_down`;
+          }
+
+          return { lookingAway, direction, noseOffsetX, noseOffsetY };
+        };
+
+        const runAdvancedFaceAnalysis = async () => {
+          if (
+            !isMonitoringRef.current ||
+            !faceVideoRef.current ||
+            faceDetectionCancelledRef.current ||
+            document.hidden ||
+            document.visibilityState === 'hidden' ||
+            isCameraObstructedRef.current ||
+            lastKnownFaceCount !== 1
+          ) {
+            resetAdvancedStates();
+            return;
+          }
+
+          if (faceApiBusy) return;
+          faceApiBusy = true;
+
+          try {
+            if (!identityBaseline) {
+              identityBaseline = readAssessmentFaceBaseline(tokenRef.current);
+            }
+
+            const faceapi = await ensureAdvancedFaceApi();
+            if (!faceapi || !faceVideoRef.current || faceDetectionCancelledRef.current) {
+              return;
+            }
+
+            const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+            let frameWidth = faceVideoRef.current.videoWidth;
+            let frameHeight = faceVideoRef.current.videoHeight;
+            let usedSnapshot = false;
+            let detections;
+
+            try {
+              detections = await faceapi
+                .detectAllFaces(faceVideoRef.current, options)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+            } catch (videoError) {
+              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
+              if (!snapshot) {
+                throw videoError;
+              }
+              detections = await faceapi
+                .detectAllFaces(snapshot, options)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+              frameWidth = snapshot.width;
+              frameHeight = snapshot.height;
+              usedSnapshot = true;
+            }
+
+            if (!detections.length && !usedSnapshot) {
+              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
+              if (snapshot) {
+                detections = await faceapi
+                  .detectAllFaces(snapshot, options)
+                  .withFaceLandmarks()
+                  .withFaceDescriptors();
+                frameWidth = snapshot.width;
+                frameHeight = snapshot.height;
+              }
+            }
+
+            const typedDetections = detections as Array<{
+              detection: {
+                box: { x: number; y: number; width: number; height: number };
+                score?: number;
+              };
+              descriptor: Float32Array;
+              landmarks: { positions: Array<{ x: number; y: number }> };
+            }>;
+            const confidentDetections = typedDetections.filter((candidate) => {
+              const score = candidate.detection?.score;
+              return typeof score !== 'number' || score >= MIN_CONFIDENT_FACE_SCORE;
+            });
+            const detection = pickPrimaryFace(
+              confidentDetections,
+              (candidate) => {
+                const box = candidate.detection?.box;
+                return box
+                  ? {
+                      x: box.x,
+                      y: box.y,
+                      width: box.width,
+                      height: box.height,
+                      score: candidate.detection?.score,
+                    }
+                  : null;
+              },
+              frameWidth,
+              frameHeight,
+            );
+
+            if (!detection?.descriptor || !detection.landmarks) {
+              if (lastKnownFaceCount === 1) {
+                maybeEmitFaceMissing('face-api.js-advanced', 'advanced_face_missing', {
+                  detector_hint_face_count: lastKnownFaceCount,
+                });
+              }
+              resetAdvancedStates();
+              return;
+            }
+
+            const gaze = classifyGazeDirection(detection.landmarks.positions);
+            if (gaze?.lookingAway) {
+              consecutiveGazeAway += 1;
+              consecutiveGazeRestored = 0;
+              if (consecutiveGazeAway >= GAZE_AWAY_CONFIRMATIONS) {
+                consecutiveGazeAway = 0;
+                emitEventRef.current('gaze_away', {
+                  direction: gaze.direction,
+                  noseOffsetX: Number(gaze.noseOffsetX.toFixed(3)),
+                  noseOffsetY: Number(gaze.noseOffsetY.toFixed(3)),
+                });
+              }
+            } else {
+              consecutiveGazeRestored += 1;
+              if (consecutiveGazeRestored >= GAZE_RESTORED_CONFIRMATIONS) {
+                consecutiveGazeAway = 0;
+                consecutiveGazeRestored = 0;
+              }
+            }
+
+            if (identityBaseline?.descriptor) {
+              const distance = faceapi.euclideanDistance(
+                Array.from(identityBaseline.descriptor),
+                Array.from(detection.descriptor),
+              );
+
+              if (distance > IDENTITY_MISMATCH_THRESHOLD) {
+                consecutiveIdentityMismatch += 1;
+                if (
+                  consecutiveIdentityMismatch >= IDENTITY_MISMATCH_CONFIRMATIONS &&
+                  Date.now() - lastIdentityMismatchEventAtRef.current > IDENTITY_EVENT_COOLDOWN_MS
+                ) {
+                  consecutiveIdentityMismatch = 0;
+                  lastIdentityMismatchEventAtRef.current = Date.now();
+                  emitEventRef.current('identity_mismatch', {
+                    distance: Number(distance.toFixed(3)),
+                    baseline_source: identityBaseline.source,
+                    baseline_created_at: identityBaseline.createdAt,
+                  });
+                }
+              } else {
+                consecutiveIdentityMismatch = 0;
+              }
+            } else {
+              bootstrapDescriptors.push(detection.descriptor);
+              if (bootstrapDescriptors.length >= IDENTITY_BOOTSTRAP_CAPTURES) {
+                const baselineDescriptor = averageDescriptors(
+                  bootstrapDescriptors.slice(0, IDENTITY_BOOTSTRAP_CAPTURES),
+                );
+                writeAssessmentFaceBaseline(tokenRef.current, baselineDescriptor, 'assessment_bootstrap');
+                identityBaseline = {
+                  descriptor: baselineDescriptor,
+                  source: 'assessment_bootstrap',
+                  createdAt: new Date().toISOString(),
+                };
+                bootstrapDescriptors.length = 0;
+              }
+            }
+          } catch (error) {
+            console.warn('[PROCTORING] Advanced face analysis skipped:', error);
+          } finally {
+            faceApiBusy = false;
+          }
+        };
+
+        const startAdvancedFaceAnalysis = () => {
+          if (faceAnalysisIntervalRef.current) {
+            clearInterval(faceAnalysisIntervalRef.current);
+            faceAnalysisIntervalRef.current = null;
+          }
+
+          const startTimer = window.setTimeout(() => {
+            void runAdvancedFaceAnalysis();
+            faceAnalysisIntervalRef.current = setInterval(() => {
+              void runAdvancedFaceAnalysis();
+            }, FACE_DETECTION_INTERVAL);
+          }, Math.floor(FACE_DETECTION_INTERVAL / 2));
+
+          faceAnalysisIntervalRef.current = startTimer as unknown as NodeJS.Timeout;
+          console.log('[PROCTORING] Advanced face analysis started');
         };
 
         // ── Path A: Native FaceDetector (Chrome/Edge, no model download) ──
@@ -775,11 +1176,24 @@ export function useProctoringMonitor({
             if (!isMonitoringRef.current || !faceVideoRef.current) return;
             try {
               const faces = await detector.detect(faceVideoRef.current);
-              handleFaceCount(faces.length, 'native');
+              const significantFaces = filterSignificantFaces(
+                Array.from(faces),
+                (face) => {
+                  const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
+                  return box
+                    ? { x: box.x, y: box.y, width: box.width, height: box.height }
+                    : null;
+                },
+                faceVideoRef.current.videoWidth,
+                faceVideoRef.current.videoHeight,
+              );
+              handleFaceCount(significantFaces.length, 'native');
             } catch (error) {
               handleDetectionFailure('native', error);
             }
           }, FACE_DETECTION_INTERVAL);
+
+          startAdvancedFaceAnalysis();
 
           console.log('[PROCTORING] Face detection started (native FaceDetector — Chrome/Edge)');
           return;
@@ -788,23 +1202,11 @@ export function useProctoringMonitor({
         // ── Path B: face-api.js with TinyFaceDetector (Firefox / Safari / all others) ──
         const faceapi = await loadFaceApiWithCpuBackend();
 
-        if (!faceapi.nets.tinyFaceDetector.isLoaded) {
-          let loaded = false;
-          for (const url of FACE_API_MODEL_URLS) {
-            try {
-              console.log(`[PROCTORING] Loading TinyFaceDetector model from ${url}…`);
-              await faceapi.nets.tinyFaceDetector.loadFromUri(url);
-              console.log(`[PROCTORING] TinyFaceDetector model loaded from ${url}`);
-              loaded = true;
-              break;
-            } catch (loadErr) {
-              console.warn(`[PROCTORING] Failed to load model from ${url}:`, loadErr);
-            }
-          }
-          if (!loaded) {
-            console.error('[PROCTORING] TinyFaceDetector model could not be loaded from any source — face detection unavailable on this browser');
-            return;
-          }
+        try {
+          await loadFaceApiNetWithFallback(faceapi.nets.tinyFaceDetector, FACE_API_MODEL_URLS);
+        } catch (loadErr) {
+          console.error('[PROCTORING] TinyFaceDetector model could not be loaded from any source — face detection unavailable on this browser', loadErr);
+          return;
         }
 
         // Guard: component may have unmounted during model download (~190 KB fetch)
@@ -816,22 +1218,71 @@ export function useProctoringMonitor({
         const detectorOptions = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
 
         faceIntervalRef.current = setInterval(async () => {
-          if (!isMonitoringRef.current || !faceVideoRef.current) return;
+          if (!isMonitoringRef.current || !faceVideoRef.current || faceApiBusy) return;
+          faceApiBusy = true;
           try {
-            const detections = await faceapi.detectAllFaces(faceVideoRef.current, detectorOptions);
-            const confidentDetections = detections.filter(
-              detection => (typeof detection.score === 'number' ? detection.score >= MIN_FACE_SCORE : true),
+            let frameWidth = faceVideoRef.current.videoWidth;
+            let frameHeight = faceVideoRef.current.videoHeight;
+            let usedSnapshot = false;
+            let detections;
+
+            try {
+              detections = await faceapi.detectAllFaces(faceVideoRef.current, detectorOptions);
+            } catch (videoError) {
+              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
+              if (!snapshot) {
+                throw videoError;
+              }
+              detections = await faceapi.detectAllFaces(snapshot, detectorOptions);
+              frameWidth = snapshot.width;
+              frameHeight = snapshot.height;
+              usedSnapshot = true;
+            }
+
+            if (!detections.length && !usedSnapshot) {
+              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
+              if (snapshot) {
+                detections = await faceapi.detectAllFaces(snapshot, detectorOptions);
+                frameWidth = snapshot.width;
+                frameHeight = snapshot.height;
+              }
+            }
+
+            const typedDetections = detections as Array<{
+              box: { x: number; y: number; width: number; height: number };
+              score?: number;
+            }>;
+            const confidentDetections = typedDetections.filter(
+              detection => (typeof detection.score === 'number' ? detection.score >= MIN_CONFIDENT_FACE_SCORE : true),
+            );
+            const significantDetections = filterSignificantFaces(
+              confidentDetections,
+              (detection) => ({
+                x: detection.box.x,
+                y: detection.box.y,
+                width: detection.box.width,
+                height: detection.box.height,
+                score: detection.score,
+              }),
+              frameWidth,
+              frameHeight,
             );
 
-            handleFaceCount(confidentDetections.length, 'face-api.js', {
-              reason: confidentDetections.length === 0 && detections.length > 0 ? 'low_confidence_face' : 'no_face_detected',
+            handleFaceCount(significantDetections.length, 'face-api.js', {
+              reason: significantDetections.length === 0 && detections.length > 0 ? 'low_confidence_face' : 'no_face_detected',
               raw_face_count: detections.length,
               confident_face_count: confidentDetections.length,
+              significant_face_count: significantDetections.length,
             });
           } catch (error) {
             handleDetectionFailure('face-api.js', error);
+          } finally {
+            faceApiBusy = false;
           }
         }, FACE_DETECTION_INTERVAL);
+
+        advancedFaceApi = faceapi;
+        startAdvancedFaceAnalysis();
 
         console.log('[PROCTORING] Face detection started (face-api.js — Firefox/Safari/Opera compatible)');
       } catch (err) {
@@ -952,6 +1403,8 @@ export function useProctoringMonitor({
     let lastCopyKeyTime = 0;
     let lastPasteKeyTime = 0;
     let lastCutKeyTime = 0;
+    let lastDragCopyTime = 0;
+    let lastDragDropTime = 0;
 
     const handleCopy = (e: ClipboardEvent) => {
       if (Date.now() - lastCopyKeyTime < 100) {
@@ -980,6 +1433,40 @@ export function useProctoringMonitor({
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       return false;
+    };
+    const handleDragStart = (e: DragEvent) => {
+      const now = Date.now();
+      if (now - lastDragCopyTime < 250) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        return false;
+      }
+      lastDragCopyTime = now;
+      return block(e, 'copy_attempt', {
+        method: 'drag_drop',
+        action: 'dragstart',
+        selectedText: window.getSelection()?.toString()?.substring(0, 100),
+      });
+    };
+    const swallowDragMovement = (e: DragEvent) => {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      return false;
+    };
+    const handleDrop = (e: DragEvent) => {
+      const now = Date.now();
+      if (now - lastDragDropTime < 250) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        return false;
+      }
+      lastDragDropTime = now;
+      const itemCount = e.dataTransfer?.items?.length ?? 0;
+      const fileCount = e.dataTransfer?.files?.length ?? 0;
+      return block(e, 'paste_attempt', {
+        method: 'drag_drop',
+        action: 'drop',
+        item_count: itemCount,
+        file_count: fileCount,
+        has_files: fileCount > 0,
+      });
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1052,6 +1539,10 @@ export function useProctoringMonitor({
     document.addEventListener('paste', handlePaste, true);
     document.addEventListener('cut', handleCut, true);
     document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('dragstart', handleDragStart, true);
+    document.addEventListener('dragenter', swallowDragMovement, true);
+    document.addEventListener('dragover', swallowDragMovement, true);
+    document.addEventListener('drop', handleDrop, true);
     document.addEventListener('keydown', handleKeyDown, true);
     console.log('[PROCTORING] Copy/paste detection started');
 
@@ -1060,6 +1551,10 @@ export function useProctoringMonitor({
       document.removeEventListener('paste', handlePaste, true);
       document.removeEventListener('cut', handleCut, true);
       document.removeEventListener('contextmenu', handleContextMenu, true);
+      document.removeEventListener('dragstart', handleDragStart, true);
+      document.removeEventListener('dragenter', swallowDragMovement, true);
+      document.removeEventListener('dragover', swallowDragMovement, true);
+      document.removeEventListener('drop', handleDrop, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [armFocusSwitchSignal, beginNavigationSequence, emitTabSwitchEvent]);
@@ -1086,12 +1581,18 @@ export function useProctoringMonitor({
       return (
         normalizedKey === 'printscreen' ||
         normalizedKey === 'print screen' ||
+        normalizedKey === 'print' ||
+        normalizedKey === 'print scrn' ||
+        normalizedKey === 'printscrn' ||
+        normalizedKey === 'prntscrn' ||
         normalizedKey === 'prtsc' ||
         normalizedKey === 'prtscr' ||
         normalizedKey === 'prtscn' ||
         normalizedKey === 'snapshot' ||
         normalizedKey === 'sysrq' ||
+        normalizedKey === 'sys rq' ||
         normalizedCode === 'printscreen' ||
+        normalizedCode === 'print' ||
         e.keyCode === 44 ||
         e.which === 44
       );
@@ -1113,6 +1614,9 @@ export function useProctoringMonitor({
       if (normalizedKey === 'meta' || normalizedKey === 'os' || normalizedKey === 'super') {
         lastMetaKeyAtRef.current = now;
       }
+      if (normalizedKey === 'alt') {
+        lastAltKeyAtRef.current = now;
+      }
       if (normalizedKey === 'shift') {
         lastShiftKeyAtRef.current = now;
       }
@@ -1130,6 +1634,15 @@ export function useProctoringMonitor({
 
       if (sawWindowsSnipChord) {
         armScreenshotChord('Win+Shift+S');
+      } else if (
+        e.altKey &&
+        (e.shiftKey || normalizedKey === 'shift') &&
+        (
+          normalizedKey === 's' ||
+          now - lastSKeyAtRef.current < 250
+        )
+      ) {
+        armScreenshotChord('Alt+Shift+S');
       } else if (
         (e.metaKey || normalizedKey === 'meta' || normalizedKey === 'os' || normalizedKey === 'super') &&
         (e.shiftKey || normalizedKey === 'shift')
@@ -1160,6 +1673,19 @@ export function useProctoringMonitor({
           enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
         });
         clearClipboardIfPossible();
+        return;
+      }
+
+      if (e.altKey && e.shiftKey && normalizedKey === 's') {
+        if (screenshotBlocking) {
+          e.preventDefault();
+        }
+        emitScreenshotEvent({
+          key: 'Alt+Shift+S',
+          capture_type: 'screenshot',
+          phase,
+          enforcement_mode: screenshotBlocking ? 'best_effort_block' : 'detect_only',
+        });
         return;
       }
 
@@ -1516,6 +2042,7 @@ export function useProctoringMonitor({
       if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
       if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+      if (faceAnalysisIntervalRef.current) { clearInterval(faceAnalysisIntervalRef.current); faceAnalysisIntervalRef.current = null; }
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
 
       // Final flush — send remaining events to backend
@@ -1560,6 +2087,7 @@ function getSeverity(type: ProctoringEventType): string {
     camera_disabled: 'high',
     microphone_disabled: 'high',
     camera_obstructed: 'high',
+    camera_frozen: 'high',
     screenshot_attempt: 'high',
     screen_recording_attempt: 'high',
     window_blur: 'low',
@@ -1568,6 +2096,7 @@ function getSeverity(type: ProctoringEventType): string {
     face_missing: 'high',
     multiple_faces: 'high',
     gaze_away: 'medium',
+    identity_mismatch: 'high',
   };
   return map[type] || 'low';
 }
