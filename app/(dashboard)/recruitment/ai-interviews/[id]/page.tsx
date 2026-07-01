@@ -20,9 +20,9 @@ export default function AIInterviewDetailsPage() {
   useEffect(() => {
     const fetchAllIds = async () => {
       try {
-        const probe = await aiInterviewService.listConfigs({ page_size: 1, page: 1 });
+        const probe = await aiInterviewService.listConfigs({ page_size: 1, page: 1, compact: true });
         const res = probe.total > probe.items.length
-          ? await aiInterviewService.listConfigs({ page_size: probe.total, page: 1 })
+          ? await aiInterviewService.listConfigs({ page_size: probe.total, page: 1, compact: true })
           : probe;
         setAllIds(res.items.map((a: any) => a.id));
       } catch { /* ignore */ }

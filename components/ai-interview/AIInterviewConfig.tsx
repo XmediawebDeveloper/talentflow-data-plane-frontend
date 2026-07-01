@@ -1165,7 +1165,7 @@ export default function AIInterviewConfig() {
         // Look for an existing config: specific config_id takes priority, then search drafts by jd_id
         let existingDraft: AIInterviewResponse | null = specificConfig;
         if (!existingDraft) {
-          const draftResult = await aiInterviewService.listConfigs({ status: 'draft', page_size: 50 }).catch(() => null);
+          const draftResult = await aiInterviewService.listConfigs({ status: 'draft', page_size: 50, compact: true }).catch(() => null);
           existingDraft = draftResult?.items?.find(
             (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
           ) ?? null;

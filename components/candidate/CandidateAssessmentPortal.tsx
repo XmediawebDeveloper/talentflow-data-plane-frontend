@@ -1408,8 +1408,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         await candidateService.completeAssessment(token);
         console.log('[DEBUG] completeAssessment API called successfully');
       } catch (err) {
-        // Ignore if already completed - scoring will still run
-        console.log('[DEBUG] completeAssessment error (may be already completed):', err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const alreadySubmitted = /already submitted|already completed/i.test(errorMessage);
+        if (!alreadySubmitted) {
+          throw err;
+        }
+        console.log('[DEBUG] completeAssessment already submitted:', err);
       }
 
       // IMMEDIATELY show completed screen - NO waiting for scoring

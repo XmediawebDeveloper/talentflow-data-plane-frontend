@@ -548,6 +548,7 @@ export const aiInterviewService = {
     search?: string;
     page?: number;
     page_size?: number;
+    compact?: boolean;
   }): Promise<AIInterviewListResponse> {
     try {
       const response = await api.get<AIInterviewListResponse>('/ai-interview/configs', { params });
