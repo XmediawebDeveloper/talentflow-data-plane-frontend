@@ -16,6 +16,12 @@ const MIN_MULTI_FACE_ABSOLUTE_AREA_RATIO = 0.0025;
 const MIN_MULTI_FACE_RELATIVE_AREA_RATIO = 0.06;
 const MIN_MULTI_FACE_WIDTH_RATIO = 0.045;
 const MIN_MULTI_FACE_HEIGHT_RATIO = 0.07;
+const MIN_ADDITIONAL_FACE_ABSOLUTE_AREA_RATIO = 0.0018;
+const MIN_ADDITIONAL_FACE_RELATIVE_AREA_RATIO = 0.035;
+const MIN_ADDITIONAL_FACE_WIDTH_RATIO = 0.035;
+const MIN_ADDITIONAL_FACE_HEIGHT_RATIO = 0.055;
+const MIN_DISTINCT_FACE_CENTER_DISTANCE_RATIO = 0.08;
+const MAX_SAME_FACE_IOU_RATIO = 0.45;
 const MIN_CANDIDATE_FACE_AREA_RATIO = 0.015;
 const MIN_CANDIDATE_FACE_WIDTH_RATIO = 0.11;
 const MIN_CANDIDATE_FACE_HEIGHT_RATIO = 0.14;
@@ -270,6 +276,58 @@ function filterFacesByThresholds<T>(
     })
     .sort((left, right) => getRegionArea(right.region) - getRegionArea(left.region))
     .map(({ item }) => item);
+}
+
+function getIntersectionOverUnion(left: FaceRegion, right: FaceRegion): number {
+  const overlapLeft = Math.max(left.x, right.x);
+  const overlapTop = Math.max(left.y, right.y);
+  const overlapRight = Math.min(left.x + left.width, right.x + right.width);
+  const overlapBottom = Math.min(left.y + left.height, right.y + right.height);
+  const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+  const overlapHeight = Math.max(0, overlapBottom - overlapTop);
+  const overlapArea = overlapWidth * overlapHeight;
+  if (overlapArea <= 0) return 0;
+
+  const unionArea = getRegionArea(left) + getRegionArea(right) - overlapArea;
+  if (unionArea <= 0) return 0;
+  return overlapArea / unionArea;
+}
+
+export function filterAdditionalFaceCandidates<T>(
+  items: T[],
+  getRegion: (item: T) => FaceRegion | null,
+  primaryItem: T | null,
+  frameWidth: number,
+  frameHeight: number,
+): T[] {
+  const primaryRegion = normalizeRegion(primaryItem ? getRegion(primaryItem) : null);
+  if (!primaryRegion || frameWidth <= 0 || frameHeight <= 0) return [];
+
+  const frameDiagonal = Math.max(Math.hypot(frameWidth, frameHeight), 1);
+  const primaryCenterX = primaryRegion.x + (primaryRegion.width / 2);
+  const primaryCenterY = primaryRegion.y + (primaryRegion.height / 2);
+
+  return filterFacesByThresholds(items, getRegion, frameWidth, frameHeight, {
+    minAbsoluteAreaRatio: MIN_ADDITIONAL_FACE_ABSOLUTE_AREA_RATIO,
+    minRelativeAreaRatio: MIN_ADDITIONAL_FACE_RELATIVE_AREA_RATIO,
+    minWidthRatio: MIN_ADDITIONAL_FACE_WIDTH_RATIO,
+    minHeightRatio: MIN_ADDITIONAL_FACE_HEIGHT_RATIO,
+  }).filter((item) => {
+    if (primaryItem && Object.is(item, primaryItem)) return false;
+
+    const region = normalizeRegion(getRegion(item));
+    if (!region) return false;
+
+    const centerX = region.x + (region.width / 2);
+    const centerY = region.y + (region.height / 2);
+    const centerDistanceRatio = Math.hypot(centerX - primaryCenterX, centerY - primaryCenterY) / frameDiagonal;
+    const overlapRatio = getIntersectionOverUnion(region, primaryRegion);
+
+    return (
+      centerDistanceRatio >= MIN_DISTINCT_FACE_CENTER_DISTANCE_RATIO &&
+      overlapRatio <= MAX_SAME_FACE_IOU_RATIO
+    );
+  });
 }
 
 export function pickPrimaryFace<T>(
