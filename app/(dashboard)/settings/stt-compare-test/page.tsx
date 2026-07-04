@@ -24,7 +24,6 @@ const TARGET_SR = 16000;
 const EXTRA_TEST_MODELS: SttModelOption[] = [
   { value: 'deepgram-flux', label: 'Deepgram Flux (live)', liveTranscript: true },
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-  { value: 'soniox', label: 'Soniox' },
 ];
 const TEST_MODELS: SttModelOption[] = [...STT_MODELS, ...EXTRA_TEST_MODELS];
 const LIVE_MODELS = TEST_MODELS.filter((m) => m.liveTranscript);
