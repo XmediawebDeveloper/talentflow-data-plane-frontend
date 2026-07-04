@@ -101,11 +101,27 @@ function downsampleRealtime(input: Float32Array, inRate: number): Float32Array {
   return out;
 }
 
+// Concatenate native-rate frames and render a clean 16 kHz WAV (OfflineAudioContext
+// resample). Returns null if no audio was captured.
+async function renderTo16kWav(frames: Float32Array[], inRate: number): Promise<Blob | null> {
+  const total = frames.reduce((n, c) => n + c.length, 0);
+  if (total === 0) return null;
+  const merged = new Float32Array(total);
+  let o = 0; for (const c of frames) { merged.set(c, o); o += c.length; }
+  const off = new OfflineAudioContext(1, Math.ceil(total * TARGET_SR / inRate), TARGET_SR);
+  const nbuf = off.createBuffer(1, total, inRate);
+  nbuf.copyToChannel(merged, 0);
+  const src = off.createBufferSource(); src.buffer = nbuf; src.connect(off.destination); src.start();
+  const rendered = await off.startRendering();
+  return encodeWav16(rendered.getChannelData(0), TARGET_SR);
+}
+
 export default function SttCompareTestPage() {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState<Record<string, LiveState>>({});
   const [batch, setBatch] = useState<BatchResult[] | null>(null);
+  const [rawUrl, setRawUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
   const [dfnLoaded, setDfnLoaded] = useState<boolean | null>(null);
@@ -123,6 +139,7 @@ export default function SttCompareTestPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const socketsRef = useRef<Record<string, WebSocket>>({});
   const nativePcmRef = useRef<Float32Array[]>([]);   // native-rate buffer (gain applied) for the clean batch WAV
+  const nativeRawPcmRef = useRef<Float32Array[]>([]); // native-rate buffer (untouched) for the truly-raw player
   const inRateRef = useRef<number>(48000);
   const micRecentPeakRef = useRef(0);                // slowly-decaying recent peak for adaptive gain
   const gainMaxRef = useRef(MIC_GAIN_MAX_DEFAULT);   // per-device software gain ceiling
@@ -135,8 +152,9 @@ export default function SttCompareTestPage() {
   }, []);
 
   const start = useCallback(async () => {
-    setError(null); setBatch(null); setAudioUrl(null); setEnhancedUrl(null); setDfnLoaded(null);
+    setError(null); setBatch(null); setRawUrl(null); setAudioUrl(null); setEnhancedUrl(null); setDfnLoaded(null);
     nativePcmRef.current = [];
+    nativeRawPcmRef.current = [];
     micRecentPeakRef.current = 0;
     const jwt = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const initLive: Record<string, LiveState> = {};
@@ -194,6 +212,7 @@ export default function SttCompareTestPage() {
 
       proc.onaudioprocess = (e) => {
         const input = e.inputBuffer.getChannelData(0);
+        nativeRawPcmRef.current.push(new Float32Array(input)); // untouched copy for the truly-raw player
 
         // ── Adaptive mic gain (same as the AI interview) ──────────────────
         // Track a slowly-decaying recent peak and boost it toward the target,
@@ -240,20 +259,17 @@ export default function SttCompareTestPage() {
     });
     setTimeout(() => { Object.values(socketsRef.current).forEach((ws) => { try { ws.close(); } catch {} }); }, 4000);
 
-    // Build a CLEAN 16 kHz WAV from the native-rate buffer (OfflineAudioContext resample).
-    const totalNative = nativePcmRef.current.reduce((n, c) => n + c.length, 0);
-    if (totalNative === 0) { setError('No audio captured.'); return; }
-    const mergedNative = new Float32Array(totalNative);
-    let o = 0; for (const c of nativePcmRef.current) { mergedNative.set(c, o); o += c.length; }
+    if (nativePcmRef.current.reduce((n, c) => n + c.length, 0) === 0) { setError('No audio captured.'); return; }
 
     setBusy(true);
     try {
-      const off = new OfflineAudioContext(1, Math.ceil(totalNative * TARGET_SR / inRate), TARGET_SR);
-      const nbuf = off.createBuffer(1, totalNative, inRate);
-      nbuf.copyToChannel(mergedNative, 0);
-      const src = off.createBufferSource(); src.buffer = nbuf; src.connect(off.destination); src.start();
-      const rendered = await off.startRendering();
-      const wav = encodeWav16(rendered.getChannelData(0), TARGET_SR);
+      // Truly-raw clip (untouched capture — no gain, playback/download only).
+      const rawWav = await renderTo16kWav(nativeRawPcmRef.current, inRate);
+      if (rawWav) setRawUrl(URL.createObjectURL(rawWav));
+
+      // Gain-boosted clip — this is what the (optional) denoise + batch models see.
+      const wav = await renderTo16kWav(nativePcmRef.current, inRate);
+      if (!wav) { setError('No audio captured.'); return; }
       setAudioUrl(URL.createObjectURL(wav));
 
       const jwt = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
@@ -379,11 +395,19 @@ export default function SttCompareTestPage() {
         })}
       </div>
 
-      {audioUrl && (
+      {rawUrl && (
         <div className="space-y-2 border rounded-lg p-4">
-          <div className="font-medium text-sm">Recorded clip (16 kHz{boostGain ? ', gain-boosted' : ''})</div>
+          <div className="font-medium text-sm">Raw clip (16 kHz) — untouched capture, no gain</div>
+          <audio controls src={rawUrl} className="w-full" />
+          <a href={rawUrl} download="clip-raw.wav" className="text-sm text-purple-600 underline">Download</a>
+        </div>
+      )}
+
+      {audioUrl && boostGain && (
+        <div className="space-y-2 border rounded-lg p-4">
+          <div className="font-medium text-sm">Gain-boosted clip (16 kHz){denoise ? '' : ' — what batch models transcribed'}</div>
           <audio controls src={audioUrl} className="w-full" />
-          <a href={audioUrl} download="clip.wav" className="text-sm text-purple-600 underline">Download</a>
+          <a href={audioUrl} download="clip-boosted.wav" className="text-sm text-purple-600 underline">Download</a>
         </div>
       )}
 
