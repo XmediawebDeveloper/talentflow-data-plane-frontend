@@ -9,8 +9,11 @@
  * BATCH models (gpt-4o-transcribe / gemini / sarvam / assemblyai): transcribed
  * from the recorded clip AFTER you stop.
  *
- * Both paths return RAW provider text — no enhancer, no corrections, no gain.
- * The clip is resampled cleanly to 16 kHz for the batch call.
+ * Both paths return RAW provider text — no enhancer, no corrections. An
+ * optional adaptive mic-gain boost (on by default) mirrors the AI interview so
+ * quiet / headset mics are normalized before ASR; toggle it off to compare
+ * against the untouched signal. The clip is resampled cleanly to 16 kHz for the
+ * batch call.
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -19,6 +22,40 @@ import { STT_MODELS, type SttModelOption } from '@/lib/constants/aiInterviewSttM
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
 const TARGET_SR = 16000;
+
+// ── Adaptive mic-gain constants — mirror the AI interview (InterviewUI.tsx).
+// Track a slowly-decaying recent peak and boost it toward a target level,
+// clamped to [1, MIC_GAIN_MAX]. A built-in mic already at/above target gets
+// gain≈1; quiet headset/Bluetooth mics get boosted. The peak floor caps how
+// high the gain can climb during silence so steady noise isn't amplified.
+// (The interview raises MIC_GAIN_MAX to 9–10 for Bluetooth; we use the 6
+//  built-in default here as a representative baseline.)
+const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level for confident ASR
+const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this
+const MIC_GAIN_MAX_DEFAULT = 6;     // built-in fallback gain ceiling
+
+// Device-aware gain ceiling — mirrors the interview's per-mic profile. A fixed
+// ceiling of 6 was too low for headphones (quiet HFP/wired mics stayed under
+// the target and the boost couldn't reach it), so headsets get a higher ceiling
+// and Bluetooth the most. Classified from the mic's device label.
+type MicType = 'builtin' | 'wired_headphone' | 'bluetooth' | 'unknown';
+function classifyMicType(label: string): MicType {
+  const l = (label || '').toLowerCase();
+  if (!l) return 'unknown';
+  if (/bluetooth|hands[\s-]?free|\bhfp\b|\bhsp\b|airpod|earpods|galaxy buds|\bbuds\b|\bwh-|\bwf-/.test(l)) return 'bluetooth';
+  if (/headset|headphone|earphone|earbud|jabra|\bplantronics\b|\bsennheiser\b/.test(l)) return 'wired_headphone';
+  if (/built[\s-]?in|internal|realtek|macbook|microphone array|digital microphone|intel smart sound|default/.test(l)) return 'builtin';
+  return 'unknown';
+}
+function gainMaxForMicType(t: MicType): number {
+  switch (t) {
+    case 'bluetooth': return 10;      // quietest → highest ceiling
+    case 'wired_headphone': return 9;
+    case 'builtin': return 6;
+    default: return 7;                // unknown → safe middle
+  }
+}
+const isHeadphone = (t: MicType) => t === 'wired_headphone' || t === 'bluetooth';
 
 // Test-only extras — NOT added to the recruiter interview dropdown (STT_MODELS).
 const EXTRA_TEST_MODELS: SttModelOption[] = [
@@ -70,14 +107,25 @@ export default function SttCompareTestPage() {
   const [live, setLive] = useState<Record<string, LiveState>>({});
   const [batch, setBatch] = useState<BatchResult[] | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
+  const [dfnLoaded, setDfnLoaded] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [micLabel, setMicLabel] = useState<string>('');
+  // Options (mirror the AI interview capture pipeline). Refs shadow the state so
+  // the audio callback + stop() read live values without stale closures.
+  const [boostGain, setBoostGain] = useState(true);
+  const boostRef = useRef(true);
+  const [denoise, setDenoise] = useState(true);
+  const denoiseRef = useRef(true);
 
   const ctxRef = useRef<AudioContext | null>(null);
   const procRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketsRef = useRef<Record<string, WebSocket>>({});
-  const nativePcmRef = useRef<Float32Array[]>([]);   // native-rate buffer for the clean batch WAV
+  const nativePcmRef = useRef<Float32Array[]>([]);   // native-rate buffer (gain applied) for the clean batch WAV
   const inRateRef = useRef<number>(48000);
+  const micRecentPeakRef = useRef(0);                // slowly-decaying recent peak for adaptive gain
+  const gainMaxRef = useRef(MIC_GAIN_MAX_DEFAULT);   // per-device software gain ceiling
 
   const teardownAudio = useCallback(() => {
     try { procRef.current?.disconnect(); } catch {}
@@ -87,15 +135,39 @@ export default function SttCompareTestPage() {
   }, []);
 
   const start = useCallback(async () => {
-    setError(null); setBatch(null); setAudioUrl(null);
+    setError(null); setBatch(null); setAudioUrl(null); setEnhancedUrl(null); setDfnLoaded(null);
     nativePcmRef.current = [];
+    micRecentPeakRef.current = 0;
     const jwt = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const initLive: Record<string, LiveState> = {};
     LIVE_MODELS.forEach((m) => { initLive[m.value] = { text: '', done: false }; });
     setLive(initLive);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Capture constraints mirror the interview: AGC OFF (it flattens levels for
+      // ASR — the adaptive boost below replaces it) and noise suppression OFF so
+      // DeepFilterNet has real noise to remove when denoise is enabled.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: { ideal: 1 },
+          echoCancellation: true,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
       streamRef.current = stream;
+
+      // Detect the mic type from its label and set the per-device gain ceiling
+      // (headphone fix). For headphones, drop echo cancellation — there's no
+      // speaker→mic echo path and EC ducks quiet near-end speech.
+      const track = stream.getAudioTracks().find((t) => t.readyState === 'live');
+      const label = track?.label || '';
+      const micType = classifyMicType(label);
+      gainMaxRef.current = gainMaxForMicType(micType);
+      setMicLabel(label ? `${label} · ${micType} · gain≤${gainMaxRef.current}×` : `${micType} · gain≤${gainMaxRef.current}×`);
+      if (track && isHeadphone(micType)) {
+        try { await track.applyConstraints({ echoCancellation: false, noiseSuppression: false, autoGainControl: false }); } catch {}
+      }
+
       const ctx = new AudioContext();
       ctxRef.current = ctx;
       inRateRef.current = ctx.sampleRate;
@@ -122,8 +194,28 @@ export default function SttCompareTestPage() {
 
       proc.onaudioprocess = (e) => {
         const input = e.inputBuffer.getChannelData(0);
-        nativePcmRef.current.push(new Float32Array(input));   // keep native rate for clean batch WAV
-        const ds = downsampleRealtime(new Float32Array(input), inRateRef.current);
+
+        // ── Adaptive mic gain (same as the AI interview) ──────────────────
+        // Track a slowly-decaying recent peak and boost it toward the target,
+        // clamped to [1, gainMax]. The peak floor caps how high gain climbs
+        // during silence so steady noise isn't amplified. The SAME gain is
+        // baked into both the batch clip and the live WS PCM so every model
+        // sees the interview's normalized signal. Toggle off → gain = 1.
+        let sum = 0;
+        for (let i = 0; i < input.length; i++) sum += Math.abs(input[i]);
+        const rawLevel = sum / input.length;
+        micRecentPeakRef.current = Math.max(rawLevel, micRecentPeakRef.current * 0.995);
+        const micGain = boostRef.current
+          ? Math.min(gainMaxRef.current, Math.max(1, MIC_GAIN_TARGET_PEAK / Math.max(micRecentPeakRef.current, MIC_GAIN_PEAK_FLOOR)))
+          : 1;
+
+        // Native-rate PCM with gain applied → clean batch WAV (encodeWav16 clamps).
+        const boosted = new Float32Array(input.length);
+        for (let i = 0; i < input.length; i++) boosted[i] = input[i] * micGain;
+        nativePcmRef.current.push(boosted);
+
+        // Live stream: downsample the boosted signal and send 16-bit PCM.
+        const ds = downsampleRealtime(boosted, inRateRef.current);
         const i16 = new Int16Array(ds.length);
         for (let i = 0; i < ds.length; i++) { const s = Math.max(-1, Math.min(1, ds[i])); i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
         Object.values(socketsRef.current).forEach((ws) => { if (ws.readyState === WebSocket.OPEN) ws.send(i16.buffer); });
@@ -165,8 +257,33 @@ export default function SttCompareTestPage() {
       setAudioUrl(URL.createObjectURL(wav));
 
       const jwt = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+
+      // Optional DeepFilterNet denoise (same backend endpoint as stt-denoise-test).
+      // The enhanced clip is what the batch models then transcribe, so you can
+      // compare accuracy on denoised vs raw audio. (Live models already streamed
+      // during recording, so denoise applies to the BATCH path only.)
+      let batchClip = wav;
+      if (denoiseRef.current) {
+        try {
+          const dfd = new FormData();
+          dfd.append('file', wav, 'clip.wav');
+          const dres = await fetch(`${API_BASE}/stt-denoise-test/denoise`, {
+            method: 'POST',
+            headers: jwt ? { Authorization: `Bearer ${jwt}` } : undefined,
+            body: dfd,
+          });
+          if (!dres.ok) throw new Error(`${dres.status} ${await dres.text().catch(() => '')}`);
+          setDfnLoaded(dres.headers.get('x-dfn-loaded') === 'true');
+          const enhanced = await dres.blob();
+          setEnhancedUrl(URL.createObjectURL(enhanced));
+          batchClip = new File([enhanced], 'clip-enhanced.wav', { type: 'audio/wav' });
+        } catch (err) {
+          setError(`Denoise failed (transcribing raw clip instead): ${(err as Error).message}`);
+        }
+      }
+
       const fd = new FormData();
-      fd.append('file', wav, 'clip.wav');
+      fd.append('file', batchClip, 'clip.wav');
       fd.append('models', BATCH_MODELS.map((m) => m.value).join(','));
       const res = await fetch(`${API_BASE}/stt-denoise-test/transcribe-compare`, {
         method: 'POST',
@@ -189,19 +306,54 @@ export default function SttCompareTestPage() {
         <h1 className="text-xl font-semibold">STT Accuracy Comparison</h1>
         <p className="text-sm text-gray-500 mt-1">
           <b>Live</b> models stream over WebSocket in real time (interims as you speak).
-          <b> Batch</b> models transcribe the recorded clip after you stop. All output is
-          <b> raw</b> — no enhancer, no corrections.
+          <b> Batch</b> models transcribe the recorded clip after you stop. Output is
+          <b> raw</b> provider text — no enhancer, no corrections. The capture pipeline
+          mirrors the AI interview (adaptive mic-gain boost + optional DeepFilterNet denoise).
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-4">
         {!recording ? (
           <button onClick={start} disabled={busy} className="px-4 py-2 rounded-lg bg-purple-600 text-white font-medium disabled:opacity-50">● Record</button>
         ) : (
           <button onClick={stop} className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium animate-pulse">■ Stop</button>
         )}
-        {busy && <span className="text-sm text-gray-500">Transcribing batch models…</span>}
+        <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+          <input
+            type="checkbox"
+            checked={boostGain}
+            disabled={recording || busy}
+            onChange={(e) => { boostRef.current = e.target.checked; setBoostGain(e.target.checked); }}
+          />
+          Mic-gain boost <span className="text-gray-400">(interview)</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+          <input
+            type="checkbox"
+            checked={denoise}
+            disabled={recording || busy}
+            onChange={(e) => { denoiseRef.current = e.target.checked; setDenoise(e.target.checked); }}
+          />
+          DeepFilterNet denoise <span className="text-gray-400">(batch only)</span>
+        </label>
+        {busy && <span className="text-sm text-gray-500">Processing batch models…</span>}
       </div>
+
+      {micLabel && (
+        <div className="text-xs text-gray-400">Mic: {micLabel}</div>
+      )}
+
+      {dfnLoaded === false && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          ⚠️ DeepFilterNet is <b>not installed</b> on the backend (<code>pip install deepfilternet</code>), so the
+          enhanced clip equals the raw one and batch models transcribed the un-denoised audio.
+        </div>
+      )}
+      {dfnLoaded === true && (
+        <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          ✓ DeepFilterNet ran — batch models transcribed the denoised clip.
+        </div>
+      )}
 
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</div>}
 
@@ -229,9 +381,17 @@ export default function SttCompareTestPage() {
 
       {audioUrl && (
         <div className="space-y-2 border rounded-lg p-4">
-          <div className="font-medium text-sm">Recorded clip (16 kHz)</div>
+          <div className="font-medium text-sm">Recorded clip (16 kHz{boostGain ? ', gain-boosted' : ''})</div>
           <audio controls src={audioUrl} className="w-full" />
           <a href={audioUrl} download="clip.wav" className="text-sm text-purple-600 underline">Download</a>
+        </div>
+      )}
+
+      {enhancedUrl && (
+        <div className="space-y-2 border rounded-lg p-4">
+          <div className="font-medium text-sm">Denoised clip (DeepFilterNet) — what batch models transcribed</div>
+          <audio controls src={enhancedUrl} className="w-full" />
+          <a href={enhancedUrl} download="clip-enhanced.wav" className="text-sm text-purple-600 underline">Download</a>
         </div>
       )}
 
