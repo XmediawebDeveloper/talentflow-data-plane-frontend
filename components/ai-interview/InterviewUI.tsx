@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useCallback, useRef, useEffect, memo } from "react";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
+import { MicWaveform } from "./MicWaveform";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
 import {
@@ -2458,10 +2459,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, []);
 
   // Idempotent "now listening" trigger for the "Your turn — speak now" popup.
-  // Gated so the popup surfaces in sync with REAL listening: the capture
-  // pipeline must be live, and on the Web Speech (batch) path the recognizer
-  // must have fired onaudiostart (it is actually capturing). Backend-live
-  // providers have no Web Speech engine, so pipeline-ready alone gates them.
+  // Shows once the capture pipeline (mic + worklet) is live. (Batch models no
+  // longer use the Web Speech API, and streaming models are backend-driven, so
+  // pipeline-ready is the single gate for every provider.)
   const markListeningStarted = useCallback(() => {
     if (
       nowSpeakShownForSessionRef.current ||
@@ -2473,12 +2473,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     ) {
       return;
     }
-    if (!backendLiveTranscriptEnabled && !webSpeechListeningRef.current) {
-      return;
-    }
     nowSpeakShownForSessionRef.current = true;
     setShowNowSpeakBanner(true);
-  }, [backendLiveTranscriptEnabled]);
+  }, []);
 
   const startWebSpeechRecognition = useCallback(() => {
     // Frontend-only live transcript for batch/final-only ASR models. This is
@@ -4744,28 +4741,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isProcessing: isProcessingRef.current,
       isAiSpeaking: isAiSpeakingRef.current,
     });
-    // ── Pre-warm the browser Web Speech recognizer EARLY ──────────────────
-    // For batch ASR providers (no backend live_transcript) the on-screen live
-    // transcript comes from the browser Web Speech API. recognition.start() has
-    // a 1-3 s engine connect / cold-start latency during which the engine
-    // captures NO audio of its own. Starting it only AFTER the async
-    // getUserMedia + AudioWorklet setup below (itself ~1-2 s) stacked on top of
-    // that latency was dropping the candidate's first 2-5 s of speech from the
-    // DISPLAYED transcript (the SCORED answer is unaffected — preSpeechPCMRingRef
-    // flushes those words to the backend). Kick the recognizer off here instead:
-    // isRecordingRef is already true (so the onend/onerror auto-restart guards
-    // pass) and isAiSpeaking is already false, so the connect latency now overlaps
-    // the mic/worklet setup and the engine is live by the time the candidate
-    // speaks. onresult still drops Linda's TTS tail via the echo guard. The old
-    // call site (after the worklet setup) is removed so we don't reset/reconnect.
-    // Reset the per-turn "now listening" sync gates before (re)starting the
-    // recognizer; the popup stays hidden until BOTH the pipeline is ready and
-    // the recognizer is capturing.
+    // ── Batch models: NO browser Web Speech API (2026-07) ─────────────────
+    // Batch STT providers (gpt-4o-transcribe / gemini / sarvam / assemblyai) no
+    // longer use the browser Web Speech API for a live caption — it was laggy /
+    // unreliable and depended on Google's servers. Instead the UI shows a live
+    // RECORDING WAVEFORM while the candidate answers (see the render block); the
+    // final transcript arrives from the backend after the turn. Streaming
+    // providers (Deepgram / OpenAI realtime) keep their backend-driven live
+    // transcript. Reset the per-turn gate; the "Your turn" popup shows once the
+    // capture pipeline is ready (markListeningStarted, below).
     turnPipelineReadyRef.current = false;
     webSpeechListeningRef.current = false;
-    if (!backendLiveTranscriptEnabled) {
-      startWebSpeechRecognition();
-    }
+    // Web Speech API is intentionally DISABLED for batch models (a recording
+    // waveform is shown instead — see render). startWebSpeechRecognition() is
+    // kept for reference / easy re-enable; `void` references it so it isn't
+    // flagged as unused. To re-enable, call it here when !backendLiveTranscriptEnabled.
+    void startWebSpeechRecognition;
     console.log(`[Recording ${timestamp}] Starting recording...`);
     try {
       // Prefer a dedicated per-turn answer-capture microphone for VAD + ASR so
@@ -5319,31 +5310,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
       setIsRecording(true);
       startPendingQuestionTimer("candidate_turn_open");
-      // Capture pipeline (mic + worklet) is now live — gate the "Your turn"
-      // popup on this so it can never appear before we can actually record.
+      // Capture pipeline (mic + worklet) is now live — show the "Your turn"
+      // popup + listening state. Same signal for every provider now (no Web
+      // Speech onaudiostart dependency).
       turnPipelineReadyRef.current = true;
-      // Try to show now: succeeds immediately for backend-live providers; for the
-      // Web Speech (batch) path it shows only once the recognizer's onaudiostart
-      // has fired (set in startWebSpeechRecognition) so the popup, the listening
-      // bubble and the live transcript all light up together.
       markListeningStarted();
-      if (!backendLiveTranscriptEnabled) {
-        // Fallback: if onaudiostart never fires (browser quirk), don't strand the
-        // candidate without a prompt — surface the popup after a short ceiling.
-        if (nowSpeakBannerFallbackTimerRef.current) {
-          clearTimeout(nowSpeakBannerFallbackTimerRef.current);
-        }
-        nowSpeakBannerFallbackTimerRef.current = setTimeout(() => {
-          webSpeechListeningRef.current = true;
-          markListeningStarted();
-        }, 1200);
-      }
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
-      // NOTE: Web Speech recognizer is now pre-warmed earlier (right after
-      // isRecordingRef flips true, before the mic/worklet setup) so its connect
-      // latency overlaps that setup and the opening words aren't dropped from the
-      // live transcript. See the startWebSpeechRecognition() call above.
 
       // No-response detection fallback — fire after 5s of total silence with no
       // speech. The backend normally drives the canonical silence-nudge flow,
@@ -6957,9 +6930,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         {realtimeTranscriptionEnabled ? 'Start speaking...' : 'Listening for live transcript...'}
                       </p>
                     ) : (
-                      <p className="text-xs leading-relaxed italic text-emerald-700/70">
-                        This speech model shows the transcript after you finish speaking.
-                      </p>
+                      // Batch STT models (gpt-4o-transcribe / gemini / sarvam /
+                      // assemblyai): no Web Speech / live transcript. Show a live
+                      // recording waveform of the candidate's mic while they answer
+                      // — the transcript is revealed after the turn is processed.
+                      <div className="flex flex-col gap-1.5">
+                        <MicWaveform analyserRef={micAnalyserRef} active={isRecording} />
+                        <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                          Recording… your transcript appears after you finish speaking.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>

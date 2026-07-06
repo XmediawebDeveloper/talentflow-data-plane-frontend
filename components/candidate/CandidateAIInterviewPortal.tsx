@@ -455,12 +455,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       const mixDest = mixCtx.createMediaStreamDestination();
 
       // Linda's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
+      let lindaCaptured = false;
       if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
         mixCtx.createMediaStreamSource(lindaDest.stream).connect(mixDest);
+        lindaCaptured = true;
       }
 
-      // Tab audio (AI voice backup — only if user checked "Share audio" in screen picker)
-      if (screenStream.getAudioTracks().length > 0) {
+      // Tab audio is Linda's voice as it plays through the shared tab — so it is
+      // ONLY a FALLBACK. If we already tapped Linda directly above, mixing the tab
+      // audio too records her voice TWICE (the doubled/echoey Linda heard in the
+      // saved recording). Only add it when the direct tap was unavailable.
+      if (!lindaCaptured && screenStream.getAudioTracks().length > 0) {
         mixCtx.createMediaStreamSource(
           new MediaStream(screenStream.getAudioTracks()),
         ).connect(mixDest);
