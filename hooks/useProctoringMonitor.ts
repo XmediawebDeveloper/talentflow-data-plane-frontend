@@ -790,15 +790,12 @@ export function useProctoringMonitor({
       return 'Win+Shift+S';
     }
 
-    const allowLinuxShortcutInference = screenshotBlocking || !isLinuxDesktop();
-    if (allowLinuxShortcutInference) {
-      const sawExplicitLinuxSnipShortcut =
-        now - lastAltKeyAtRef.current < 900 &&
-        now - lastShiftKeyAtRef.current < 900 &&
-        now - lastSKeyAtRef.current < 900;
-      if (sawExplicitLinuxSnipShortcut) {
-        return 'Alt+Shift+S';
-      }
+    const sawExplicitLinuxSnipShortcut =
+      now - lastAltKeyAtRef.current < 900 &&
+      now - lastShiftKeyAtRef.current < 900 &&
+      now - lastSKeyAtRef.current < 900;
+    if (sawExplicitLinuxSnipShortcut) {
+      return 'Alt+Shift+S';
     }
 
     const sawSoftWindowsSnipShortcut =
@@ -2076,7 +2073,6 @@ export function useProctoringMonitor({
       return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     };
     const screenshotMode = screenshotBlocking ? 'best_effort_block' : 'detect_only';
-    const passThroughLinuxShortcut = !screenshotBlocking && isLinuxDesktop();
 
     const isPrintScreenEvent = (e: KeyboardEvent) => {
       const normalizedKey = normalizeKeyValue(e.key);
@@ -2138,7 +2134,6 @@ export function useProctoringMonitor({
       if (sawWindowsSnipChord) {
         armScreenshotChord('Win+Shift+S');
       } else if (
-        !passThroughLinuxShortcut &&
         e.altKey &&
         (e.shiftKey || normalizedKey === 'shift') &&
         (
@@ -2186,9 +2181,6 @@ export function useProctoringMonitor({
       }
 
       if (e.altKey && e.shiftKey && normalizedKey === 's') {
-        if (passThroughLinuxShortcut) {
-          return;
-        }
         if (screenshotBlocking) {
           e.preventDefault();
         }

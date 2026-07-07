@@ -92,6 +92,18 @@ interface AddonTransaction {
   created_at?: string;
 }
 
+function normalizeBillingInvoice(inv: BillingInvoice): BillingInvoice {
+  const status = (inv.status || '').toUpperCase();
+  const normalizedDueDate =
+    status === 'PAID' && inv.billing_interval && (inv.next_billing_date || inv.subscription_end_date)
+      ? (inv.next_billing_date || inv.subscription_end_date || inv.due_date)
+      : inv.due_date;
+
+  return normalizedDueDate === inv.due_date
+    ? inv
+    : { ...inv, due_date: normalizedDueDate };
+}
+
 export default function BillingHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -137,7 +149,7 @@ export default function BillingHistoryPage() {
       const res = await api.get('/billing/invoices/billing');
 
       const result = res.data;
-      const invoiceData: BillingInvoice[] = result.data?.invoices || [];
+      const invoiceData: BillingInvoice[] = ((result.data?.invoices || []) as BillingInvoice[]).map(normalizeBillingInvoice);
       setInvoices(invoiceData);
 
       const paid = invoiceData.filter(inv => inv.status.toUpperCase() === 'PAID');

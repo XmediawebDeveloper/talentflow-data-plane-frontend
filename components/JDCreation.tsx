@@ -184,6 +184,9 @@ const TITLE_ROLE_BOUNDARY_STOPWORDS = new Set([
 
 const TITLE_ROLE_GENERIC_MODIFIERS = new Set([
   'senior', 'junior', 'lead', 'principal', 'staff', 'expert', 'chief',
+  'associate', 'assistant', 'intern', 'trainee',
+  'entry', 'entry-level', 'entrylevel', 'fresher',
+  'mid', 'mid-level', 'midlevel', 'intermediate',
 ]);
 
 const TITLE_ROLE_TERMINALS = new Set([
@@ -204,6 +207,40 @@ const PROMPT_DETAIL_STOPWORDS = new Set([
   'years', 'year', 'yrs', 'experience', 'exp',
 ]);
 
+const EXCLUSIVE_SENIORITY_BUCKETS = {
+  junior: new Set(['junior', 'entry', 'entry-level', 'entrylevel', 'fresher', 'trainee', 'intern']),
+  mid: new Set(['mid', 'mid-level', 'midlevel', 'intermediate']),
+  senior: new Set(['senior']),
+} as const;
+
+const REPEATED_TEXT_MIN_UNIT_CHARS = 12;
+
+const SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP = new Map<string, string>([
+  ['jr', 'junior'],
+  ['junior', 'junior'],
+  ['sr', 'senior'],
+  ['senior', 'senior'],
+  ['entry', 'entry'],
+  ['entrylevel', 'entry'],
+  ['fresher', 'fresher'],
+  ['trainee', 'trainee'],
+  ['intern', 'intern'],
+  ['mid', 'mid'],
+  ['midlevel', 'mid'],
+  ['intermediate', 'intermediate'],
+]);
+
+const SENIORITY_SUGGESTION_LABELS = new Map<string, string>([
+  ['junior', 'junior'],
+  ['senior', 'senior'],
+  ['entry', 'entry'],
+  ['fresher', 'fresher'],
+  ['trainee', 'trainee'],
+  ['intern', 'intern'],
+  ['mid', 'mid-level'],
+  ['intermediate', 'intermediate'],
+]);
+
 const roleTokenPattern = /[A-Za-z][A-Za-z0-9#+./-]*/g;
 
 const normalizeRoleToken = (value: string): string =>
@@ -211,6 +248,126 @@ const normalizeRoleToken = (value: string): string =>
 
 const extractRoleTokens = (text: string): string[] =>
   Array.from(text.matchAll(roleTokenPattern), (match) => normalizeRoleToken(match[0])).filter(Boolean);
+
+const compactSeniorityToken = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const boundedEditDistance = (left: string, right: string, maxDistance: number): number => {
+  if (left === right) {
+    return 0;
+  }
+  if (Math.abs(left.length - right.length) > maxDistance) {
+    return maxDistance + 1;
+  }
+
+  let previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    const currentRow = [leftIndex + 1];
+    let rowMin = currentRow[0];
+
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+      const cost = left[leftIndex] === right[rightIndex] ? 0 : 1;
+      const currentValue = Math.min(
+        previousRow[rightIndex + 1] + 1,
+        currentRow[rightIndex] + 1,
+        previousRow[rightIndex] + cost,
+      );
+      currentRow.push(currentValue);
+      rowMin = Math.min(rowMin, currentValue);
+    }
+
+    if (rowMin > maxDistance) {
+      return maxDistance + 1;
+    }
+
+    previousRow = currentRow;
+  }
+
+  return previousRow[previousRow.length - 1];
+};
+
+const canonicalizeSeniorityToken = (token: string): string =>
+  SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.get(compactSeniorityToken(token)) || token;
+
+const suggestSeniorityTokenCorrection = (token: string): string | null => {
+  const compactToken = compactSeniorityToken(token);
+  if (!compactToken || SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.has(compactToken) || compactToken.length < 4) {
+    return null;
+  }
+
+  let bestCandidate: string | null = null;
+  let bestDistance: number | null = null;
+
+  Array.from(SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.entries()).forEach(([candidateToken, canonicalToken]) => {
+    if (candidateToken.length < 4 || compactToken.slice(0, 2) !== candidateToken.slice(0, 2)) {
+      return;
+    }
+
+    const maxDistance = Math.max(compactToken.length, candidateToken.length) < 8 ? 1 : 2;
+    const distance = boundedEditDistance(compactToken, candidateToken, maxDistance);
+    if (distance > maxDistance) {
+      return;
+    }
+
+    if (
+      bestDistance === null ||
+      distance < bestDistance ||
+      (distance === bestDistance && candidateToken.length < (bestCandidate?.length || Number.POSITIVE_INFINITY))
+    ) {
+      bestCandidate = canonicalToken;
+      bestDistance = distance;
+    }
+  });
+
+  return bestCandidate;
+};
+
+const collectSeniorityTokenCorrections = (tokens: string[]): Map<string, string> => {
+  const corrections = new Map<string, string>();
+  tokens.forEach((token) => {
+    const suggestion = suggestSeniorityTokenCorrection(token);
+    if (suggestion) {
+      corrections.set(token, suggestion);
+    }
+  });
+  return corrections;
+};
+
+const applySeniorityTokenCorrections = (tokens: string[], corrections?: Map<string, string>): string[] =>
+  tokens.map((token) => corrections?.get(token) || canonicalizeSeniorityToken(token));
+
+const formatSeniorityCorrectionExamples = (corrections: Map<string, string>): string =>
+  Array.from(corrections.entries())
+    .map(([token, suggestion]) => `"${token}" -> "${SENIORITY_SUGGESTION_LABELS.get(suggestion) || suggestion}"`)
+    .join(', ');
+
+const extractSeniorityBuckets = (tokens: string[]): string[] =>
+  Object.entries(EXCLUSIVE_SENIORITY_BUCKETS)
+    .filter(([, bucketTokens]) => tokens.some((token) => bucketTokens.has(token)))
+    .map(([bucket]) => bucket);
+
+const compactRepetitionText = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const hasRepeatedCompactSequence = (value: string, minUnitChars = REPEATED_TEXT_MIN_UNIT_CHARS): boolean => {
+  const compact = compactRepetitionText(value);
+  if (compact.length < minUnitChars * 2) {
+    return false;
+  }
+
+  return new RegExp(`(.{${minUnitChars},}?)\\1+`).test(compact);
+};
+
+const countNonGenericRoleHeads = (tokens: string[]): Map<string, number> => {
+  const counts = new Map<string, number>();
+  tokens.forEach((token) => {
+    if (TITLE_ROLE_GENERIC_MODIFIERS.has(token) || !isRoleHeadToken(token)) {
+      return;
+    }
+    counts.set(token, (counts.get(token) || 0) + 1);
+  });
+  return counts;
+};
 
 const isPlaceholderLikeToken = (token: string): boolean => {
   const normalized = normalizeRoleToken(token);
@@ -298,6 +455,31 @@ const getJobTitleValidationError = (value: string): string => {
     return JOB_TITLE_ENGLISH_ONLY_MESSAGE;
   }
 
+  const tokens = extractRoleTokens(trimmedValue);
+  const seniorityCorrections = collectSeniorityTokenCorrections(tokens);
+  const normalizedTokens = applySeniorityTokenCorrections(tokens, seniorityCorrections);
+  if (hasRepeatedCompactSequence(trimmedValue)) {
+    return 'Job title contains repeated text. Please enter one clear job title only.';
+  }
+
+  const seniorityBuckets = extractSeniorityBuckets(normalizedTokens);
+  if (seniorityCorrections.size > 0) {
+    const correctionExamples = formatSeniorityCorrectionExamples(seniorityCorrections);
+    if (seniorityBuckets.length > 1) {
+      return `Job title contains misspelled or conflicting seniority levels (${correctionExamples}). Please correct the seniority terms and choose only one level, such as Junior, Mid-Level, or Senior.`;
+    }
+    return `Job title contains a possible misspelled seniority/level term (${correctionExamples}). Please correct it before generating the JD.`;
+  }
+
+  if (seniorityBuckets.length > 1) {
+    return 'Job title contains conflicting seniority levels. Please choose only one level, such as Junior, Mid-Level, or Senior.';
+  }
+
+  const roleHeadCount = Array.from(countNonGenericRoleHeads(normalizedTokens).values()).reduce((sum, count) => sum + count, 0);
+  if (roleHeadCount > 1) {
+    return 'Job title appears to contain multiple roles. Please enter one primary job title only.';
+  }
+
   if (!looksLikeValidJobTitle(trimmedValue)) {
     return 'Please enter a real job title such as "Java Developer" or "HR Executive".';
   }
@@ -320,15 +502,45 @@ const getAIPromptValidationError = (value: string): string => {
     return '';
   }
 
+  const seniorityCorrections = collectSeniorityTokenCorrections(tokens);
+  const normalizedTokens = applySeniorityTokenCorrections(tokens, seniorityCorrections);
+  if (hasRepeatedCompactSequence(trimmedValue)) {
+    return 'AI prompt contains repeated text. Please describe the role once and add real details like skills, experience, location, salary, or responsibilities.';
+  }
+
+  const seniorityBuckets = extractSeniorityBuckets(normalizedTokens);
+  const detailTokens = normalizedTokens.filter(
+    (token) => !PROMPT_DETAIL_STOPWORDS.has(token) && !TITLE_ROLE_GENERIC_MODIFIERS.has(token)
+  );
+  const distinctDetailCount = new Set(detailTokens).size;
+
+  if (seniorityCorrections.size > 0) {
+    const correctionExamples = formatSeniorityCorrectionExamples(seniorityCorrections);
+    if (seniorityBuckets.length > 1 && distinctDetailCount < 6) {
+      return `AI prompt contains misspelled or conflicting seniority levels (${correctionExamples}). Please correct the seniority terms and describe one clear level only.`;
+    }
+    return `AI prompt contains a possible misspelled seniority/level term (${correctionExamples}). Please correct it before generating the JD.`;
+  }
+
+  if (seniorityBuckets.length > 1 && distinctDetailCount < 6) {
+    return 'AI prompt contains conflicting seniority levels. Please choose only one level and describe the actual role requirements.';
+  }
+
+  const roleHeadCounts = countNonGenericRoleHeads(normalizedTokens);
+  const dominantRoleHeadCount = Math.max(0, ...Array.from(roleHeadCounts.values()));
+  if (dominantRoleHeadCount >= 2 && distinctDetailCount < 6) {
+    return 'AI prompt repeats the job role too many times. Please describe the role once and add real details like skills, experience, location, salary, or responsibilities.';
+  }
+
   const placeholderTokens = tokens.filter((token) => isPlaceholderLikeToken(token));
   if (placeholderTokens.length === 0) {
     return '';
   }
 
-  const detailTokens = tokens.filter(
+  const placeholderFilteredDetailTokens = tokens.filter(
     (token) => !PROMPT_DETAIL_STOPWORDS.has(token) && !isPlaceholderLikeToken(token)
   );
-  const distinctDetailCount = new Set(detailTokens).size;
+  const distinctPlaceholderDetailCount = new Set(placeholderFilteredDetailTokens).size;
   const tokenCounts = new Map<string, number>();
 
   tokens.forEach((token) => {
@@ -345,12 +557,12 @@ const getAIPromptValidationError = (value: string): string => {
   });
 
   if (
-    (placeholderTokens.length >= 2 && distinctDetailCount < 4) ||
+    (placeholderTokens.length >= 2 && distinctPlaceholderDetailCount < 4) ||
     (
       isPlaceholderLikeToken(mostCommonToken) &&
       mostCommonCount >= 2 &&
       (mostCommonCount / tokens.length) >= 0.3 &&
-      distinctDetailCount < 4
+      distinctPlaceholderDetailCount < 4
     )
   ) {
     return 'AI prompt contains repetitive placeholder text. Please describe actual skills, experience, salary, location, or responsibilities.';
