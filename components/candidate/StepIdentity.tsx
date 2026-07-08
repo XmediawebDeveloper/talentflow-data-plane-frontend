@@ -27,6 +27,25 @@ const LIVENESS_STEPS = [
 ];
 const STEP_DURATION_MS = 2200;
 
+// ── Active-liveness gesture tuning ─────────────────────────────────────────
+// Each step now verifies the ACTUAL gesture (not just face presence) from
+// face-api 68-point landmarks (self-hosted) — plus the expression net for
+// smile when it loads from the CDN fallback. Detection is motion/range based
+// (calibration-free): we look for the change the gesture produces during the
+// ~2.2 s window rather than an absolute pose, so it works across face shapes.
+const LIVENESS_POLL_MS = 250;             // ~8-9 samples per step
+const LIVENESS_MIN_METRIC_SAMPLES = 3;    // need this many landmark reads to enforce a gesture
+const MAX_GESTURE_ATTEMPTS = 3;           // after N failed tries, degrade to presence-only (never hard-block)
+// Blink: eyes open then closed within the step (eye-aspect-ratio dip).
+const EYE_OPEN_EAR = 0.22;
+const EYE_CLOSED_EAR = 0.16;
+const EAR_BLINK_DELTA = 0.09;             // fallback: a clear open→closed swing
+// Turn: horizontal nose-yaw range across the step (head moved side to side).
+const TURN_YAW_RANGE = 0.12;
+// Smile: expression "happy" prob, or a widening of the mouth vs inter-ocular width.
+const SMILE_HAPPY_THRESHOLD = 0.5;
+const SMILE_WIDTH_DELTA = 0.1;
+
 export default function StepIdentity({
   token,
   candidateName = '',
@@ -62,8 +81,10 @@ export default function StepIdentity({
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const livenessFaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Loaded face-api.js module + options for face detection fallback
-  const faceApiRef = useRef<{ module: any; options: any } | null>(null);
+  const livenessAttemptsRef = useRef(0);
+  // Loaded face-api.js module + options. `landmarks` gates gesture checks;
+  // `expressions` is best-effort (CDN-only weights) and only strengthens smile.
+  const faceApiRef = useRef<{ module: any; options: any; landmarks: boolean; expressions: boolean } | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<typeof faceApiRef.current> | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -144,9 +165,27 @@ export default function StepIdentity({
           if (!fa.nets.tinyFaceDetector.isLoaded) {
             await loadFaceApiNetWithFallback(fa.nets.tinyFaceDetector, FACE_API_MODEL_URLS);
           }
+          // 68-point landmarks (self-hosted) — required for blink/turn/smile geometry.
+          let landmarks = false;
+          try {
+            if (!fa.nets.faceLandmark68Net.isLoaded) {
+              await loadFaceApiNetWithFallback(fa.nets.faceLandmark68Net, FACE_API_MODEL_URLS);
+            }
+            landmarks = fa.nets.faceLandmark68Net.isLoaded;
+          } catch { landmarks = false; }
+          // Expression net (CDN-only weights) — best-effort, strengthens smile.
+          let expressions = false;
+          try {
+            if (!fa.nets.faceExpressionNet.isLoaded) {
+              await loadFaceApiNetWithFallback(fa.nets.faceExpressionNet, FACE_API_MODEL_URLS);
+            }
+            expressions = fa.nets.faceExpressionNet.isLoaded;
+          } catch { expressions = false; }
           const loaded = {
             module: fa,
             options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }),
+            landmarks,
+            expressions,
           };
           faceApiRef.current = loaded;
           return loaded;
@@ -203,6 +242,87 @@ export default function StepIdentity({
     }
     return null; // model not available — skip check
   }, [ensureFaceApiFallback]);
+
+  // Sample one liveness frame: face count + gesture geometry from face-api
+  // 68-point landmarks (blink EAR, head yaw, smile). Returns null when the
+  // landmark model isn't available (→ callers degrade to presence-only).
+  const detectLivenessSample = useCallback(async (): Promise<
+    { faceCount: number; ear: number | null; yaw: number | null; smileWidth: number | null; happy: number | null } | null
+  > => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) return null;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    ctx.drawImage(video, 0, 0);
+
+    const fa = await ensureFaceApiFallback();
+    if (!fa || !fa.landmarks) return null; // no landmark model → gesture checks skipped
+    const { module: faceapi, options, expressions: exprAvailable } = fa;
+
+    try {
+      let task = faceapi.detectAllFaces(canvas, options).withFaceLandmarks();
+      if (exprAvailable) task = task.withFaceExpressions();
+      const results = await task;
+      const faceCount = results.length;
+      if (faceCount === 0) return { faceCount: 0, ear: null, yaw: null, smileWidth: null, happy: null };
+
+      // Largest detection = the candidate.
+      let primary = results[0];
+      let bestArea = primary.detection.box.width * primary.detection.box.height;
+      for (const r of results) {
+        const a = r.detection.box.width * r.detection.box.height;
+        if (a > bestArea) { bestArea = a; primary = r; }
+      }
+
+      const p = primary.landmarks.positions as Array<{ x: number; y: number }>;
+      const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+      const interOcular = d(p[36], p[45]) || 1;
+
+      // Eye-aspect-ratio (average of both eyes). Open ≈ 0.3, closed < 0.15.
+      const earLeft = (d(p[37], p[41]) + d(p[38], p[40])) / (2 * (d(p[36], p[39]) || 1));
+      const earRight = (d(p[43], p[47]) + d(p[44], p[46])) / (2 * (d(p[42], p[45]) || 1));
+      const ear = (earLeft + earRight) / 2;
+
+      // Horizontal nose yaw: nose-tip offset from the eye midpoint, normalized.
+      const eyeMidX = (p[36].x + p[45].x) / 2;
+      const yaw = (p[30].x - eyeMidX) / interOcular;
+
+      // Mouth width relative to inter-ocular distance (widens on a smile).
+      const smileWidth = d(p[48], p[54]) / interOcular;
+
+      const happy = exprAvailable && primary.expressions ? primary.expressions.happy : null;
+      return { faceCount, ear, yaw, smileWidth, happy };
+    } catch {
+      return null;
+    }
+  }, [ensureFaceApiFallback]);
+
+  // Decide whether the required gesture actually happened during a step, from
+  // the min/max ranges accumulated across the step's samples.
+  const evaluateGesture = useCallback((
+    stepIdx: number,
+    m: { minEar: number; maxEar: number; minYaw: number; maxYaw: number; minSmile: number; maxSmile: number; maxHappy: number },
+  ): boolean => {
+    switch (stepIdx) {
+      case 0: // Smile — expression prob, or a clear widening of the mouth.
+        return m.maxHappy >= SMILE_HAPPY_THRESHOLD || (m.maxSmile - m.minSmile) >= SMILE_WIDTH_DELTA;
+      case 1: // Blink — eyes open then closed (or a clear open→closed swing).
+        return (m.maxEar >= EYE_OPEN_EAR && m.minEar <= EYE_CLOSED_EAR) || (m.maxEar - m.minEar) >= EAR_BLINK_DELTA;
+      case 2: // Turn — horizontal head movement across the step.
+        return (m.maxYaw - m.minYaw) >= TURN_YAW_RANGE;
+      default:
+        return true;
+    }
+  }, []);
+
+  const GESTURE_FAIL_MESSAGE = [
+    "We didn't detect a smile. Please smile clearly at the camera and try again.",
+    "We didn't detect a blink. Please blink both eyes slowly and try again.",
+    "We didn't detect head movement. Gently turn your head left, then back, and try again.",
+  ];
 
   const startCamera = useCallback(async () => {
     try {
@@ -262,6 +382,11 @@ export default function StepIdentity({
   const handleStartLiveness = useCallback(() => {
     if (cameraError) return;
     setFaceError(null);
+    livenessAttemptsRef.current += 1;
+    // Safety net: after repeated failed tries (bad lighting, unusual face
+    // geometry, flaky model load) stop enforcing the gesture so a genuine
+    // candidate is never permanently locked out — presence is still required.
+    const enforceGestures = livenessAttemptsRef.current <= MAX_GESTURE_ATTEMPTS;
 
     const runStep = (stepIdx: number) => {
       if (stepIdx >= LIVENESS_STEPS.length) {
@@ -286,17 +411,26 @@ export default function StepIdentity({
       setLivenessProgress(0);
       setPhase('liveness');
 
-      // Track face presence during this step
+      // Accumulate face presence + gesture-metric ranges across the step.
       let facePresentCount = 0;
       let faceChecksRun = 0;
+      let metricsSeen = 0;
+      let minEar = Infinity, maxEar = -Infinity;
+      let minYaw = Infinity, maxYaw = -Infinity;
+      let minSmile = Infinity, maxSmile = -Infinity;
+      let maxHappy = 0;
 
-      // Check face every 600ms while the step is running
       if (livenessFaceIntervalRef.current) clearInterval(livenessFaceIntervalRef.current);
       livenessFaceIntervalRef.current = setInterval(async () => {
-        const count = await detectFaceCount();
+        const s = await detectLivenessSample();
         faceChecksRun++;
-        if (count !== null && count === 1) facePresentCount++;
-      }, 600);
+        if (!s) return;
+        if (s.faceCount === 1) facePresentCount++;
+        if (s.ear != null) { metricsSeen++; minEar = Math.min(minEar, s.ear); maxEar = Math.max(maxEar, s.ear); }
+        if (s.yaw != null) { minYaw = Math.min(minYaw, s.yaw); maxYaw = Math.max(maxYaw, s.yaw); }
+        if (s.smileWidth != null) { minSmile = Math.min(minSmile, s.smileWidth); maxSmile = Math.max(maxSmile, s.smileWidth); }
+        if (s.happy != null) maxHappy = Math.max(maxHappy, s.happy);
+      }, LIVENESS_POLL_MS);
 
       const startTime = performance.now();
       const animate = (now: number) => {
@@ -309,12 +443,21 @@ export default function StepIdentity({
           clearInterval(livenessFaceIntervalRef.current!);
           livenessFaceIntervalRef.current = null;
 
-          // Require at least 1 clean face detection during this step
-          // (skip enforcement only if detector wasn't available at all)
+          // 1) A single face must have been visible during the step.
           if (faceChecksRun > 0 && facePresentCount === 0) {
             setFaceError(`Face not visible during "${LIVENESS_STEPS[stepIdx].action}". Position your face clearly and try again.`);
             setPhase('photo_ready');
             return;
+          }
+          // 2) The actual gesture must have happened — enforced only when we
+          //    gathered enough landmark samples (else degrade to presence-only).
+          if (enforceGestures && metricsSeen >= LIVENESS_MIN_METRIC_SAMPLES) {
+            const gestureOk = evaluateGesture(stepIdx, { minEar, maxEar, minYaw, maxYaw, minSmile, maxSmile, maxHappy });
+            if (!gestureOk) {
+              setFaceError(GESTURE_FAIL_MESSAGE[stepIdx] ?? `We couldn't verify "${LIVENESS_STEPS[stepIdx].action}". Please try again.`);
+              setPhase('photo_ready');
+              return;
+            }
           }
           runStep(stepIdx + 1);
         }
@@ -323,7 +466,7 @@ export default function StepIdentity({
     };
 
     runStep(0);
-  }, [cameraError, capturePhoto, detectFaceCount]);
+  }, [cameraError, capturePhoto, detectLivenessSample, evaluateGesture, GESTURE_FAIL_MESSAGE]);
 
   const handleRetake = useCallback(() => {
     stopStream();
