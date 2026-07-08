@@ -6,7 +6,7 @@ import {
   CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
-import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
+import { loadFaceApiWithCpuBackend, ensureFaceApiCpuBackend } from '@/lib/face-api-loader';
 import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback } from '@/lib/proctoring/faceDetection';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
@@ -68,6 +68,9 @@ export default function StepIdentity({
   const [livenessProgress, setLivenessProgress] = useState(0);
   const [cameraError, setCameraError] = useState(false);
   const [faceError, setFaceError] = useState<string | null>(null);
+  // Debug readout (enable with ?livenessDebug=1) — live gesture metrics on screen.
+  const [debugOn, setDebugOn] = useState(false);
+  const [dbg, setDbg] = useState<{ expr: boolean; happy: number | null; ear: number | null; smileW: number | null; yaw: number | null } | null>(null);
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
@@ -214,7 +217,9 @@ export default function StepIdentity({
   useEffect(() => {
     void ensureFaceApiFallback();
     if (typeof window !== 'undefined') {
-      livenessDebugRef.current = new URLSearchParams(window.location.search).get('livenessDebug') === '1';
+      const on = new URLSearchParams(window.location.search).get('livenessDebug') === '1';
+      livenessDebugRef.current = on;
+      setDebugOn(on);
     }
   }, [ensureFaceApiFallback]);
 
@@ -273,13 +278,29 @@ export default function StepIdentity({
     if (!fa || !fa.landmarks) return null; // no landmark model → gesture checks skipped
     const { module: faceapi, expressions: exprAvailable } = fa;
 
-    try {
+    // face-api 0.20 / TF.js 1.x intermittently loses its backend mid-inference
+    // ("Cannot read properties of undefined (reading 'backend')"), which was
+    // throwing on EVERY landmark/expression call → no gesture metrics at all.
+    // Re-ensure the CPU backend before detecting and retry once on a backend
+    // crash (same hardening as InterviewFaceVerification).
+    const isBackendErr = (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err ?? '');
+      return msg.includes('backend') || msg.includes('moveData') || msg.includes('WebGL') || msg.includes('context');
+    };
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await ensureFaceApiCpuBackend(faceapi);
+      } catch {
+        return null;
+      }
+      try {
       // detectSingleFace @ smaller inputSize = far cheaper on the CPU backend,
       // so we get enough samples within the 2.2 s step to judge the gesture.
       const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 288, scoreThreshold: 0.4 });
       let task = faceapi.detectSingleFace(canvas, opts).withFaceLandmarks();
       if (exprAvailable) task = task.withFaceExpressions();
-      const primary = await task;
+      const primary = await Promise.resolve(task);
       if (!primary) return { faceCount: 0, ear: null, yaw: null, smileWidth: null, happy: null };
 
       const p = primary.landmarks.positions as Array<{ x: number; y: number }>;
@@ -300,9 +321,12 @@ export default function StepIdentity({
 
       const happy = exprAvailable && primary.expressions ? primary.expressions.happy : null;
       return { faceCount: 1, ear, yaw, smileWidth, happy };
-    } catch {
-      return null;
+      } catch (err) {
+        if (isBackendErr(err) && attempt === 0) continue; // backend crashed — recover + retry once
+        return null;
+      }
     }
+    return null;
   }, [ensureFaceApiFallback]);
 
   // Decide whether the required gesture actually happened during a step, from
@@ -459,6 +483,7 @@ export default function StepIdentity({
             if (s.smileWidth != null) { minSmile = Math.min(minSmile, s.smileWidth); maxSmile = Math.max(maxSmile, s.smileWidth); }
             if (s.happy != null) maxHappy = Math.max(maxHappy, s.happy);
             if (livenessDebugRef.current) {
+              setDbg({ expr: !!fa?.expressions, happy: s.happy, ear: s.ear, smileW: s.smileWidth, yaw: s.yaw });
               console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] expr=${!!fa?.expressions} happy=${s.happy?.toFixed(2) ?? '—'} ear=${s.ear?.toFixed(3) ?? '—'} yaw=${s.yaw?.toFixed(3) ?? '—'} smileW=${s.smileWidth?.toFixed(3) ?? '—'}`);
             }
           }
@@ -467,6 +492,9 @@ export default function StepIdentity({
           const c = await detectFaceCount();
           if (c !== null) { detectionsRan++; if (c === 1) facePresentCount++; }
         }
+        // Small yield between inferences — avoids starving the microtask queue
+        // (a contributor to the TF.js backend races) and keeps the UI responsive.
+        await new Promise((r) => setTimeout(r, 60));
       }
       if (livenessCancelledRef.current) return;
       if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
@@ -827,6 +855,17 @@ export default function StepIdentity({
                   {LivenessIcon && <LivenessIcon className={`w-4 h-4 ${currentLivenessStep.color}`} />}
                   {currentLivenessStep.action}
                   <span className="text-gray-400 text-xs ml-1">({livenessStepIdx + 1}/{LIVENESS_STEPS.length})</span>
+                </div>
+              )}
+
+              {/* Debug readout (?livenessDebug=1) */}
+              {debugOn && phase === 'liveness' && dbg && (
+                <div className="absolute top-2 left-2 bg-black/80 text-green-300 text-[10px] leading-tight font-mono px-2 py-1 rounded">
+                  <div>expr model: {dbg.expr ? 'loaded' : 'MISSING'}</div>
+                  <div>happy: {dbg.happy != null ? dbg.happy.toFixed(2) : '—'}</div>
+                  <div>ear: {dbg.ear != null ? dbg.ear.toFixed(3) : '—'}</div>
+                  <div>smileW: {dbg.smileW != null ? dbg.smileW.toFixed(3) : '—'}</div>
+                  <div>yaw: {dbg.yaw != null ? dbg.yaw.toFixed(3) : '—'}</div>
                 </div>
               )}
 
