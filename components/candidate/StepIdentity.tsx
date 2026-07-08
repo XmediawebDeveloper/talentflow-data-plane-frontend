@@ -231,6 +231,33 @@ export default function StepIdentity({
     return loaded ?? faceApiRef.current;
   }, []);
 
+  // Lazily load MediaPipe FaceMesh (CDN bundle). Results stream into
+  // faceMeshResultRef via onResults. Returns the instance, or null on failure.
+  // Declared BEFORE the preload effect below — it's in that effect's dep array,
+  // and a later declaration would throw a TDZ error at render.
+  const ensureFaceMesh = useCallback(async (): Promise<any> => {
+    if (faceMeshRef.current) return faceMeshRef.current;
+    if (!faceMeshLoadPromiseRef.current) {
+      faceMeshLoadPromiseRef.current = (async () => {
+        try {
+          await loadMediaPipeScript(MP_FACEMESH_CDN);
+          const FaceMeshClass = (window as any).FaceMesh;
+          if (!FaceMeshClass) return null;
+          const fm = new FaceMeshClass({
+            locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+          });
+          fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+          fm.onResults((r: any) => { faceMeshResultRef.current = r; });
+          faceMeshRef.current = fm;
+          return fm;
+        } catch {
+          return null;
+        }
+      })().finally(() => { faceMeshLoadPromiseRef.current = null; });
+    }
+    return faceMeshLoadPromiseRef.current;
+  }, []);
+
   // Preload up front so detection is warm the moment liveness starts:
   //  • MediaPipe FaceMesh → blink/smile/turn gestures (its WASM takes ~1-2 s).
   //  • face-api → only the photo-capture face COUNT.
@@ -281,31 +308,6 @@ export default function StepIdentity({
     }
     return null; // model not available — skip check
   }, [ensureFaceApiFallback]);
-
-  // Lazily load MediaPipe FaceMesh (CDN bundle). Results stream into
-  // faceMeshResultRef via onResults. Returns the instance, or null on failure.
-  const ensureFaceMesh = useCallback(async (): Promise<any> => {
-    if (faceMeshRef.current) return faceMeshRef.current;
-    if (!faceMeshLoadPromiseRef.current) {
-      faceMeshLoadPromiseRef.current = (async () => {
-        try {
-          await loadMediaPipeScript(MP_FACEMESH_CDN);
-          const FaceMeshClass = (window as any).FaceMesh;
-          if (!FaceMeshClass) return null;
-          const fm = new FaceMeshClass({
-            locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-          });
-          fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-          fm.onResults((r: any) => { faceMeshResultRef.current = r; });
-          faceMeshRef.current = fm;
-          return fm;
-        } catch {
-          return null;
-        }
-      })().finally(() => { faceMeshLoadPromiseRef.current = null; });
-    }
-    return faceMeshLoadPromiseRef.current;
-  }, []);
 
   // Sample one liveness frame with MediaPipe FaceMesh → gesture geometry
   // (blink EAR, head yaw, smile width + corner curl). Returns null if FaceMesh
