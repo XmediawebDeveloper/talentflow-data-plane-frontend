@@ -241,6 +241,11 @@ const SENIORITY_SUGGESTION_LABELS = new Map<string, string>([
   ['intermediate', 'intermediate'],
 ]);
 
+const TITLE_WORK_MODE_PATTERN = /\b(?:remote|hybrid|on[\s-]?site|work\s+from\s+home|wfh|field[\s-]?based)\b/i;
+const TITLE_JOB_TYPE_PATTERN = /\b(?:full[\s-]?time|part[\s-]?time|internship|temporary|permanent|contractual)\b/i;
+const TITLE_VACANCY_PATTERN = /\b(?:hiring\s+\d+|(?:no\.?\s+of\s+)?vacanc(?:y|ies)\s*:?\s*\d+|(?:no\.?\s+of\s+)?openings?\s*:?\s*\d+|\d+\s+positions?\s+available)\b/i;
+const TITLE_SALARY_PATTERN = /(?:₹|\$|USD\b|INR\b|Rs\.?)\s*\d|(?:\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|per\s*annum|per\s*month|per\s*year|ctc|package|k\b|m\b))|(?:(?:salary|sal|compensation|ctc|package|pay|remuneration)\s*(?:is|of|from|:|\s)\s*(?:₹|\$|USD\b|INR\b|Rs\.?)?\s*\d)/i;
+
 const roleTokenPattern = /[A-Za-z][A-Za-z0-9#+./-]*/g;
 
 const normalizeRoleToken = (value: string): string =>
@@ -340,6 +345,23 @@ const formatSeniorityCorrectionExamples = (corrections: Map<string, string>): st
   Array.from(corrections.entries())
     .map(([token, suggestion]) => `"${token}" -> "${SENIORITY_SUGGESTION_LABELS.get(suggestion) || suggestion}"`)
     .join(', ');
+
+const detectTitleMetadataMarkers = (value: string): string[] => {
+  const markers: string[] = [];
+  if (TITLE_WORK_MODE_PATTERN.test(value)) {
+    markers.push('work mode');
+  }
+  if (TITLE_JOB_TYPE_PATTERN.test(value)) {
+    markers.push('job type');
+  }
+  if (TITLE_SALARY_PATTERN.test(value)) {
+    markers.push('salary');
+  }
+  if (TITLE_VACANCY_PATTERN.test(value)) {
+    markers.push('vacancy details');
+  }
+  return markers;
+};
 
 const extractSeniorityBuckets = (tokens: string[]): string[] =>
   Object.entries(EXCLUSIVE_SENIORITY_BUCKETS)
@@ -462,6 +484,11 @@ const getJobTitleValidationError = (value: string): string => {
     return 'Job title contains repeated text. Please enter one clear job title only.';
   }
 
+  const metadataMarkers = detectTitleMetadataMarkers(trimmedValue);
+  if (metadataMarkers.length > 0) {
+    return `Job title should contain only the role name. Remove ${metadataMarkers.join(', ')} from the title and keep those details in the JD fields instead.`;
+  }
+
   const seniorityBuckets = extractSeniorityBuckets(normalizedTokens);
   if (seniorityCorrections.size > 0) {
     const correctionExamples = formatSeniorityCorrectionExamples(seniorityCorrections);
@@ -502,31 +529,21 @@ const getAIPromptValidationError = (value: string): string => {
     return '';
   }
 
-  const seniorityCorrections = collectSeniorityTokenCorrections(tokens);
-  const normalizedTokens = applySeniorityTokenCorrections(tokens, seniorityCorrections);
   if (hasRepeatedCompactSequence(trimmedValue)) {
     return 'AI prompt contains repeated text. Please describe the role once and add real details like skills, experience, location, salary, or responsibilities.';
   }
 
-  const seniorityBuckets = extractSeniorityBuckets(normalizedTokens);
-  const detailTokens = normalizedTokens.filter(
+  const seniorityBuckets = extractSeniorityBuckets(tokens);
+  const detailTokens = tokens.filter(
     (token) => !PROMPT_DETAIL_STOPWORDS.has(token) && !TITLE_ROLE_GENERIC_MODIFIERS.has(token)
   );
   const distinctDetailCount = new Set(detailTokens).size;
-
-  if (seniorityCorrections.size > 0) {
-    const correctionExamples = formatSeniorityCorrectionExamples(seniorityCorrections);
-    if (seniorityBuckets.length > 1 && distinctDetailCount < 6) {
-      return `AI prompt contains misspelled or conflicting seniority levels (${correctionExamples}). Please correct the seniority terms and describe one clear level only.`;
-    }
-    return `AI prompt contains a possible misspelled seniority/level term (${correctionExamples}). Please correct it before generating the JD.`;
-  }
 
   if (seniorityBuckets.length > 1 && distinctDetailCount < 6) {
     return 'AI prompt contains conflicting seniority levels. Please choose only one level and describe the actual role requirements.';
   }
 
-  const roleHeadCounts = countNonGenericRoleHeads(normalizedTokens);
+  const roleHeadCounts = countNonGenericRoleHeads(tokens);
   const dominantRoleHeadCount = Math.max(0, ...Array.from(roleHeadCounts.values()));
   if (dominantRoleHeadCount >= 2 && distinctDetailCount < 6) {
     return 'AI prompt repeats the job role too many times. Please describe the role once and add real details like skills, experience, location, salary, or responsibilities.';
