@@ -35,15 +35,20 @@ const STEP_DURATION_MS = 2200;
 // ~2.2 s window rather than an absolute pose, so it works across face shapes.
 const LIVENESS_MIN_METRIC_SAMPLES = 2;    // min landmark reads before we judge a gesture
 const MAX_GESTURE_ATTEMPTS = 3;           // after N failed tries, degrade to presence-only (never hard-block)
-// Blink: eyes open then closed within the step (eye-aspect-ratio dip).
-const EYE_OPEN_EAR = 0.22;
-const EYE_CLOSED_EAR = 0.16;
-const EAR_BLINK_DELTA = 0.09;             // fallback: a clear open→closed swing
+// Blink: eyes open then closed within the step (eye-aspect-ratio dip). Glasses
+// distort the eye landmarks, so we also accept a RELATIVE closure — EAR dropping
+// to a fraction of its own open value — which is tolerant of per-person/glasses
+// baselines rather than relying on absolute thresholds alone.
+const EYE_OPEN_EAR = 0.2;
+const EYE_CLOSED_EAR = 0.17;
+const EAR_BLINK_DELTA = 0.07;             // absolute open→closed swing
+const EAR_CLOSE_RATIO = 0.72;             // min/max EAR: closed to ≤72% of open
 // Turn: horizontal nose-yaw range across the step (head moved side to side).
 const TURN_YAW_RANGE = 0.12;
-// Smile: expression "happy" prob, or a widening of the mouth vs inter-ocular width.
-const SMILE_HAPPY_THRESHOLD = 0.5;
-const SMILE_WIDTH_DELTA = 0.1;
+// Smile: expression "happy" prob (self-hosted model → reliable, works on a held
+// smile), or a widening of the mouth vs inter-ocular width as a fallback.
+const SMILE_HAPPY_THRESHOLD = 0.4;
+const SMILE_WIDTH_DELTA = 0.08;
 
 export default function StepIdentity({
   token,
@@ -82,6 +87,7 @@ export default function StepIdentity({
   const livenessFaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const livenessAttemptsRef = useRef(0);
   const livenessCancelledRef = useRef(false);
+  const livenessDebugRef = useRef(false); // ?livenessDebug=1 → console-log gesture metrics
   // Loaded face-api.js module + options. `landmarks` gates gesture checks;
   // `expressions` is best-effort (CDN-only weights) and only strengthens smile.
   const faceApiRef = useRef<{ module: any; options: any; landmarks: boolean; expressions: boolean } | null>(null);
@@ -207,6 +213,9 @@ export default function StepIdentity({
   // here means samples flow the moment liveness starts.
   useEffect(() => {
     void ensureFaceApiFallback();
+    if (typeof window !== 'undefined') {
+      livenessDebugRef.current = new URLSearchParams(window.location.search).get('livenessDebug') === '1';
+    }
   }, [ensureFaceApiFallback]);
 
   // Helper: detect number of faces from canvas snapshot (works cross-browser)
@@ -305,8 +314,13 @@ export default function StepIdentity({
     switch (stepIdx) {
       case 0: // Smile — expression prob, or a clear widening of the mouth.
         return m.maxHappy >= SMILE_HAPPY_THRESHOLD || (m.maxSmile - m.minSmile) >= SMILE_WIDTH_DELTA;
-      case 1: // Blink — eyes open then closed (or a clear open→closed swing).
-        return (m.maxEar >= EYE_OPEN_EAR && m.minEar <= EYE_CLOSED_EAR) || (m.maxEar - m.minEar) >= EAR_BLINK_DELTA;
+      case 1: // Blink — absolute open→closed, an EAR swing, or a relative closure
+              // (robust to glasses / narrow eyes where absolute EAR stays low).
+        return (
+          (m.maxEar >= EYE_OPEN_EAR && m.minEar <= EYE_CLOSED_EAR) ||
+          (m.maxEar - m.minEar) >= EAR_BLINK_DELTA ||
+          (m.maxEar > 0 && m.minEar / m.maxEar <= EAR_CLOSE_RATIO)
+        );
       case 2: // Turn — horizontal head movement across the step.
         return (m.maxYaw - m.minYaw) >= TURN_YAW_RANGE;
       default:
@@ -444,6 +458,9 @@ export default function StepIdentity({
             if (s.yaw != null) { minYaw = Math.min(minYaw, s.yaw); maxYaw = Math.max(maxYaw, s.yaw); }
             if (s.smileWidth != null) { minSmile = Math.min(minSmile, s.smileWidth); maxSmile = Math.max(maxSmile, s.smileWidth); }
             if (s.happy != null) maxHappy = Math.max(maxHappy, s.happy);
+            if (livenessDebugRef.current) {
+              console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] expr=${!!fa?.expressions} happy=${s.happy?.toFixed(2) ?? '—'} ear=${s.ear?.toFixed(3) ?? '—'} yaw=${s.yaw?.toFixed(3) ?? '—'} smileW=${s.smileWidth?.toFixed(3) ?? '—'}`);
+            }
           }
         } else {
           // No landmark model (or attempts exhausted) → presence-only fallback.
@@ -464,6 +481,9 @@ export default function StepIdentity({
       }
       // 2) The actual gesture must have happened.
       if (canGesture) {
+        if (livenessDebugRef.current) {
+          console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] DECISION samples=${metricsSeen} earMin=${minEar.toFixed(3)} earMax=${maxEar.toFixed(3)} yawRange=${(maxYaw - minYaw).toFixed(3)} smileRange=${(maxSmile - minSmile).toFixed(3)} maxHappy=${maxHappy.toFixed(2)}`);
+        }
         if (metricsSeen < LIVENESS_MIN_METRIC_SAMPLES) {
           // Couldn't read the face well enough to judge — don't pass silently.
           fail(`Couldn't read your face clearly for "${LIVENESS_STEPS[stepIdx].action}". Improve lighting, face the camera, and try again.`);
