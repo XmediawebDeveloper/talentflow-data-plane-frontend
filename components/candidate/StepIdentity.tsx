@@ -3,7 +3,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Shield, Camera, Lock, AlertCircle, Mail, User,
-  CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
+  CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
@@ -20,52 +20,8 @@ interface StepIdentityProps {
   submitting?: boolean;
 }
 
-const LIVENESS_STEPS = [
-  { action: 'Smile', icon: Smile, description: 'Show a natural smile for the camera', color: 'text-yellow-500' },
-  { action: 'Blink slowly', icon: Eye, description: 'Slowly blink both eyes once', color: 'text-blue-500' },
-  { action: 'Turn slightly', icon: ArrowRight, description: 'Gently turn your head left, then back', color: 'text-purple-500' },
-];
-const STEP_DURATION_MS = 2200;
-
-// Load a CDN <script> once (idempotent) — used for the MediaPipe FaceMesh bundle.
-function loadMediaPipeScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof document === 'undefined') { reject(new Error('no document')); return; }
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src; s.crossOrigin = 'anonymous';
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load: ${src}`));
-    document.head.appendChild(s);
-  });
-}
-const MP_FACEMESH_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
-// MediaPipe FaceMesh landmark indices (subset).
-const MP = {
-  leftEyeOuter: 33, rightEyeOuter: 263, leftEyeInner: 133, rightEyeInner: 362,
-  leftEyeTop: 159, leftEyeBottom: 145, rightEyeTop: 386, rightEyeBottom: 374,
-  noseTip: 1, mouthLeft: 61, mouthRight: 291, lipUpperInner: 13, lipLowerInner: 14,
-};
-
-// ── Active-liveness gesture tuning ─────────────────────────────────────────
-// Each step verifies the ACTUAL gesture (not just face presence) from MediaPipe
-// FaceMesh's 468 refined landmarks. We use MediaPipe (not face-api/TF.js) here
-// because face-api 0.20 / TF.js 1.x crashed its backend on every inference in
-// this rapid loop ("reading 'backend'"). Detection is motion/range based
-// (calibration-free): we look for the CHANGE a gesture produces over the ~2.2 s
-// window, so it works across face shapes / glasses without per-person tuning.
-const LIVENESS_MIN_METRIC_SAMPLES = 2;    // min landmark reads before we judge a gesture
-const MAX_GESTURE_ATTEMPTS = 3;           // after N failed tries, degrade to presence-only (never hard-block)
-// Blink: eye-aspect-ratio dips during the step. Absolute EAR varies with
-// glasses/eye shape, so the primary signal is a RELATIVE closure (EAR dropping
-// to a fraction of its own open value).
-const EAR_BLINK_DELTA = 0.06;             // absolute open→closed swing
-const EAR_CLOSE_RATIO = 0.7;              // min/max EAR: closed to ≤70% of open
-// Turn: horizontal nose-yaw range across the step (head moved side to side).
-const TURN_YAW_RANGE = 0.1;
-// Smile: the mouth widens and/or the corners lift (curvature) during the step.
-const SMILE_WIDTH_DELTA = 0.05;           // mouth widened vs inter-ocular width
-const SMILE_CURL_DELTA = 0.025;           // mouth corners rose relative to lip center
+// Seconds counted down before the identity photo is auto-captured.
+const CAPTURE_COUNTDOWN_SECONDS = 3;
 
 export default function StepIdentity({
   token,
@@ -75,19 +31,14 @@ export default function StepIdentity({
   onVerify,
   submitting = false,
 }: StepIdentityProps) {
-  const [phase, setPhase] = useState<'form' | 'photo_ready' | 'liveness' | 'countdown' | 'captured'>('form');
+  const [phase, setPhase] = useState<'form' | 'photo_ready' | 'countdown' | 'captured'>('form');
   const [name, setName] = useState(candidateName);
   const [email, setEmail] = useState(candidateEmail);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(3);
-  const [livenessStepIdx, setLivenessStepIdx] = useState(0);
-  const [livenessProgress, setLivenessProgress] = useState(0);
+  const [countdown, setCountdown] = useState(CAPTURE_COUNTDOWN_SECONDS);
   const [cameraError, setCameraError] = useState(false);
   const [faceError, setFaceError] = useState<string | null>(null);
-  // Debug readout (enable with ?livenessDebug=1) — live gesture metrics on screen.
-  const [debugOn, setDebugOn] = useState(false);
-  const [dbg, setDbg] = useState<{ ok: boolean; ear: number | null; smileW: number | null; curl: number | null; yaw: number | null } | null>(null);
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
@@ -103,20 +54,10 @@ export default function StepIdentity({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const livenessFaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const livenessAttemptsRef = useRef(0);
-  const livenessCancelledRef = useRef(false);
-  const livenessDebugRef = useRef(false); // ?livenessDebug=1 → console-log gesture metrics
   // Loaded face-api.js module + options — used only for the photo-capture face
-  // COUNT (0 / 1 / >1). Gesture liveness uses MediaPipe FaceMesh (below).
-  const faceApiRef = useRef<{ module: any; options: any; landmarks: boolean; expressions: boolean } | null>(null);
+  // COUNT check (0 / 1 / >1).
+  const faceApiRef = useRef<{ module: any; options: any } | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<typeof faceApiRef.current> | null>(null);
-  // MediaPipe FaceMesh — drives blink/smile/turn. Its own WASM/GL pipeline (no
-  // TF.js), so it avoids the face-api backend crash. Results arrive via onResults.
-  const faceMeshRef = useRef<any>(null);
-  const faceMeshResultRef = useRef<any>(null);
-  const faceMeshLoadPromiseRef = useRef<Promise<any> | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid && otpVerified;
@@ -170,14 +111,11 @@ export default function StepIdentity({
 
 
   const stopStream = useCallback(() => {
-    livenessCancelledRef.current = true; // abort any in-flight liveness sampling loop
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
-    if (livenessFaceIntervalRef.current) { clearInterval(livenessFaceIntervalRef.current); livenessFaceIntervalRef.current = null; }
   }, []);
 
   useEffect(() => {
@@ -197,27 +135,9 @@ export default function StepIdentity({
           if (!fa.nets.tinyFaceDetector.isLoaded) {
             await loadFaceApiNetWithFallback(fa.nets.tinyFaceDetector, FACE_API_MODEL_URLS);
           }
-          // 68-point landmarks (self-hosted) — required for blink/turn/smile geometry.
-          let landmarks = false;
-          try {
-            if (!fa.nets.faceLandmark68Net.isLoaded) {
-              await loadFaceApiNetWithFallback(fa.nets.faceLandmark68Net, FACE_API_MODEL_URLS);
-            }
-            landmarks = fa.nets.faceLandmark68Net.isLoaded;
-          } catch { landmarks = false; }
-          // Expression net (CDN-only weights) — best-effort, strengthens smile.
-          let expressions = false;
-          try {
-            if (!fa.nets.faceExpressionNet.isLoaded) {
-              await loadFaceApiNetWithFallback(fa.nets.faceExpressionNet, FACE_API_MODEL_URLS);
-            }
-            expressions = fa.nets.faceExpressionNet.isLoaded;
-          } catch { expressions = false; }
           const loaded = {
             module: fa,
             options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }),
-            landmarks,
-            expressions,
           };
           faceApiRef.current = loaded;
           return loaded;
@@ -231,47 +151,10 @@ export default function StepIdentity({
     return loaded ?? faceApiRef.current;
   }, []);
 
-  // Lazily load MediaPipe FaceMesh (CDN bundle). Results stream into
-  // faceMeshResultRef via onResults. Returns the instance, or null on failure.
-  // Declared BEFORE the preload effect below — it's in that effect's dep array,
-  // and a later declaration would throw a TDZ error at render.
-  const ensureFaceMesh = useCallback(async (): Promise<any> => {
-    if (faceMeshRef.current) return faceMeshRef.current;
-    if (!faceMeshLoadPromiseRef.current) {
-      faceMeshLoadPromiseRef.current = (async () => {
-        try {
-          await loadMediaPipeScript(MP_FACEMESH_CDN);
-          const FaceMeshClass = (window as any).FaceMesh;
-          if (!FaceMeshClass) return null;
-          const fm = new FaceMeshClass({
-            locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-          });
-          fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-          fm.onResults((r: any) => { faceMeshResultRef.current = r; });
-          faceMeshRef.current = fm;
-          return fm;
-        } catch {
-          return null;
-        }
-      })().finally(() => { faceMeshLoadPromiseRef.current = null; });
-    }
-    return faceMeshLoadPromiseRef.current;
-  }, []);
-
-  // Preload up front so detection is warm the moment liveness starts:
-  //  • MediaPipe FaceMesh → blink/smile/turn gestures (its WASM takes ~1-2 s).
-  //  • face-api → only the photo-capture face COUNT.
-  // Lazy-loading during the 2.2 s step left no time for inference, so the step
-  // used to advance without verifying the gesture.
+  // Warm the face-api detector up front so the capture face-count check is ready.
   useEffect(() => {
-    void ensureFaceMesh();
     void ensureFaceApiFallback();
-    if (typeof window !== 'undefined') {
-      const on = new URLSearchParams(window.location.search).get('livenessDebug') === '1';
-      livenessDebugRef.current = on;
-      setDebugOn(on);
-    }
-  }, [ensureFaceMesh, ensureFaceApiFallback]);
+  }, [ensureFaceApiFallback]);
 
   // Helper: detect number of faces from canvas snapshot (works cross-browser)
   const detectFaceCount = useCallback(async (): Promise<number | null> => {
@@ -308,70 +191,6 @@ export default function StepIdentity({
     }
     return null; // model not available — skip check
   }, [ensureFaceApiFallback]);
-
-  // Sample one liveness frame with MediaPipe FaceMesh → gesture geometry
-  // (blink EAR, head yaw, smile width + corner curl). Returns null if FaceMesh
-  // isn't available (→ callers degrade to presence-only via detectFaceCount).
-  const detectLivenessSample = useCallback(async (): Promise<
-    { faceCount: number; ear: number | null; yaw: number | null; smileWidth: number | null; curl: number | null } | null
-  > => {
-    const video = videoRef.current;
-    if (!video || video.readyState < 2 || video.videoWidth === 0) return null;
-    const fm = await ensureFaceMesh();
-    if (!fm) return null;
-    try {
-      await fm.send({ image: video });
-    } catch {
-      return null;
-    }
-    const faces = faceMeshResultRef.current?.multiFaceLandmarks;
-    if (!faces || faces.length === 0) return { faceCount: 0, ear: null, yaw: null, smileWidth: null, curl: null };
-
-    const lm = faces[0] as Array<{ x: number; y: number }>;
-    const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-    const interOcular = d(lm[MP.leftEyeOuter], lm[MP.rightEyeOuter]) || 1;
-
-    // Eye-aspect-ratio per eye: vertical opening / horizontal width.
-    const earLeft = d(lm[MP.leftEyeTop], lm[MP.leftEyeBottom]) / (d(lm[MP.leftEyeOuter], lm[MP.leftEyeInner]) || 1);
-    const earRight = d(lm[MP.rightEyeTop], lm[MP.rightEyeBottom]) / (d(lm[MP.rightEyeInner], lm[MP.rightEyeOuter]) || 1);
-    const ear = (earLeft + earRight) / 2;
-
-    // Horizontal nose yaw: nose-tip offset from the eye midpoint, normalized.
-    const eyeMidX = (lm[MP.leftEyeOuter].x + lm[MP.rightEyeOuter].x) / 2;
-    const yaw = (lm[MP.noseTip].x - eyeMidX) / interOcular;
-
-    // Smile: mouth width (widens) + corner curl (corners rise above the lip line).
-    const smileWidth = d(lm[MP.mouthLeft], lm[MP.mouthRight]) / interOcular;
-    const mouthCenterY = (lm[MP.lipUpperInner].y + lm[MP.lipLowerInner].y) / 2;
-    const cornerY = (lm[MP.mouthLeft].y + lm[MP.mouthRight].y) / 2;
-    const curl = (mouthCenterY - cornerY) / interOcular; // >0 when corners are higher than the lip center
-
-    return { faceCount: 1, ear, yaw, smileWidth, curl };
-  }, [ensureFaceMesh]);
-
-  // Decide whether the required gesture actually happened during a step, from
-  // the min/max ranges accumulated across the step's samples.
-  const evaluateGesture = useCallback((
-    stepIdx: number,
-    m: { minEar: number; maxEar: number; minYaw: number; maxYaw: number; minSmile: number; maxSmile: number; minCurl: number; maxCurl: number },
-  ): boolean => {
-    switch (stepIdx) {
-      case 0: // Smile — mouth widened OR corners lifted (curvature) during the step.
-        return (m.maxSmile - m.minSmile) >= SMILE_WIDTH_DELTA || (m.maxCurl - m.minCurl) >= SMILE_CURL_DELTA;
-      case 1: // Blink — a clear EAR swing, or a relative closure (glasses-tolerant).
-        return (m.maxEar - m.minEar) >= EAR_BLINK_DELTA || (m.maxEar > 0 && m.minEar / m.maxEar <= EAR_CLOSE_RATIO);
-      case 2: // Turn — horizontal head movement across the step.
-        return (m.maxYaw - m.minYaw) >= TURN_YAW_RANGE;
-      default:
-        return true;
-    }
-  }, []);
-
-  const GESTURE_FAIL_MESSAGE = [
-    "We didn't detect a smile. Please smile clearly at the camera and try again.",
-    "We didn't detect a blink. Please blink both eyes slowly and try again.",
-    "We didn't detect head movement. Gently turn your head left, then back, and try again.",
-  ];
 
   const startCamera = useCallback(async () => {
     try {
@@ -428,121 +247,25 @@ export default function StepIdentity({
     if (isFormValid) setPhase('photo_ready');
   }, [isFormValid]);
 
-  const handleStartLiveness = useCallback(() => {
+  const handleStartCapture = useCallback(() => {
     if (cameraError) return;
     setFaceError(null);
-    livenessCancelledRef.current = false;
-    livenessAttemptsRef.current += 1;
-    // Safety net: after repeated failed tries (bad lighting, unusual face
-    // geometry, flaky model load) stop enforcing the gesture so a genuine
-    // candidate is never permanently locked out — presence is still required.
-    const enforceGestures = livenessAttemptsRef.current <= MAX_GESTURE_ATTEMPTS;
-
-    const runStep = async (stepIdx: number) => {
-      if (livenessCancelledRef.current) return;
-      if (stepIdx >= LIVENESS_STEPS.length) {
-        // All liveness steps done — start countdown
-        setPhase('countdown');
-        setCountdown(3);
-        let count = 3;
-        countdownRef.current = setInterval(async () => {
-          count -= 1;
-          if (count <= 0) {
-            clearInterval(countdownRef.current!);
-            countdownRef.current = null;
-            await capturePhoto();
-          } else {
-            setCountdown(count);
-          }
-        }, 1000);
-        return;
+    // Short countdown so the candidate can frame themselves, then auto-capture.
+    setPhase('countdown');
+    setCountdown(CAPTURE_COUNTDOWN_SECONDS);
+    let count = CAPTURE_COUNTDOWN_SECONDS;
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(async () => {
+      count -= 1;
+      if (count <= 0) {
+        clearInterval(countdownRef.current!);
+        countdownRef.current = null;
+        await capturePhoto();
+      } else {
+        setCountdown(count);
       }
-
-      setLivenessStepIdx(stepIdx);
-      setLivenessProgress(0);
-      setPhase('liveness');
-
-      // Can we actually verify the gesture this run? Needs MediaPipe FaceMesh.
-      const fm = await ensureFaceMesh();
-      if (livenessCancelledRef.current) return;
-      const canGesture = enforceGestures && !!fm;
-
-      // Accumulate face presence + gesture-metric ranges across the step.
-      let detectionsRan = 0;   // samples where the detector actually returned a result
-      let facePresentCount = 0;
-      let metricsSeen = 0;
-      let minEar = Infinity, maxEar = -Infinity;
-      let minYaw = Infinity, maxYaw = -Infinity;
-      let minSmile = Infinity, maxSmile = -Infinity;
-      let minCurl = Infinity, maxCurl = -Infinity;
-
-      const startTime = performance.now();
-      // Progress bar (rAF, decoupled from the sampling loop).
-      const animate = (now: number) => {
-        if (livenessCancelledRef.current) return;
-        setLivenessProgress(Math.min(((now - startTime) / STEP_DURATION_MS) * 100, 100));
-        if (now - startTime < STEP_DURATION_MS) animFrameRef.current = requestAnimationFrame(animate);
-      };
-      animFrameRef.current = requestAnimationFrame(animate);
-
-      // Sequential sampling loop — runs inferences back-to-back (no overlap) as
-      // fast as the CPU backend allows for the full step window.
-      while (!livenessCancelledRef.current && performance.now() - startTime < STEP_DURATION_MS) {
-        if (canGesture) {
-          const s = await detectLivenessSample();
-          if (s) {
-            detectionsRan++;
-            if (s.faceCount === 1) facePresentCount++;
-            if (s.ear != null) { metricsSeen++; minEar = Math.min(minEar, s.ear); maxEar = Math.max(maxEar, s.ear); }
-            if (s.yaw != null) { minYaw = Math.min(minYaw, s.yaw); maxYaw = Math.max(maxYaw, s.yaw); }
-            if (s.smileWidth != null) { minSmile = Math.min(minSmile, s.smileWidth); maxSmile = Math.max(maxSmile, s.smileWidth); }
-            if (s.curl != null) { minCurl = Math.min(minCurl, s.curl); maxCurl = Math.max(maxCurl, s.curl); }
-            if (livenessDebugRef.current) {
-              setDbg({ ok: true, ear: s.ear, smileW: s.smileWidth, curl: s.curl, yaw: s.yaw });
-              console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] ear=${s.ear?.toFixed(3) ?? '—'} yaw=${s.yaw?.toFixed(3) ?? '—'} smileW=${s.smileWidth?.toFixed(3) ?? '—'} curl=${s.curl?.toFixed(3) ?? '—'}`);
-            }
-          }
-        } else {
-          // No landmark model (or attempts exhausted) → presence-only fallback.
-          const c = await detectFaceCount();
-          if (c !== null) { detectionsRan++; if (c === 1) facePresentCount++; }
-        }
-        // Small yield between inferences — avoids starving the microtask queue
-        // (a contributor to the TF.js backend races) and keeps the UI responsive.
-        await new Promise((r) => setTimeout(r, 60));
-      }
-      if (livenessCancelledRef.current) return;
-      if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
-      setLivenessProgress(100);
-
-      const fail = (msg: string) => { setFaceError(msg); setPhase('photo_ready'); };
-
-      // 1) A single face must have been visible (only enforce if detection ran).
-      if (detectionsRan > 0 && facePresentCount === 0) {
-        fail(`Face not visible during "${LIVENESS_STEPS[stepIdx].action}". Position your face clearly and try again.`);
-        return;
-      }
-      // 2) The actual gesture must have happened.
-      if (canGesture) {
-        if (livenessDebugRef.current) {
-          console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] DECISION samples=${metricsSeen} earRange=${(maxEar - minEar).toFixed(3)} earRatio=${(maxEar > 0 ? minEar / maxEar : 1).toFixed(2)} yawRange=${(maxYaw - minYaw).toFixed(3)} smileRange=${(maxSmile - minSmile).toFixed(3)} curlRange=${(maxCurl - minCurl).toFixed(3)}`);
-        }
-        if (metricsSeen < LIVENESS_MIN_METRIC_SAMPLES) {
-          // Couldn't read the face well enough to judge — don't pass silently.
-          fail(`Couldn't read your face clearly for "${LIVENESS_STEPS[stepIdx].action}". Improve lighting, face the camera, and try again.`);
-          return;
-        }
-        const gestureOk = evaluateGesture(stepIdx, { minEar, maxEar, minYaw, maxYaw, minSmile, maxSmile, minCurl, maxCurl });
-        if (!gestureOk) {
-          fail(GESTURE_FAIL_MESSAGE[stepIdx] ?? `We couldn't verify "${LIVENESS_STEPS[stepIdx].action}". Please try again.`);
-          return;
-        }
-      }
-      runStep(stepIdx + 1);
-    };
-
-    runStep(0);
-  }, [cameraError, capturePhoto, ensureFaceMesh, detectLivenessSample, detectFaceCount, evaluateGesture, GESTURE_FAIL_MESSAGE]);
+    }, 1000);
+  }, [cameraError, capturePhoto]);
 
   const handleRetake = useCallback(() => {
     stopStream();
@@ -811,9 +534,6 @@ export default function StepIdentity({
   }
 
   // ── PHASES B-E: Live Photo Capture ──
-  const currentLivenessStep = LIVENESS_STEPS[livenessStepIdx];
-  const LivenessIcon = currentLivenessStep?.icon;
-
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
       {progressStepper}
@@ -856,31 +576,10 @@ export default function StepIdentity({
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
-                    phase === 'liveness' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.4)]' :
                     phase === 'countdown' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
                     'border-white/50'
                   }`} />
                   <p className="absolute bottom-12 text-xs text-white/70 font-medium">Position face inside oval</p>
-                </div>
-              )}
-
-              {/* Liveness instruction overlay */}
-              {phase === 'liveness' && currentLivenessStep && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
-                  {LivenessIcon && <LivenessIcon className={`w-4 h-4 ${currentLivenessStep.color}`} />}
-                  {currentLivenessStep.action}
-                  <span className="text-gray-400 text-xs ml-1">({livenessStepIdx + 1}/{LIVENESS_STEPS.length})</span>
-                </div>
-              )}
-
-              {/* Debug readout (?livenessDebug=1) */}
-              {debugOn && phase === 'liveness' && dbg && (
-                <div className="absolute top-2 left-2 bg-black/80 text-green-300 text-[10px] leading-tight font-mono px-2 py-1 rounded">
-                  <div>facemesh: {dbg.ok ? 'ok' : 'no face'}</div>
-                  <div>ear: {dbg.ear != null ? dbg.ear.toFixed(3) : '—'}</div>
-                  <div>smileW: {dbg.smileW != null ? dbg.smileW.toFixed(3) : '—'}</div>
-                  <div>curl: {dbg.curl != null ? dbg.curl.toFixed(3) : '—'}</div>
-                  <div>yaw: {dbg.yaw != null ? dbg.yaw.toFixed(3) : '—'}</div>
                 </div>
               )}
 
@@ -913,23 +612,21 @@ export default function StepIdentity({
                   <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                       <Shield className="w-4 h-4 text-gray-600" />
-                      <h4 className="text-sm font-semibold text-gray-900">Liveness Check Process</h4>
+                      <h4 className="text-sm font-semibold text-gray-900">How it works</h4>
                     </div>
                     <div className="px-4 py-3 space-y-3">
-                      {LIVENESS_STEPS.map((step, i) => (
-                        <div key={step.action} className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">{i + 1}</div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{step.action}</p>
-                            <p className="text-xs text-gray-500">{step.description}</p>
-                          </div>
-                        </div>
-                      ))}
                       <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">4</div>
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">1</div>
                         <div>
-                          <p className="text-sm font-medium text-gray-800">Photo Captured</p>
-                          <p className="text-xs text-gray-500">Auto-capture after liveness check</p>
+                          <p className="text-sm font-medium text-gray-800">Position your face</p>
+                          <p className="text-xs text-gray-500">Center your face inside the oval, with only you in frame.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">2</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">Capture</p>
+                          <p className="text-xs text-gray-500">A short countdown, then your photo is taken automatically.</p>
                         </div>
                       </div>
                     </div>
@@ -943,57 +640,12 @@ export default function StepIdentity({
                   )}
 
                   <button
-                    type="button" onClick={handleStartLiveness} disabled={cameraError}
+                    type="button" onClick={handleStartCapture} disabled={cameraError}
                     className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
                   >
-                    {faceError ? 'Retry Liveness Check' : 'Start Liveness Check →'}
+                    {faceError ? 'Retake Photo' : 'Capture Photo →'}
                   </button>
                 </>
-              )}
-
-              {phase === 'liveness' && currentLivenessStep && (
-                <div className="space-y-4">
-                  {/* Step tracker */}
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="text-sm font-semibold text-gray-900">Liveness Detection</h4>
-                    <span className="text-xs text-gray-500">{livenessStepIdx + 1} / {LIVENESS_STEPS.length}</span>
-                  </div>
-
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                    <div className="flex justify-center mb-2">
-                      <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                        {LivenessIcon && <LivenessIcon className={`w-6 h-6 ${currentLivenessStep.color}`} />}
-                      </div>
-                    </div>
-                    <p className="text-xl font-bold text-green-900">{currentLivenessStep.action}</p>
-                    <p className="text-xs text-green-700 mt-1">{currentLivenessStep.description}</p>
-                  </div>
-
-                  {/* Animated progress bar */}
-                  <div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 rounded-full transition-none"
-                        style={{ width: `${livenessProgress}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 mt-1.5 text-green-600 text-xs font-medium">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Detecting…
-                    </div>
-                  </div>
-
-                  {/* Step dots */}
-                  <div className="flex items-center justify-center gap-2">
-                    {LIVENESS_STEPS.map((s, i) => (
-                      <div key={s.action} className={`h-2 rounded-full transition-all ${
-                        i < livenessStepIdx ? 'w-6 bg-green-500' :
-                        i === livenessStepIdx ? 'w-6 bg-green-400 animate-pulse' :
-                        'w-2 bg-gray-200'
-                      }`} />
-                    ))}
-                  </div>
-                </div>
               )}
 
               {phase === 'countdown' && (
@@ -1001,10 +653,6 @@ export default function StepIdentity({
                   <Camera className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
                   <h4 className="text-sm font-semibold text-yellow-900">Capturing Photo…</h4>
                   <p className="text-xs text-yellow-800 mt-1">Hold still and look at the camera</p>
-                  <div className="flex items-center justify-center gap-1 mt-3">
-                    <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-xs text-green-700 font-medium">All liveness checks passed!</span>
-                  </div>
                 </div>
               )}
 
