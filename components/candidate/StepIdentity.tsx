@@ -6,7 +6,7 @@ import {
   CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
-import { loadFaceApiWithCpuBackend, ensureFaceApiCpuBackend } from '@/lib/face-api-loader';
+import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback } from '@/lib/proctoring/faceDetection';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
@@ -27,28 +27,45 @@ const LIVENESS_STEPS = [
 ];
 const STEP_DURATION_MS = 2200;
 
+// Load a CDN <script> once (idempotent) — used for the MediaPipe FaceMesh bundle.
+function loadMediaPipeScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof document === 'undefined') { reject(new Error('no document')); return; }
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.crossOrigin = 'anonymous';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+const MP_FACEMESH_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
+// MediaPipe FaceMesh landmark indices (subset).
+const MP = {
+  leftEyeOuter: 33, rightEyeOuter: 263, leftEyeInner: 133, rightEyeInner: 362,
+  leftEyeTop: 159, leftEyeBottom: 145, rightEyeTop: 386, rightEyeBottom: 374,
+  noseTip: 1, mouthLeft: 61, mouthRight: 291, lipUpperInner: 13, lipLowerInner: 14,
+};
+
 // ── Active-liveness gesture tuning ─────────────────────────────────────────
-// Each step now verifies the ACTUAL gesture (not just face presence) from
-// face-api 68-point landmarks (self-hosted) — plus the expression net for
-// smile when it loads from the CDN fallback. Detection is motion/range based
-// (calibration-free): we look for the change the gesture produces during the
-// ~2.2 s window rather than an absolute pose, so it works across face shapes.
+// Each step verifies the ACTUAL gesture (not just face presence) from MediaPipe
+// FaceMesh's 468 refined landmarks. We use MediaPipe (not face-api/TF.js) here
+// because face-api 0.20 / TF.js 1.x crashed its backend on every inference in
+// this rapid loop ("reading 'backend'"). Detection is motion/range based
+// (calibration-free): we look for the CHANGE a gesture produces over the ~2.2 s
+// window, so it works across face shapes / glasses without per-person tuning.
 const LIVENESS_MIN_METRIC_SAMPLES = 2;    // min landmark reads before we judge a gesture
 const MAX_GESTURE_ATTEMPTS = 3;           // after N failed tries, degrade to presence-only (never hard-block)
-// Blink: eyes open then closed within the step (eye-aspect-ratio dip). Glasses
-// distort the eye landmarks, so we also accept a RELATIVE closure — EAR dropping
-// to a fraction of its own open value — which is tolerant of per-person/glasses
-// baselines rather than relying on absolute thresholds alone.
-const EYE_OPEN_EAR = 0.2;
-const EYE_CLOSED_EAR = 0.17;
-const EAR_BLINK_DELTA = 0.07;             // absolute open→closed swing
-const EAR_CLOSE_RATIO = 0.72;             // min/max EAR: closed to ≤72% of open
+// Blink: eye-aspect-ratio dips during the step. Absolute EAR varies with
+// glasses/eye shape, so the primary signal is a RELATIVE closure (EAR dropping
+// to a fraction of its own open value).
+const EAR_BLINK_DELTA = 0.06;             // absolute open→closed swing
+const EAR_CLOSE_RATIO = 0.7;              // min/max EAR: closed to ≤70% of open
 // Turn: horizontal nose-yaw range across the step (head moved side to side).
-const TURN_YAW_RANGE = 0.12;
-// Smile: expression "happy" prob (self-hosted model → reliable, works on a held
-// smile), or a widening of the mouth vs inter-ocular width as a fallback.
-const SMILE_HAPPY_THRESHOLD = 0.4;
-const SMILE_WIDTH_DELTA = 0.08;
+const TURN_YAW_RANGE = 0.1;
+// Smile: the mouth widens and/or the corners lift (curvature) during the step.
+const SMILE_WIDTH_DELTA = 0.05;           // mouth widened vs inter-ocular width
+const SMILE_CURL_DELTA = 0.025;           // mouth corners rose relative to lip center
 
 export default function StepIdentity({
   token,
@@ -70,7 +87,7 @@ export default function StepIdentity({
   const [faceError, setFaceError] = useState<string | null>(null);
   // Debug readout (enable with ?livenessDebug=1) — live gesture metrics on screen.
   const [debugOn, setDebugOn] = useState(false);
-  const [dbg, setDbg] = useState<{ expr: boolean; happy: number | null; ear: number | null; smileW: number | null; yaw: number | null } | null>(null);
+  const [dbg, setDbg] = useState<{ ok: boolean; ear: number | null; smileW: number | null; curl: number | null; yaw: number | null } | null>(null);
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
@@ -91,10 +108,15 @@ export default function StepIdentity({
   const livenessAttemptsRef = useRef(0);
   const livenessCancelledRef = useRef(false);
   const livenessDebugRef = useRef(false); // ?livenessDebug=1 → console-log gesture metrics
-  // Loaded face-api.js module + options. `landmarks` gates gesture checks;
-  // `expressions` is best-effort (CDN-only weights) and only strengthens smile.
+  // Loaded face-api.js module + options — used only for the photo-capture face
+  // COUNT (0 / 1 / >1). Gesture liveness uses MediaPipe FaceMesh (below).
   const faceApiRef = useRef<{ module: any; options: any; landmarks: boolean; expressions: boolean } | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<typeof faceApiRef.current> | null>(null);
+  // MediaPipe FaceMesh — drives blink/smile/turn. Its own WASM/GL pipeline (no
+  // TF.js), so it avoids the face-api backend crash. Results arrive via onResults.
+  const faceMeshRef = useRef<any>(null);
+  const faceMeshResultRef = useRef<any>(null);
+  const faceMeshLoadPromiseRef = useRef<Promise<any> | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid && otpVerified;
@@ -209,19 +231,20 @@ export default function StepIdentity({
     return loaded ?? faceApiRef.current;
   }, []);
 
-  // Preload face-api (detector + 68-pt landmarks + expressions) up front. The
-  // liveness gesture checks need landmarks, and lazy-loading them during the
-  // 2.2 s step was too slow on the CPU backend — no inference finished in time,
-  // so the step advanced WITHOUT verifying blink/smile/turn. Warming the models
-  // here means samples flow the moment liveness starts.
+  // Preload up front so detection is warm the moment liveness starts:
+  //  • MediaPipe FaceMesh → blink/smile/turn gestures (its WASM takes ~1-2 s).
+  //  • face-api → only the photo-capture face COUNT.
+  // Lazy-loading during the 2.2 s step left no time for inference, so the step
+  // used to advance without verifying the gesture.
   useEffect(() => {
+    void ensureFaceMesh();
     void ensureFaceApiFallback();
     if (typeof window !== 'undefined') {
       const on = new URLSearchParams(window.location.search).get('livenessDebug') === '1';
       livenessDebugRef.current = on;
       setDebugOn(on);
     }
-  }, [ensureFaceApiFallback]);
+  }, [ensureFaceMesh, ensureFaceApiFallback]);
 
   // Helper: detect number of faces from canvas snapshot (works cross-browser)
   const detectFaceCount = useCallback(async (): Promise<number | null> => {
@@ -259,92 +282,82 @@ export default function StepIdentity({
     return null; // model not available — skip check
   }, [ensureFaceApiFallback]);
 
-  // Sample one liveness frame: face count + gesture geometry from face-api
-  // 68-point landmarks (blink EAR, head yaw, smile). Returns null when the
-  // landmark model isn't available (→ callers degrade to presence-only).
+  // Lazily load MediaPipe FaceMesh (CDN bundle). Results stream into
+  // faceMeshResultRef via onResults. Returns the instance, or null on failure.
+  const ensureFaceMesh = useCallback(async (): Promise<any> => {
+    if (faceMeshRef.current) return faceMeshRef.current;
+    if (!faceMeshLoadPromiseRef.current) {
+      faceMeshLoadPromiseRef.current = (async () => {
+        try {
+          await loadMediaPipeScript(MP_FACEMESH_CDN);
+          const FaceMeshClass = (window as any).FaceMesh;
+          if (!FaceMeshClass) return null;
+          const fm = new FaceMeshClass({
+            locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+          });
+          fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+          fm.onResults((r: any) => { faceMeshResultRef.current = r; });
+          faceMeshRef.current = fm;
+          return fm;
+        } catch {
+          return null;
+        }
+      })().finally(() => { faceMeshLoadPromiseRef.current = null; });
+    }
+    return faceMeshLoadPromiseRef.current;
+  }, []);
+
+  // Sample one liveness frame with MediaPipe FaceMesh → gesture geometry
+  // (blink EAR, head yaw, smile width + corner curl). Returns null if FaceMesh
+  // isn't available (→ callers degrade to presence-only via detectFaceCount).
   const detectLivenessSample = useCallback(async (): Promise<
-    { faceCount: number; ear: number | null; yaw: number | null; smileWidth: number | null; happy: number | null } | null
+    { faceCount: number; ear: number | null; yaw: number | null; smileWidth: number | null; curl: number | null } | null
   > => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return null;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
-    canvas.width = video.videoWidth || 320;
-    canvas.height = video.videoHeight || 240;
-    ctx.drawImage(video, 0, 0);
-
-    const fa = await ensureFaceApiFallback();
-    if (!fa || !fa.landmarks) return null; // no landmark model → gesture checks skipped
-    const { module: faceapi, expressions: exprAvailable } = fa;
-
-    // face-api 0.20 / TF.js 1.x intermittently loses its backend mid-inference
-    // ("Cannot read properties of undefined (reading 'backend')"), which was
-    // throwing on EVERY landmark/expression call → no gesture metrics at all.
-    // Re-ensure the CPU backend before detecting and retry once on a backend
-    // crash (same hardening as InterviewFaceVerification).
-    const isBackendErr = (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err ?? '');
-      return msg.includes('backend') || msg.includes('moveData') || msg.includes('WebGL') || msg.includes('context');
-    };
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        await ensureFaceApiCpuBackend(faceapi);
-      } catch {
-        return null;
-      }
-      try {
-      // detectSingleFace @ smaller inputSize = far cheaper on the CPU backend,
-      // so we get enough samples within the 2.2 s step to judge the gesture.
-      const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 288, scoreThreshold: 0.4 });
-      let task = faceapi.detectSingleFace(canvas, opts).withFaceLandmarks();
-      if (exprAvailable) task = task.withFaceExpressions();
-      const primary = await Promise.resolve(task);
-      if (!primary) return { faceCount: 0, ear: null, yaw: null, smileWidth: null, happy: null };
-
-      const p = primary.landmarks.positions as Array<{ x: number; y: number }>;
-      const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-      const interOcular = d(p[36], p[45]) || 1;
-
-      // Eye-aspect-ratio (average of both eyes). Open ≈ 0.3, closed < 0.15.
-      const earLeft = (d(p[37], p[41]) + d(p[38], p[40])) / (2 * (d(p[36], p[39]) || 1));
-      const earRight = (d(p[43], p[47]) + d(p[44], p[46])) / (2 * (d(p[42], p[45]) || 1));
-      const ear = (earLeft + earRight) / 2;
-
-      // Horizontal nose yaw: nose-tip offset from the eye midpoint, normalized.
-      const eyeMidX = (p[36].x + p[45].x) / 2;
-      const yaw = (p[30].x - eyeMidX) / interOcular;
-
-      // Mouth width relative to inter-ocular distance (widens on a smile).
-      const smileWidth = d(p[48], p[54]) / interOcular;
-
-      const happy = exprAvailable && primary.expressions ? primary.expressions.happy : null;
-      return { faceCount: 1, ear, yaw, smileWidth, happy };
-      } catch (err) {
-        if (isBackendErr(err) && attempt === 0) continue; // backend crashed — recover + retry once
-        return null;
-      }
+    if (!video || video.readyState < 2 || video.videoWidth === 0) return null;
+    const fm = await ensureFaceMesh();
+    if (!fm) return null;
+    try {
+      await fm.send({ image: video });
+    } catch {
+      return null;
     }
-    return null;
-  }, [ensureFaceApiFallback]);
+    const faces = faceMeshResultRef.current?.multiFaceLandmarks;
+    if (!faces || faces.length === 0) return { faceCount: 0, ear: null, yaw: null, smileWidth: null, curl: null };
+
+    const lm = faces[0] as Array<{ x: number; y: number }>;
+    const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+    const interOcular = d(lm[MP.leftEyeOuter], lm[MP.rightEyeOuter]) || 1;
+
+    // Eye-aspect-ratio per eye: vertical opening / horizontal width.
+    const earLeft = d(lm[MP.leftEyeTop], lm[MP.leftEyeBottom]) / (d(lm[MP.leftEyeOuter], lm[MP.leftEyeInner]) || 1);
+    const earRight = d(lm[MP.rightEyeTop], lm[MP.rightEyeBottom]) / (d(lm[MP.rightEyeInner], lm[MP.rightEyeOuter]) || 1);
+    const ear = (earLeft + earRight) / 2;
+
+    // Horizontal nose yaw: nose-tip offset from the eye midpoint, normalized.
+    const eyeMidX = (lm[MP.leftEyeOuter].x + lm[MP.rightEyeOuter].x) / 2;
+    const yaw = (lm[MP.noseTip].x - eyeMidX) / interOcular;
+
+    // Smile: mouth width (widens) + corner curl (corners rise above the lip line).
+    const smileWidth = d(lm[MP.mouthLeft], lm[MP.mouthRight]) / interOcular;
+    const mouthCenterY = (lm[MP.lipUpperInner].y + lm[MP.lipLowerInner].y) / 2;
+    const cornerY = (lm[MP.mouthLeft].y + lm[MP.mouthRight].y) / 2;
+    const curl = (mouthCenterY - cornerY) / interOcular; // >0 when corners are higher than the lip center
+
+    return { faceCount: 1, ear, yaw, smileWidth, curl };
+  }, [ensureFaceMesh]);
 
   // Decide whether the required gesture actually happened during a step, from
   // the min/max ranges accumulated across the step's samples.
   const evaluateGesture = useCallback((
     stepIdx: number,
-    m: { minEar: number; maxEar: number; minYaw: number; maxYaw: number; minSmile: number; maxSmile: number; maxHappy: number },
+    m: { minEar: number; maxEar: number; minYaw: number; maxYaw: number; minSmile: number; maxSmile: number; minCurl: number; maxCurl: number },
   ): boolean => {
     switch (stepIdx) {
-      case 0: // Smile — expression prob, or a clear widening of the mouth.
-        return m.maxHappy >= SMILE_HAPPY_THRESHOLD || (m.maxSmile - m.minSmile) >= SMILE_WIDTH_DELTA;
-      case 1: // Blink — absolute open→closed, an EAR swing, or a relative closure
-              // (robust to glasses / narrow eyes where absolute EAR stays low).
-        return (
-          (m.maxEar >= EYE_OPEN_EAR && m.minEar <= EYE_CLOSED_EAR) ||
-          (m.maxEar - m.minEar) >= EAR_BLINK_DELTA ||
-          (m.maxEar > 0 && m.minEar / m.maxEar <= EAR_CLOSE_RATIO)
-        );
+      case 0: // Smile — mouth widened OR corners lifted (curvature) during the step.
+        return (m.maxSmile - m.minSmile) >= SMILE_WIDTH_DELTA || (m.maxCurl - m.minCurl) >= SMILE_CURL_DELTA;
+      case 1: // Blink — a clear EAR swing, or a relative closure (glasses-tolerant).
+        return (m.maxEar - m.minEar) >= EAR_BLINK_DELTA || (m.maxEar > 0 && m.minEar / m.maxEar <= EAR_CLOSE_RATIO);
       case 2: // Turn — horizontal head movement across the step.
         return (m.maxYaw - m.minYaw) >= TURN_YAW_RANGE;
       default:
@@ -447,10 +460,10 @@ export default function StepIdentity({
       setLivenessProgress(0);
       setPhase('liveness');
 
-      // Can we actually verify the gesture this run? Needs the landmark model.
-      const fa = await ensureFaceApiFallback();
+      // Can we actually verify the gesture this run? Needs MediaPipe FaceMesh.
+      const fm = await ensureFaceMesh();
       if (livenessCancelledRef.current) return;
-      const canGesture = enforceGestures && !!fa?.landmarks;
+      const canGesture = enforceGestures && !!fm;
 
       // Accumulate face presence + gesture-metric ranges across the step.
       let detectionsRan = 0;   // samples where the detector actually returned a result
@@ -459,7 +472,7 @@ export default function StepIdentity({
       let minEar = Infinity, maxEar = -Infinity;
       let minYaw = Infinity, maxYaw = -Infinity;
       let minSmile = Infinity, maxSmile = -Infinity;
-      let maxHappy = 0;
+      let minCurl = Infinity, maxCurl = -Infinity;
 
       const startTime = performance.now();
       // Progress bar (rAF, decoupled from the sampling loop).
@@ -481,10 +494,10 @@ export default function StepIdentity({
             if (s.ear != null) { metricsSeen++; minEar = Math.min(minEar, s.ear); maxEar = Math.max(maxEar, s.ear); }
             if (s.yaw != null) { minYaw = Math.min(minYaw, s.yaw); maxYaw = Math.max(maxYaw, s.yaw); }
             if (s.smileWidth != null) { minSmile = Math.min(minSmile, s.smileWidth); maxSmile = Math.max(maxSmile, s.smileWidth); }
-            if (s.happy != null) maxHappy = Math.max(maxHappy, s.happy);
+            if (s.curl != null) { minCurl = Math.min(minCurl, s.curl); maxCurl = Math.max(maxCurl, s.curl); }
             if (livenessDebugRef.current) {
-              setDbg({ expr: !!fa?.expressions, happy: s.happy, ear: s.ear, smileW: s.smileWidth, yaw: s.yaw });
-              console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] expr=${!!fa?.expressions} happy=${s.happy?.toFixed(2) ?? '—'} ear=${s.ear?.toFixed(3) ?? '—'} yaw=${s.yaw?.toFixed(3) ?? '—'} smileW=${s.smileWidth?.toFixed(3) ?? '—'}`);
+              setDbg({ ok: true, ear: s.ear, smileW: s.smileWidth, curl: s.curl, yaw: s.yaw });
+              console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] ear=${s.ear?.toFixed(3) ?? '—'} yaw=${s.yaw?.toFixed(3) ?? '—'} smileW=${s.smileWidth?.toFixed(3) ?? '—'} curl=${s.curl?.toFixed(3) ?? '—'}`);
             }
           }
         } else {
@@ -510,14 +523,14 @@ export default function StepIdentity({
       // 2) The actual gesture must have happened.
       if (canGesture) {
         if (livenessDebugRef.current) {
-          console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] DECISION samples=${metricsSeen} earMin=${minEar.toFixed(3)} earMax=${maxEar.toFixed(3)} yawRange=${(maxYaw - minYaw).toFixed(3)} smileRange=${(maxSmile - minSmile).toFixed(3)} maxHappy=${maxHappy.toFixed(2)}`);
+          console.log(`[liveness ${LIVENESS_STEPS[stepIdx].action}] DECISION samples=${metricsSeen} earRange=${(maxEar - minEar).toFixed(3)} earRatio=${(maxEar > 0 ? minEar / maxEar : 1).toFixed(2)} yawRange=${(maxYaw - minYaw).toFixed(3)} smileRange=${(maxSmile - minSmile).toFixed(3)} curlRange=${(maxCurl - minCurl).toFixed(3)}`);
         }
         if (metricsSeen < LIVENESS_MIN_METRIC_SAMPLES) {
           // Couldn't read the face well enough to judge — don't pass silently.
           fail(`Couldn't read your face clearly for "${LIVENESS_STEPS[stepIdx].action}". Improve lighting, face the camera, and try again.`);
           return;
         }
-        const gestureOk = evaluateGesture(stepIdx, { minEar, maxEar, minYaw, maxYaw, minSmile, maxSmile, maxHappy });
+        const gestureOk = evaluateGesture(stepIdx, { minEar, maxEar, minYaw, maxYaw, minSmile, maxSmile, minCurl, maxCurl });
         if (!gestureOk) {
           fail(GESTURE_FAIL_MESSAGE[stepIdx] ?? `We couldn't verify "${LIVENESS_STEPS[stepIdx].action}". Please try again.`);
           return;
@@ -527,7 +540,7 @@ export default function StepIdentity({
     };
 
     runStep(0);
-  }, [cameraError, capturePhoto, ensureFaceApiFallback, detectLivenessSample, detectFaceCount, evaluateGesture, GESTURE_FAIL_MESSAGE]);
+  }, [cameraError, capturePhoto, ensureFaceMesh, detectLivenessSample, detectFaceCount, evaluateGesture, GESTURE_FAIL_MESSAGE]);
 
   const handleRetake = useCallback(() => {
     stopStream();
@@ -861,10 +874,10 @@ export default function StepIdentity({
               {/* Debug readout (?livenessDebug=1) */}
               {debugOn && phase === 'liveness' && dbg && (
                 <div className="absolute top-2 left-2 bg-black/80 text-green-300 text-[10px] leading-tight font-mono px-2 py-1 rounded">
-                  <div>expr model: {dbg.expr ? 'loaded' : 'MISSING'}</div>
-                  <div>happy: {dbg.happy != null ? dbg.happy.toFixed(2) : '—'}</div>
+                  <div>facemesh: {dbg.ok ? 'ok' : 'no face'}</div>
                   <div>ear: {dbg.ear != null ? dbg.ear.toFixed(3) : '—'}</div>
                   <div>smileW: {dbg.smileW != null ? dbg.smileW.toFixed(3) : '—'}</div>
+                  <div>curl: {dbg.curl != null ? dbg.curl.toFixed(3) : '—'}</div>
                   <div>yaw: {dbg.yaw != null ? dbg.yaw.toFixed(3) : '—'}</div>
                 </div>
               )}
