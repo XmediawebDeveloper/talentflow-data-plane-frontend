@@ -21,8 +21,16 @@ import { useRef, useCallback } from 'react';
 
 const NUM_MFCC_COEFFICIENTS = 13;
 const FFT_SIZE = 2048;
-const SAME_SPEAKER_THRESHOLD = 0.85;
-const DIFFERENT_SPEAKER_THRESHOLD = 0.65;
+// Loosened from 0.85 / 0.65 → 0.80 / 0.55. The old cutoffs false-flagged the
+// SAME speaker constantly (MFCC-cosine shifts with content/volume/mic/noise).
+const SAME_SPEAKER_THRESHOLD = 0.8;
+const DIFFERENT_SPEAKER_THRESHOLD = 0.55;
+// A baseline recorded from near-silence produces a garbage MFCC that later
+// mismatches real speech. Reject enrollment below this mean-abs amplitude.
+const MIN_ENROLL_ENERGY = 0.004;
+// Require this many CONSECUTIVE off-baseline turns before emitting, so one
+// noisy answer can't wrongly accuse the candidate.
+const CONSECUTIVE_TO_FLAG = 2;
 
 interface VoiceVerificationCallbacks {
   onVoiceMismatch?: (similarity: number) => void;
@@ -145,6 +153,9 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallbacks) {
   const baselineMFCCRef = useRef<Float32Array | null>(null);
   const isEnrolledRef = useRef(false);
+  // Consecutive off-baseline turn counters — a single noisy turn won't flag.
+  const mismatchStreakRef = useRef(0);
+  const changedStreakRef = useRef(0);
 
   /**
    * Enroll the candidate's voice during system check.
@@ -197,6 +208,16 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
         offset += chunk.length;
       }
 
+      // Reject a baseline captured from silence — otherwise it mismatches real
+      // speech later and false-flags the candidate. Enrollment must hear a voice.
+      let energyAcc = 0;
+      for (let i = 0; i < combined.length; i++) energyAcc += Math.abs(combined[i]);
+      const meanAbs = combined.length ? energyAcc / combined.length : 0;
+      if (meanAbs < MIN_ENROLL_ENERGY) {
+        console.warn(`[VoiceVerification] Enrollment too quiet (meanAbs=${meanAbs.toFixed(4)}) — no voice baseline set; voice checks disabled`);
+        return false;
+      }
+
       // Extract MFCC baseline — yield to main thread first to avoid UI freeze
       const sr = audioContext.sampleRate || 44100;
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -231,12 +252,25 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
 
     const similarity = cosineSimilarity(baselineMFCCRef.current, mfcc);
 
+    // Debounce: only emit after CONSECUTIVE_TO_FLAG off-baseline turns in a row.
     if (similarity < DIFFERENT_SPEAKER_THRESHOLD) {
-      console.warn(`[VoiceVerification] IDENTITY CHANGED — similarity: ${similarity.toFixed(3)}`);
-      callbacks?.onVoiceIdentityChanged?.(similarity);
+      changedStreakRef.current += 1;
+      mismatchStreakRef.current = 0;
+      if (changedStreakRef.current >= CONSECUTIVE_TO_FLAG) {
+        console.warn(`[VoiceVerification] IDENTITY CHANGED — similarity: ${similarity.toFixed(3)} (x${changedStreakRef.current})`);
+        callbacks?.onVoiceIdentityChanged?.(similarity);
+      }
     } else if (similarity < SAME_SPEAKER_THRESHOLD) {
-      console.warn(`[VoiceVerification] MISMATCH — similarity: ${similarity.toFixed(3)}`);
-      callbacks?.onVoiceMismatch?.(similarity);
+      mismatchStreakRef.current += 1;
+      changedStreakRef.current = 0;
+      if (mismatchStreakRef.current >= CONSECUTIVE_TO_FLAG) {
+        console.warn(`[VoiceVerification] MISMATCH — similarity: ${similarity.toFixed(3)} (x${mismatchStreakRef.current})`);
+        callbacks?.onVoiceMismatch?.(similarity);
+      }
+    } else {
+      // Clearly the same speaker — reset the streaks.
+      mismatchStreakRef.current = 0;
+      changedStreakRef.current = 0;
     }
   }, [callbacks]);
 
@@ -253,6 +287,8 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
   const reset = useCallback(() => {
     baselineMFCCRef.current = null;
     isEnrolledRef.current = false;
+    mismatchStreakRef.current = 0;
+    changedStreakRef.current = 0;
   }, []);
 
   return {

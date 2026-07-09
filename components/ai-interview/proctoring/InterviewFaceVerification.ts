@@ -38,6 +38,9 @@ const MODELS_URL = '/models';
 const VERIFICATION_INTERVAL_MS = 10000; // 10 seconds
 const MISMATCH_THRESHOLD = 0.6;
 const IDENTITY_CHANGED_THRESHOLD = 0.8;
+// Require this many CONSECUTIVE readings in the same band before emitting — a
+// single bad frame (blur, head-turn, lighting) must not accuse the candidate.
+const FACE_CONSECUTIVE_TO_FLAG = 2;
 const REGISTRATION_CAPTURES = 3;
 const CAPTURE_DELAY_MS = 1500; // delay between registration captures
 
@@ -351,7 +354,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
    *
    * @param videoElement - The video element showing the webcam feed
    */
-  const startVerification = useCallback((videoElement: HTMLVideoElement) => {
+  const startVerification = useCallback((videoElement: HTMLVideoElement, intervalMs: number = VERIFICATION_INTERVAL_MS) => {
     videoElementRef.current = videoElement;
     verificationActiveRef.current = true;
 
@@ -371,6 +374,10 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       return;
     }
 
+    // Consecutive-agreement debounce (local to this run; reset on stop/restart).
+    let mismatchStreak = 0;
+    let changedStreak = 0;
+
     verificationIntervalRef.current = setInterval(async () => {
       try {
         const descriptor = await extractDescriptor();
@@ -382,20 +389,32 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
         );
 
         if (distance > IDENTITY_CHANGED_THRESHOLD) {
-          console.warn(`[FaceVerification] IDENTITY CHANGED — distance: ${distance.toFixed(3)}`);
-          callbacks?.onFaceIdentityChanged?.(distance);
+          changedStreak += 1;
+          mismatchStreak = 0;
+          if (changedStreak >= FACE_CONSECUTIVE_TO_FLAG) {
+            console.warn(`[FaceVerification] IDENTITY CHANGED — distance: ${distance.toFixed(3)} (x${changedStreak})`);
+            callbacks?.onFaceIdentityChanged?.(distance);
+          }
         } else if (distance > MISMATCH_THRESHOLD) {
-          console.warn(`[FaceVerification] MISMATCH — distance: ${distance.toFixed(3)}`);
-          callbacks?.onFaceMismatch?.(distance);
+          mismatchStreak += 1;
+          changedStreak = 0;
+          if (mismatchStreak >= FACE_CONSECUTIVE_TO_FLAG) {
+            console.warn(`[FaceVerification] MISMATCH — distance: ${distance.toFixed(3)} (x${mismatchStreak})`);
+            callbacks?.onFaceMismatch?.(distance);
+          }
+        } else {
+          // Clearly the same person — reset streaks.
+          mismatchStreak = 0;
+          changedStreak = 0;
         }
       } catch (err) {
         // Swallow TF.js backend errors (tensor disposal, WebGL context loss) so
         // a single bad frame does not halt continuous verification.
         console.warn('[FaceVerification] Verification frame skipped:', err);
       }
-    }, VERIFICATION_INTERVAL_MS);
+    }, intervalMs);
 
-    console.log('[FaceVerification] Continuous verification started');
+    console.log(`[FaceVerification] Continuous verification started (every ${Math.round(intervalMs / 1000)}s)`);
   }, [extractDescriptor, callbacks]);
 
   /**

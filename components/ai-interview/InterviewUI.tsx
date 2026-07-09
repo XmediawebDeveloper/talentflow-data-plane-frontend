@@ -29,7 +29,7 @@ import { detectDeviceCapability, type DeviceCapability } from "@/lib/utils/devic
 import "@/lib/tfjs-rejection-guard";
 
 interface FaceVerificationHandle {
-  startVerification: (videoElement: HTMLVideoElement) => void;
+  startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
   stopVerification: () => void;
   hasBaseline: () => boolean;
 }
@@ -1202,19 +1202,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         console.error("[Recording] MediaRecorder not supported:", err);
       }
     }
-    // Start continuous face verification — but SKIP it on low-tier devices.
-    // On weak (≤2-core) machines the face-api/TF.js loop is the dominant CPU
-    // hog: it runs neural inference every ~10s, crashes ("Swallowed TF.js
-    // backend crash" / "No face detected"), and starves the main thread
-    // (frozen timers, 5fps avatar). Skipping the CONTINUOUS loop here frees
-    // that CPU so the interview runs smoothly; the one-time identity-photo
-    // baseline registration still happened at system check, and all other
-    // proctoring (tab-switch, fullscreen, audio) stays active.
+    // Start continuous face-identity verification. On weak (≤2-core) machines
+    // the face-api/TF.js loop is CPU-heavy, so instead of DISABLING it on
+    // low-tier (which meant identity swaps were never caught) we run it at a
+    // SLOWER 30s cadence — 3× fewer inferences keeps the main thread healthy
+    // while still catching a substituted candidate within ~30s. Full-tier keeps
+    // the default 10s cadence.
     const lowTier = effectiveDeviceCapability?.tier === 'low';
-    if (faceVerification?.hasBaseline() && !lowTier) {
-      faceVerification.startVerification(video);
-    } else if (lowTier) {
-      console.log('[INTERVIEW-DEBUG] Low-tier device — continuous face verification DISABLED to save CPU');
+    if (faceVerification?.hasBaseline()) {
+      faceVerification.startVerification(video, lowTier ? 30000 : undefined);
+      console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${lowTier ? '30s low-tier' : '10s'} cadence)`);
     }
   }, [handDetection, faceDetection, faceVerification, effectiveDeviceCapability]);
 
