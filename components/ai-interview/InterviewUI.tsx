@@ -3308,6 +3308,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
+        // Fix (question-skip bug): cancel any STALE playback timers left over
+        // from the previous turn. `audio_end` arms playbackCompleteSignalRef +
+        // audioEndFallbackRef on wall-clock delays; if the prior turn ended via
+        // a path that didn't clear them, a stale timer could fire DURING this
+        // new generation and send a premature `playback_complete`, making the
+        // backend think Linda finished → it advances/skips this question.
+        if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+        if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
         // Bug C fix: new Linda turn starting — retract the "candidate can
         // speak" signal immediately so the banner can't linger from Q(n-1).
         candidatePlaybackEndedRef.current = false;
