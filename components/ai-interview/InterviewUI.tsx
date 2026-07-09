@@ -1948,6 +1948,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const MIN_STRONG_IN_TURN_LEVEL = 0.0056;
   const TRANSCRIPT_ACTIVITY_GRACE_MS = 1800;
   const REALTIME_TRANSCRIPT_BOOTSTRAP_GRACE_MS = 2500;
+  // Safety net for server-side EndOfTurn (streaming providers). Normally the
+  // SERVER decides when the turn ends, so the client silence cutoff is disabled.
+  // But if the provider's EndOfTurn signal never fires after the candidate goes
+  // quiet, the turn would sit idle until the 130 s hard cap — the reported
+  // "answer finished but interview stays idle" bug. If TRUE silence persists this
+  // long (well beyond a natural thinking pause and far past when EndOfTurn should
+  // have fired), the client force-ends the turn. Generous on purpose so it never
+  // pre-empts the provider's smarter semantic end-of-turn during normal pauses.
+  const SERVER_EOT_SILENCE_FALLBACK_MS = 15000;
   const LIVE_BATCH_CHAR_THRESHOLD = 320;
   const liveBatchSentCharsRef = useRef(0);
   const liveBatchIndexRef = useRef(0);
@@ -5198,9 +5207,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   }
                   // Server-side EOT mode: the SERVER (provider EndOfTurn) decides
                   // when the turn ends — the client must not cut on its own silence
-                  // timer. Skip the cutoff and let the silence clock keep running;
-                  // the turn ends when `server_end_turn` arrives (or the hard cap).
+                  // timer. Normally we just let the silence clock keep running and
+                  // wait for `server_end_turn`. SAFETY NET: if that signal never
+                  // arrives and TRUE silence has persisted far beyond when EndOfTurn
+                  // should have fired, force-end the turn here so the interview can't
+                  // sit idle until the 130 s hard cap (the "answer finished but stays
+                  // idle" bug). This threshold is generous so a normal pause is never
+                  // pre-empted — it only rescues a genuinely stuck turn.
                   if (serverEotEnabledRef.current) {
+                    if (nowMs - silenceSince > SERVER_EOT_SILENCE_FALLBACK_MS) {
+                      console.warn('[INTERVIEW-DEBUG] server_end_turn missing — silence safety-net force-ending turn', {
+                        silenceMs: nowMs - silenceSince,
+                        fallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
+                      });
+                      stopRecording();
+                    }
                     return;
                   }
                   console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', {
