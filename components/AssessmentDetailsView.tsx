@@ -1,6 +1,9 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService, jdService } from '@/lib/services';
 import type { JDResponse } from '@/lib/services';
@@ -2090,8 +2093,12 @@ export default function AssessmentDetailsView({
                     <FileText className="w-3.5 h-3.5 text-gray-500" />
                     Description
                   </div>
-                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-slate-50 rounded-lg ring-1 ring-black/[0.02] text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                    {jdData.description}
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-slate-50 rounded-lg ring-1 ring-black/[0.02] text-sm text-gray-800">
+                    <div className="markdown-content leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {jdData.description}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2103,8 +2110,12 @@ export default function AssessmentDetailsView({
                     <Info className="w-3.5 h-3.5 text-brand-blue" />
                     Assessment Guidance
                   </div>
-                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                    {jdData.assessment_guidance}
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800">
+                    <div className="markdown-content leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {jdData.assessment_guidance}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               )}
