@@ -20,6 +20,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import ListPagination from '@/components/ListPagination';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -1611,7 +1612,9 @@ export default function AIInterview() {
               <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100 dark:border-slate-700/60">
                 {[
                   { key: 'general', label: 'General' },
-                  { key: 'proctoring', label: 'Proctoring' },
+                  // Proctoring settings are a staging-only testing menu — hidden in
+                  // production, where proctoring runs on enforced defaults.
+                  ...(IS_PRODUCTION_ENV ? [] : [{ key: 'proctoring', label: 'Proctoring' }]),
                 ].map(sub => (
                   <button
                     key={sub.key}
@@ -1717,8 +1720,8 @@ export default function AIInterview() {
                 </div>
               )}
 
-              {/* Proctoring Settings */}
-              {settingsSubTab === 'proctoring' && (
+              {/* Proctoring Settings — staging-only testing menu; hidden in production. */}
+              {settingsSubTab === 'proctoring' && !IS_PRODUCTION_ENV && (
                 <div className="max-w-3xl space-y-6">
                   {proctoringLoading ? (
                     <div className="flex items-center justify-center py-12">

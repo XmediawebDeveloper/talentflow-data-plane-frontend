@@ -57,6 +57,16 @@ const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
 
+// Strict tab-switch/minimize proctoring is enforced only in PRODUCTION so that
+// developers testing on staging aren't paused/terminated. Frontend reads the
+// browser-exposed NEXT_PUBLIC_ENVIRONMENT (the plain ENVIRONMENT var is server-only).
+const IS_PRODUCTION_ENV = process.env.NEXT_PUBLIC_ENVIRONMENT === 'production';
+// Switching tabs / minimizing PAUSES the interview (never an instant close, so a
+// network blip or accidental focus change is tolerated). It is only TERMINATED
+// if the candidate stays away longer than this, or switches away too many times.
+const TAB_AWAY_PROLONGED_MS = 30000; // stay hidden longer than 30s → terminate
+const TAB_AWAY_MAX_EVENTS = 5;       // more than 5 tab-switches → terminate
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   return Promise.race([
     promise,
@@ -100,6 +110,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // platforms use this pattern so accidental Esc presses don't kill the
   // interview. null = not in grace period.
   const [fullscreenGraceRemaining, setFullscreenGraceRemaining] = useState<number | null>(null);
+  // Tab-switch / minimize proctoring (production only). `awayWarning` shows a
+  // "you left the interview" banner on RETURN; `tabTerminatedReason` marks a
+  // hard termination (prolonged absence or too many switches). Refs mirror the
+  // count + terminated flag so the visibilitychange listener reads live values.
+  const [awayWarning, setAwayWarning] = useState<{ count: number } | null>(null);
+  const [tabTerminatedReason, setTabTerminatedReason] = useState<string | null>(null);
+  const tabAwayCountRef = useRef(0);
+  const tabTerminatedRef = useRef(false);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
   // Device tier + feature flags — detected once during the system check so the
   // interview runs the heavy/accurate path only on capable machines and a
@@ -957,6 +975,67 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     };
   }, [step]);
 
+  // ── Tab-switch / minimize handling (PRODUCTION ONLY) ──────────────────────
+  // Per product decision: switching tabs or minimizing should NOT instantly
+  // close the interview (a network blip or accidental focus change must be
+  // tolerated). Instead we PAUSE — the candidate simply can't proceed while the
+  // tab is hidden — and only TERMINATE if the absence is PROLONGED
+  // (> TAB_AWAY_PROLONGED_MS) or REPEATED (> TAB_AWAY_MAX_EVENTS). On staging
+  // (NEXT_PUBLIC_ENVIRONMENT !== 'production') this is disabled so devs can test
+  // freely. Uses visibilitychange (real tab-switch + minimize) — NOT window
+  // 'blur' — to avoid firing on benign focus changes (clicking browser chrome,
+  // OS notifications, dev tools).
+  useEffect(() => {
+    if (step !== 'interview' || !IS_PRODUCTION_ENV) return;
+    let prolongedTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const terminate = (reason: string) => {
+      if (tabTerminatedRef.current) return;
+      tabTerminatedRef.current = true;
+      if (prolongedTimer) { clearTimeout(prolongedTimer); prolongedTimer = null; }
+      setAwayWarning(null);
+      setTabTerminatedReason(reason);
+      // Best-effort: record the terminating violation for the recruiter timeline.
+      try {
+        void candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'tab_switch',
+          severity: 'high',
+          details: { reason, tab_away_count: tabAwayCountRef.current, action: 'interview_terminated' },
+        });
+      } catch { /* non-blocking */ }
+      stopAndUploadScreenRecording();
+      if (isFullscreen()) exitFullscreen().catch(() => {});
+    };
+
+    const handleVisibility = () => {
+      if (tabTerminatedRef.current) return;
+      if (document.hidden) {
+        // Candidate switched away / minimized → pause + arm the prolonged timer.
+        tabAwayCountRef.current += 1;
+        if (tabAwayCountRef.current > TAB_AWAY_MAX_EVENTS) {
+          terminate('too_many_tab_switches');
+          return;
+        }
+        if (prolongedTimer) clearTimeout(prolongedTimer);
+        prolongedTimer = setTimeout(() => {
+          if (document.hidden) terminate('prolonged_absence');
+        }, TAB_AWAY_PROLONGED_MS);
+      } else {
+        // Returned in time → cancel the prolonged timer and resume, showing a
+        // warning banner (on RETURN, when they can actually read it).
+        if (prolongedTimer) { clearTimeout(prolongedTimer); prolongedTimer = null; }
+        setAwayWarning({ count: tabAwayCountRef.current });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (prolongedTimer) clearTimeout(prolongedTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   // ========== LOADING ==========
   if (step === 'loading') {
     return (
@@ -1257,16 +1336,33 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 Enter Fullscreen Mode
               </h1>
               <p className="text-gray-600 mb-6 text-center text-sm">
-                The AI interview requires fullscreen mode and Entire Screen sharing to ensure a focused and fair environment.
+                The AI interview runs in fullscreen with Entire Screen sharing and is actively proctored, to ensure a focused and fair environment. Please read the rules below before you begin.
               </p>
-              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-4">
                 <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
                 <ul className="space-y-2 text-sm text-indigo-800">
                   <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Select Entire Screen only. Window and Current Tab are not allowed</span></li>
                   <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Screen sharing is required to prevent malpractice</span></li>
                   <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden (fullscreen mode)</span></li>
-                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Exiting fullscreen will be flagged as a violation</span></li>
+                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Stay in fullscreen and keep this window in focus for the whole interview</span></li>
                 </ul>
+              </div>
+              {/* Proctoring guidelines — clearly warn which actions are monitored
+                  and may terminate the interview (subject to the recruiter's policy). */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">
+                <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  Not allowed during the interview
+                </p>
+                <ul className="space-y-2 text-sm text-amber-800">
+                  <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
+                </ul>
+                <p className="text-xs text-amber-700 mt-3 leading-relaxed">
+                  These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
+                </p>
               </div>
               <button
                 onClick={() => { handleFullscreenReady(); }}
@@ -1356,7 +1452,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }}
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
-          copyPasteBlocking={interview?.copy_paste_blocking ?? true}
+          copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}
           onTimerChange={setTimerSnapshot}
           deviceCapability={deviceCapability}
         />
@@ -1451,6 +1547,53 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               </button>
               <p className="text-xs text-red-500 font-medium animate-pulse mt-4">
                 This event has been recorded
+              </p>
+            </div>
+          </div>
+        )}
+        {/* Tab-switch / minimize — "you left" warning shown on RETURN (production).
+            Non-blocking of termination: just informs the candidate they were away
+            and how close they are to the limit. */}
+        {IS_PRODUCTION_ENV && !tabTerminatedReason && awayWarning && (
+          <div className="fixed inset-0 z-[9998] bg-black/90 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
+              <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Stay on the interview</h2>
+              <p className="text-gray-600 mb-4 text-sm">
+                You switched away from or minimized the interview. Please stay on this tab in
+                fullscreen for the whole interview — leaving does not end it immediately, but
+                repeated or prolonged switching will terminate it.
+              </p>
+              <div className="mb-5 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-2">
+                <span className="text-sm font-semibold text-amber-700">
+                  {Math.min(awayWarning.count, TAB_AWAY_MAX_EVENTS)} of {TAB_AWAY_MAX_EVENTS} allowed
+                </span>
+              </div>
+              <button
+                onClick={() => { setAwayWarning(null); requestFullscreen().catch(() => {}); }}
+                className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold text-white transition-colors"
+              >
+                Resume Interview
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Tab-switch / minimize — hard termination (prolonged absence or too many
+            switches). Terminal screen; no resume. */}
+        {tabTerminatedReason && (
+          <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Interview Ended</h2>
+              <p className="text-gray-600 mb-2 text-sm">
+                {tabTerminatedReason === 'prolonged_absence'
+                  ? 'You left the interview window for too long. As per the proctoring policy, the interview has been ended.'
+                  : 'You switched away from the interview too many times. As per the proctoring policy, the interview has been ended.'}
+              </p>
+              <p className="text-xs text-gray-400 mt-4">
+                This session has been recorded and flagged for review.
               </p>
             </div>
           </div>

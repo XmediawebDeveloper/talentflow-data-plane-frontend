@@ -28,6 +28,7 @@ import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
@@ -74,7 +75,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setActiveTab(tab);
     setPageView('list');
   };
-  const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
+  // Proctoring settings are a staging-only testing menu — in production it's
+  // hidden, so land on Topics instead.
+  const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>(IS_PRODUCTION_ENV ? 'topics' : 'proctoring');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
@@ -1787,6 +1790,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="space-y-4 sm:space-y-6">
                 {/* Settings Sub-tabs */}
                 <div className="flex gap-2 sm:gap-4 border-b border-gray-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
+                  {/* Proctoring & Security — staging-only testing menu; hidden in production. */}
+                  {!IS_PRODUCTION_ENV && (
                   <button
                     onClick={() => setSettingsSubTab('proctoring')}
                     className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
@@ -1799,6 +1804,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <span className="hidden sm:inline">Proctoring & Security</span>
                     <span className="sm:hidden">Proctoring</span>
                   </button>
+                  )}
                   <button
                     onClick={() => setSettingsSubTab('topics')}
                     className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
@@ -1812,8 +1818,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </button>
                 </div>
 
-                {/* Assessment Topics Settings Content */}
-                {settingsSubTab === 'topics' ? (
+                {/* Content: Topics is shown normally; the Proctoring & Security
+                    content is gated to non-production (staging-only testing menu). */}
+                {settingsSubTab === 'topics' || IS_PRODUCTION_ENV ? (
                   <div className="space-y-4 sm:space-y-6">
                     {/* Header */}
                     <div>

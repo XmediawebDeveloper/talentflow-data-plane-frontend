@@ -28,6 +28,7 @@ import { ProctoringWarningModal } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode, lockKeyboardShortcuts, unlockKeyboardShortcuts } from '@/lib/utils/browserCompat';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 
 // ============================================
 // FULLSCREEN PROMPT SCREEN COMPONENT
@@ -385,8 +386,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     obstructionThreshold: 30,
     maxTabSwitches: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.max_tab_switches ?? 3,
     screenshotBlocking: false,
-    copyPasteBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true,
-    tabSwitchDetection: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true,
+    // In production, protections are forced ON regardless of the stored setting
+    // (the config toggles that could weaken them are staging-only), so a value
+    // saved while testing can never relax a real production run.
+    copyPasteBlocking: IS_PRODUCTION_ENV ? true : ((assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true),
+    tabSwitchDetection: IS_PRODUCTION_ENV ? true : ((assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true),
     reportEvent: async (tok, event) => {
       await candidateService.reportProctorEvent(tok, {
         event_type: event.event_type as any,
@@ -1787,7 +1791,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             stream={cameraStream}
             isCameraActive={proctoringState.isCameraActive}
             isMicrophoneActive={proctoringState.isMicrophoneActive}
-            copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
+            copyPasteBlocking={IS_PRODUCTION_ENV ? true : ((assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true)}
             enforceFullscreen={!useAdaptiveAssessmentMode}
           />
         </AssessmentErrorBoundary>
