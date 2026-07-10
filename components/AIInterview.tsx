@@ -1927,7 +1927,7 @@ export default function AIInterview() {
         // Once a unit has been consumed (candidate actually started the interview),
         // expiry no longer applies.
         const isInvExpired = (inv: any): boolean => {
-          if (['completed', 'cancelled', 'expired'].includes(inv.status)) return false;
+          if (['completed', 'cancelled', 'terminated', 'expired'].includes(inv.status)) return false;
           if (inv.unit_consumed) return false;
           return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
         };
@@ -2144,7 +2144,7 @@ export default function AIInterview() {
                           </div>
 
                           {/* Copy Link — available while session is still active */}
-                          {inv.interview_token && !['completed', 'cancelled', 'expired'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
+                          {inv.interview_token && !['completed', 'cancelled', 'terminated', 'expired'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -2179,8 +2179,10 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* View Details button */}
-                          {(inv.status === 'completed' || inv.status === 'in_progress') && (
+                          {/* View Details button — also for terminated sessions so
+                              the recruiter can review whatever the candidate answered
+                              before the proctoring policy ended the interview. */}
+                          {(inv.status === 'completed' || inv.status === 'in_progress' || inv.status === 'terminated') && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleViewCandidateDetail(inv.id); }}
                               className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"

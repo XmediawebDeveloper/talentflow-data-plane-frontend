@@ -1011,12 +1011,27 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     if (step !== 'interview' || !IS_PRODUCTION_ENV) return;
     const fsEvent = getFullscreenChangeEvent();
     let done = false;
+
+    // Entry-transition guard. Entering the interview involves the screen-share
+    // picker closing and requestFullscreen() — both emit a transient window
+    // `blur` and a brief `fullscreenchange` where isFullscreen() momentarily
+    // reads false. If we armed the terminate listeners immediately, that churn
+    // (worse on the wrong-tab → re-select path) would fire a FALSE termination
+    // the instant the interview started. So we arm only after the browser has
+    // settled, and we only treat a fullscreen change as an EXIT once fullscreen
+    // was actually confirmed active at least once.
+    let armed = false;
+    let sawFullscreen = false;
+
     const terminateNow = (reason: string) => {
-      if (done || screenShareStoppedRef.current) return;
+      if (done || !armed || screenShareStoppedRef.current) return;
       done = true;
       setInterviewTerminatedReason(reason);
       // Persist so reopening the link stays on the terminated page (can't restart).
       try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
+      // Report the termination so the recruiter side flips out of "In Progress".
+      // The component stays mounted (setStep only swaps the rendered screen — no
+      // navigation), so this request completes normally after fullscreen exit.
       try {
         void candidateAIInterviewService.reportProctorEvent(token, {
           event_type: 'interview_terminated',
@@ -1031,11 +1046,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     };
     const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
     const onBlur = () => terminateNow('left_screen_focus_lost');
-    const onFsChange = () => { if (!isFullscreen()) terminateNow('left_screen_fullscreen_exit'); };
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('blur', onBlur);
+    const onFsChange = () => {
+      if (isFullscreen()) { sawFullscreen = true; return; }
+      // Ignore a not-fullscreen reading until we've confirmed the candidate was
+      // actually in fullscreen — protects against the entry transition where the
+      // event can fire before fullscreen finishes activating.
+      if (sawFullscreen) terminateNow('left_screen_fullscreen_exit');
+    };
+
+    // Track fullscreen state during the settle window too, so `sawFullscreen`
+    // is already true by the time listeners arm.
     document.addEventListener(fsEvent, onFsChange);
+
+    // Arm after the entry transition settles (~1.2s). Only then do the
+    // blur/visibility listeners start counting as violations.
+    const armTimer = window.setTimeout(() => {
+      armed = true;
+      if (isFullscreen()) sawFullscreen = true;
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('blur', onBlur);
+      // If the candidate already left during the settle window, catch it now.
+      if (document.hidden) terminateNow('left_screen_tab_hidden');
+    }, 1200);
+
     return () => {
+      window.clearTimeout(armTimer);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener(fsEvent, onFsChange);
