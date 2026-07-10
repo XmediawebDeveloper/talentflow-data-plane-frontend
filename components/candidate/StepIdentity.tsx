@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
-import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback } from '@/lib/proctoring/faceDetection';
+import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback, assessCandidateFaceVisibility, type FaceRegion } from '@/lib/proctoring/faceDetection';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 
@@ -157,7 +157,10 @@ export default function StepIdentity({
   }, [ensureFaceApiFallback]);
 
   // Helper: detect number of faces from canvas snapshot (works cross-browser)
-  const detectFaceCount = useCallback(async (): Promise<number | null> => {
+  // Detect face count AND the largest face's bounding box (canvas pixels) so
+  // capturePhoto can enforce both "exactly one person" and "face placed inside
+  // the oval". Returns null when no detector is available (→ callers fail-open).
+  const detectFaceInfo = useCallback(async (): Promise<{ count: number; region: FaceRegion | null } | null> => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.readyState < 2) return null;
@@ -167,14 +170,28 @@ export default function StepIdentity({
     canvas.height = video.videoHeight || 240;
     ctx.drawImage(video, 0, 0);
 
+    const largest = (boxes: FaceRegion[]): FaceRegion | null => {
+      let best: FaceRegion | null = null;
+      let bestArea = 0;
+      for (const b of boxes) {
+        const area = (b.width || 0) * (b.height || 0);
+        if (area > bestArea) { bestArea = area; best = b; }
+      }
+      return best;
+    };
+
     // Path A: native FaceDetector (Chrome/Edge with flag)
     if (typeof window !== 'undefined' && 'FaceDetector' in window) {
       try {
-        const detector = new (window as any).FaceDetector({ fastMode: false });
+        const detector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 });
         const bitmap = await createImageBitmap(canvas);
         const faces = await detector.detect(bitmap);
         bitmap.close();
-        return faces.length;
+        const boxes: FaceRegion[] = faces.map((f: any) => ({
+          x: f.boundingBox?.x ?? 0, y: f.boundingBox?.y ?? 0,
+          width: f.boundingBox?.width ?? 0, height: f.boundingBox?.height ?? 0,
+        }));
+        return { count: faces.length, region: largest(boxes) };
       } catch {
         await ensureFaceApiFallback();
       }
@@ -186,7 +203,11 @@ export default function StepIdentity({
       try {
         const { module: fa, options } = faceApiRef.current;
         const detections = await fa.detectAllFaces(canvas, options);
-        return detections.length;
+        const boxes: FaceRegion[] = detections.map((d: any) => {
+          const box = d.box || d.detection?.box || {};
+          return { x: box.x ?? 0, y: box.y ?? 0, width: box.width ?? 0, height: box.height ?? 0 };
+        });
+        return { count: detections.length, region: largest(boxes) };
       } catch { /* fall through */ }
     }
     return null; // model not available — skip check
@@ -215,17 +236,31 @@ export default function StepIdentity({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    // Face count check — uses detectFaceCount which tries native FaceDetector then face-api.js
-    const faceCount = await detectFaceCount();
-    if (faceCount !== null) {
-      // Only enforce check when detection was possible (faceCount=null means no model available)
-      if (faceCount === 0) {
-        setFaceError('No face detected. Center your face in the frame and try again.');
+    // Face gate — exactly ONE person, correctly placed INSIDE the oval. If any
+    // check fails we do NOT save the photo; we return to photo_ready so the
+    // candidate fixes it and retries. (info=null → no detector available → skip.)
+    const info = await detectFaceInfo();
+    if (info !== null) {
+      if (info.count === 0) {
+        setFaceError('No face detected. Position your face inside the oval and try again.');
         setPhase('photo_ready');
         return;
       }
-      if (faceCount > 1) {
-        setFaceError(`${faceCount} faces detected. Ensure only you are visible and try again.`);
+      if (info.count > 1) {
+        setFaceError(`${info.count} people detected. Only you may be in frame — ask others to step away, then try again.`);
+        setPhase('photo_ready');
+        return;
+      }
+      // Exactly one face — require it to be properly sized/centered in the oval.
+      const assess = assessCandidateFaceVisibility(info.region, canvas.width, canvas.height);
+      if (!assess.visible) {
+        setFaceError(
+          assess.reason === 'face_too_small'
+            ? 'Move closer so your face fills the oval, then try again.'
+            : assess.reason === 'face_off_center'
+            ? 'Center your face inside the oval, then try again.'
+            : 'Position your face clearly inside the oval and try again.'
+        );
         setPhase('photo_ready');
         return;
       }
@@ -241,7 +276,7 @@ export default function StepIdentity({
         streamRef.current = null;
       }
     }, 'image/png');
-  }, [detectFaceCount]);
+  }, [detectFaceInfo]);
 
   const handleFormSubmit = useCallback(() => {
     if (isFormValid) setPhase('photo_ready');

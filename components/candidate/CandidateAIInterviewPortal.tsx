@@ -1046,25 +1046,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     };
     const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
 
-    // A window `blur` is NOT always a real "left the screen". Clicking Chrome's
-    // "<site> is sharing your screen" info bar — including its Hide / Stop
-    // buttons — moves focus to the browser chrome (→ blur) but the interview
-    // page stays visible and focus returns within a few hundred ms. So instead
-    // of terminating on every blur, we DEFER and re-check: a genuine leave
-    // (Alt+Tab, another app/monitor, minimize) either hides the page or leaves
-    // it without focus after the grace window; a screen-share-bar click regains
-    // focus and is cancelled by onFocus below.
+    // A window `blur` is NOT proof the candidate left the interview. While
+    // sharing Entire Screen, Chrome's "<site> is sharing your screen" bar is
+    // browser chrome that can hold focus, and OS notifications / transient focus
+    // steals also blur the page — all WITHOUT the candidate leaving. Those also
+    // throttle the tab, which is why Linda's audio stutters right before a false
+    // termination. So we do NOT terminate on raw focus loss (the old
+    // `!document.hasFocus()` check fired `left_screen_focus_lost` here). Instead,
+    // a blur just DEFERS and re-checks the two signals that actually mean "left
+    // the screen": the tab became hidden (switch / minimize) or fullscreen was
+    // dropped (Esc). If the page is still visible AND still fullscreen, the
+    // candidate is still here — ignore it. (visibilitychange + fullscreenchange
+    // have their own listeners; this is a backstop.)
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
     const clearBlurTimer = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } };
     const onBlur = () => {
       clearBlurTimer();
       blurTimer = setTimeout(() => {
         blurTimer = null;
-        if (document.hidden || !document.hasFocus()) {
-          terminateNow('left_screen_focus_lost');
+        if (document.hidden) {
+          terminateNow('left_screen_tab_hidden');
+        } else if (sawFullscreen && !isFullscreen()) {
+          terminateNow('left_screen_fullscreen_exit');
         }
-        // else: focus returned & page still visible → transient blur from the
-        // screen-share info bar / Hide button. Not a violation.
+        // else: still visible & still fullscreen → transient focus loss
+        // (screen-share bar, notification, OS focus steal). Not a violation.
       }, 500);
     };
     const onFocus = () => clearBlurTimer();
