@@ -39,6 +39,11 @@ export default function StepIdentity({
   const [countdown, setCountdown] = useState(CAPTURE_COUNTDOWN_SECONDS);
   const [cameraError, setCameraError] = useState(false);
   const [faceError, setFaceError] = useState<string | null>(null);
+  // Live face status while framing (photo_ready) — gates the Capture button so
+  // it's only clickable with exactly ONE face correctly placed in the oval.
+  // 'unavailable' = no detector → fail-open (allow capture).
+  const [liveFaceStatus, setLiveFaceStatus] = useState<'checking' | 'ok' | 'none' | 'multiple' | 'off_oval' | 'unavailable'>('checking');
+  const liveDetectBusyRef = useRef(false);
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
@@ -225,6 +230,45 @@ export default function StepIdentity({
   useEffect(() => {
     if (phase === 'photo_ready') startCamera();
   }, [phase, startCamera]);
+
+  // Live face check while the candidate frames themselves (photo_ready only).
+  // Polls ~every 700ms and drives `liveFaceStatus`, which gates the Capture
+  // button: it's enabled ONLY with exactly one face correctly placed in the
+  // oval — no face, multiple faces, or an off-oval face keeps it disabled.
+  useEffect(() => {
+    if (phase !== 'photo_ready' || cameraError) return;
+    setLiveFaceStatus('checking');
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      if (cancelled) return;
+      if (!liveDetectBusyRef.current) {
+        liveDetectBusyRef.current = true;
+        try {
+          const info = await detectFaceInfo();
+          if (!cancelled) {
+            if (info === null) {
+              setLiveFaceStatus('unavailable'); // no detector → don't hard-block
+            } else if (info.count === 0) {
+              setLiveFaceStatus('none');
+            } else if (info.count > 1) {
+              setLiveFaceStatus('multiple');
+            } else {
+              const cvs = canvasRef.current;
+              const assess = cvs
+                ? assessCandidateFaceVisibility(info.region, cvs.width, cvs.height)
+                : { visible: true, reason: 'ok' as const };
+              setLiveFaceStatus(assess.visible ? 'ok' : 'off_oval');
+            }
+          }
+        } catch { /* transient detector error — keep prior status */ }
+        finally { liveDetectBusyRef.current = false; }
+      }
+      if (!cancelled) timer = setTimeout(tick, 700);
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [phase, cameraError, detectFaceInfo]);
 
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -607,14 +651,24 @@ export default function StepIdentity({
                 </div>
               )}
 
-              {/* Always-visible face oval guide */}
+              {/* Always-visible face oval guide — border + hint reflect the live
+                  face status so the candidate knows why capture is disabled. */}
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
                     phase === 'countdown' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
+                    phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
+                    phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
                     'border-white/50'
                   }`} />
-                  <p className="absolute bottom-12 text-xs text-white/70 font-medium">Position face inside oval</p>
+                  <p className="absolute bottom-12 text-xs text-white/90 font-medium text-center px-4">
+                    {phase === 'countdown' ? 'Hold still…'
+                      : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you should be visible'
+                      : liveFaceStatus === 'none' ? 'No face detected — center your face in the oval'
+                      : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval'
+                      : liveFaceStatus === 'ok' ? 'Looks good — you can capture'
+                      : 'Position face inside oval'}
+                  </p>
                 </div>
               )}
 
@@ -674,12 +728,36 @@ export default function StepIdentity({
                     </div>
                   )}
 
-                  <button
-                    type="button" onClick={handleStartCapture} disabled={cameraError}
-                    className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
-                  >
-                    {faceError ? 'Retake Photo' : 'Capture Photo →'}
-                  </button>
+                  {/* Capture is enabled ONLY when exactly one face is correctly in
+                      the oval. 'unavailable' (no detector) fails open. */}
+                  {(() => {
+                    const captureReady = liveFaceStatus === 'ok' || liveFaceStatus === 'unavailable';
+                    const blockedMsg =
+                      liveFaceStatus === 'none' ? 'No face detected — center your face in the oval.'
+                      : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you may be in frame.'
+                      : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval.'
+                      : liveFaceStatus === 'checking' ? 'Detecting your face…'
+                      : '';
+                    return (
+                      <>
+                        {!captureReady && blockedMsg && (
+                          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-700">{blockedMsg}</p>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleStartCapture}
+                          disabled={cameraError || !captureReady}
+                          title={!captureReady ? blockedMsg : undefined}
+                          className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                        >
+                          {faceError ? 'Retake Photo' : 'Capture Photo →'}
+                        </button>
+                      </>
+                    );
+                  })()}
                 </>
               )}
 
