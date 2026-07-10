@@ -16,7 +16,7 @@ import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/servi
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -75,6 +75,12 @@ interface Message {
    *  transcribed ones in the decoupled flow) carry the number of the question they
    *  answered so they can be attached to the right bubble instead of appended at the bottom. */
   questionNumber?: number;
+  /** True for candidate-initiated action chips ("Repeat Question" / "Move to
+   *  next question") posted into the chat when those buttons are clicked. These
+   *  render like a candidate bubble but must NEVER be treated as an answer — the
+   *  answer-transcript placement/upgrade logic skips any bubble with this flag so
+   *  a later transcript can't overwrite the request text. */
+  isActionRequest?: boolean;
 }
 
 type ClusterData = import('./SkillCoveragePanel').ClusterData;
@@ -295,6 +301,19 @@ const MessageRow = (({ msg }: MessageRowProps) => {
       </div>
     );
   }
+  if (msg.role === 'user' && msg.isActionRequest) {
+    // Candidate quick-action chip (Repeat Question / Next). Rendered as a compact
+    // right-aligned request bubble so it's clearly a candidate action, not a
+    // spoken answer.
+    return (
+      <div className="flex justify-end">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+          <p className="text-xs font-medium">{msg.content}</p>
+        </div>
+      </div>
+    );
+  }
   if (msg.role === 'user') {
     return (
       <div className="flex gap-2 flex-row-reverse">
@@ -415,6 +434,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState("");
   const [isCandidateTranscriptProcessing, setIsCandidateTranscriptProcessing] = useState(false);
+  // Ref mirror so stale-closure re-arm paths (setTimeout, WS handlers) can read
+  // the latest value synchronously. Used to block the mic from reopening while a
+  // PREVIOUS answer is still being transcribed — otherwise a same-slot second
+  // utterance can race the first answer (the "spoke 2 min, mic reopened, said a
+  // few words" bug that wiped the real answer).
+  const isCandidateTranscriptProcessingRef = useRef(false);
   const [backendLiveTranscriptEnabled, setBackendLiveTranscriptEnabled] = useState(false);
   const [browserSpeechRecognitionSupported, setBrowserSpeechRecognitionSupported] = useState(false);
   const [realtimeTranscriptionEnabled, setRealtimeTranscriptionEnabled] = useState(false);
@@ -487,6 +512,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // question_timer_started event, confirming the skip was processed.
   const [nextSkipInFlight, setNextSkipInFlight] = useState(false);
   const nextSkipInFlightRef = useRef(false);
+  // Guards the "Repeat Question" action button so a double-click can't fire two
+  // repeat_question messages. Released when the backend re-opens the answer
+  // window (question_timer_started) — same lifecycle as nextSkipInFlight.
+  const [repeatInFlight, setRepeatInFlight] = useState(false);
+  const repeatInFlightRef = useRef(false);
   // Tracks whether the BACKEND already sent question_timer_expired for the current
   // question. When true, the client must NOT send its own skip_question — the
   // backend's _auto_skip already called handle_skip_question. Cleared when the
@@ -3052,6 +3082,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 for (let i = updated.length - 1; i >= 0; i--) {
                   if (
                     updated[i].role === "user" &&
+                    !updated[i].isActionRequest &&
                     (qn == null || updated[i].questionNumber === qn)
                   ) {
                     if (updated[i].content !== transcriptText) {
@@ -3134,7 +3165,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 //    provisional live transcript) in place — no duplicate.
                 if (targetQn != null) {
                   for (let i = updated.length - 1; i >= 0; i--) {
-                    if (updated[i].role === "user" && updated[i].questionNumber === targetQn) {
+                    if (updated[i].role === "user" && !updated[i].isActionRequest && updated[i].questionNumber === targetQn) {
                       updated[i] = { ...updated[i], content: transcriptText };
                       return updated;
                     }
@@ -3152,6 +3183,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         while (
                           insertAt < updated.length &&
                           updated[insertAt].role === "user" &&
+                          !updated[insertAt].isActionRequest &&
                           updated[insertAt].questionNumber === qn
                         ) {
                           insertAt++;
@@ -3730,6 +3762,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (nextSkipInFlightRef.current) {
           nextSkipInFlightRef.current = false;
           setNextSkipInFlight(false);
+        }
+        // Same for the Repeat-Question guard: the answer window is (re)open, so
+        // the candidate may request another repeat if needed.
+        if (repeatInFlightRef.current) {
+          repeatInFlightRef.current = false;
+          setRepeatInFlight(false);
         }
         // Use data.seconds — the actual candidate answer window sent by the backend.
         // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
@@ -4372,6 +4410,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Keep ref in sync so the periodic timer scheduled inside startRecorder
   // (set up before this callback exists in the closure) always sees the latest.
   useEffect(() => { uploadCheckpointRef.current = uploadCheckpoint; }, [uploadCheckpoint]);
+  // Mirror the transcript-processing flag into a ref for the re-arm guards.
+  useEffect(() => { isCandidateTranscriptProcessingRef.current = isCandidateTranscriptProcessing; }, [isCandidateTranscriptProcessing]);
 
   // Tab-visibility checkpoint — flush before the browser may throttle us
   useEffect(() => {
@@ -4681,35 +4721,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     teardownRecordingMedia(false);
   }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, teardownRecordingMedia]);
 
-  // Mute toggle — fully stops/restarts recording + Web Speech Recognition.
-  // Disabling track.enabled alone doesn't mute the browser's SpeechRecognition API
-  // which has independent mic access, so we must stop recording entirely on mute.
-  const toggleMute = useCallback(() => {
-    const next = !isMutedRef.current;
-    console.log('[INTERVIEW-DEBUG] MIC toggle pressed by USER', { from: isMutedRef.current, to: next });
-    isMutedRef.current = next;
-    setIsMuted(next);
-    if (next) {
-      // MUTE: stop everything — no audio should be captured or sent
-      stopRecordingSilentRef.current();
-      stopWebSpeechRecognition();
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
-      }
-    } else {
-      // UNMUTE: re-enable tracks and restart recording
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
-      }
-      if (!isAiSpeakingRef.current && !isProcessingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current) {
-        setTimeout(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN && !isMutedRef.current) {
-            startRecordingInternalRef.current();
-          }
-        }, 300);
-      }
-    }
-  }, [stopWebSpeechRecognition]);
+  // Tester mute toggle removed per UX request. The mute STATE (isMuted /
+  // isMutedRef) is still used internally by proctoring/fullscreen enforcement
+  // paths, but there is no longer a user-facing manual mute button.
 
   const startRecordingInternal = async () => {
     const timestamp = new Date().toISOString();
@@ -4718,6 +4732,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
     if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) {
       console.log(`[Recording ${timestamp}] startRecordingInternal blocked by state`);
+      return;
+    }
+    // Do NOT reopen the mic while a PREVIOUS answer is still being transcribed.
+    // Otherwise a same-slot second utterance races the first answer and can wipe
+    // it (the "spoke the full 2 min → mic reopened → said a few words → 2-min
+    // answer lost" bug). The backend clears this flag (via the transcript /
+    // silent_discard / transcript_discarded messages) as soon as the prior
+    // answer resolves, and the next question's question_timer_started then
+    // re-arms normally — so this never permanently blocks the mic.
+    if (isCandidateTranscriptProcessingRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked — previous answer still transcribing`);
       return;
     }
     if (isFaceBlockedRef.current) {
@@ -6275,6 +6300,158 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const candidateLiveTranscriptEnabled =
     backendLiveTranscriptEnabled || browserSpeechRecognitionSupported;
 
+  // ── Candidate turn state + action buttons ──────────────────────────────
+  // It's the candidate's turn to answer when Linda has fully finished speaking
+  // AND the answer timer is open. Drives the RED↔GREEN turn banner and gates the
+  // Repeat/Next action buttons (they must NOT show while Linda is speaking).
+  const isCandidateTurn =
+    isConnected && !isClosing &&
+    !isAiSpeaking && !isProcessing &&
+    questionTimerSeconds !== null && !questionTimerExpired;
+
+  // Post a candidate-initiated action into the chat as a distinct chip. Tagged
+  // isActionRequest so the answer-transcript logic never overwrites it.
+  const postCandidateActionMessage = (content: string) => {
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      role: "user" as const,
+      content,
+      timestamp: nowIST(),
+      isActionRequest: true,
+    }]);
+  };
+
+  // "Next" — record any partial answer, then ask the backend for the next
+  // question. Ported verbatim from the old bottom-bar Next-Q button; the only
+  // addition is the candidate action chip posted to the chat.
+  const handleNextQuestion = () => {
+    if (questionTimerExpired) return;
+    // Disable on last question — candidate must answer the final Q, not skip it.
+    if (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) return;
+    if (nextSkipInFlightRef.current) return;
+    if (isAiSpeakingRef.current && questionTimerSeconds === null) return;
+
+    // Chat: the candidate's "move on" request.
+    postCandidateActionMessage("Let's move on to the next question.");
+
+    nextSkipInFlightRef.current = true;
+    setNextSkipInFlight(true);
+    setTimeout(() => {
+      if (nextSkipInFlightRef.current) {
+        nextSkipInFlightRef.current = false;
+        setNextSkipInFlight(false);
+      }
+    }, 15000);
+
+    const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
+    const hadSpeechForSkip = speechDetectedRef.current;
+
+    // 0. If Linda is speaking, stop her immediately.
+    if (isAiSpeakingRef.current) {
+      talkingHeadRef.current?.streamStop();
+      isPlayingRef.current = false;
+      isAiSpeakingRef.current = false;
+      setIsAiSpeaking(false);
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+      avatarState.onAiStopSpeaking();
+      pendingBuffersRef.current = 0;
+      audioEndReceivedRef.current = false;
+      if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+    }
+
+    // 1. Stop mic silently — no end_turn, no processing state.
+    abortRecordingForSkipRef.current();
+
+    // 1b. If the candidate spoke, show the loading bubble right away.
+    if (hadSpeechForSkip) {
+      setCurrentTranscript("");
+      currentTranscriptRef.current = "";
+      setIsCandidateTranscriptProcessing(true);
+    }
+
+    clearNoResponseTimer();
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    audioEndReceivedRef.current = false;
+    if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+    if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+
+    setStatus("Linda is preparing the next question...");
+    setIsFollowUp(false);
+
+    // Optimistically clear active-skill highlight so the coverage panel doesn't freeze.
+    setSkillCoverage(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        clusters: prev.clusters?.map(c => ({
+          ...c,
+          is_active: false,
+          current_skill: undefined,
+          skills: c.skills.map(s => ({ ...s, is_active: false })),
+        })),
+      };
+    });
+
+    if (showSilenceBanner) {
+      setShowSilenceBanner(false);
+      if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'skip_question',
+        source: 'candidate',
+        browser_transcript: skipBrowserTranscript || undefined,
+      }));
+    }
+
+    if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+    questionTimerPendingRef.current = null;
+    questionTimerReceivedAtRef.current = null;
+    questionTimerSecondsRef.current = null;
+    setQuestionTimerSeconds(null);
+    setQuestionTimerExpired(false);
+    questionTimerExpiredRef.current = false;
+  };
+
+  // "Repeat Question" — ask Linda to re-read the CURRENT question. The backend
+  // re-speaks WITHOUT advancing the slot or incrementing the question count.
+  const handleRepeatQuestion = () => {
+    if (repeatInFlightRef.current) return;
+    if (isAiSpeakingRef.current || isProcessingRef.current) return;
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+    // Most recent question Linda asked (last non-action assistant bubble).
+    let lastQuestion = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && !m.isActionRequest && m.content.trim()) {
+        lastQuestion = m.content.trim();
+        break;
+      }
+    }
+    if (!lastQuestion) return;
+
+    repeatInFlightRef.current = true;
+    setRepeatInFlight(true);
+    setTimeout(() => {
+      if (repeatInFlightRef.current) {
+        repeatInFlightRef.current = false;
+        setRepeatInFlight(false);
+      }
+    }, 20000);
+
+    // Chat: the candidate's repeat request.
+    postCandidateActionMessage("Could you please repeat the question?");
+    setStatus("Linda will repeat the question...");
+
+    // The incoming speaking_started (from the backend re-speak) stops the mic and
+    // flips the banner to RED — same path as a clarification repeat.
+    wsRef.current.send(JSON.stringify({ type: 'repeat_question', text: lastQuestion }));
+  };
+
   return (
     <>
       {/* ── Connection lost overlay ── */}
@@ -6416,49 +6593,61 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         </div>
       )}
 
-      {/* ── Time's Up banner — shown when per-question timer expires ── */}
-      {questionTimerExpired && !showSilenceBanner && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-red-500/50 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl max-w-xs">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-red-400 font-semibold block" style={{ fontSize: 13 }}>
-                Time&apos;s Up!
-              </span>
-              <span className="text-[#94a3b8] text-[11px]">
-                Moving to the next question…
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Turn banner (single, persistent, fixed) ──────────────────────────
+          ONE banner element in ONE fixed spot (bottom-centre). Its SIZE, shape,
+          position and layout never change — only the color, icon and text swap
+          between three mutually-exclusive states, so exactly one shows:
+            • GREEN  "Your turn — speak now"      the moment the mic opens
+            • RED    "Hold On — Linda is speaking" while Linda speaks/thinks
+            • RED    "Time's Up!"                  when the 2-min answer window ends
+          Precedence: Time's Up wins at expiry (so it shows first), then Hold On
+          the instant Linda starts the next question, then Your turn. The GREEN
+          trigger (showNowSpeakBanner && candidatePlaybackEnded) is unchanged. */}
+      {(() => {
+        let variant: 'timesup' | 'hold' | 'turn' | null = null;
+        if (showSilenceBanner) variant = null;               // silence banner owns the slot
+        else if (questionTimerExpired) variant = 'timesup';
+        else if (isAiSpeaking || isProcessing) variant = 'hold';
+        else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
+        if (!variant) return null;
 
-      {/* ── "Now Speak" banner — shown when mic opens after Linda finishes speaking ──
-          Bug C fix: also require candidatePlaybackEnded so the banner cannot
-          surface while Linda is still audibly playing on the client (the
-          classic Q1 cold-AudioContext race). */}
-      {showNowSpeakBanner && candidatePlaybackEnded && !isAiSpeaking && !isProcessing && !questionTimerExpired && !showSilenceBanner && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[104] animate-in fade-in slide-in-from-bottom-4 duration-400">
-          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-emerald-500/60 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl">
-            {/* Pulsing mic icon */}
-            <div className="relative shrink-0">
-              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
-                  <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
-                </svg>
+        const micIcon = (
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
+            <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
+          </svg>
+        );
+        const pauseIcon = (
+          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="5" width="4" height="14" rx="1" />
+            <rect x="14" y="5" width="4" height="14" rx="1" />
+          </svg>
+        );
+        const cfg = {
+          turn:    { box: 'border-emerald-300 bg-emerald-500 shadow-emerald-500/40', title: 'Your turn — speak now',       subtitle: 'Microphone is active · Linda is listening',   icon: micIcon },
+          hold:    { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — Linda is speaking', subtitle: 'Please wait until Linda finishes the question', icon: pauseIcon },
+          timesup: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: "Time's Up!",                  subtitle: 'Moving to the next question…',                 icon: <Clock className="w-5 h-5 text-white" /> },
+        }[variant];
+
+        return (
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className={`flex items-center gap-3.5 px-7 py-4 rounded-2xl border-2 shadow-2xl min-w-[320px] ${cfg.box}`}>
+              <div className="relative shrink-0">
+                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+                  {cfg.icon}
+                </div>
+                <div className="absolute inset-0 rounded-full border-2 border-white/60 animate-ping opacity-50" />
               </div>
-              <div className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-60" />
-            </div>
-            <div>
-              <span className="text-emerald-300 font-bold block" style={{ fontSize: 14 }}>Your turn — speak now</span>
-              <span className="text-[#94a3b8] text-[11px]">Microphone is active · Linda is listening</span>
+              <div className="min-w-0">
+                <span className="text-white font-extrabold block leading-tight" style={{ fontSize: 18 }}>{cfg.title}</span>
+                <span className="text-white/90 text-xs">{cfg.subtitle}</span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Interview completion modal (Req 16) ── */}
       {showCompletionModal && (
@@ -6825,6 +7014,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 {isFlexibleMode && <span className="text-white/55 text-[9px] font-semibold ml-0.5">REM</span>}
                 {isInBuffer && !isFlexibleMode && <span className="text-amber-200 text-[9px] font-semibold ml-0.5">BUF</span>}
               </div>
+              {/* REC badge — moved up here from the old bottom input bar. Shown
+                  only while the candidate's mic is actively recording. */}
+              {isRecording && !isMuted && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-red-500/25 rounded-full border border-red-400/50">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-300 animate-pulse" />
+                  <span className="text-red-100 text-[10px] font-bold tracking-wide">REC</span>
+                </div>
+              )}
               {/* LIVE badge */}
               <div className="flex items-center gap-1 px-2 py-1 bg-white/20 rounded-full border border-white/30">
                 <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -6931,7 +7128,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               candidate response was hidden behind the emerald banner. */}
           <div
             className={`flex-1 overflow-y-auto px-4 pt-4 space-y-3 bg-gray-50 ${
-              showNowSpeakBanner || showSilenceBanner || questionTimerExpired
+              showNowSpeakBanner || showSilenceBanner || questionTimerExpired || isAiSpeaking || isProcessing
                 ? 'pb-44'
                 : 'pb-4'
             }`}
@@ -7033,7 +7230,52 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input area */}
+          {/* ── Candidate action bar — Repeat Question / Next ──
+              Conventional chatbot-style quick actions, shown ONLY during the
+              candidate's turn (Linda has finished speaking AND the answer
+              window is open). Hidden while Linda is speaking/thinking. Replaces
+              the old bottom REC badge (moved to the header) and Next-Q button.
+              Both actions also post a candidate chip into the chat. */}
+          {isCandidateTurn && (
+            <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 pt-3 pb-3">
+              <div className="flex items-center justify-center gap-3">
+                {/* Repeat Question — Linda re-reads the current question. Does
+                    NOT count as a new question. */}
+                <button
+                  type="button"
+                  onClick={handleRepeatQuestion}
+                  disabled={repeatInFlight}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 hover:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  {repeatInFlight ? 'Repeating…' : 'Repeat Question'}
+                </button>
+                {/* Next — record any partial answer and move to the next question. */}
+                {(() => {
+                  const isLastQuestion = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+                  const nextDisabled = isLastQuestion || nextSkipInFlight;
+                  return (
+                    <button
+                      type="button"
+                      onClick={handleNextQuestion}
+                      disabled={nextDisabled}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-200 ${
+                        nextDisabled
+                          ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
+                          : 'bg-violet-600 hover:bg-violet-700 border-violet-600 text-white shadow-sm'
+                      }`}
+                    >
+                      {isLastQuestion ? 'Last Question' : nextSkipInFlight ? 'Moving on…' : 'Next'}
+                      <SkipForward className="w-4 h-4" />
+                    </button>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Legacy input area removed (REC moved to header, Next-Q → action bar). */}
+          {false && (
           <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 pt-3 pb-3">
             <div className="flex items-center justify-end gap-3">
 
@@ -7229,6 +7471,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               </div>
             </div>
           </div>
+          )}
         </div>
 
 
@@ -7406,29 +7649,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       <InterviewProctoringWarnings />
 
-      {/* TESTER MUTE DOT — small button in bottom-right, subtle for real
-          candidates but findable for QA. Click to toggle mic mute for silence
-          scenarios ("Are you there?" trigger, VAD testing). Red = muted,
-          gray ring = live. Size bumped from 8px → 14px so testers can find
-          it; still easy to miss at a glance unless you know to look. */}
-      {isConnected && !isClosing && (
-        <button
-          onClick={toggleMute}
-          title={isMuted ? "MUTED — click to unmute mic" : "MIC LIVE — click to mute"}
-          aria-label="Tester mute toggle"
-          className="fixed bottom-2 right-2 z-[400] rounded-full transition-all duration-200 flex items-center justify-center"
-          style={{
-            width: "14px",
-            height: "14px",
-            background: isMuted ? "#ef4444" : "rgba(148, 163, 184, 0.35)",
-            border: isMuted ? "1px solid #fca5a5" : "1px solid rgba(148, 163, 184, 0.5)",
-            boxShadow: isMuted ? "0 0 10px rgba(239, 68, 68, 0.8)" : "0 0 4px rgba(148, 163, 184, 0.3)",
-            cursor: "pointer",
-          }}
-        >
-          {isMuted && <span style={{ color: "white", fontSize: "8px", fontWeight: "bold", lineHeight: 1 }}>M</span>}
-        </button>
-      )}
+      {/* Tester mute dot removed per UX request. */}
     </>
   );
 }

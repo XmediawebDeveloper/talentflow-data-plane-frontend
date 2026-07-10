@@ -34,8 +34,19 @@ interface StepSamplePracticeProps {
 
 // ── Practice question ────────────────────────────────────────────────────────
 
+// Spoken/shown greeting that plays BEFORE the practice question. It sets
+// expectations clearly: this is only a practice/test run for the candidate to
+// confirm their mic + video work, the recording can be replayed, and nothing
+// here is stored in our database.
+const PRACTICE_GREETING =
+  "Hi, this is Linda. Welcome — this is just a practice session. Before the real interview begins, let's make sure everything is working correctly, especially your microphone and camera. Go ahead and record a short answer, then play it back to check that you can be seen and heard clearly. Don't worry — this practice recording is only for you to test yourself and is not stored in our database.";
+
+// The actual practice question, asked AFTER the greeting.
 const PRACTICE_QUESTION =
-  'Please briefly introduce yourself — your name, background, and what excites you about this role.';
+  'Whenever you are ready, please briefly introduce yourself — your name, background, and what excites you about this role.';
+
+// Full script the AI voice reads aloud: greeting first, then the question.
+const PRACTICE_SPOKEN_SCRIPT = `${PRACTICE_GREETING} ${PRACTICE_QUESTION}`;
 
 // ── Helper: pick a good SpeechSynthesis voice ────────────────────────────────
 
@@ -245,7 +256,7 @@ export default function StepSamplePractice({
       // Resume in case the synth engine was paused
       window.speechSynthesis.resume();
 
-      const utterance = new SpeechSynthesisUtterance(PRACTICE_QUESTION);
+      const utterance = new SpeechSynthesisUtterance(PRACTICE_SPOKEN_SCRIPT);
       utterance.rate = 0.9;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
@@ -712,6 +723,15 @@ export default function StepSamplePractice({
 
   return (
     <div className="space-y-4" style={{ colorScheme: 'light' }}>
+      {/* Medium-speed blink used by the PRACTICE SESSION label and the
+          Recording badge (1.4s cycle — steady, not fast). */}
+      <style>{`
+        @keyframes tf-blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.25; }
+        }
+        .tf-blink { animation: tf-blink 1.4s ease-in-out infinite; }
+      `}</style>
       {/* Header */}
       <div className="text-center space-y-1">
         <span className="inline-block px-4 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
@@ -727,7 +747,9 @@ export default function StepSamplePractice({
         {/* Top bar */}
         <div className="flex items-center px-4 py-2.5 border-b border-white/[0.07] bg-[#060D1A]">
           <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2" />
-          <span className="text-xs font-semibold text-gray-300 tracking-wide">PRACTICE SESSION</span>
+          <span className="tf-blink text-xs font-bold tracking-wider px-2.5 py-1 rounded-md bg-amber-400 text-gray-900 shadow-sm">
+            PRACTICE SESSION
+          </span>
         </div>
 
         {/* 2-Column Grid */}
@@ -762,11 +784,25 @@ export default function StepSamplePractice({
 
           {/* Question bubble */}
           <div className="bg-[#1E293B]/80 border border-white/[0.08] rounded-xl p-4 flex-1 flex flex-col justify-between gap-4">
-            <div>
-              <p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide mb-2">Practice Question</p>
-              <p className="text-[#E2E8F0] text-sm leading-relaxed font-medium">
-                &ldquo;{PRACTICE_QUESTION}&rdquo;
+            <div className="space-y-3">
+              {/* Linda's greeting — sets expectations before the question */}
+              <div>
+                <p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide mb-2">Linda says</p>
+                <p className="text-[#E2E8F0] text-sm leading-relaxed">
+                  {PRACTICE_GREETING}
+                </p>
+              </div>
+              {/* Reassurance chip: practice recording is not stored */}
+              <p className="inline-flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Practice only — your recording is not saved to our database
               </p>
+              <div className="pt-1 border-t border-white/[0.06]">
+                <p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide mb-2 mt-2">Practice Question</p>
+                <p className="text-[#E2E8F0] text-sm leading-relaxed font-medium">
+                  &ldquo;{PRACTICE_QUESTION}&rdquo;
+                </p>
+              </div>
             </div>
 
             {/* Play button */}
@@ -827,11 +863,15 @@ export default function StepSamplePractice({
 
             {/* Status badges */}
             {!showReplay && (isRecording || isTranscribing) && (
-              <div className={`absolute top-2 left-2 flex items-center gap-1.5 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm ${isRecording ? 'bg-red-500/90' : 'bg-blue-600/90'}`}>
+              <div className={`absolute top-2 left-2 flex items-center rounded-full backdrop-blur-sm text-white ${
+                isRecording
+                  ? 'tf-blink gap-2 text-base font-bold px-4 py-2 bg-red-500 shadow-lg shadow-red-500/40 ring-2 ring-red-300/50'
+                  : 'gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-600/90'
+              }`}>
                 {isRecording ? (
                   <>
-                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                    {`Recording · ${recordingElapsed}s`}
+                    <span className="w-2.5 h-2.5 bg-white rounded-full animate-ping" />
+                    {`● Recording · ${recordingElapsed}s`}
                   </>
                 ) : (
                   <><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>
