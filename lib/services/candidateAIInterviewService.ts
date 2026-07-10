@@ -143,16 +143,18 @@ export const candidateAIInterviewService = {
     await candidateApi.post(`/candidate/ai-interview/${token}/practice-complete`).catch(() => {});
   },
 
-  // Records a candidate consent action to the backend Audit Log. Best-effort —
-  // never blocks the interview flow. Called for both pre-interview consent
-  // gates: 'rules_acknowledged' (checkbox on the fullscreen prompt) and
-  // 'final_accept' (the in-fullscreen "Yes, I accept" gate).
-  async recordConsent(
+  // Records a candidate consent ACKNOWLEDGEMENT to the backend Audit Log.
+  // Distinct from recordConsent() above (which posts the video/audio/biometric
+  // consent form to /consent). This posts to /consent-ack and is best-effort —
+  // never blocks the interview flow. Called for both pre-interview gates:
+  // 'rules_acknowledged' (checkbox on the fullscreen prompt) and 'final_accept'
+  // (the in-fullscreen "Yes, I accept" gate).
+  async recordConsentAck(
     token: string,
     consentType: 'rules_acknowledged' | 'final_accept',
     details?: Record<string, any>,
   ): Promise<void> {
-    await candidateApi.post(`/candidate/ai-interview/${token}/consent`, {
+    await candidateApi.post(`/candidate/ai-interview/${token}/consent-ack`, {
       consent_type: consentType,
       timestamp: new Date().toISOString(),
       details: details || {},

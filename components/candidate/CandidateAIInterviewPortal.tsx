@@ -999,7 +999,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setStartSubmitting(true);
 
     // Log the SECOND consent to the audit trail (best-effort, non-blocking).
-    candidateAIInterviewService.recordConsent(token, 'final_accept', {
+    candidateAIInterviewService.recordConsentAck(token, 'final_accept', {
       phase: 'pre_interview_fullscreen',
     }).catch(() => {});
 
@@ -1597,7 +1597,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 onClick={() => {
                   // Log the FIRST consent (checkbox acknowledged) to the audit
                   // trail, then proceed to screen-share + fullscreen.
-                  candidateAIInterviewService.recordConsent(token, 'rules_acknowledged', { phase: 'fullscreen_prompt' }).catch(() => {});
+                  candidateAIInterviewService.recordConsentAck(token, 'rules_acknowledged', { phase: 'fullscreen_prompt' }).catch(() => {});
                   handleFullscreenReady();
                 }}
                 disabled={startSubmitting || !rulesConsent}
