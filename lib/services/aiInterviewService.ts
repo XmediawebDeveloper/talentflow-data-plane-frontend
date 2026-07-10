@@ -221,6 +221,8 @@ export interface AIInterviewListResponse {
 export interface AIInterviewInvitationListResponse extends AIInterviewListResponse {
   completed: number;
   in_progress: number;
+  terminated: number;
+  cancelled: number;
   average_score: number | null;
 }
 

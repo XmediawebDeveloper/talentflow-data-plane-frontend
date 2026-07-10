@@ -7084,6 +7084,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       // wiping it.
                       const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
 
+                      // Did the candidate actually speak before clicking Next? Capture
+                      // it BEFORE abortRecordingForSkip resets speechDetectedRef. When
+                      // true, the backend records their partial answer, so we show the
+                      // "Your Response" loading bubble immediately (dots) and let the
+                      // incoming transcript fill it in — instead of a blank gap that
+                      // suddenly pops the transcript.
+                      const hadSpeechForSkip = speechDetectedRef.current;
+
                       // 0. If Linda is speaking, stop her immediately
                       if (isAiSpeakingRef.current) {
                         talkingHeadRef.current?.streamStop();
@@ -7100,6 +7108,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
                       // 1. Stop mic silently — no end_turn, no processing state
                       abortRecordingForSkipRef.current();
+
+                      // 1b. If the candidate spoke, show the "Your Response" loading
+                      //     bubble right away. abortRecordingForSkip cleared this flag
+                      //     and currentTranscript above; re-set it here (same event
+                      //     handler → React batches, this wins) so the bubble with the
+                      //     bouncing dots appears at once and the backend's transcript
+                      //     replaces it when it lands — no blank-then-sudden jump.
+                      if (hadSpeechForSkip) {
+                        setCurrentTranscript("");
+                        currentTranscriptRef.current = "";
+                        setIsCandidateTranscriptProcessing(true);
+                      }
 
                       // 2. Clear no-response timer explicitly (stopRecordingSilent skips this
                       //    when isRecording=false, e.g. candidate never spoke)

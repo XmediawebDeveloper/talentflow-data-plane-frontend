@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward,
+  Download, Loader2, Sparkles, SkipForward, Play,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -128,6 +128,30 @@ function formatTs(ts?: string) {
   catch { return '—'; }
 }
 
+// Elapsed seconds into the interview recording at which an event fired,
+// measured from `startTs` (the session start ≈ recording start). Returns null
+// when either timestamp is missing/invalid or the offset would be negative
+// (clock skew / event stamped before the anchor) — i.e. not seekable.
+function videoOffsetSeconds(ts?: string, startTs?: string): number | null {
+  if (!ts || !startTs) return null;
+  const eventMs = new Date(ts).getTime();
+  const startMs = new Date(startTs).getTime();
+  if (Number.isNaN(eventMs) || Number.isNaN(startMs)) return null;
+  const offsetSec = Math.floor((eventMs - startMs) / 1000);
+  return offsetSec < 0 ? null : offsetSec;
+}
+
+// Elapsed position in the interview recording (mm:ss) at which an event fired.
+// Minutes are not capped at 59 — a 75-minute mark reads "75:12". Returns '—'
+// when the offset is not computable (see videoOffsetSeconds).
+function formatVideoOffset(ts?: string, startTs?: string) {
+  const offsetSec = videoOffsetSeconds(ts, startTs);
+  if (offsetSec == null) return '—';
+  const mm = Math.floor(offsetSec / 60);
+  const ss = offsetSec % 60;
+  return `${mm}:${String(ss).padStart(2, '0')}`;
+}
+
 /* ─── Recording sub-tab component ───────────────────────────────────────── */
 function VideoPane({
   label,
@@ -137,6 +161,8 @@ function VideoPane({
   error,
   onError,
   onDuration,
+  seekTo,
+  seekKey,
 }: {
   label: string;
   hasFile: boolean;
@@ -145,6 +171,8 @@ function VideoPane({
   error: boolean;
   onError: () => void;
   onDuration?: (seconds: number) => void;
+  seekTo?: number | null;
+  seekKey?: number;
 }) {
   if (!hasFile) {
     return (
@@ -177,7 +205,7 @@ function VideoPane({
   }
   if (blobUrl) {
     return (
-      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} />
+      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
     );
   }
   return null;
@@ -192,26 +220,53 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function VideoWithDuration({ blobUrl, onError, onDuration }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void }) {
+function VideoWithDuration({ blobUrl, onError, onDuration, seekTo, seekKey }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void; seekTo?: number | null; seekKey?: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  // True once metadata (and, for webm, duration) has resolved so it's safe to
+  // set currentTime. Seek requests that arrive before this are applied on ready.
+  const readyRef = useRef(false);
 
   const applyDuration = (d: number) => {
     setDuration(d);
     if (onDuration && isFinite(d) && d > 0) onDuration(d);
   };
 
+  const applySeek = () => {
+    const v = videoRef.current;
+    if (!v || !readyRef.current || seekTo == null) return;
+    const max = isFinite(v.duration) && v.duration > 0 ? v.duration - 0.25 : seekTo;
+    try {
+      v.currentTime = Math.max(0, Math.min(seekTo, max));
+      // Best-effort autoplay from the seeked point; ignore blocked-autoplay.
+      void v.play?.().catch(() => {});
+    } catch { /* setting currentTime can throw on not-yet-seekable media */ }
+  };
+
+  const markReady = () => {
+    readyRef.current = true;
+    applySeek();
+  };
+
+  // A new seek request (seekKey change) after the video is already loaded.
+  useEffect(() => {
+    applySeek();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekKey]);
+
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     if (isFinite(v.duration) && v.duration > 0) {
       applyDuration(v.duration);
+      markReady();
       return;
     }
     const onTimeUpdate = () => {
       v.removeEventListener('timeupdate', onTimeUpdate);
       v.currentTime = 0;
       applyDuration(v.duration);
+      markReady();
     };
     v.addEventListener('timeupdate', onTimeUpdate);
     v.currentTime = 1e9;
@@ -284,6 +339,7 @@ function RecordingTabContent({
   interview,
   videoBlobUrl, videoBlobSize, videoLoading, videoError, setVideoError,
   screenBlobUrl, screenBlobSize, screenLoading, screenError,
+  seekRequest,
 }: {
   interview: AIInterviewResponse;
   videoBlobUrl: string | null;
@@ -295,10 +351,24 @@ function RecordingTabContent({
   screenBlobSize: number | null;
   screenLoading: boolean;
   screenError: boolean;
+  seekRequest?: { seconds: number; key: number } | null;
 }) {
   const [recView, setRecView] = useState<'candidate' | 'screen'>('candidate');
   const [candidateDuration, setCandidateDuration] = useState<number | null>(null);
   const [screenDuration, setScreenDuration] = useState<number | null>(null);
+
+  // A seek requested from the Event Log: jump to the sub-view that actually has
+  // a recording (prefer the candidate webcam) before seeking. Keyed on the
+  // request's monotonic `key` so repeat clicks on the same row re-fire.
+  useEffect(() => {
+    if (!seekRequest) return;
+    setRecView(
+      interview.recording_file_path ? 'candidate'
+        : interview.screen_recording_file_path ? 'screen'
+        : 'candidate',
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekRequest?.key]);
 
   const isCandidate = recView === 'candidate';
   const blobUrl = isCandidate ? videoBlobUrl : screenBlobUrl;
@@ -349,6 +419,8 @@ function RecordingTabContent({
               error={videoError}
               onError={() => setVideoError(true)}
               onDuration={setCandidateDuration}
+              seekTo={seekRequest?.seconds ?? null}
+              seekKey={seekRequest?.key ?? 0}
             />
           ) : (
             <VideoPane
@@ -359,6 +431,8 @@ function RecordingTabContent({
               error={screenError}
               onError={() => {}}
               onDuration={setScreenDuration}
+              seekTo={seekRequest?.seconds ?? null}
+              seekKey={seekRequest?.key ?? 0}
             />
           )}
         </div>
@@ -480,6 +554,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // content is merged into the Eval tab. The render blocks are kept so any
   // deep-link / fallback still works.
   const [activeTab, setActiveTab] = useState<TabKey>('eval');
+  // Seek request from the Violations Event Log → Recording player. `key` is a
+  // monotonic counter (via seekNonceRef) so clicking the same row twice re-fires.
+  const [recordingSeek, setRecordingSeek] = useState<{ seconds: number; key: number } | null>(null);
+  const seekNonceRef = useRef(0);
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [qaExportMenuOpen, setQaExportMenuOpen] = useState(false);
@@ -1013,6 +1091,19 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
       (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
     );
   }, [violations]);
+
+  // Anchor for the "Video Time" column: the session start ≈ recording start.
+  // Falls back to the earliest event timestamp for legacy sessions that never
+  // stored started_at, so the log still shows relative offsets (first event
+  // then reads 0:00). Undefined only when neither is available.
+  const videoAnchor = useMemo(() => {
+    if (liveSession.started_at) return liveSession.started_at;
+    const stamps = violations
+      .map(v => v.timestamp)
+      .filter((t): t is string => !!t)
+      .sort();
+    return stamps[0];
+  }, [liveSession.started_at, violations]);
 
   const ROWS_PER_PAGE = violationsPerPage;
   const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
@@ -2261,6 +2352,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   screenBlobSize={screenBlobSize}
                   screenLoading={screenLoading}
                   screenError={screenError}
+                  seekRequest={recordingSeek}
                 />
               )
             )}
@@ -3464,6 +3556,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Event</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Time</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Video Time</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
                               <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
                             </tr>
@@ -3481,6 +3574,17 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 row.count >= 3 ? 'text-brand-orange-deep font-semibold' :
                                                  'text-gray-600';
                               const globalIdx = (safeViolationPage - 1) * ROWS_PER_PAGE + idx + 1;
+                              // Video Time is clickable only when we can compute
+                              // an offset AND a recording exists to seek into.
+                              const offsetSec = videoOffsetSeconds(row.timestamp, videoAnchor);
+                              const hasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+                              const seekable = offsetSec != null && hasRecording;
+                              const jumpToRecording = () => {
+                                if (offsetSec == null) return;
+                                seekNonceRef.current += 1;
+                                setRecordingSeek({ seconds: offsetSec, key: seekNonceRef.current });
+                                setActiveTab('recording');
+                              };
                               return (
                                 <tr key={idx} className="hover:bg-brand-blue/[0.02] transition-colors">
                                   <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
@@ -3493,6 +3597,21 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                     </div>
                                   </td>
                                   <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{formatTs(row.timestamp)}</td>
+                                  <td className="px-4 py-2.5 text-xs font-mono">
+                                    {seekable ? (
+                                      <button
+                                        type="button"
+                                        onClick={jumpToRecording}
+                                        title="Jump to this moment in the recording"
+                                        className="inline-flex items-center gap-1 text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue/40 rounded"
+                                      >
+                                        <Play className="w-3 h-3" />
+                                        {formatVideoOffset(row.timestamp, videoAnchor)}
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-500">{formatVideoOffset(row.timestamp, videoAnchor)}</span>
+                                    )}
+                                  </td>
                                   <td className="px-4 py-2.5">
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
                                       {sev}
