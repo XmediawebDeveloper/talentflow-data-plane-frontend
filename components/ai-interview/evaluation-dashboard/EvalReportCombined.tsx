@@ -258,19 +258,48 @@ export function EvalReportCombined({
         const al = doc.splitTextToSize(aiSummary, CW); ensure(al.length * 4.4 + 2);
         txt(sub); doc.text(al, M, y + 3); y += al.length * 4.4 + 3; txt(ink);
       }
-      const bulletList = (title: string, items: string[], c: RGB) => {
-        if (!items || items.length === 0) return;
-        ensure(7); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); txt(c); doc.text(title, M, y + 3); y += 5;
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(ink);
-        items.slice(0, 5).forEach((it) => {
-          const il = doc.splitTextToSize(`•  ${it}`, CW - 2); ensure(il.length * 4 + 1);
-          doc.text(il, M + 1, y + 3); y += il.length * 4 + 1;
+      const columnGap = 4;
+      const columnWidth = (CW - columnGap) / 2;
+      const measureInsightCard = (items: string[], width: number) => {
+        let height = 11;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        const safeItems = items.length > 0 ? items.slice(0, 5) : ['No items captured.'];
+        safeItems.forEach((item) => {
+          const lines = doc.splitTextToSize(`• ${item}`, width - 8);
+          height += lines.length * 4 + 1;
         });
-        y += 2;
+        return Math.max(height + 3, 22);
       };
-      bulletList('Key Strengths', strengths, [4, 120, 87]);
-      bulletList('Areas of Concern', weaknesses, [185, 28, 28]);
-      y += 2;
+      const drawInsightCard = (
+        x: number,
+        topY: number,
+        width: number,
+        height: number,
+        title: string,
+        items: string[],
+        accent: RGB,
+        background: RGB,
+      ) => {
+        fill(background); stroke(accent); doc.roundedRect(x, topY, width, height, 1.5, 1.5, 'FD');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); txt(accent);
+        doc.text(title, x + 3, topY + 5);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(ink);
+        let cy = topY + 9;
+        const safeItems = items.length > 0 ? items.slice(0, 5) : ['No items captured.'];
+        safeItems.forEach((item) => {
+          const lines = doc.splitTextToSize(`• ${item}`, width - 8);
+          doc.text(lines, x + 3, cy + 3);
+          cy += lines.length * 4 + 1;
+        });
+      };
+      const strengthsHeight = measureInsightCard(strengths, columnWidth);
+      const weaknessesHeight = measureInsightCard(weaknesses, columnWidth);
+      const insightHeight = Math.max(strengthsHeight, weaknessesHeight);
+      ensure(insightHeight + 2);
+      drawInsightCard(M, y, columnWidth, insightHeight, 'Key Strengths', strengths, [4, 120, 87], [236, 253, 245]);
+      drawInsightCard(M + columnWidth + columnGap, y, columnWidth, insightHeight, 'Areas of Concern', weaknesses, [185, 28, 28], [254, 242, 242]);
+      y += insightHeight + 4;
 
       // Footer
       ensure(18);
