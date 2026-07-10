@@ -486,29 +486,53 @@ export default function StepSystemCheck({
       updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       return;
     }
+    // ── Measure the room's noise floor from MANY samples over the window ──
+    // A single reading was skewed by any transient (click/breath) at that
+    // instant → wrong threshold → real speech missed or noise false-detected.
+    // Take the MEDIAN of ~10 samples: robust to spikes AND dead-quiet dropouts.
     updateSystemCheck('microphone', { status: 'checking', detail: 'Measuring ambient levels...' });
-    await new Promise((r) => setTimeout(r, 1500));
-    let ambientLevel = getRMS(analyser);
-    if (ambientLevel < 1) {
-      await new Promise((r) => setTimeout(r, 600));
-      ambientLevel = getRMS(analyser);
+    const ambientSamples: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      ambientSamples.push(getRMS(analyser));
+      await new Promise((r) => setTimeout(r, 130));
     }
-    const VOICE_FACTOR = 1.8;
-    const VOICE_FLOOR = 8;
-    const voiceThreshold = Math.max(Math.max(ambientLevel, 0) * VOICE_FACTOR, VOICE_FLOOR);
+    ambientSamples.sort((a, b) => a - b);
+    const ambient = ambientSamples[Math.floor(ambientSamples.length / 2)] || 0;
+
+    // ── Voice threshold is AMBIENT-RELATIVE (ratio + margin), not a fixed floor.
+    // Ratio detection is SCALE-INVARIANT, so it works for quiet headset/jack
+    // mics (low ambient) AND loud built-in mics without any gain boost. The
+    // small absolute MIN only stops near-silence from triggering.
+    const VOICE_RATIO = 2.0;    // speech ≥ 2× the room's noise floor …
+    const VOICE_MARGIN = 4;     // … and at least +4 above it (covers ambient≈0)
+    const VOICE_MIN = 3;        // never trigger below this (near-silence guard)
+    const LOUD_ABS = 22;        // clearly-loud sound also qualifies
+    const voiceThreshold = Math.max(ambient * VOICE_RATIO, ambient + VOICE_MARGIN, VOICE_MIN);
+    // Require CONSECUTIVE frames above threshold (~300 ms) so a single spurious
+    // spike (click / AudioContext startup transient) can't false-trigger "voice
+    // detected" — the "showed detected without speaking" bug.
+    const CONSECUTIVE_NEEDED = 2;
+    let aboveStreak = 0;
     let voiceEverDetected = false;
     updateSystemCheck('microphone', { status: 'checking', detail: 'Say something — your microphone will be detected automatically...' });
     micIntervalRef.current = setInterval(() => {
       const a = analyserRef.current;
       if (!a) return;
       const lvl = getRMS(a);
-      if (lvl >= voiceThreshold) {
-        voiceEverDetected = true;
-        updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
-      } else if (!voiceEverDetected) {
-        updateSystemCheck('microphone', lvl >= 1
-          ? { status: 'checking', detail: 'Listening — say something to confirm your microphone...' }
-          : { status: 'checking', detail: 'No audio yet — say something, or check that your mic is unmuted...' });
+      const isVoice = lvl >= LOUD_ABS || lvl >= voiceThreshold;
+      if (isVoice) {
+        aboveStreak += 1;
+        if (aboveStreak >= CONSECUTIVE_NEEDED) {
+          voiceEverDetected = true;
+          updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
+        }
+      } else {
+        aboveStreak = 0;
+        if (!voiceEverDetected) {
+          updateSystemCheck('microphone', lvl > ambient + 1
+            ? { status: 'checking', detail: 'Listening — say something to confirm your microphone...' }
+            : { status: 'checking', detail: 'No audio yet — say something, or check that your mic is unmuted...' });
+        }
       }
     }, 150);
   }, [ensureAudioAnalyser, getRMS, updateSystemCheck]);

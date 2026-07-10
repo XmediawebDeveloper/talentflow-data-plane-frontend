@@ -4372,9 +4372,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Keep ref in sync so the periodic timer scheduled inside startRecorder
   // (set up before this callback exists in the closure) always sees the latest.
   useEffect(() => { uploadCheckpointRef.current = uploadCheckpoint; }, [uploadCheckpoint]);
-  // Keep a live ref to uploadRecording so the unmount-only cleanup can flush the
-  // candidate webcam recording without adding uploadRecording to its deps.
-  useEffect(() => { uploadRecordingRef.current = uploadRecording; }, [uploadRecording]);
 
   // Tab-visibility checkpoint — flush before the browser may throttle us
   useEffect(() => {
@@ -4439,6 +4436,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       recorder.stop();
     });
   }, [token]);
+
+  // Keep a live ref to uploadRecording so the unmount-only cleanup can flush the
+  // candidate webcam recording without adding uploadRecording to its deps.
+  // MUST be declared AFTER uploadRecording — referencing it earlier hits the
+  // const temporal-dead-zone ("Cannot access before initialization") and crashes
+  // the whole interview screen.
+  useEffect(() => { uploadRecordingRef.current = uploadRecording; }, [uploadRecording]);
 
   // Recording
   const stopRecording = useCallback(() => {
