@@ -119,6 +119,7 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
   screen_share_stopped:     { label: 'Screen Share Stopped', icon: <Monitor className="w-4 h-4" />,       color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+  interview_terminated:     { label: 'Interview Terminated — Left Screen', icon: <ShieldAlert className="w-4 h-4" />, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-300' },
 };
 
 function formatTs(ts?: string) {
@@ -1185,6 +1186,21 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               {evalElapsedSec > 0 && ` (${Math.floor(evalElapsedSec / 60)}:${String(evalElapsedSec % 60).padStart(2, '0')})`}
               …
             </span>
+          </div>
+        )}
+
+        {/* Interview TERMINATED — candidate left the interview screen (proctoring).
+            Prominent red banner so the recruiter immediately sees the session was
+            cut short for an integrity violation, independent of the eval flow. */}
+        {violations.some(v => v.event_type === 'interview_terminated') && (
+          <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-300 ring-1 ring-red-100 rounded-xl text-sm text-red-800 shadow-sm">
+            <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold">Interview terminated — candidate left the screen</div>
+              <div className="text-red-700/90 mt-0.5">
+                The candidate switched tabs, minimized, lost window focus, or exited fullscreen during the interview. Per the proctoring policy the session was ended automatically and cannot be resumed.
+              </div>
+            </div>
           </div>
         )}
 
@@ -2501,30 +2517,29 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                       </div>
                                     )}
                                   </>
-                                ) : hasCorrection && diff ? (
+                                ) : (
                                   <>
-                                    {/* Original (raw ASR) — shown FIRST */}
+                                    {/* Original (raw ASR) — ALWAYS shown, even when the
+                                        enhancer made no change, so the recruiter can always
+                                        see exactly what the ASR engine produced. */}
                                     <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-brand-orange/10 ring-1 ring-brand-orange/25 text-brand-orange-deep">
                                       <div className="text-[10px] font-semibold text-brand-orange-deep mb-1 uppercase tracking-wide">Original (ASR)</div>
-                                      {diff.mode === 'word'
+                                      {hasCorrection && diff && diff.mode === 'word'
                                         ? <DiffText parts={diff.raw} tone="raw" />
-                                        : <span>{rawContent}</span>}
+                                        : <span>{rawContent || content}</span>}
                                     </div>
-                                    {/* Corrected — shown BELOW */}
+                                    {/* Corrected — ALWAYS shown below. When identical to the
+                                        raw ASR it simply repeats the same text (no correction). */}
                                     <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                       <div className="text-[10px] font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
-                                      {diff.mode === 'word'
+                                      {hasCorrection && diff && diff.mode === 'word'
                                         ? <DiffText parts={diff.corrected} tone="corrected" />
                                         : <span>{content}</span>}
                                     </div>
-                                    {diff.mode === 'sentence' && (
+                                    {hasCorrection && diff && diff.mode === 'sentence' && (
                                       <div className="text-[10px] text-brand-orange-deep mt-1 pr-1 text-right italic">full-sentence rewrite</div>
                                     )}
                                   </>
-                                ) : (
-                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white rounded-tr-sm ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
-                                    {content}
-                                  </div>
                                 )}
 
                                 {ts && (

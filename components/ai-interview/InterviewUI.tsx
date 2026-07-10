@@ -7075,6 +7075,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         }
                       }, 15000);
 
+                      // Snapshot any browser-side live transcript BEFORE tearing the
+                      // mic down, so a partial answer the candidate spoke isn't lost.
+                      // It's sent with the skip as a fallback — the audio streamed to
+                      // the backend is the primary source, but this covers the case
+                      // where the backend ASR returns nothing. The backend records
+                      // this partial answer against the current question instead of
+                      // wiping it.
+                      const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
+
                       // 0. If Linda is speaking, stop her immediately
                       if (isAiSpeakingRef.current) {
                         talkingHeadRef.current?.streamStop();
@@ -7145,9 +7154,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
                       }
 
-                      // 7. Send skip — backend generates next Q
+                      // 7. Send skip — backend records any partial answer (buffered
+                      //    audio + this browser-transcript fallback), then generates
+                      //    the next Q. If nothing was spoken it's a plain skip.
                       if (wsRef.current?.readyState === WebSocket.OPEN) {
-                        wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'candidate' }));
+                        wsRef.current.send(JSON.stringify({
+                          type: 'skip_question',
+                          source: 'candidate',
+                          browser_transcript: skipBrowserTranscript || undefined,
+                        }));
                       }
 
                       // 9. Clear question timer state

@@ -43,6 +43,7 @@ type Step =
   | 'fullscreen_prompt'
   | 'interview'
   | 'completed'
+  | 'terminated'      // proctoring termination — candidate left the interview screen
   | 'error';
 
 
@@ -61,11 +62,16 @@ const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to con
 // developers testing on staging aren't paused/terminated. Frontend reads the
 // browser-exposed NEXT_PUBLIC_ENVIRONMENT (the plain ENVIRONMENT var is server-only).
 const IS_PRODUCTION_ENV = process.env.NEXT_PUBLIC_ENVIRONMENT === 'production';
-// Switching tabs / minimizing PAUSES the interview (never an instant close, so a
-// network blip or accidental focus change is tolerated). It is only TERMINATED
-// if the candidate stays away longer than this, or switches away too many times.
-const TAB_AWAY_PROLONGED_MS = 30000; // stay hidden longer than 30s → terminate
-const TAB_AWAY_MAX_EVENTS = 5;       // more than 5 tab-switches → terminate
+// Persist a proctoring termination so reopening the link keeps showing the
+// terminated page (like the completed page persists) — the candidate can't
+// restart by reloading. Keyed per interview token.
+const terminatedStorageKey = (token: string) => `tf_ai_terminated_${token}`;
+// In production the candidate must STAY on the interview page. Leaving it
+// (switching tabs, minimizing, Alt+Tab, Windows key / losing focus, or exiting
+// fullscreen with Esc) PAUSES and blocks the interview until they return — no
+// "chances", no termination (a network blip or accidental focus change just
+// pauses and auto-resumes on return). Enforced only in production; staging is
+// relaxed for dev testing.
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   return Promise.race([
@@ -110,14 +116,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // platforms use this pattern so accidental Esc presses don't kill the
   // interview. null = not in grace period.
   const [fullscreenGraceRemaining, setFullscreenGraceRemaining] = useState<number | null>(null);
-  // Tab-switch / minimize proctoring (production only). `awayWarning` shows a
-  // "you left the interview" banner on RETURN; `tabTerminatedReason` marks a
-  // hard termination (prolonged absence or too many switches). Refs mirror the
-  // count + terminated flag so the visibilitychange listener reads live values.
-  const [awayWarning, setAwayWarning] = useState<{ count: number } | null>(null);
-  const [tabTerminatedReason, setTabTerminatedReason] = useState<string | null>(null);
-  const tabAwayCountRef = useRef(0);
-  const tabTerminatedRef = useRef(false);
+  // Production "stay on the page" enforcement. If the candidate leaves the
+  // interview (tab hidden / window unfocused / not fullscreen) the interview is
+  // TERMINATED immediately — no grace, no resume. Non-null = the reason it ended.
+  const [interviewTerminatedReason, setInterviewTerminatedReason] = useState<string | null>(null);
+  // Mirror of screenShareStopped so the terminate listener can ignore the blur
+  // caused by the re-share screen picker (that's not the candidate leaving).
+  const screenShareStoppedRef = useRef(false);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
   // Device tier + feature flags — detected once during the system check so the
   // interview runs the heavy/accurate path only on capable machines and a
@@ -213,10 +218,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
     if (stepRef.current === 'interview') return;
+    // Proctoring termination is sticky: once the candidate was terminated for
+    // leaving the screen, reopening the link must stay on the terminated page —
+    // they can't restart. Checked before anything else.
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem(terminatedStorageKey(token))) {
+        const reason = localStorage.getItem(terminatedStorageKey(token)) || 'left_screen';
+        setInterviewTerminatedReason(reason);
+        setStep('terminated');
+        return;
+      }
+    } catch { /* ignore storage errors */ }
     try {
       setStep('loading');
       const info = await candidateAIInterviewService.getInterviewInfo(token);
       setInterview(info);
+
+      // Server-side proctoring termination is sticky and unbypassable (survives
+      // clearing localStorage / a different browser): if the backend says this
+      // interview was terminated, stay on the terminated page — no resume.
+      if (info.proctoring_terminated) {
+        try { localStorage.setItem(terminatedStorageKey(token), 'left_screen'); } catch { /* ignore */ }
+        setInterviewTerminatedReason('left_screen');
+        setStep('terminated');
+        return;
+      }
 
       // Populate available languages from interview config
       if (info.available_languages?.length) {
@@ -356,7 +382,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => {
     if (POST_CHECK_STEPS.includes(step as Step)) {
       writeInterviewStep(token, step);
-    } else if (step === 'interview' || step === 'completed' || step === 'error') {
+    } else if (step === 'interview' || step === 'completed' || step === 'terminated' || step === 'error') {
       clearInterviewStep(token);
     }
   }, [step, token]);
@@ -916,12 +942,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   }, [startSubmitting, token, requestEntireScreenShare]);
 
-  // Fullscreen enforcement during interview — with 10s grace period so
-  // accidental Esc presses don't immediately slap the hard-pause overlay
-  // on the candidate. If they return within 10s, we silently restore
-  // without ever showing the blocking UI.
+  // Fullscreen enforcement (STAGING only) — 10s grace so accidental Esc presses
+  // don't immediately show the pause overlay. In PRODUCTION the unified
+  // "stay on the page" pause below owns fullscreen-exit (immediate, no grace).
   useEffect(() => {
-    if (step !== 'interview') return;
+    if (step !== 'interview' || IS_PRODUCTION_ENV) return;
     const eventName = getFullscreenChangeEvent();
     const GRACE_MS = 10000;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -975,66 +1000,51 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     };
   }, [step]);
 
-  // ── Tab-switch / minimize handling (PRODUCTION ONLY) ──────────────────────
-  // Per product decision: switching tabs or minimizing should NOT instantly
-  // close the interview (a network blip or accidental focus change must be
-  // tolerated). Instead we PAUSE — the candidate simply can't proceed while the
-  // tab is hidden — and only TERMINATE if the absence is PROLONGED
-  // (> TAB_AWAY_PROLONGED_MS) or REPEATED (> TAB_AWAY_MAX_EVENTS). On staging
-  // (NEXT_PUBLIC_ENVIRONMENT !== 'production') this is disabled so devs can test
-  // freely. Uses visibilitychange (real tab-switch + minimize) — NOT window
-  // 'blur' — to avoid firing on benign focus changes (clicking browser chrome,
-  // OS notifications, dev tools).
+  // ── "Stay on the page" — TERMINATE on leaving (PRODUCTION ONLY) ────────────
+  // The candidate must remain ON the interview. Leaving it in ANY way —
+  // switching tabs, minimizing, Alt+Tab, the Windows key / losing window focus,
+  // or exiting fullscreen (Esc) — TERMINATES the interview immediately, with NO
+  // grace period and no resume. Fires only on real events (not the initial
+  // mount state) and ignores the blur from the screen-share re-share picker.
+  // Staging is exempt so developers can test freely.
   useEffect(() => {
     if (step !== 'interview' || !IS_PRODUCTION_ENV) return;
-    let prolongedTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const terminate = (reason: string) => {
-      if (tabTerminatedRef.current) return;
-      tabTerminatedRef.current = true;
-      if (prolongedTimer) { clearTimeout(prolongedTimer); prolongedTimer = null; }
-      setAwayWarning(null);
-      setTabTerminatedReason(reason);
-      // Best-effort: record the terminating violation for the recruiter timeline.
+    const fsEvent = getFullscreenChangeEvent();
+    let done = false;
+    const terminateNow = (reason: string) => {
+      if (done || screenShareStoppedRef.current) return;
+      done = true;
+      setInterviewTerminatedReason(reason);
+      // Persist so reopening the link stays on the terminated page (can't restart).
+      try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
       try {
         void candidateAIInterviewService.reportProctorEvent(token, {
-          event_type: 'tab_switch',
+          event_type: 'interview_terminated',
           severity: 'high',
-          details: { reason, tab_away_count: tabAwayCountRef.current, action: 'interview_terminated' },
+          details: { reason, action: 'interview_terminated' },
         });
       } catch { /* non-blocking */ }
       stopAndUploadScreenRecording();
       if (isFullscreen()) exitFullscreen().catch(() => {});
+      // Navigate to the full terminated page (mirrors the completed-page flow).
+      setStep('terminated');
     };
-
-    const handleVisibility = () => {
-      if (tabTerminatedRef.current) return;
-      if (document.hidden) {
-        // Candidate switched away / minimized → pause + arm the prolonged timer.
-        tabAwayCountRef.current += 1;
-        if (tabAwayCountRef.current > TAB_AWAY_MAX_EVENTS) {
-          terminate('too_many_tab_switches');
-          return;
-        }
-        if (prolongedTimer) clearTimeout(prolongedTimer);
-        prolongedTimer = setTimeout(() => {
-          if (document.hidden) terminate('prolonged_absence');
-        }, TAB_AWAY_PROLONGED_MS);
-      } else {
-        // Returned in time → cancel the prolonged timer and resume, showing a
-        // warning banner (on RETURN, when they can actually read it).
-        if (prolongedTimer) { clearTimeout(prolongedTimer); prolongedTimer = null; }
-        setAwayWarning({ count: tabAwayCountRef.current });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
+    const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
+    const onBlur = () => terminateNow('left_screen_focus_lost');
+    const onFsChange = () => { if (!isFullscreen()) terminateNow('left_screen_fullscreen_exit'); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener(fsEvent, onFsChange);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      if (prolongedTimer) clearTimeout(prolongedTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener(fsEvent, onFsChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  // Keep the ref mirror of screenShareStopped current for the terminate guard.
+  useEffect(() => { screenShareStoppedRef.current = screenShareStopped; }, [screenShareStopped]);
 
   // ========== LOADING ==========
   if (step === 'loading') {
@@ -1489,7 +1499,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         )}
         {/* Grace-period countdown — shown while candidate has 10s to return
             before the hard-pause overlay kicks in. Silent otherwise. */}
-        {!screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
+        {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-amber-500 mx-auto mb-4" />
@@ -1516,8 +1526,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
         )}
-        {/* Hard-pause overlay — shown only after grace period expires */}
-        {!screenShareStopped && !isFullscreenActive && (
+        {/* Hard-pause overlay (STAGING) — shown after the fullscreen grace expires.
+            Production uses the unified "return to the interview" pause below. */}
+        {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
@@ -1551,54 +1562,37 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
         )}
-        {/* Tab-switch / minimize — "you left" warning shown on RETURN (production).
-            Non-blocking of termination: just informs the candidate they were away
-            and how close they are to the limit. */}
-        {IS_PRODUCTION_ENV && !tabTerminatedReason && awayWarning && (
-          <div className="fixed inset-0 z-[9998] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
-              <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Stay on the interview</h2>
-              <p className="text-gray-600 mb-4 text-sm">
-                You switched away from or minimized the interview. Please stay on this tab in
-                fullscreen for the whole interview — leaving does not end it immediately, but
-                repeated or prolonged switching will terminate it.
-              </p>
-              <div className="mb-5 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-2">
-                <span className="text-sm font-semibold text-amber-700">
-                  {Math.min(awayWarning.count, TAB_AWAY_MAX_EVENTS)} of {TAB_AWAY_MAX_EVENTS} allowed
-                </span>
-              </div>
-              <button
-                onClick={() => { setAwayWarning(null); requestFullscreen().catch(() => {}); }}
-                className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold text-white transition-colors"
-              >
-                Resume Interview
-              </button>
-            </div>
-          </div>
-        )}
-        {/* Tab-switch / minimize — hard termination (prolonged absence or too many
-            switches). Terminal screen; no resume. */}
-        {tabTerminatedReason && (
-          <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Interview Ended</h2>
-              <p className="text-gray-600 mb-2 text-sm">
-                {tabTerminatedReason === 'prolonged_absence'
-                  ? 'You left the interview window for too long. As per the proctoring policy, the interview has been ended.'
-                  : 'You switched away from the interview too many times. As per the proctoring policy, the interview has been ended.'}
-              </p>
-              <p className="text-xs text-gray-400 mt-4">
-                This session has been recorded and flagged for review.
-              </p>
-            </div>
-          </div>
-        )}
       </>
+    );
+  }
+
+  // ========== TERMINATED (proctoring — candidate left the interview screen) ==========
+  // Prominent RED terminal page. Sticky across reloads (see loadInterview) so
+  // reopening the link keeps showing this — the candidate cannot restart.
+  if (step === 'terminated') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-red-50 px-4" style={{ colorScheme: 'light' }}>
+        <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-300 max-w-md w-full p-8 text-center">
+          <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-10 h-10 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-red-700 mb-3">Interview Terminated</h1>
+          <p className="text-gray-700 mb-3">
+            Your interview has been <span className="font-semibold text-red-600">ended</span> because you left
+            the interview screen (switching tabs, minimizing, pressing a shortcut key,
+            or exiting fullscreen is not allowed).
+          </p>
+          <p className="text-sm text-gray-600 mb-4">
+            As required by the proctoring policy, you must remain on the interview page in
+            fullscreen for the entire session. This session has been recorded and flagged for review.
+          </p>
+          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+            <p className="text-sm font-semibold text-red-700">
+              The interview cannot be resumed or restarted.
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
