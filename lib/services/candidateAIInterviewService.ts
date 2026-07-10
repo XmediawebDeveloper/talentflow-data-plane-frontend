@@ -52,6 +52,9 @@ export interface CandidateInterviewInfo {
   // True once the interview was terminated for a proctoring violation
   // (candidate left the interview screen). Sticky — routes to the terminated page.
   proctoring_terminated?: boolean | null;
+  // When true, block starting the interview if the camera/mic is already held by
+  // another app (candidate already in a Teams/Zoom/Meet call).
+  block_active_meeting?: boolean | null;
   // Expiry timestamp for client-side expiry checks
   expires_at?: string | null;
 }
@@ -138,6 +141,22 @@ export const candidateAIInterviewService = {
 
   async recordPracticeComplete(token: string): Promise<void> {
     await candidateApi.post(`/candidate/ai-interview/${token}/practice-complete`).catch(() => {});
+  },
+
+  // Records a candidate consent action to the backend Audit Log. Best-effort —
+  // never blocks the interview flow. Called for both pre-interview consent
+  // gates: 'rules_acknowledged' (checkbox on the fullscreen prompt) and
+  // 'final_accept' (the in-fullscreen "Yes, I accept" gate).
+  async recordConsent(
+    token: string,
+    consentType: 'rules_acknowledged' | 'final_accept',
+    details?: Record<string, any>,
+  ): Promise<void> {
+    await candidateApi.post(`/candidate/ai-interview/${token}/consent`, {
+      consent_type: consentType,
+      timestamp: new Date().toISOString(),
+      details: details || {},
+    }).catch(() => {});
   },
 
   async transcribePracticeAudio(token: string, audioBlob: Blob): Promise<string> {

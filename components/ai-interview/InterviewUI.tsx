@@ -6331,9 +6331,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (nextSkipInFlightRef.current) return;
     if (isAiSpeakingRef.current && questionTimerSeconds === null) return;
 
-    // Chat: the candidate's "move on" request.
-    postCandidateActionMessage("Let's move on to the next question.");
-
     nextSkipInFlightRef.current = true;
     setNextSkipInFlight(true);
     setTimeout(() => {
@@ -6345,6 +6342,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
     const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
     const hadSpeechForSkip = speechDetectedRef.current;
+
+    // Chat: only post the "move on" chip when the candidate did NOT answer.
+    // If they spoke, their real transcription bubble is the record — showing a
+    // "Let's move on to the next question." chip on top of their answer is
+    // redundant and confusing (see reported bug). So chip == genuine skip only.
+    if (!hadSpeechForSkip) {
+      postCandidateActionMessage("Let's move on to the next question.");
+    }
 
     // 0. If Linda is speaking, stop her immediately.
     if (isAiSpeakingRef.current) {
@@ -6604,11 +6609,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           the instant Linda starts the next question, then Your turn. The GREEN
           trigger (showNowSpeakBanner && candidatePlaybackEnded) is unchanged. */}
       {(() => {
-        let variant: 'timesup' | 'hold' | 'turn' | null = null;
+        // 'prepare' is the TRANSITIONAL state that fills the brief gap after
+        // Linda finishes speaking but before the mic is live and GREEN triggers —
+        // so a banner is ALWAYS on screen (no empty flash). It stays RED because,
+        // like 'hold', it means "not your turn yet — don't speak".
+        let variant: 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
         if (showSilenceBanner) variant = null;               // silence banner owns the slot
         else if (questionTimerExpired) variant = 'timesup';
-        else if (isAiSpeaking || isProcessing) variant = 'hold';
+        else if (isAiSpeaking || isProcessing || isCandidateTranscriptProcessing) variant = 'hold';
         else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
+        else if (isConnected && !isClosing && questionNumber !== null) variant = 'prepare';
         if (!variant) return null;
 
         const micIcon = (
@@ -6625,10 +6635,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             <rect x="14" y="5" width="4" height="14" rx="1" />
           </svg>
         );
+        const spinnerIcon = (
+          <svg className="w-5 h-5 text-white animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.3" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        );
         const cfg = {
           turn:    { box: 'border-emerald-300 bg-emerald-500 shadow-emerald-500/40', title: 'Your turn — speak now',       subtitle: 'Microphone is active · Linda is listening',   icon: micIcon },
           hold:    { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — Linda is speaking', subtitle: 'Please wait until Linda finishes the question', icon: pauseIcon },
           timesup: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: "Time's Up!",                  subtitle: 'Moving to the next question…',                 icon: <Clock className="w-5 h-5 text-white" /> },
+          prepare: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — get ready',         subtitle: 'Your turn is starting…',                       icon: spinnerIcon },
         }[variant];
 
         return (

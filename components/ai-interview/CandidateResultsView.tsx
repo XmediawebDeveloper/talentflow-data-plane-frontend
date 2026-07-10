@@ -1283,17 +1283,45 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
         {/* Interview TERMINATED — candidate left the interview screen (proctoring).
             Prominent red banner so the recruiter immediately sees the session was
             cut short for an integrity violation, independent of the eval flow. */}
-        {violations.some(v => v.event_type === 'interview_terminated') && (
-          <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-300 ring-1 ring-red-100 rounded-xl text-sm text-red-800 shadow-sm">
-            <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <div>
-              <div className="font-semibold">Interview terminated — candidate left the screen</div>
-              <div className="text-red-700/90 mt-0.5">
-                The candidate switched tabs, minimized, lost window focus, or exited fullscreen during the interview. Per the proctoring policy the session was ended automatically and cannot be resumed.
+        {(() => {
+          const term = violations.find(v => v.event_type === 'interview_terminated');
+          if (!term) return null;
+          const d = (term.details || {}) as Record<string, unknown>;
+          // Prefer the human-readable message the candidate portal sent; fall
+          // back to mapping the reason code (kept in sync with the portal's
+          // TERMINATION_MESSAGES).
+          const REASON_LABELS: Record<string, string> = {
+            key_f11: 'Pressed F11 to exit fullscreen',
+            key_escape: 'Pressed the Esc key to exit fullscreen',
+            key_alt_tab: 'Used Alt + Tab to switch away from the interview',
+            key_meta: 'Pressed the Windows / ⌘ (Meta) key',
+            left_screen_fullscreen_exit: 'Exited fullscreen mode',
+            left_screen_tab_hidden: 'Switched to another tab or minimized the window',
+            left_screen_focus_lost: 'Moved focus away from the interview window',
+            left_screen: 'Left the interview screen',
+          };
+          const reason = typeof d.reason === 'string' ? d.reason : '';
+          const what = (typeof d.message === 'string' && d.message)
+            || REASON_LABELS[reason]
+            || '';
+          return (
+            <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-300 ring-1 ring-red-100 rounded-xl text-sm text-red-800 shadow-sm">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold">Interview terminated — candidate left the screen</div>
+                {what ? (
+                  <div className="text-red-700/90 mt-0.5">
+                    What the candidate did: <b>{what}</b>{term.timestamp ? <> at <b>{formatTs(term.timestamp)}</b></> : null}. Per the proctoring policy the session was ended automatically and cannot be resumed.
+                  </div>
+                ) : (
+                  <div className="text-red-700/90 mt-0.5">
+                    The candidate switched tabs, minimized, lost window focus, or exited fullscreen during the interview. Per the proctoring policy the session was ended automatically and cannot be resumed.
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Partial warning banner — only when truly partial (not auto-completed) */}
         {isPartial && !isCompleted && (
