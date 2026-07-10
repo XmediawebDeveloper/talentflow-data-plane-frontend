@@ -721,6 +721,13 @@ function buildPerQuestionDetailsFromGroups(
 ): PerQuestionDetail[] {
   const groups = (eval_?.question_groups || []) as any[];
   const questionHistory = (eval_?.question_history || []) as any[];
+  const questionSkillMap = (eval_?.question_skill_map || {}) as Record<string | number, any[]>;
+
+  const scoringRowsForQ = (rawQNum: any): any[] => {
+    const num = Number(rawQNum);
+    const rows = questionSkillMap[num] ?? questionSkillMap[String(rawQNum)];
+    return Array.isArray(rows) ? rows : [];
+  };
 
   // Index history by exact question text (lowercase) for skill enrichment.
   const historyByText = new Map<string, any>();
@@ -766,27 +773,42 @@ function buildPerQuestionDetailsFromGroups(
     return r;
   };
 
-  const buildSkillRows = (names: string[]): PerQuestionSkill[] =>
+  const buildSkillRows = (names: string[], scoringRows: any[] = []): PerQuestionSkill[] =>
     names.map(name => {
       const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] || 'Medium';
+      const sl = String(name).toLowerCase().trim();
+      const matchedRow = scoringRows.find((r: any) => {
+        const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+        return topic === sl || (topic && (topic.includes(sl) || sl.includes(topic)));
+      });
       return {
         name,
         priority,
         weight: PRIORITY_WEIGHT[priority],
-        score: 0,
-        note: '',
+        score: matchedRow ? Math.round((Number(matchedRow?.score) || 0) * 10) / 10 : 0,
+        note: matchedRow ? String(matchedRow?.note || '') : '',
       };
     });
+
+  const computeQuestionScore = (skills: PerQuestionSkill[]): number => {
+    const scored = skills.filter(k => k.score > 0);
+    const sumW = scored.reduce((s, k) => s + k.weight, 0);
+    const sumWS = scored.reduce((s, k) => s + k.score * k.weight, 0);
+    return sumW > 0 ? Math.round((sumWS / sumW) * 10) / 10 : 0;
+  };
 
   for (const g of groups) {
     const mainQ = String(g?.question || '');
     const mainA = String(g?.answer || '');
     const matched = historyByText.get(mainQ.trim().toLowerCase());
+    const mainScoreRows = scoringRowsForQ(matched?.question_number ?? g?.q_num);
 
     // Main Q skills: prefer persisted assigned_skills (richer multi-skill
     // set), fall back to the group's single g.skill.
     let mainSkillNames: string[] = [];
-    if (matched && Array.isArray(matched.assigned_skills) && matched.assigned_skills.length > 0) {
+    if (mainScoreRows.length > 0) {
+      mainSkillNames = mainScoreRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+    } else if (matched && Array.isArray(matched.assigned_skills) && matched.assigned_skills.length > 0) {
       mainSkillNames = matched.assigned_skills.filter(
         (s: any) => typeof s === 'string' && s.trim(),
       );
@@ -795,16 +817,19 @@ function buildPerQuestionDetailsFromGroups(
     }
     mainSkillNames = dedupeKeepCase(mainSkillNames);
     const section = sectionFromRT(matched?.round_type);
+    const mainSkills = buildSkillRows(mainSkillNames, mainScoreRows);
 
     out.push({
       qNum: nextQ++,
       section,
       question: mainQ,
       answer: mainA,
-      skills: buildSkillRows(mainSkillNames),
-      questionScore: typeof matched?.score === 'number'
-        ? Math.round(matched.score * 10) / 10
-        : 0,
+      skills: mainSkills,
+      questionScore: mainScoreRows.length > 0
+        ? computeQuestionScore(mainSkills)
+        : typeof matched?.score === 'number'
+          ? Math.round(matched.score * 10) / 10
+          : 0,
       // Recover the bundled-followup note from the matched history row so it
       // survives even when this (groups) builder is the one selected.
       bundledFollowUp: bundledFollowUpFromRow(matched),
@@ -819,8 +844,11 @@ function buildPerQuestionDetailsFromGroups(
       const fuQ = String(fu?.question || '');
       const fuA = String(fu?.answer || '');
       const fuMatched = historyByText.get(fuQ.trim().toLowerCase());
+      const fuScoreRows = scoringRowsForQ(fuMatched?.question_number ?? fu?.q_num);
       let fuSkillNames: string[] = [];
-      if (fuMatched && Array.isArray(fuMatched.assigned_skills) && fuMatched.assigned_skills.length > 0) {
+      if (fuScoreRows.length > 0) {
+        fuSkillNames = fuScoreRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+      } else if (fuMatched && Array.isArray(fuMatched.assigned_skills) && fuMatched.assigned_skills.length > 0) {
         fuSkillNames = fuMatched.assigned_skills.filter(
           (s: any) => typeof s === 'string' && s.trim(),
         );
@@ -831,16 +859,19 @@ function buildPerQuestionDetailsFromGroups(
         fuSkillNames = mainSkillNames.slice();
       }
       fuSkillNames = dedupeKeepCase(fuSkillNames);
+      const fuSkills = buildSkillRows(fuSkillNames, fuScoreRows);
 
       out.push({
         qNum: nextQ++,
         section,
         question: fuQ,
         answer: fuA,
-        skills: buildSkillRows(fuSkillNames),
-        questionScore: typeof fuMatched?.score === 'number'
-          ? Math.round(fuMatched.score * 10) / 10
-          : 0,
+        skills: fuSkills,
+        questionScore: fuScoreRows.length > 0
+          ? computeQuestionScore(fuSkills)
+          : typeof fuMatched?.score === 'number'
+            ? Math.round(fuMatched.score * 10) / 10
+            : 0,
         bundledFollowUp: bundledFollowUpFromRow(fuMatched),
       });
     }
@@ -874,6 +905,7 @@ function buildPerQuestionDetailsFromHistory(
 ): PerQuestionDetail[] {
   const questionHistory = (eval_?.question_history || []) as any[];
   const evaluations = (eval_?.evaluations || []) as any[];
+  const questionSkillMap = (eval_?.question_skill_map || {}) as Record<string | number, any[]>;
 
   // Group evaluations by question_number → list of skill-rows. A single
   // delivered question can have multiple eval rows (one per assigned
@@ -884,6 +916,11 @@ function buildPerQuestionDetailsFromHistory(
     if (!qn) continue;
     (evalsByQ[qn] = evalsByQ[qn] || []).push(ev);
   }
+
+  const scoringRowsForQ = (qn: number): any[] => {
+    const rows = questionSkillMap[qn] ?? questionSkillMap[String(qn)];
+    return Array.isArray(rows) ? rows : [];
+  };
 
   // Detector for skipped / IDK responses. The evaluator often
   // mis-scores these as `topic="Behavioural", score=5.0` (observed in
@@ -937,6 +974,7 @@ function buildPerQuestionDetailsFromHistory(
     isSkipped: boolean,
   ): { score: number; note: string; is_fallback: boolean; is_skipped: boolean; is_unscored: boolean } => {
     const sl = skill.toLowerCase().trim();
+    const scoringRows = scoringRowsForQ(qn);
     const rows = evalsByQ[qn] || [];
     const readScore = (r: any): number => {
       const raw = Number(r?.score ?? r?.evaluation?.overall ?? 0);
@@ -944,8 +982,26 @@ function buildPerQuestionDetailsFromHistory(
     };
     const readNote = (r: any): string =>
       String(r?.one_line_note || r?.evaluation?.brief_note || '').slice(0, 250);
+    const readScoringScore = (r: any): number =>
+      Math.max(0, Math.min(10, Number(r?.score) || 0));
+    const readScoringNote = (r: any): string =>
+      String(r?.note || '').slice(0, 250);
 
-    // Exact then substring match — these are real per-skill scores
+    // Prefer the backend's whole-interview question-skill rows when present.
+    for (const r of scoringRows) {
+      const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+      if (topic === sl) {
+        return { score: readScoringScore(r), note: readScoringNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+    for (const r of scoringRows) {
+      const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+      if (topic && (topic.includes(sl) || sl.includes(topic))) {
+        return { score: readScoringScore(r), note: readScoringNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+
+    // Exact then substring match — these are real local per-skill scores
     // (even on skipped questions, if the evaluator did emit one).
     for (const r of rows) {
       const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
@@ -1164,6 +1220,7 @@ function buildPerQuestionDetailsFromHistory(
     const displayQ = Number.isFinite(historyIdx) ? historyIdx + 1 : idx + 1;
     const section = sectionFromRT(q?.round_type);
     const assigned: string[] = Array.isArray(q?.assigned_skills) ? q.assigned_skills : [];
+    const recoveredRows = scoringRowsForQ(origQ);
 
     // Source priority for the displayed skill rows — recruiter spec
     // 2026-05-20: the Question Analysis tab must mirror the Question
@@ -1187,7 +1244,9 @@ function buildPerQuestionDetailsFromHistory(
     }
 
     let baseNames: string[];
-    if (assigned.length > 0) {
+    if (recoveredRows.length > 0) {
+      baseNames = recoveredRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+    } else if (assigned.length > 0) {
       baseNames = assigned;
     } else if (fromText.length > 0) {
       baseNames = fromText;
@@ -1243,10 +1302,10 @@ function buildPerQuestionDetailsFromHistory(
     // card so the displayed arithmetic is always self-consistent (this is
     // what fixes the "44.0 ÷ 11 = 2.40" mismatch: the question score must be
     // the weighted average of the rows the recruiter sees, not a separately
-    // sourced entry.score). Unscored skills (no evaluator row) are EXCLUDED
-    // from numerator and denominator — never fabricated as 0 — matching the
-    // backend rule in transcript_evaluation_service.py:3209-3214.
-    const scoredSkills = skills.filter(k => !k.is_unscored);
+    // sourced entry.score). Unscored skills (no evaluator row) are EXCLUDED,
+    // and true 0-scored skills are excluded as well to match the backend's
+    // question-score rule (`score > 0` contributes; pure no-evidence rows do not).
+    const scoredSkills = skills.filter(k => !k.is_unscored && k.score > 0);
     const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
     const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
     const weighted = sumW > 0 ? sumWS / sumW : 0;
