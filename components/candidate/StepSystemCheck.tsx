@@ -875,6 +875,45 @@ export default function StepSystemCheck({
       await new Promise(r => setTimeout(r, 50));
     }
 
+    // ── FINAL multi-face gate ──────────────────────────────────────────────
+    // The live face poll runs every ~2.5 s and was cleared just above, so an
+    // extra person who steps back into frame in that gap (right before clicking
+    // Continue) could otherwise slip through on a stale "passed" status. Do ONE
+    // fresh, synchronous detection NOW and block the proceed if >1 face is
+    // present. Fail-open on a detector error (the live checks already validated).
+    try {
+      const _vid = videoRef.current;
+      if (_vid && _vid.readyState >= 2 && _vid.videoWidth > 0) {
+        faceApiBusyRef.current = true;
+        let _faces = -1;
+        if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+          try {
+            const _det = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
+            _faces = (await _det.detect(_vid)).length;
+          } catch { _faces = -1; }
+        }
+        if (_faces < 0) {
+          try {
+            const faceapi = await loadFaceApiWithCpuBackend();
+            if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+              await faceapi.nets.tinyFaceDetector.loadFromUri('/models/');
+            }
+            const _opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+            _faces = (await faceapi.detectAllFaces(_vid, _opts)).length;
+          } catch { _faces = -1; }
+        }
+        faceApiBusyRef.current = false;
+        if (_faces > 1) {
+          updateSystemCheck('multiple', { status: 'fail', detail: `${_faces} people detected — ensure you are alone before continuing` });
+          setIsProceedLoading(false);
+          runFaceMultiple();  // restart the live poll so they can fix it and retry
+          return;
+        }
+      }
+    } catch {
+      faceApiBusyRef.current = false;
+    }
+
     try {
       // Run API recording and face registration in parallel — they are independent.
       // Face registration is best-effort only and must never block progression.
@@ -936,7 +975,7 @@ export default function StepSystemCheck({
     } finally {
       if (mountedRef.current) setIsProceedLoading(false);
     }
-  }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace, onEnrollVoice]);
+  }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace, onEnrollVoice, runFaceMultiple, updateSystemCheck]);
 
   // ────────────────────────────────────────
   // Render helpers
