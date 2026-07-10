@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList, Mic } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList, Mic, Ban } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -58,6 +58,7 @@ const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
   { value: 'system_check', label: 'System Check' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'terminated', label: 'Terminated' },
   { value: 'expired', label: 'Expired' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'scheduled', label: 'Scheduled' },
@@ -127,6 +128,8 @@ export default function AIInterview() {
     total: 0,
     completed: 0,
     inProgress: 0,
+    terminated: 0,
+    cancelled: 0,
   });
   const [configListPage, setConfigListPage] = useState(1);
   const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
@@ -351,6 +354,8 @@ export default function AIInterview() {
         total: result.total || 0,
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
+        terminated: result.terminated || 0,
+        cancelled: result.cancelled || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation overview:', error);
@@ -358,6 +363,8 @@ export default function AIInterview() {
         total: 0,
         completed: 0,
         inProgress: 0,
+        terminated: 0,
+        cancelled: 0,
       });
     }
   }, []);
@@ -1926,10 +1933,14 @@ export default function AIInterview() {
         };
 
         const invTotal = invitationOverview.total;
-        const invInvited = Math.max(0, invitationOverview.total - invitationOverview.completed - invitationOverview.inProgress);
         const invInProgress = invitationOverview.inProgress;
         const invCompleted = invitationOverview.completed;
-        const invCancelled = Math.max(0, invTotal - invInvited - invInProgress - invCompleted);
+        const invTerminated = invitationOverview.terminated;
+        const invCancelled = invitationOverview.cancelled;
+        // Everything not in a completed/in-progress/terminated/cancelled state is
+        // still awaiting the candidate → "Invited". Subtract the explicit terminal
+        // counts so terminated/cancelled sessions don't inflate the Invited card.
+        const invInvited = Math.max(0, invTotal - invCompleted - invInProgress - invTerminated - invCancelled);
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
         const paginatedInvitations = invitations;
         const hasActiveInviteFilters =
@@ -1964,6 +1975,7 @@ export default function AIInterview() {
             case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
             case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
             case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
+            case 'terminated': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1" title="Auto-ended by the proctoring policy — candidate left the interview screen"><Ban className="w-3 h-3" /> Terminated</span>;
             case 'expired': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
             default: return <span className="px-2 py-0.5 bg-slate-100 text-gray-700 ring-1 ring-gray-200 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
           }
@@ -1990,7 +2002,7 @@ export default function AIInterview() {
 
               {/* Stats Cards */}
               <div className="px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-                <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
+                <div className="grid grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-4">
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500 text-[10px] sm:text-xs mb-1">
                       <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
@@ -2018,6 +2030,13 @@ export default function AIInterview() {
                       <span className="truncate">Completed</span>
                     </div>
                     <p className="text-lg sm:text-2xl font-bold text-green-600 tracking-tight">{invCompleted}</p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">
+                      <Ban className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                      <span className="truncate">Terminated</span>
+                    </div>
+                    <p className="text-lg sm:text-2xl font-bold text-red-600 tracking-tight">{invTerminated}</p>
                   </div>
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">

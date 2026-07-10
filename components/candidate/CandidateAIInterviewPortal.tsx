@@ -1298,7 +1298,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   if (step === 'fullscreen_prompt') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 md:p-10">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
 
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
@@ -1369,6 +1369,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
                   <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
                   <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching your internet connection or network. Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview</span></li>
                 </ul>
                 <p className="text-xs text-amber-700 mt-3 leading-relaxed">
                   These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.

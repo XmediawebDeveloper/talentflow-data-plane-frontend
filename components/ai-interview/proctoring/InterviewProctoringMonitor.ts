@@ -785,18 +785,57 @@ export function useInterviewProctoringMonitor({
   }, [reportCameraDisabled, reportCameraRestored, reportMicDisabled, reportMicRestored]);
 
   const setupTabSwitchDetection = useCallback(() => {
+    // A pending, not-yet-confirmed blur. window.blur fires not only on a real
+    // tab/app switch but ALSO when the candidate interacts with browser-native
+    // UI that is NOT a violation — most notably Chrome's "<site> is sharing your
+    // screen" info bar and its Hide / Stop button. Clicking that bar briefly
+    // moves focus to the browser chrome (→ window.blur) but never hides the page
+    // and returns focus within a few hundred ms. So instead of flagging every
+    // blur, we defer and re-check: a genuine leave either hides the document
+    // (caught by visibilitychange → tab_switch) or leaves the window without
+    // focus after the grace window; a screen-share-bar click regains focus and
+    // is cancelled below.
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+    const BLUR_CONFIRM_MS = 600;
+
+    const clearBlurTimer = () => {
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+    };
+
     const handleVisibilityChange = () => {
       if (document.hidden) emitEventRef.current('tab_switch', { hidden: true });
     };
-    const handleBlur = () => emitEventRef.current('window_blur', {});
+
+    const handleBlur = () => {
+      clearBlurTimer();
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        // Only a real leave: the page is hidden, OR focus has NOT come back
+        // after the grace window. A click on the screen-share info bar / Hide
+        // button keeps the page visible and hands focus back, so handleFocus
+        // will have cancelled this timer before it runs.
+        if (document.hidden || !document.hasFocus()) {
+          emitEventRef.current('window_blur', {});
+        } else {
+          console.log('[INTERVIEW_PROCTORING] Transient blur ignored (focus regained, page still visible) — likely the screen-share info bar / Hide button');
+        }
+      }, BLUR_CONFIRM_MS);
+    };
+
+    // Focus returned to the interview window — a pending blur was transient
+    // (e.g. the screen-share bar). Cancel it so it never counts as a violation.
+    const handleFocus = () => clearBlurTimer();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
     console.log('[INTERVIEW_PROCTORING] Tab switch detection started');
 
     return () => {
+      clearBlurTimer();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
