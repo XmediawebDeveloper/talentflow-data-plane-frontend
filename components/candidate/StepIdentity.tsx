@@ -41,7 +41,7 @@ export default function StepIdentity({
   const [faceError, setFaceError] = useState<string | null>(null);
   // Live face status while framing (photo_ready) — gates the Capture button so
   // it's only clickable with exactly ONE face correctly placed in the oval.
-  // 'unavailable' = no detector → fail-open (allow capture).
+  // 'unavailable' = no detector → HARD-BLOCK (can't verify → can't capture).
   const [liveFaceStatus, setLiveFaceStatus] = useState<'checking' | 'ok' | 'none' | 'multiple' | 'off_oval' | 'unavailable'>('checking');
   const liveDetectBusyRef = useRef(false);
 
@@ -161,10 +161,58 @@ export default function StepIdentity({
     void ensureFaceApiFallback();
   }, [ensureFaceApiFallback]);
 
-  // Helper: detect number of faces from canvas snapshot (works cross-browser)
-  // Detect face count AND the largest face's bounding box (canvas pixels) so
-  // capturePhoto can enforce both "exactly one person" and "face placed inside
-  // the oval". Returns null when no detector is available (→ callers fail-open).
+  // Core detector: run face detection on an ALREADY-DRAWN canvas and return the
+  // face count + the largest face's bounding box (canvas pixels). Returns null
+  // when no detector is available (→ callers HARD-BLOCK). Works on any canvas so
+  // we can verify BOTH the live preview and the exact captured still image.
+  const detectFaceInfoFromCanvas = useCallback(
+    async (canvas: HTMLCanvasElement): Promise<{ count: number; region: FaceRegion | null } | null> => {
+      const largest = (boxes: FaceRegion[]): FaceRegion | null => {
+        let best: FaceRegion | null = null;
+        let bestArea = 0;
+        for (const b of boxes) {
+          const area = (b.width || 0) * (b.height || 0);
+          if (area > bestArea) { bestArea = area; best = b; }
+        }
+        return best;
+      };
+
+      // Path A (PRIMARY): face-api.js TinyFaceDetector — self-hosted models,
+      // consistent across all browsers. Preferred over the native FaceDetector,
+      // which is flag-gated / flaky and only used as a fallback below.
+      await ensureFaceApiFallback();
+      if (faceApiRef.current) {
+        try {
+          const { module: fa, options } = faceApiRef.current;
+          const detections = await fa.detectAllFaces(canvas, options);
+          const boxes: FaceRegion[] = detections.map((d: any) => {
+            const box = d.box || d.detection?.box || {};
+            return { x: box.x ?? 0, y: box.y ?? 0, width: box.width ?? 0, height: box.height ?? 0 };
+          });
+          return { count: detections.length, region: largest(boxes) };
+        } catch { /* fall through to native */ }
+      }
+      // Path B (FALLBACK): native FaceDetector where available.
+      if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+        try {
+          const detector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 });
+          const bitmap = await createImageBitmap(canvas);
+          const faces = await detector.detect(bitmap);
+          bitmap.close();
+          const boxes: FaceRegion[] = faces.map((f: any) => ({
+            x: f.boundingBox?.x ?? 0, y: f.boundingBox?.y ?? 0,
+            width: f.boundingBox?.width ?? 0, height: f.boundingBox?.height ?? 0,
+          }));
+          return { count: faces.length, region: largest(boxes) };
+        } catch { /* fall through */ }
+      }
+      return null; // NO detector available → callers HARD-BLOCK capture
+    },
+    [ensureFaceApiFallback]
+  );
+
+  // Live detector: snapshot the current video frame to the working canvas and
+  // detect on it (used by the framing/photo_ready poll).
   const detectFaceInfo = useCallback(async (): Promise<{ count: number; region: FaceRegion | null } | null> => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -174,49 +222,8 @@ export default function StepIdentity({
     canvas.width = video.videoWidth || 320;
     canvas.height = video.videoHeight || 240;
     ctx.drawImage(video, 0, 0);
-
-    const largest = (boxes: FaceRegion[]): FaceRegion | null => {
-      let best: FaceRegion | null = null;
-      let bestArea = 0;
-      for (const b of boxes) {
-        const area = (b.width || 0) * (b.height || 0);
-        if (area > bestArea) { bestArea = area; best = b; }
-      }
-      return best;
-    };
-
-    // Path A: native FaceDetector (Chrome/Edge with flag)
-    if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-      try {
-        const detector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 });
-        const bitmap = await createImageBitmap(canvas);
-        const faces = await detector.detect(bitmap);
-        bitmap.close();
-        const boxes: FaceRegion[] = faces.map((f: any) => ({
-          x: f.boundingBox?.x ?? 0, y: f.boundingBox?.y ?? 0,
-          width: f.boundingBox?.width ?? 0, height: f.boundingBox?.height ?? 0,
-        }));
-        return { count: faces.length, region: largest(boxes) };
-      } catch {
-        await ensureFaceApiFallback();
-      }
-    } else if (!faceApiRef.current) {
-      await ensureFaceApiFallback();
-    }
-    // Path B: face-api.js TinyFaceDetector
-    if (faceApiRef.current) {
-      try {
-        const { module: fa, options } = faceApiRef.current;
-        const detections = await fa.detectAllFaces(canvas, options);
-        const boxes: FaceRegion[] = detections.map((d: any) => {
-          const box = d.box || d.detection?.box || {};
-          return { x: box.x ?? 0, y: box.y ?? 0, width: box.width ?? 0, height: box.height ?? 0 };
-        });
-        return { count: detections.length, region: largest(boxes) };
-      } catch { /* fall through */ }
-    }
-    return null; // model not available — skip check
-  }, [ensureFaceApiFallback]);
+    return detectFaceInfoFromCanvas(canvas);
+  }, [detectFaceInfoFromCanvas]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -248,7 +255,7 @@ export default function StepIdentity({
           const info = await detectFaceInfo();
           if (!cancelled) {
             if (info === null) {
-              setLiveFaceStatus('unavailable'); // no detector → don't hard-block
+              setLiveFaceStatus('unavailable'); // no detector → capture stays disabled
             } else if (info.count === 0) {
               setLiveFaceStatus('none');
             } else if (info.count > 1) {
@@ -280,18 +287,25 @@ export default function StepIdentity({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    // Face gate — exactly ONE person, correctly placed INSIDE the oval. If any
-    // check fails we do NOT save the photo; we return to photo_ready so the
-    // candidate fixes it and retries. (info=null → no detector available → skip.)
-    const info = await detectFaceInfo();
-    if (info !== null) {
+    // Verify THE CAPTURED STILL itself (the exact pixels we're about to save),
+    // not a fresh live frame — the saved photo must show exactly ONE face, that
+    // is clearly visible and correctly placed inside the oval. If any check
+    // fails we do NOT save the photo; we return to photo_ready so the candidate
+    // fixes it and retries. (info=null → no detector → HARD-BLOCK.)
+    const info = await detectFaceInfoFromCanvas(canvas);
+    if (info === null) {
+      setFaceError('Face detection is unavailable — reload the page or use Chrome/Edge to continue.');
+      setPhase('photo_ready');
+      return;
+    }
+    {
       if (info.count === 0) {
-        setFaceError('No face detected. Position your face inside the oval and try again.');
+        setFaceError('No face detected in the photo. Position your face inside the oval and try again.');
         setPhase('photo_ready');
         return;
       }
       if (info.count > 1) {
-        setFaceError(`${info.count} people detected. Only you may be in frame — ask others to step away, then try again.`);
+        setFaceError(`${info.count} people detected in the photo. Only you may be in frame — ask others to step away, then try again.`);
         setPhase('photo_ready');
         return;
       }
@@ -300,9 +314,9 @@ export default function StepIdentity({
       if (!assess.visible) {
         setFaceError(
           assess.reason === 'face_too_small'
-            ? 'Move closer so your face fills the oval, then try again.'
+            ? 'Your face is too small in the photo — move closer so it fills the oval, then try again.'
             : assess.reason === 'face_off_center'
-            ? 'Center your face inside the oval, then try again.'
+            ? 'Your face is off-center in the photo — center it inside the oval, then try again.'
             : 'Position your face clearly inside the oval and try again.'
         );
         setPhase('photo_ready');
@@ -320,7 +334,7 @@ export default function StepIdentity({
         streamRef.current = null;
       }
     }, 'image/png');
-  }, [detectFaceInfo]);
+  }, [detectFaceInfoFromCanvas]);
 
   const handleFormSubmit = useCallback(() => {
     if (isFormValid) setPhase('photo_ready');
@@ -729,14 +743,16 @@ export default function StepIdentity({
                   )}
 
                   {/* Capture is enabled ONLY when exactly one face is correctly in
-                      the oval. 'unavailable' (no detector) fails open. */}
+                      the oval. If no detector is available we HARD-BLOCK (can't
+                      verify → can't capture). */}
                   {(() => {
-                    const captureReady = liveFaceStatus === 'ok' || liveFaceStatus === 'unavailable';
+                    const captureReady = liveFaceStatus === 'ok';
                     const blockedMsg =
                       liveFaceStatus === 'none' ? 'No face detected — center your face in the oval.'
                       : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you may be in frame.'
                       : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval.'
                       : liveFaceStatus === 'checking' ? 'Detecting your face…'
+                      : liveFaceStatus === 'unavailable' ? 'Face detection unavailable — reload the page or use Chrome/Edge to continue.'
                       : '';
                     return (
                       <>
@@ -774,8 +790,8 @@ export default function StepIdentity({
                   <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-sm font-semibold text-green-900">Photo Captured!</h4>
-                      <p className="text-xs text-green-700 mt-1">Review your photo on the left. If it looks good, click Continue.</p>
+                      <h4 className="text-sm font-semibold text-green-900">Photo Verified</h4>
+                      <p className="text-xs text-green-700 mt-1">One face detected and clearly visible — no other people in frame. Review your photo on the left, then click Continue.</p>
                     </div>
                   </div>
                   <button
