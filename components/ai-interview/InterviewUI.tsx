@@ -972,6 +972,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const checkpointInProgressRef = useRef(false);
   const isFinalizingUploadRef = useRef(false);
   const uploadCheckpointRef = useRef<() => Promise<void>>(async () => {});
+  const uploadRecordingRef = useRef<() => Promise<void>>(async () => {});
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
   // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
@@ -4371,6 +4372,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Keep ref in sync so the periodic timer scheduled inside startRecorder
   // (set up before this callback exists in the closure) always sees the latest.
   useEffect(() => { uploadCheckpointRef.current = uploadCheckpoint; }, [uploadCheckpoint]);
+  // Keep a live ref to uploadRecording so the unmount-only cleanup can flush the
+  // candidate webcam recording without adding uploadRecording to its deps.
+  useEffect(() => { uploadRecordingRef.current = uploadRecording; }, [uploadRecording]);
 
   // Tab-visibility checkpoint — flush before the browser may throttle us
   useEffect(() => {
@@ -5864,6 +5868,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
       if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
       if (checkpointTimerRef.current) { clearInterval(checkpointTimerRef.current); checkpointTimerRef.current = null; }
+      // Flush the candidate webcam recording BEFORE tearing down media. When the
+      // interview is terminated (proctoring), the portal unmounts this component
+      // and the WS closes with code 3001 — a path the onclose handler skips, so
+      // without this the candidate-camera recording was never uploaded (only the
+      // screen recording was). Guarded by isFinalizingUploadRef so a normal
+      // completion (which already uploaded via the WS-close 1000 path) does not
+      // upload a second time. Fire-and-forget: the SPA stays mounted on the
+      // terminated/completed screen, so the in-flight fetch completes.
+      if (!isFinalizingUploadRef.current) {
+        try { void uploadRecordingRef.current?.(); } catch { /* best effort */ }
+      }
       wsRef.current?.close(3001, 'Component unmounted');
       try { audioContextRef.current?.close(); } catch {}
       audioContextRef.current = null;

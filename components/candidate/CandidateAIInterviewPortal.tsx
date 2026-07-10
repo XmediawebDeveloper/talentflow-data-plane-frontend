@@ -1045,7 +1045,29 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setStep('terminated');
     };
     const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
-    const onBlur = () => terminateNow('left_screen_focus_lost');
+
+    // A window `blur` is NOT always a real "left the screen". Clicking Chrome's
+    // "<site> is sharing your screen" info bar — including its Hide / Stop
+    // buttons — moves focus to the browser chrome (→ blur) but the interview
+    // page stays visible and focus returns within a few hundred ms. So instead
+    // of terminating on every blur, we DEFER and re-check: a genuine leave
+    // (Alt+Tab, another app/monitor, minimize) either hides the page or leaves
+    // it without focus after the grace window; a screen-share-bar click regains
+    // focus and is cancelled by onFocus below.
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearBlurTimer = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } };
+    const onBlur = () => {
+      clearBlurTimer();
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        if (document.hidden || !document.hasFocus()) {
+          terminateNow('left_screen_focus_lost');
+        }
+        // else: focus returned & page still visible → transient blur from the
+        // screen-share info bar / Hide button. Not a violation.
+      }, 500);
+    };
+    const onFocus = () => clearBlurTimer();
     const onFsChange = () => {
       if (isFullscreen()) { sawFullscreen = true; return; }
       // Ignore a not-fullscreen reading until we've confirmed the candidate was
@@ -1065,14 +1087,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (isFullscreen()) sawFullscreen = true;
       document.addEventListener('visibilitychange', onVisibility);
       window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
       // If the candidate already left during the settle window, catch it now.
       if (document.hidden) terminateNow('left_screen_tab_hidden');
     }, 1200);
 
     return () => {
       window.clearTimeout(armTimer);
+      clearBlurTimer();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
       document.removeEventListener(fsEvent, onFsChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
