@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
+import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 interface Props {
   data: DashboardData;
@@ -563,7 +564,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             (HR isn't scored). Multi-skill questions list 2-3 skills, so the
             block collapses by default; expanding shows each skill's score AND
             the AI's per-skill rationale (one_line_note). */}
-        {!isHr && (
+        {!isHr && !IS_PRODUCTION_ENV && (
           <div>
             {q.skills.length === 0 ? (
               <>
