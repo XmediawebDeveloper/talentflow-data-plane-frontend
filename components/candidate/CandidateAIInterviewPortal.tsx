@@ -1719,6 +1719,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
+          {/* Prominent do-not-refresh warning — reloading here drops fullscreen
+              + screen sharing and sends the candidate back to re-share. */}
+          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            Do not refresh this page
+          </div>
           <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="w-10 h-10 text-amber-600" />
           </div>

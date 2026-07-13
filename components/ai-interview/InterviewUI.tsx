@@ -449,6 +449,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const serverEotEnabledRef = useRef(false);
   const [activeMicLabel, setActiveMicLabel] = useState("");
   const [micInputLevel, setMicInputLevel] = useState(0);
+  // "Mic input low" warning is SUSTAINED-only: it fires solely after several
+  // seconds of continuously low input, never on the normal dips between words.
+  // This stops the distracting warning from flashing while the candidate speaks
+  // normally (each speech peak resets the clock). See the level loop below.
+  const [micInputLow, setMicInputLow] = useState(false);
+  const micInputLowRef = useRef(false);
+  const lastGoodMicAtRef = useRef<number | null>(null);
   // Sync ref mirror of currentTranscript — the live provider/browser
   // transcript the candidate sees while speaking.
   const currentTranscriptRef = useRef("");
@@ -1970,6 +1977,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const POSSIBLE_SPEECH_LEVEL = 0.0018;
   const MIN_POSSIBLE_SPEECH_FRAMES = 6;
   const QUIET_SPEECH_ACTIVITY_LEVEL = 0.0032;
+  // Ceiling for what counts as "ambient/room noise" that the noise floor may
+  // learn. The OLD code only learned ambient while avgLevel < QUIET_SPEECH_
+  // ACTIVITY_LEVEL (0.0032), so once the mic-gain-amplified room noise sat
+  // ABOVE that (fans, chatter, keyboard), the floor saturated and every
+  // adaptive threshold (ambient×mult) stayed too low → noise was treated as
+  // speech. This higher cap lets the floor track real noise up to ~0.012 while
+  // still excluding true speech (amplified speech peaks are ~0.03–0.06, well
+  // above this), so the thresholds rise ABOVE the noise and only real speech
+  // trips them. (Quiet rooms are unaffected — the floor just stays low.)
+  const AMBIENT_LEARN_CAP = 0.012;
   const POSSIBLE_SPEECH_NOISE_MULTIPLIER = 2.2;
   const POSSIBLE_SPEECH_MARGIN = 0.0012;
   const IN_TURN_NOISE_MULTIPLIER = 2.2;
@@ -4718,6 +4735,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     setCurrentTranscript("");
     currentTranscriptRef.current = "";
     setMicInputLevel(0);
+    lastGoodMicAtRef.current = null;
+    micInputLowRef.current = false;
+    setMicInputLow(false);
     teardownRecordingMedia(false);
   }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, teardownRecordingMedia]);
 
@@ -4934,6 +4954,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       liveTranscriptDisplayRef.current = "";
       micLevelLastUpdateRef.current = 0;
       setMicInputLevel(0);
+      lastGoodMicAtRef.current = null;
+      micInputLowRef.current = false;
+      setMicInputLow(false);
       // Pre-speech ring buffer: cleared at turn start so the previous turn's
       // tail can't leak into this turn's flush.
       preSpeechPCMRingRef.current = [];
@@ -5002,7 +5025,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         const nowMs = Date.now();
         if (nowMs - micLevelLastUpdateRef.current > 120) {
           micLevelLastUpdateRef.current = nowMs;
-          setMicInputLevel(Math.min(1, avgLevel / 0.03));
+          const level = Math.min(1, avgLevel / 0.03);
+          setMicInputLevel(level);
+          // Sustained-low detection for the warning (NOT the moving bar, which
+          // keeps reflecting the instantaneous level). Any real speech peak
+          // (level >= GOOD) resets the clock; the warning only turns on after
+          // LOW_MS of continuously low input — so it never flickers during the
+          // natural pauses between words/sentences.
+          const GOOD_LEVEL = 0.15;
+          const LOW_MS = 5000;
+          if (lastGoodMicAtRef.current === null) lastGoodMicAtRef.current = nowMs;
+          if (level >= GOOD_LEVEL) {
+            lastGoodMicAtRef.current = nowMs;
+            if (micInputLowRef.current) { micInputLowRef.current = false; setMicInputLow(false); }
+          } else if (nowMs - lastGoodMicAtRef.current > LOW_MS) {
+            if (!micInputLowRef.current) { micInputLowRef.current = true; setMicInputLow(true); }
+          }
         }
 
         // ── Encode PCM up-front so warmup / pre-detection audio can also be
@@ -5055,7 +5093,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // detection. The ring buffer will flush to backend the moment VAD
         // does confirm speech (post-warmup), preserving the warmup-window
         // audio that used to be discarded.
-        if (nowMs < vadWarmupUntilRef.current) return;
+        if (nowMs < vadWarmupUntilRef.current) {
+          // …but DO calibrate the ambient noise floor during warmup (when Linda's
+          // echo has settled). This gives the floor a head start so it already
+          // reflects the room noise the instant the candidate's turn opens —
+          // otherwise the first ~300ms of noise could trip the soft gate before
+          // the floor catches up. Loud echo is excluded by AMBIENT_LEARN_CAP.
+          if (
+            !isAiSpeakingRef.current &&
+            nowMs >= playbackEchoGuardUntilRef.current &&
+            avgLevel < AMBIENT_LEARN_CAP
+          ) {
+            const rising = avgLevel > ambientNoiseFloorRef.current;
+            const a = rising ? 0.08 : 0.12;
+            ambientNoiseFloorRef.current =
+              ambientNoiseFloorRef.current * (1 - a) + avgLevel * a;
+          }
+          return;
+        }
         // Fix 3 (revised): the echo guard and "Linda still speaking" check
         // must NOT `return` — that drops the PCM send block at the bottom of
         // this function and silently kills candidate audio. Instead, fold
@@ -5072,14 +5127,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Track the room's baseline mic energy before the candidate starts.
         // The in-turn silence clock later uses this to distinguish quiet speech
         // from constant office / fan noise.
+        // Learn the room's noise floor from every non-speech frame below the
+        // AMBIENT_LEARN_CAP (which excludes true speech). We intentionally do
+        // NOT gate on candidateAudioStreamingRef anymore: background noise can
+        // open the soft "possible speech" stream WITHOUT confirming real speech,
+        // and if we froze learning there the floor could never catch up to the
+        // noise. Asymmetric EMA — rise slowly toward sustained louder noise,
+        // fall faster when it quiets — so a brief noise burst doesn't over-
+        // inflate the floor but persistent noise IS learned.
         if (
           !speechDetectedRef.current &&
-          !candidateAudioStreamingRef.current &&
           !suppressNewSpeechDetection &&
-          avgLevel < QUIET_SPEECH_ACTIVITY_LEVEL
+          avgLevel < AMBIENT_LEARN_CAP
         ) {
+          const rising = avgLevel > ambientNoiseFloorRef.current;
+          const a = rising ? 0.05 : 0.10;
           ambientNoiseFloorRef.current =
-            ambientNoiseFloorRef.current * 0.92 + avgLevel * 0.08;
+            ambientNoiseFloorRef.current * (1 - a) + avgLevel * a;
         }
 
         // OpenAI realtime transcription path: stream the full post-warmup mic
@@ -6960,13 +7024,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     <div className="w-20 h-1.5 rounded-full bg-white/15 overflow-hidden shrink-0">
                       <div
                         className={`h-full rounded-full transition-all duration-150 ${
-                          micInputLevel < 0.12 && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
+                          micInputLow && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
                         }`}
                         style={{ width: `${Math.max(4, Math.round(micInputLevel * 100))}%` }}
                       />
                     </div>
                   </div>
-                  {isRecording && !isMuted && micInputLevel < 0.12 && (
+                  {isRecording && !isMuted && micInputLow && (
                     <div className="mt-1 text-[10px] leading-tight text-amber-200">
                       Microphone input is low. Check headset mic or system input.
                     </div>
@@ -7031,11 +7095,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 {isFlexibleMode && <span className="text-white/55 text-[9px] font-semibold ml-0.5">REM</span>}
                 {isInBuffer && !isFlexibleMode && <span className="text-amber-200 text-[9px] font-semibold ml-0.5">BUF</span>}
               </div>
-              {/* REC badge — moved up here from the old bottom input bar. Shown
-                  only while the candidate's mic is actively recording. */}
-              {isRecording && !isMuted && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-red-500/25 rounded-full border border-red-400/50">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-300 animate-pulse" />
+              {/* REC badge — persistent while the interview is live (the session
+                  is recorded end-to-end). Solid red + pulse while the candidate's
+                  mic is actively capturing; dimmed between turns. */}
+              {isConnected && !isClosing && (
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors duration-300 ${
+                  isRecording && !isMuted
+                    ? 'bg-red-500/30 border-red-400/60'
+                    : 'bg-red-500/12 border-red-400/25'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
                   <span className="text-red-100 text-[10px] font-bold tracking-wide">REC</span>
                 </div>
               )}

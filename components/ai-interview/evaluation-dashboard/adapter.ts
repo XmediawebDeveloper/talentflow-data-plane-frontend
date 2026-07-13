@@ -387,7 +387,14 @@ function buildClustersFromConfig(
   // When NONE of those signals exist for ANY skill in the cluster (legacy
   // interviews with no assigned snapshot, no scores, no assessed map), fall
   // back to the full list so we don't strip an entire cluster.
-  const filterToPlanned = hasAssignedSnapshot || hasAssessedMap;
+  // For a PARTIAL / terminated interview (cut short by a proctoring
+  // termination or abandonment) the plan was only partly delivered. Collapsing
+  // the denominator to "just the probed skills" then makes a single asked slot
+  // render as 100% coverage — misleading. So for partial evals we keep the FULL
+  // configured cluster, so coverage honestly reflects how little of the plan was
+  // reached (e.g. 1 of 6 skills). Normal completed interviews are unchanged.
+  const isPartialEval = eval_?.partial === true || eval_?.evaluation_incomplete === true;
+  const filterToPlanned = (hasAssignedSnapshot || hasAssessedMap) && !isPartialEval;
   return configClusters.map((cc, idx): Cluster => {
     const weight = weights[idx];
 
