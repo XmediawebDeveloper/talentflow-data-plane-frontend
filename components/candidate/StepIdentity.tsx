@@ -249,6 +249,20 @@ export default function StepIdentity({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tick = async () => {
       if (cancelled) return;
+      // Don't run detection — or show any "no face" / "unavailable" warning —
+      // until the camera has actually produced frames. getUserMedia + video.play()
+      // take a moment; before that the video is black/empty and would falsely
+      // report 0 faces ('none') or, at readyState<2, be treated as 'unavailable'.
+      // Keep status 'checking' (neutral, no warning) and poll quickly until ready.
+      const _v = videoRef.current;
+      const _videoReady = !!_v && _v.readyState >= 2 && (_v.videoWidth || 0) > 0;
+      if (!_videoReady) {
+        if (!cancelled) {
+          setLiveFaceStatus('checking');
+          timer = setTimeout(tick, 250);
+        }
+        return;
+      }
       if (!liveDetectBusyRef.current) {
         liveDetectBusyRef.current = true;
         try {
@@ -677,6 +691,7 @@ export default function StepIdentity({
                   }`} />
                   <p className="absolute bottom-12 text-xs text-white/90 font-medium text-center px-4">
                     {phase === 'countdown' ? 'Hold still…'
+                      : liveFaceStatus === 'checking' ? 'Starting camera…'
                       : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you should be visible'
                       : liveFaceStatus === 'none' ? 'No face detected — center your face in the oval'
                       : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval'
@@ -747,11 +762,13 @@ export default function StepIdentity({
                       verify → can't capture). */}
                   {(() => {
                     const captureReady = liveFaceStatus === 'ok';
+                    // 'checking' = camera still initializing → show NO warning (a
+                    // clean start). The face/unavailable warnings only appear once
+                    // the camera is live and detection has actually run.
                     const blockedMsg =
                       liveFaceStatus === 'none' ? 'No face detected — center your face in the oval.'
                       : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you may be in frame.'
                       : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval.'
-                      : liveFaceStatus === 'checking' ? 'Detecting your face…'
                       : liveFaceStatus === 'unavailable' ? 'Face detection unavailable — reload the page or use Chrome/Edge to continue.'
                       : '';
                     return (

@@ -85,6 +85,16 @@ const TERMINATION_MESSAGES: Record<string, string> = {
 };
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
+
+// True when a keyboard event is the Windows / Command (Meta / Super) key.
+// Checked by key name, physical code, AND the metaKey modifier so it's caught
+// across browsers/OSes — though the OS often intercepts the bare Windows key
+// before the browser sees any key event (the focus-loss fallback covers that).
+const isMetaKey = (e: KeyboardEvent): boolean =>
+  e.key === 'Meta' || e.key === 'OS' ||
+  e.code === 'MetaLeft' || e.code === 'MetaRight' ||
+  e.code === 'OSLeft' || e.code === 'OSRight' ||
+  e.metaKey === true;
 // In production the candidate must STAY on the interview page. Leaving it
 // (switching tabs, minimizing, Alt+Tab, Windows key / losing focus, or exiting
 // fullscreen with Esc) PAUSES and blocks the interview until they return — no
@@ -121,6 +131,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Consent checkbox on the "Enter Fullscreen Mode" prompt — the Share button
   // stays disabled until the candidate ticks this.
   const [rulesConsent, setRulesConsent] = useState(false);
+  // True when the candidate dropped fullscreen (F11/Esc) WHILE on the final
+  // consent gate. Blocks accepting until they return to fullscreen so the
+  // interview can never start outside fullscreen.
+  const [finalConsentFsExited, setFinalConsentFsExited] = useState(false);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
   const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
   // True when the pre-start check found the camera/mic already in use by another
@@ -337,13 +351,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // Require a fresh OTP before letting the candidate resume at any step.
       const sessionAuthed = sessionStorage.getItem(SESSION_AUTH_KEY) === '1';
       if (!sessionAuthed) {
-        // Determine where to send them AFTER they pass OTP
+        // Determine where to send them AFTER they pass OTP. A saved post-check
+        // step wins even if system_check_passed is stale/false (they clearly
+        // progressed past it); only fall back to the default ordering otherwise.
         let targetStep: Step = 'system_check';
-        if (info.system_check_passed) {
-          const savedStep = readInterviewStep(token) as Step | null;
-          if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
-            targetStep = savedStep;
-          } else if (info.introduction_video_url) {
+        const savedStep = readInterviewStep(token) as Step | null;
+        if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
+          targetStep = savedStep;
+        } else if (info.system_check_passed) {
+          if (info.introduction_video_url) {
             targetStep = 'intro_video';
           } else if ((info.available_languages?.length ?? 0) > 1 && !info.selected_language) {
             targetStep = 'language_select';
@@ -357,13 +373,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       }
       // ────────────────────────────────────────────────────────────────────────
 
-      if (!info.system_check_passed) {
-        setStep('system_check');
-        return;
-      }
-
-      // ── 3. Post-system-check steps — restore via aiInterviewSessionStore ──
-      // (sessionStorage first, localStorage mirror as fallback if tab closed)
+      // ── 3. Post-check step restore takes PRIORITY over the system-check gate ──
+      // A saved post-check step (intro_video / language_select / sample_practice
+      // / fullscreen_prompt) only exists because the candidate ALREADY progressed
+      // past system check in this browser. So honor it even when the backend's
+      // system_check_passed flag is stale/false (e.g. the check soft-passed with
+      // warnings) — otherwise a refresh on the fullscreen-prompt / final-consent
+      // pages wrongly drops the candidate back to step 3 (system check). OTP
+      // re-auth above still runs on a fresh browser, so this doesn't weaken
+      // security. (sessionStorage first, localStorage mirror as tab-close fallback.)
       const savedStep = readInterviewStep(token) as Step | null;
       if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
         // Skip language_select if language already confirmed
@@ -372,6 +390,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           return;
         }
         setStep(savedStep);
+        return;
+      }
+
+      // No saved post-check step → enforce system check before the defaults.
+      if (!info.system_check_passed) {
+        setStep('system_check');
         return;
       }
 
@@ -407,6 +431,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => {
     if (POST_CHECK_STEPS.includes(step as Step)) {
       writeInterviewStep(token, step);
+    } else if (step === 'final_consent') {
+      // The final consent gate runs in fullscreen with screen sharing active,
+      // both of which are lost on reload and must be re-granted. So a refresh
+      // here must return to the fullscreen prompt (not stay on final_consent,
+      // and not drop to an earlier step). Persist it as 'fullscreen_prompt'.
+      writeInterviewStep(token, 'fullscreen_prompt');
     } else if (step === 'interview' || step === 'completed' || step === 'terminated' || step === 'error') {
       clearInterviewStep(token);
     }
@@ -996,6 +1026,26 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // accepts the "not allowed" rules one more time in fullscreen.
   const handleFinalConsentAccept = useCallback(async () => {
     if (startSubmitting) return;
+
+    // HARD REQUIREMENT: the interview must start IN fullscreen. If it was
+    // dropped on this screen (e.g. F11 / Esc), re-enter it NOW — this click is
+    // the user gesture fullscreen requires — issued BEFORE any await so the
+    // gesture isn't consumed. Then VERIFY it actually engaged; if not, abort
+    // and keep the candidate on the consent gate (the overlay guides them back)
+    // rather than starting the interview windowed. This is the fix for
+    // "F11 → accept → interview started without fullscreen".
+    if (!isFullscreen()) {
+      try { await requestFullscreen(); } catch { /* verified below */ }
+    }
+    if (!isFullscreen()) {
+      setFinalConsentFsExited(true);
+      toast.error(
+        'You must be in fullscreen to start. Click "Return to Fullscreen", then accept again.',
+        { duration: 6000 },
+      );
+      return;
+    }
+    setFinalConsentFsExited(false);
     setStartSubmitting(true);
 
     // Log the SECOND consent to the audit trail (best-effort, non-blocking).
@@ -1003,10 +1053,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       phase: 'pre_interview_fullscreen',
     }).catch(() => {});
 
-    // Re-assert fullscreen from THIS user gesture in case it was dropped while
-    // the accept screen was shown, and resume the audio context so Linda's TTS
-    // is unlocked (Chrome autoplay policy requires a resume inside a gesture).
-    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* proceed anyway */ } }
+    // Resume the audio context so Linda's TTS is unlocked (Chrome autoplay
+    // policy requires a resume inside a user gesture).
     try {
       const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
       ctx.resume?.().catch(() => { /* ignore */ });
@@ -1151,10 +1199,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         terminateNow('key_escape');
       } else if (e.key === 'Tab' && e.altKey) {
         terminateNow('key_alt_tab');
-      } else if (e.key === 'Meta' || e.key === 'OS' || e.metaKey) {
-        // Windows / Command key (Meta). Some browsers report 'OS'.
+      } else if (isMetaKey(e)) {
+        // Windows / Command key (Meta). Caught here when the browser actually
+        // receives the keydown; when the OS swallows it (common for the bare
+        // Windows key), the focus-loss fallback in onBlur catches it instead.
         terminateNow('key_meta');
       }
+    };
+    // Some environments deliver only the keyup for the Windows/⌘ key (the
+    // keydown is consumed by the OS). Catch it here too.
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (isMetaKey(e)) terminateNow('key_meta');
     };
     const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
 
@@ -1171,7 +1226,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // candidate is still here — ignore it. (visibilitychange + fullscreenchange
     // have their own listeners; this is a backstop.)
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
-    const clearBlurTimer = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } };
+    // Second, longer confirmation timer for the "focus lost but still
+    // visible & fullscreen" case — this is what catches the Windows / ⌘ key
+    // (which opens the OS Start menu and steals focus without ever delivering
+    // a keydown to the browser). A transient blur that regains focus quickly
+    // (screen-share bar, OS notification) clears this before it fires.
+    let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearBlurTimer = () => {
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+      if (focusLossTimer) { clearTimeout(focusLossTimer); focusLossTimer = null; }
+    };
     const onBlur = () => {
       clearBlurTimer();
       blurTimer = setTimeout(() => {
@@ -1180,9 +1244,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           terminateNow('left_screen_tab_hidden');
         } else if (sawFullscreen && !isFullscreen()) {
           terminateNow('left_screen_fullscreen_exit');
+        } else if (!screenShareStoppedRef.current) {
+          // Still visible & still fullscreen but focus was lost. The candidate
+          // moved to something OUTSIDE the interview — the Windows / ⌘ key (Start
+          // menu), or another app window. Confirm focus is STILL gone after a
+          // longer window so a brief blur that immediately returns focus (share
+          // bar, notification) does NOT terminate; onFocus cancels this.
+          focusLossTimer = setTimeout(() => {
+            focusLossTimer = null;
+            if (!done && !document.hasFocus() && !document.hidden && !screenShareStoppedRef.current) {
+              terminateNow('left_screen_focus_lost');
+            }
+          }, 1200);
         }
-        // else: still visible & still fullscreen → transient focus loss
-        // (screen-share bar, notification, OS focus steal). Not a violation.
       }, 500);
     };
     const onFocus = () => clearBlurTimer();
@@ -1208,6 +1282,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.addEventListener('focus', onFocus);
       // Capture phase so we see the key before the browser acts on it.
       window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('keyup', onKeyUp, true);
       // If the candidate already left during the settle window, catch it now.
       if (document.hidden) terminateNow('left_screen_tab_hidden');
     }, 1200);
@@ -1219,6 +1294,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
       document.removeEventListener(fsEvent, onFsChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1226,6 +1302,27 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
   // Keep the ref mirror of screenShareStopped current for the terminate guard.
   useEffect(() => { screenShareStoppedRef.current = screenShareStopped; }, [screenShareStopped]);
+
+  // Enforce fullscreen on the FINAL CONSENT gate. If the candidate drops
+  // fullscreen here (e.g. presses F11 or Esc) before accepting, flag it so the
+  // "Return to fullscreen" overlay blocks the accept button — the interview
+  // must never start outside fullscreen. A best-effort keydown also blocks the
+  // F11 default (browsers may ignore it; the overlay is the real guarantee).
+  useEffect(() => {
+    if (step !== 'final_consent') return;
+    const ev = getFullscreenChangeEvent();
+    const sync = () => setFinalConsentFsExited(!isFullscreen());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F11') { try { e.preventDefault(); } catch { /* ignore */ } }
+    };
+    sync();
+    document.addEventListener(ev, sync);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener(ev, sync);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [step]);
 
   // ========== LOADING ==========
   if (step === 'loading') {
@@ -1649,7 +1746,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           </div>
           <button
             onClick={() => { handleFinalConsentAccept(); }}
-            disabled={startSubmitting}
+            disabled={startSubmitting || finalConsentFsExited}
+            title={finalConsentFsExited ? 'Return to fullscreen to continue' : undefined}
             className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
             {startSubmitting ? (
@@ -1659,6 +1757,32 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             )}
           </button>
         </div>
+
+        {/* Fullscreen dropped on this gate (F11 / Esc) — block accepting and
+            force the candidate back into fullscreen. Re-entering needs a user
+            gesture, so it happens on this button's click. */}
+        {finalConsentFsExited && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <Maximize2 className="w-8 h-8 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
+              <p className="text-gray-600 mb-6 text-sm">
+                You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.
+              </p>
+              <button
+                onClick={async () => {
+                  try { await requestFullscreen(); } catch { /* ignore */ }
+                  setFinalConsentFsExited(!isFullscreen());
+                }}
+                className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-xl transition-all"
+              >
+                <Maximize2 className="w-4 h-4" />Return to Fullscreen
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

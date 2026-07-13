@@ -353,19 +353,26 @@ function RecordingTabContent({
   screenError: boolean;
   seekRequest?: { seconds: number; key: number } | null;
 }) {
-  const [recView, setRecView] = useState<'candidate' | 'screen'>('candidate');
+  // Default to the Interview View (screen recording) whenever one exists — the
+  // recruiter wants the screen recording to open first, not the candidate webcam.
+  // Falls back to the candidate view only when there is no screen recording.
+  const [recView, setRecView] = useState<'candidate' | 'screen'>(
+    () => interview.screen_recording_file_path
+      ? 'screen'
+      : interview.recording_file_path ? 'candidate' : 'screen',
+  );
   const [candidateDuration, setCandidateDuration] = useState<number | null>(null);
   const [screenDuration, setScreenDuration] = useState<number | null>(null);
 
   // A seek requested from the Event Log: jump to the sub-view that actually has
-  // a recording (prefer the candidate webcam) before seeking. Keyed on the
-  // request's monotonic `key` so repeat clicks on the same row re-fire.
+  // a recording (prefer the Interview View / screen recording) before seeking.
+  // Keyed on the request's monotonic `key` so repeat clicks on the same row re-fire.
   useEffect(() => {
     if (!seekRequest) return;
     setRecView(
-      interview.recording_file_path ? 'candidate'
-        : interview.screen_recording_file_path ? 'screen'
-        : 'candidate',
+      interview.screen_recording_file_path ? 'screen'
+        : interview.recording_file_path ? 'candidate'
+        : 'screen',
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekRequest?.key]);
