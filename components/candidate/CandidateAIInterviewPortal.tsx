@@ -10,6 +10,7 @@ import { InterviewUI } from '@/components/ai-interview/InterviewUI';
 import type { InterviewTimerSnapshot } from '@/components/ai-interview/InterviewUI';
 import { useInterviewFaceVerification } from '@/components/ai-interview/proctoring/InterviewFaceVerification';
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
+import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
 
 // Pre-interview step components
@@ -2112,11 +2113,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
           onEnrollVoice={async (stream) => {
-            // Record 10 s of the candidate's voice from the live mic stream
-            // already open for the noise check. Without this baseline,
-            // InterviewVoiceVerification.verifyVoice() silently no-ops during
-            // the interview — so a friend speaking on the mic instead of the
-            // candidate would never trigger a voice_identity_changed event.
+            // Primary enrollment: capture ~12 s of the candidate reading the
+            // prompt and send raw 16 kHz PCM to the server, which computes an
+            // ECAPA-TDNN voiceprint (accurate speaker verification). This is the
+            // baseline every interview turn is later checked against server-side.
+            //
+            // If server voice-ID is disabled (feature flag off), fall back to
+            // the local MFCC baseline so behavior is unchanged in that case.
+            try {
+              const cap = await recordPcm16(stream, 12000);
+              if (cap) {
+                const res = await candidateAIInterviewService.enrollVoice(
+                  token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
+                );
+                // Server owns voice-ID only when it enrolled successfully. If the
+                // server is on but couldn't capture enough speech, fall through to
+                // the local MFCC baseline so we still have *some* check. When the
+                // server enrolls, we skip local enrollment — so the client-side
+                // verifyVoice() naturally no-ops (no baseline) and never conflicts
+                // with the accurate server-side per-turn verification.
+                if (res.enabled && res.ok) return true;
+              }
+            } catch { /* fall through to local baseline */ }
             if (voiceVerification.hasBaseline()) return true;
             return voiceVerification.enrollVoice(stream, 10000);
           }}

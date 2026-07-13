@@ -789,7 +789,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [debugStats, setDebugStats] = useState({
     heapUsed: 0, heapTotal: 0, heapLimit: 0,
     wsState: 'N/A',
-    avgLevel: 0, silenceThresh: 0, ambient: 0,
+    avgLevel: 0, silenceThresh: 0, ambient: 0, voiceRatio: 1,
     silenceSince: null as number | null,
     silenceDurationMs: 5000,
     speechDetected: false,
@@ -803,6 +803,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const _dbgChunkCountRef = useRef(0);
   const _dbgLastChunkSecRef = useRef(Date.now());
   const _dbgAvgLevelRef = useRef(0);
+  // Voice-band spectral ratio (0..1) of the current frame — fraction of mic
+  // spectral energy inside the human-voice band. High for speech, low for
+  // broadband noise / low hum / music. Surfaced in the dev overlay + key logs
+  // so the VOICE_BAND_MIN_RATIO threshold can be calibrated from real audio.
+  const _dbgVoiceRatioRef = useRef(1);
+  const freqBufRef = useRef<Uint8Array | null>(null);
   // drag state — all in refs so dragging never triggers re-render
   const _dbgDragRef = useRef({ dragging: false, ox: 0, oy: 0 });
 
@@ -826,6 +832,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         avgLevel: _dbgAvgLevelRef.current,
         silenceThresh: silenceThresholdRef.current,
         ambient: ambientNoiseFloorRef.current,
+        voiceRatio: _dbgVoiceRatioRef.current,
         silenceSince: silenceStartRef.current,
         silenceDurationMs: silenceDurationMsRef.current,
         speechDetected: speechDetectedRef.current,
@@ -1987,6 +1994,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // above this), so the thresholds rise ABOVE the noise and only real speech
   // trips them. (Quiet rooms are unaffected — the floor just stays low.)
   const AMBIENT_LEARN_CAP = 0.012;
+  // Voice-band spectral gate. Human speech concentrates its energy in roughly
+  // 200–3400 Hz (fundamental + formants). Broadband noise (fans, hiss), low
+  // rumble/hum, and much music spread energy outside that band, so their
+  // in-band fraction is lower. A frame only counts as "speech" if BOTH loud
+  // enough AND voice-like. Threshold is deliberately LENIENT (real speech is
+  // ~0.6–0.9; flat broadband noise ~0.15) so it rejects clearly-non-voice sound
+  // without ever blocking a real voice. Tune via ?debug=1 (shows live ratio).
+  const VOICE_BAND_LOW_HZ = 200;
+  const VOICE_BAND_HIGH_HZ = 3400;
+  const VOICE_BAND_MIN_RATIO = 0.35;
   const POSSIBLE_SPEECH_NOISE_MULTIPLIER = 2.2;
   const POSSIBLE_SPEECH_MARGIN = 0.0012;
   const IN_TURN_NOISE_MULTIPLIER = 2.2;
@@ -5022,6 +5039,41 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         const avgLevel = rawLevel * micGain;
         _dbgAvgLevelRef.current = avgLevel; // dev overlay
         _dbgChunkCountRef.current++;        // dev overlay
+
+        // ── Voice-band spectral ratio: is this frame human-speech-like? ──
+        // Fraction of mic spectral energy inside VOICE_BAND_LOW..HIGH_HZ. Speech
+        // concentrates energy there (~0.6–0.9); broadband noise / hum / music
+        // spread it out (lower). Used only as an ADDITIONAL gate on NEW-speech
+        // detection and on what resets the in-turn silence clock — never on its
+        // own, always combined with the energy checks. Defaults to 1 (voice-like)
+        // when no analyser is present so it can never block on unsupported setups.
+        let voiceBandRatio = 1;
+        const _an = micAnalyserRef.current;
+        if (_an) {
+          const bins = _an.frequencyBinCount;
+          if (!freqBufRef.current || freqBufRef.current.length !== bins) {
+            freqBufRef.current = new Uint8Array(bins);
+          }
+          const fb = freqBufRef.current;
+          _an.getByteFrequencyData(fb);
+          const hzPerBin = ctx.sampleRate / _an.fftSize;
+          const loBin = Math.max(1, Math.floor(VOICE_BAND_LOW_HZ / hzPerBin));
+          const hiBin = Math.min(bins - 1, Math.ceil(VOICE_BAND_HIGH_HZ / hzPerBin));
+          let bandSum = 0;
+          let totalSum = 0;
+          for (let i = 0; i < bins; i++) {
+            const v = fb[i];
+            totalSum += v;
+            if (i >= loBin && i <= hiBin) bandSum += v;
+          }
+          // Only trust the ratio when there's meaningful spectral energy; on
+          // near-silence totalSum≈0, so treat as voice-like (1) — the energy
+          // gates handle silence, this gate only matters for LOUD frames.
+          voiceBandRatio = totalSum > 12 ? bandSum / totalSum : 1;
+        }
+        _dbgVoiceRatioRef.current = voiceBandRatio;
+        const voiceLike = voiceBandRatio >= VOICE_BAND_MIN_RATIO;
+
         const nowMs = Date.now();
         if (nowMs - micLevelLastUpdateRef.current > 120) {
           micLevelLastUpdateRef.current = nowMs;
@@ -5176,6 +5228,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         );
         if (
           avgLevel > possibleSpeechThreshold &&
+          voiceLike &&
           !candidateAudioStreamingRef.current &&
           !suppressNewSpeechDetection
         ) {
@@ -5187,15 +5240,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               console.log('[INTERVIEW-DEBUG] soft audio gate opened PCM streaming', {
                 avgLevel: Number(avgLevel.toFixed(4)),
                 possibleSpeechThreshold: Number(possibleSpeechThreshold.toFixed(4)),
+                voiceBandRatio: Number(voiceBandRatio.toFixed(2)),
               });
             }
           }
-        } else if (!candidateAudioStreamingRef.current && avgLevel <= possibleSpeechThreshold) {
+        } else if (!candidateAudioStreamingRef.current && (avgLevel <= possibleSpeechThreshold || !voiceLike)) {
           candidateAudioFrameCountRef.current = 0;
         }
 
         const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
-        if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold) {
+        if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike) {
           speechFrameCountRef.current++;
           silenceStartRef.current = null;
           if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES && !suppressNewSpeechDetection) {
@@ -5255,11 +5309,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               ambientNoiseFloorRef.current + STRONG_IN_TURN_ACTIVITY_MARGIN,
               Math.min(0.008, speechPeakLevelRef.current * 0.68)
             );
+            // A frame keeps the turn "active" (resets the silence clock) ONLY if
+            // it is voice-like — loud background noise / music / hum no longer
+            // holds the turn open, which is what let the interview idle to the
+            // 2-min hard cap. Live transcript advancing is authoritative and
+            // bypasses the voice-band check (ASR already confirmed real words).
             if (transcriptRecentlyAdvanced) {
               lastMeaningfulAudioAtRef.current = nowMs;
               silenceStartRef.current = null;
               inTurnSpeechFrameCountRef.current = 0;
-            } else if (avgLevel > strongInTurnActivityThreshold) {
+            } else if (avgLevel > strongInTurnActivityThreshold && voiceLike) {
               inTurnSpeechFrameCountRef.current++;
               if (!transcriptLedTurn || inTurnSpeechFrameCountRef.current >= MIN_IN_TURN_SPEECH_FRAMES) {
                 if (!realtimeTranscriptPending || realtimeBootstrapActive) {
@@ -5267,7 +5326,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   silenceStartRef.current = null;
                 }
               }
-            } else if (!transcriptLedTurn && avgLevel > inTurnActivityThreshold) {
+            } else if (!transcriptLedTurn && avgLevel > inTurnActivityThreshold && voiceLike) {
               inTurnSpeechFrameCountRef.current = 0;
               if (!realtimeTranscriptPending || realtimeBootstrapActive) {
                 lastMeaningfulAudioAtRef.current = nowMs;
@@ -5283,7 +5342,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               // accumulates "silence" the whole time it's speaking, and a 2-second
               // breath gap tips the total over silenceDurationMs → premature cut-off.
               const softVoiceFloor = Math.max(POSSIBLE_SPEECH_LEVEL, ambientNoiseFloorRef.current * 1.5);
-              if (avgLevel > softVoiceFloor) {
+              if (avgLevel > softVoiceFloor && voiceLike) {
                 lastMeaningfulAudioAtRef.current = nowMs;
                 silenceStartRef.current = null;
               } else {
@@ -5981,15 +6040,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
   }, [teardownRecordingMedia]);
 
-  // Auto-scroll.
-  // Also triggers when a bottom-anchored banner toggles on/off so the chat
-  // reflows cleanly — without this, toggling the "Your turn" banner from hidden
-  // to visible changes the chat's bottom padding (pb-4 → pb-44) but the scroll
-  // position stays pinned where it was, briefly parking the last message
-  // behind the banner until the user scrolls manually.
+  // Auto-scroll — fires ONLY on real content changes (new/updated messages,
+  // streaming AI text, live candidate transcript, and the processing bubble
+  // appearing). We intentionally do NOT depend on banner toggles anymore: they
+  // add no content, and re-running a smooth scroll each time a banner flips on/
+  // off stacked animations and caused the visible flicker / "jumps to page end"
+  // during the end-of-answer handoff. The reserved bottom padding (pb-52) plus
+  // the fade mask already keep the last message clear of the floating banner.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, currentAiText, currentTranscript, showNowSpeakBanner, showSilenceBanner, questionTimerExpired]);
+  }, [messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing]);
 
   // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
   useEffect(() => {
@@ -6640,7 +6700,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           message — we do NOT run a local countdown here anymore, because that
           used to race with Linda's TTS and skip while she was still speaking. */}
       {showSilenceBanner && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
           <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-[#F59E0B]/40 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl max-w-sm">
             <div className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse shrink-0" />
             <div className="flex-1 min-w-0">
@@ -6680,9 +6740,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         let variant: 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
         if (showSilenceBanner) variant = null;               // silence banner owns the slot
         else if (questionTimerExpired) variant = 'timesup';
-        else if (isAiSpeaking || isProcessing || isCandidateTranscriptProcessing) variant = 'hold';
+        // "Hold On — Linda is speaking" ONLY while she is ACTUALLY speaking.
+        else if (isAiSpeaking) variant = 'hold';
         else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
-        else if (isConnected && !isClosing && questionNumber !== null) variant = 'prepare';
+        // Background processing (generating the next question / transcribing the
+        // answer) and the pre-turn warmup are NOT "speaking" — show the neutral
+        // "Hold On — getting ready" state instead of claiming Linda is speaking.
+        else if (isProcessing || isCandidateTranscriptProcessing || (isConnected && !isClosing && questionNumber !== null)) variant = 'prepare';
         if (!variant) return null;
 
         const micIcon = (
@@ -6709,11 +6773,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           turn:    { box: 'border-emerald-300 bg-emerald-500 shadow-emerald-500/40', title: 'Your turn — speak now',       subtitle: 'Microphone is active · Linda is listening',   icon: micIcon },
           hold:    { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — Linda is speaking', subtitle: 'Please wait until Linda finishes the question', icon: pauseIcon },
           timesup: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: "Time's Up!",                  subtitle: 'Moving to the next question…',                 icon: <Clock className="w-5 h-5 text-white" /> },
-          prepare: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — get ready',         subtitle: 'Your turn is starting…',                       icon: spinnerIcon },
+          prepare: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — get ready',         subtitle: 'Please wait a moment…',                        icon: spinnerIcon },
         }[variant];
 
         return (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className={`flex items-center gap-3.5 px-7 py-4 rounded-2xl border-2 shadow-2xl min-w-[320px] ${cfg.box}`}>
               <div className="relative shrink-0">
                 <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
@@ -6852,6 +6916,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <Row label="Level" value={debugStats.avgLevel.toFixed(4)} />
                 <Row label="Threshold" value={debugStats.silenceThresh.toFixed(4)} />
                 <Row label="Ambient" value={debugStats.ambient.toFixed(4)} />
+                <Row label="VoiceRatio" value={`${debugStats.voiceRatio.toFixed(2)} ${debugStats.voiceRatio >= 0.35 ? '✓voice' : '✗noise'}`} />
                 <Bar pct={levelPct} color={debugStats.speechDetected ? '#34d399' : '#fbbf24'} />
                 <Row
                   label="Silence timer"
@@ -7206,16 +7271,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             </div>
           )}
 
-          {/* Chat messages.
-              Dynamic bottom padding reserves space under the last message so
-              any of the fixed-position, bottom-anchored banners ("Your turn",
-              silence nudge, Time's Up) sit BELOW the conversation instead of
-              covering its tail. Without this, the last Linda question or
-              candidate response was hidden behind the emerald banner. */}
+          {/* Chat messages — wrapped in a relative container so a bottom
+              gradient mask can fade any content into the chat background before
+              it reaches the floating turn banner. This keeps the area behind /
+              around the banner clean (no half-visible next bubble peeking
+              through), and the dynamic bottom padding still reserves clearance
+              so the last real message sits fully above the banner. */}
+          <div className="relative flex-1 flex flex-col min-h-0">
           <div
             className={`flex-1 overflow-y-auto px-4 pt-4 space-y-3 bg-gray-50 ${
               showNowSpeakBanner || showSilenceBanner || questionTimerExpired || isAiSpeaking || isProcessing
-                ? 'pb-44'
+                ? 'pb-52'
                 : 'pb-4'
             }`}
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
@@ -7233,11 +7299,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <MessageRowMemo key={msg.id} msg={msg} />
             ))}
 
-            {/* Live speech indicator — teal (matches candidate bubble).
-                Live-transcript models stream backend/provider text while
-                recording. Final-only models reveal the transcript after the
-                turn is processed. */}
-            {(currentTranscript || isRecording) && (
+            {/* Candidate live/processing bubble — ONE persistent bubble across
+                the whole recording → processing phase so its inner content
+                MORPHS (waveform/live text → loading dots) instead of two
+                separate bubbles mounting/unmounting (which flickered and jumped
+                the layout at end-of-answer). The avatar + "Your Response" header
+                + emerald container stay mounted; only the inner content swaps. It
+                unmounts once the final transcript lands in `messages` (identical
+                emerald "Your Response" styling → visually seamless handoff). */}
+            {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) && (
               <div className="flex gap-2 flex-row-reverse">
                 <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                   <span className="text-white text-[8px] font-bold">You</span>
@@ -7245,48 +7315,79 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <div className="max-w-[80%]">
                   <span className="text-[10px] font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-emerald-600 text-[10px] font-medium">
-                        {currentTranscript ? 'speaking…' : candidateLiveTranscriptEnabled ? 'listening…' : 'recording…'}
-                      </span>
-                    </div>
-                    {currentTranscript ? (
-                      <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
-                    ) : candidateLiveTranscriptEnabled ? (
-                      <p className="text-xs leading-relaxed italic text-emerald-700/70">
-                        {realtimeTranscriptionEnabled ? 'Start speaking...' : 'Listening for live transcript...'}
-                      </p>
+                    {(isRecording || currentTranscript) ? (
+                      <>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-emerald-600 text-[10px] font-medium">
+                            {currentTranscript ? 'speaking…' : candidateLiveTranscriptEnabled ? 'listening…' : 'recording…'}
+                          </span>
+                        </div>
+                        {currentTranscript ? (
+                          <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
+                        ) : candidateLiveTranscriptEnabled ? (
+                          <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                            {realtimeTranscriptionEnabled ? 'Start speaking...' : 'Listening for live transcript...'}
+                          </p>
+                        ) : (
+                          // Batch STT models (gpt-4o-transcribe / gemini / sarvam /
+                          // assemblyai): no Web Speech / live transcript. Show a live
+                          // recording waveform of the candidate's mic while they answer
+                          // — the transcript is revealed after the turn is processed.
+                          <div className="flex flex-col gap-1.5">
+                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} />
+                            <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                              Recording… your transcript appears after you finish speaking.
+                            </p>
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      // Batch STT models (gpt-4o-transcribe / gemini / sarvam /
-                      // assemblyai): no Web Speech / live transcript. Show a live
-                      // recording waveform of the candidate's mic while they answer
-                      // — the transcript is revealed after the turn is processed.
-                      <div className="flex flex-col gap-1.5">
-                        <MicWaveform analyserRef={micAnalyserRef} active={isRecording} />
-                        <p className="text-xs leading-relaxed italic text-emerald-700/70">
-                          Recording… your transcript appears after you finish speaking.
-                        </p>
+                      // Processing: candidate finished, transcript in flight.
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {isCandidateTranscriptProcessing && !currentTranscript && (
-              <div className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                  <span className="text-white text-[8px] font-bold">You</span>
-                </div>
-                <div className="max-w-[80%]">
-                  <span className="text-[10px] font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
-                  <div className="px-3.5 py-2.5 bg-emerald-50 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
+                    {/* Quick actions — INSIDE the response bubble, directly under
+                        the waveform/live area (not a separate bottom bar). Shown
+                        only during the candidate's turn (recording, not the
+                        processing state). Repeat = Linda re-reads the current
+                        question (no count change); Next = move on. */}
+                    {isCandidateTurn && (isRecording || currentTranscript) && (
+                      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-emerald-200/70">
+                        <button
+                          type="button"
+                          onClick={handleRepeatQuestion}
+                          disabled={repeatInFlight}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          {repeatInFlight ? 'Repeating…' : 'Repeat Question'}
+                        </button>
+                        {(() => {
+                          const isLastQuestion = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+                          const nextDisabled = isLastQuestion || nextSkipInFlight;
+                          return (
+                            <button
+                              type="button"
+                              onClick={handleNextQuestion}
+                              disabled={nextDisabled}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                nextDisabled
+                                  ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
+                              }`}
+                            >
+                              {isLastQuestion ? 'Last Question' : nextSkipInFlight ? 'Moving on…' : 'Next'}
+                              <SkipForward className="w-3.5 h-3.5" />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -7315,50 +7416,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
             <div ref={messagesEndRef} />
           </div>
+            {/* Bottom fade mask — dissolves any chat content into the chat
+                background (gray-50) before it reaches the floating turn banner,
+                so nothing shows sharply behind/around the banner. Non-
+                interactive so it never blocks scrolling or clicks. Sits under
+                the fixed banner (which is z-105) but above the scrolling text. */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50" />
+          </div>
 
-          {/* ── Candidate action bar — Repeat Question / Next ──
-              Conventional chatbot-style quick actions, shown ONLY during the
-              candidate's turn (Linda has finished speaking AND the answer
-              window is open). Hidden while Linda is speaking/thinking. Replaces
-              the old bottom REC badge (moved to the header) and Next-Q button.
-              Both actions also post a candidate chip into the chat. */}
-          {isCandidateTurn && (
-            <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 pt-3 pb-3">
-              <div className="flex items-center justify-center gap-3">
-                {/* Repeat Question — Linda re-reads the current question. Does
-                    NOT count as a new question. */}
-                <button
-                  type="button"
-                  onClick={handleRepeatQuestion}
-                  disabled={repeatInFlight}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 hover:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  {repeatInFlight ? 'Repeating…' : 'Repeat Question'}
-                </button>
-                {/* Next — record any partial answer and move to the next question. */}
-                {(() => {
-                  const isLastQuestion = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
-                  const nextDisabled = isLastQuestion || nextSkipInFlight;
-                  return (
-                    <button
-                      type="button"
-                      onClick={handleNextQuestion}
-                      disabled={nextDisabled}
-                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-200 ${
-                        nextDisabled
-                          ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
-                          : 'bg-violet-600 hover:bg-violet-700 border-violet-600 text-white shadow-sm'
-                      }`}
-                    >
-                      {isLastQuestion ? 'Last Question' : nextSkipInFlight ? 'Moving on…' : 'Next'}
-                      <SkipForward className="w-4 h-4" />
-                    </button>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
+          {/* Candidate action buttons (Repeat Question / Next) now live INSIDE
+              the "Your Response" bubble, directly under the waveform — see the
+              candidate live bubble above. The separate bottom action bar was
+              removed per UX request. */}
 
           {/* Legacy input area removed (REC moved to header, Next-Q → action bar). */}
           {false && (

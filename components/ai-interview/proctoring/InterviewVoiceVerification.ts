@@ -3,6 +3,15 @@
 /**
  * InterviewVoiceVerification — Voice pattern enrollment and verification.
  *
+ * ⚠ FALLBACK ONLY. The primary voice-identity path is now SERVER-SIDE
+ * (SpeechBrain ECAPA-TDNN, see backend app/ai_engine/models/voice_identity.py),
+ * which is far more accurate than this MFCC-cosine heuristic. When the server
+ * feature flag AI_VOICE_ID_ENABLED is on, the candidate is enrolled on the
+ * server and this hook is never enrolled — so enrollVoice()/verifyVoice() here
+ * simply no-op (verifyVoice returns early without a baseline). This client hook
+ * stays active ONLY when the server feature is disabled, preserving the prior
+ * behavior. Do not rely on it for malpractice decisions.
+ *
  * Uses Web Audio API to extract MFCC-like features from audio for speaker
  * comparison. This is a client-side heuristic — not forensic-grade, but
  * effective as a deterrent and early warning system.

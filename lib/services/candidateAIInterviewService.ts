@@ -161,6 +161,35 @@ export const candidateAIInterviewService = {
     }).catch(() => {});
   },
 
+  /**
+   * Enroll the candidate's voiceprint on the server (speaker verification).
+   * `pcmBlob` is raw 16 kHz mono Int16 PCM (see lib/utils/pcmEnroll.recordPcm16).
+   * `stage` is "system_check" (primary) or "practice" (top-up). Best-effort:
+   * returns {enabled, ok} — when the feature is off the backend replies
+   * {enabled:false} and the caller can fall back to local behavior.
+   */
+  async enrollVoice(
+    token: string,
+    pcmBlob: Blob,
+    stage: 'system_check' | 'practice' = 'system_check',
+    sampleRate = 16000,
+    noiseFloor = 0,
+  ): Promise<{ enabled: boolean; ok: boolean; reason?: string; speech_seconds?: number }> {
+    const formData = new FormData();
+    formData.append('file', pcmBlob, `${stage}.pcm`);
+    formData.append('stage', stage);
+    formData.append('sample_rate', String(sampleRate));
+    formData.append('noise_floor', String(noiseFloor));
+    const url = `${API_BASE_URL}/candidate/ai-interview/${token}/enroll-voice`;
+    try {
+      const response = await fetch(url, { method: 'POST', body: formData });
+      if (!response.ok) return { enabled: true, ok: false, reason: `http_${response.status}` };
+      return await response.json();
+    } catch {
+      return { enabled: false, ok: false, reason: 'network' };
+    }
+  },
+
   async transcribePracticeAudio(token: string, audioBlob: Blob): Promise<string> {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'practice.webm');

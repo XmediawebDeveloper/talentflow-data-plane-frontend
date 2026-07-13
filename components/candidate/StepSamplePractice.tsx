@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { isTranscriptMeaningful } from '@/lib/utils/whisperFilter';
+import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -119,6 +120,8 @@ export default function StepSamplePractice({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  // Ensures the voice-identity practice top-up capture runs at most once.
+  const voiceTopUpDoneRef = useRef(false);
   const audioChunksRef = useRef<Blob[]>([]);
   const videoRecorderRef = useRef<MediaRecorder | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
@@ -619,6 +622,23 @@ export default function StepSamplePractice({
     };
     mediaRecorderRef.current = mr;
     mr.start(500);
+
+    // Voice-identity top-up (best-effort, non-blocking): capture ~8 s of PCM
+    // while the candidate answers this practice question and add it to their
+    // enrolled voiceprint (stage=practice). Averaging the system-check "reading"
+    // voice with the "answering" voice makes verification more robust to the
+    // way people naturally speak differently when reading vs. conversing.
+    if (!voiceTopUpDoneRef.current) {
+      voiceTopUpDoneRef.current = true;
+      // Use the audio-only stream (non-null local) rather than the ref.
+      recordPcm16(audioStream, 8000)
+        .then((cap) => {
+          if (cap) return candidateAIInterviewService.enrollVoice(
+            token, cap.blob, 'practice', cap.sampleRate, cap.noiseFloor,
+          );
+        })
+        .catch(() => { /* best-effort */ });
+    }
 
     // Video+audio recorder for replay
     if (recordedVideoUrl) { URL.revokeObjectURL(recordedVideoUrl); setRecordedVideoUrl(null); }

@@ -276,6 +276,12 @@ function ProgressStepper({ phase }: { phase: Phase }) {
   );
 }
 
+// Fixed passage the candidate reads aloud during the mic check. A known,
+// ~5-second sentence guarantees enough clean voiced speech for an accurate
+// enrollment voiceprint (short spontaneous "hello" samples are too brief).
+const ENROLL_PASSAGE =
+  'Hello, my name is here today for the interview, and I am ready to begin.';
+
 export default function StepSystemCheck({
   token,
   position = 'this position',
@@ -310,6 +316,10 @@ export default function StepSystemCheck({
   const noiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const micIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Voice enrollment is captured WHILE the candidate speaks during the mic
+  // check (reading the prompt below), not at proceed-time when they're silent —
+  // that yields clean, sufficient speech for an accurate voiceprint.
+  const voiceEnrollPromiseRef = useRef<Promise<boolean> | null>(null);
   const mountedRef = useRef(true);
   const checksCancelledRef = useRef(false);
   // Guards concurrent face-api.js / TF.js WebGL calls — only one may run at a time.
@@ -514,7 +524,7 @@ export default function StepSystemCheck({
     const CONSECUTIVE_NEEDED = 2;
     let aboveStreak = 0;
     let voiceEverDetected = false;
-    updateSystemCheck('microphone', { status: 'checking', detail: 'Say something — your microphone will be detected automatically...' });
+    updateSystemCheck('microphone', { status: 'checking', detail: `Please read this sentence aloud: "${ENROLL_PASSAGE}"` });
     micIntervalRef.current = setInterval(() => {
       const a = analyserRef.current;
       if (!a) return;
@@ -524,7 +534,11 @@ export default function StepSystemCheck({
         aboveStreak += 1;
         if (aboveStreak >= CONSECUTIVE_NEEDED) {
           voiceEverDetected = true;
-          updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
+          updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — keep reading the sentence aloud for a moment...' });
+          // Capture the voiceprint NOW, while the candidate is actively reading.
+          if (!voiceEnrollPromiseRef.current && onEnrollVoice && streamRef.current) {
+            voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current).catch(() => false);
+          }
         }
       } else {
         aboveStreak = 0;
@@ -535,7 +549,7 @@ export default function StepSystemCheck({
         }
       }
     }, 150);
-  }, [ensureAudioAnalyser, getRMS, updateSystemCheck]);
+  }, [ensureAudioAnalyser, getRMS, updateSystemCheck, onEnrollVoice]);
 
   const runInternet = useCallback(async () => {
     updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
@@ -943,19 +957,21 @@ export default function StepSystemCheck({
             ])
           : Promise.resolve(true),
 
-        // 3. Enroll voice baseline for proctoring (best-effort — 10 s sample
-        //    of the candidate's mic during the system-check noise sweep so
-        //    the voice pattern is stored ALONGSIDE the face pattern.
-        //    Without this, verifyVoice() during the interview has no baseline
-        //    to compare against and silently no-ops → friend-speaking-on-mic
-        //    goes undetected. Timed-out at 12 s (slightly more than the
-        //    10 s enrollment window) so a hang can't block the proceed button.
-        onEnrollVoice && streamRef.current
-          ? Promise.race([
-              onEnrollVoice(streamRef.current).catch(() => false),
-              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 12000)),
-            ])
-          : Promise.resolve(true),
+        // 3. Enroll voice baseline for proctoring. Prefer the capture that was
+        //    ALREADY started mid-check while the candidate read the prompt aloud
+        //    (clean, sufficient speech). Fall back to a fresh capture only if
+        //    voice was never detected. Best-effort + timed-out at 14 s so a hang
+        //    can't block the proceed button.
+        (() => {
+          const enroll = voiceEnrollPromiseRef.current
+            ?? (onEnrollVoice && streamRef.current
+                ? onEnrollVoice(streamRef.current).catch(() => false)
+                : Promise.resolve(true));
+          return Promise.race([
+            enroll,
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 14000)),
+          ]);
+        })(),
       ]);
 
       // Stop remaining streams and intervals
