@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  X, BarChart3,
+  X, BarChart3, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -25,6 +25,7 @@ const STATUS_OPTIONS = [
   { value: 'invited', label: 'Invited' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'terminated', label: 'Terminated' },
   { value: 'expired', label: 'Expired' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
@@ -35,6 +36,7 @@ function getStatusBadge(status: string) {
     case 'in_progress': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
     case 'invited': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
     case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+    case 'terminated': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
     case 'cancelled': return 'bg-red-100 text-red-600 ring-1 ring-red-200';
     default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
   }
@@ -46,6 +48,7 @@ function getStatusLabel(status: string) {
     case 'in_progress': return 'In Progress';
     case 'invited': return 'Invited';
     case 'expired': return 'Expired';
+    case 'terminated': return 'Terminated';
     case 'cancelled': return 'Cancelled';
     default: return status;
   }
@@ -56,6 +59,7 @@ function getStatusIcon(status: string) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
     case 'in_progress': return <Clock className="w-4 h-4 text-brand-orange-deep" />;
     case 'invited': return <Mail className="w-4 h-4 text-brand-blue" />;
+    case 'terminated': return <Ban className="w-4 h-4 text-red-600" />;
     case 'cancelled': return <XCircle className="w-4 h-4 text-red-500" />;
     case 'expired': return <XCircle className="w-4 h-4 text-gray-400" />;
     default: return <Mail className="w-4 h-4 text-gray-400" />;

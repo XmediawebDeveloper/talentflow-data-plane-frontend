@@ -299,6 +299,10 @@ export default function StepSystemCheck({
   const [checksRunning, setChecksRunning] = useState(false);
   const [checksCompleted, setChecksCompleted] = useState(false);
   const [isProceedLoading, setIsProceedLoading] = useState(false);
+  // Visible voice-enrollment state (the read-aloud panel inside the card).
+  const [voiceEnrollStatus, setVoiceEnrollStatus] =
+    useState<'idle' | 'recording' | 'success' | 'failed'>('idle');
+  const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
 
   // Measured metric values to include when submitting to backend
   const networkLatencyMsRef = useRef<number | null>(null);
@@ -353,6 +357,43 @@ export default function StepSystemCheck({
     },
     [],
   );
+
+  // Kick off voice enrollment once, updating the visible panel state as it runs.
+  // Called from the mic check the moment the candidate's voice is detected.
+  const startVoiceEnroll = useCallback(() => {
+    if (voiceEnrollPromiseRef.current || !onEnrollVoice || !streamRef.current) return;
+    setVoiceEnrollStatus('recording');
+    setVoiceEnrollProgress(0);
+    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
+      .then((ok) => {
+        if (mountedRef.current) setVoiceEnrollStatus(ok ? 'success' : 'failed');
+        return ok;
+      })
+      .catch(() => {
+        if (mountedRef.current) setVoiceEnrollStatus('failed');
+        return false;
+      });
+  }, [onEnrollVoice]);
+
+  // Re-run voice enrollment (from the panel's Retry button).
+  const retryVoiceEnroll = useCallback(() => {
+    voiceEnrollPromiseRef.current = null;
+    setVoiceEnrollStatus('idle');
+    setVoiceEnrollProgress(0);
+    startVoiceEnroll();
+  }, [startVoiceEnroll]);
+
+  // Drive the recording progress bar (~12 s capture) for visible feedback.
+  useEffect(() => {
+    if (voiceEnrollStatus !== 'recording') return;
+    const started = performance.now();
+    const CAPTURE_MS = 12000;
+    const iv = setInterval(() => {
+      const pct = Math.min(100, ((performance.now() - started) / CAPTURE_MS) * 100);
+      setVoiceEnrollProgress(pct);
+    }, 200);
+    return () => clearInterval(iv);
+  }, [voiceEnrollStatus]);
 
   const stopActiveChecks = useCallback(() => {
     checksCancelledRef.current = true;
@@ -524,7 +565,7 @@ export default function StepSystemCheck({
     const CONSECUTIVE_NEEDED = 2;
     let aboveStreak = 0;
     let voiceEverDetected = false;
-    updateSystemCheck('microphone', { status: 'checking', detail: `Please read this sentence aloud: "${ENROLL_PASSAGE}"` });
+    updateSystemCheck('microphone', { status: 'checking', detail: 'Read the sentence shown below aloud to confirm your mic...' });
     micIntervalRef.current = setInterval(() => {
       const a = analyserRef.current;
       if (!a) return;
@@ -534,11 +575,10 @@ export default function StepSystemCheck({
         aboveStreak += 1;
         if (aboveStreak >= CONSECUTIVE_NEEDED) {
           voiceEverDetected = true;
-          updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — keep reading the sentence aloud for a moment...' });
-          // Capture the voiceprint NOW, while the candidate is actively reading.
-          if (!voiceEnrollPromiseRef.current && onEnrollVoice && streamRef.current) {
-            voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current).catch(() => false);
-          }
+          updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
+          // Capture the voiceprint NOW, while the candidate is actively reading
+          // the sentence shown in the Voice Verification panel below.
+          startVoiceEnroll();
         }
       } else {
         aboveStreak = 0;
@@ -549,7 +589,7 @@ export default function StepSystemCheck({
         }
       }
     }, 150);
-  }, [ensureAudioAnalyser, getRMS, updateSystemCheck, onEnrollVoice]);
+  }, [ensureAudioAnalyser, getRMS, updateSystemCheck, startVoiceEnroll]);
 
   const runInternet = useCallback(async () => {
     updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
@@ -1427,6 +1467,80 @@ export default function StepSystemCheck({
                 ))}
               </div>
             </div>
+
+            {/* Voice Verification — visible read-aloud enrollment panel.
+                Shown whenever voice enrollment is available (onEnrollVoice set). */}
+            {onEnrollVoice && (
+              <div className="mt-5 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <Mic className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
+                    <p className="text-xs text-gray-500">
+                      We record a short voice sample to confirm it&apos;s you throughout the interview.
+                    </p>
+                  </div>
+                </div>
+
+                {/* The sentence to read aloud — always visible, not truncated. */}
+                <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500 mb-1">
+                    Please read this sentence aloud
+                  </p>
+                  <p className="text-base font-medium text-gray-900 leading-snug">
+                    &ldquo;{ENROLL_PASSAGE}&rdquo;
+                  </p>
+                </div>
+
+                {/* Status area */}
+                <div className="mt-3">
+                  {voiceEnrollStatus === 'idle' && (
+                    <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-gray-300" />
+                      Waiting for you to speak — read the sentence above.
+                    </p>
+                  )}
+                  {voiceEnrollStatus === 'recording' && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        Recording your voice — keep reading the sentence aloud…
+                      </p>
+                      <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-500 transition-all duration-200 ease-linear"
+                          style={{ width: `${voiceEnrollProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {voiceEnrollStatus === 'success' && (
+                    <p className="text-xs font-medium text-green-700 flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      Voice sample captured — you&apos;re all set.
+                    </p>
+                  )}
+                  {voiceEnrollStatus === 'failed' && (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium text-amber-700 flex items-center gap-1.5">
+                        <XCircle className="w-4 h-4 text-amber-600" />
+                        We couldn&apos;t capture enough audio. Please read the sentence again.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={retryVoiceEnroll}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-md px-2 py-1 transition-colors"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Hidden canvas for frame analysis */}
             <canvas ref={canvasRef} className="hidden" />

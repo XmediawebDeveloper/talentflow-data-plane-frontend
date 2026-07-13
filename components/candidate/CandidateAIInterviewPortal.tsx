@@ -57,6 +57,11 @@ interface Props {
 // S3 multipart upload requires every part except the last to be >= 5 MiB; the
 // margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
 const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+// On a proctoring termination we keep the (entire-screen) recorder running for
+// a few more seconds BEFORE stopping/uploading, so the recording captures WHAT
+// the candidate switched to (the other tab/app/window from Alt+Tab, F11, the
+// Windows key, etc.) instead of cutting off the instant the violation fires.
+const POST_VIOLATION_RECORD_MS = 4000;
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
 
@@ -1183,7 +1188,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           details: { reason, message, action: 'interview_terminated' },
         });
       } catch { /* non-blocking */ }
-      stopAndUploadScreenRecording();
+      // Keep the entire-screen recorder RUNNING for a few more seconds so the
+      // footage captures what the candidate switched to (the violating action
+      // just happened; the recorder is still capturing their screen). Screen
+      // capture is independent of fullscreen, so exiting fullscreen / showing
+      // the terminated page below does NOT stop it. Then stop + upload the
+      // final segment (which now includes those extra seconds).
+      window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
       if (isFullscreen()) exitFullscreen().catch(() => {});
       // Navigate to the full terminated page (mirrors the completed-page flow).
       setStep('terminated');

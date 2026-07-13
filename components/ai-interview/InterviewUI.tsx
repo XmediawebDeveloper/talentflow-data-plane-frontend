@@ -501,6 +501,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
   const questionTimerExpiredRef = useRef(false); // sync ref — avoids stale closure in setTimeout/setInterval callbacks
 
+  // ── Repeat-Question button gating + timer-freeze during the re-speak ──
+  // canRepeat: the Repeat button is only clickable during the FIRST VAD window
+  // (silence_duration_ms, ~8s) of the candidate's turn — after that it disables.
+  const [canRepeat, setCanRepeat] = useState(false);
+  const repeatWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // repeatFreeze: from a Repeat click until Linda finishes re-speaking, the
+  // per-question answer timer is FROZEN (doesn't count down). We snapshot the
+  // remaining seconds at click time and resume from it after the re-speak, so
+  // the repeat's speech never eats the candidate's answer window.
+  const repeatFreezeRef = useRef(false);
+  const repeatFrozenRemainingRef = useRef<number | null>(null);
+  // True once the candidate has used their one repeat for the CURRENT question.
+  // Reset only when a genuinely NEW question starts. Prevents the repeat window
+  // from re-arming after the repeat's own re-speak resume.
+  const repeatUsedThisTurnRef = useRef(false);
+  // Id of the "Let's move on…" skip chip so it can be removed if the candidate
+  // actually spoke and a real transcript lands for the skipped question.
+  const skipChipIdRef = useRef<string | null>(null);
+
   // Bridge phrase caption — shown while Linda speaks a pre-cached transition
   // clip after the 2-min hard-cap fires. Distinct from the question card
   // (rendered as a "Linda · Transition" chip below the avatar) so reviewers
@@ -1485,6 +1504,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const lastLiveTranscriptUpdateAtRef = useRef<number | null>(null);
   const turnHasLiveTranscriptRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Scroll container for the chat — used to pin the view to the bottom
+  // (WhatsApp-style) so the newest question/response is always visible.
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
   // True while Linda is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
   const isSilencePromptRef = useRef(false);
@@ -1672,6 +1694,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       questionTimerExpiredRef.current = false;
     }
     ensureQuestionTimerRunning(pendingDur);
+
+    // ── Arm the Repeat-Question window ──
+    // The candidate may click "Repeat Question" only during the FIRST VAD window
+    // of the turn (silenceDurationMsRef — the same variable that controls the
+    // silence/no-speech cutoff, currently ~8s and configurable via backend
+    // vad_config). After that it disables, so a candidate can't reset their clock
+    // by repeating mid/late answer. A repeat-resume (repeatFreezeRef path) does
+    // NOT re-arm — one repeat per turn. Skipped for follow-ups/clarifications
+    // (same slot continuing, not a fresh answer window).
+    if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
+    if (!repeatUsedThisTurnRef.current && !repeatFreezeRef.current && !isFollowUpRef.current && !isClarificationRef.current) {
+      setCanRepeat(true);
+      const repeatWindowMs = silenceDurationMsRef.current || 8000;
+      repeatWindowTimerRef.current = setTimeout(() => {
+        setCanRepeat(false);
+        repeatWindowTimerRef.current = null;
+      }, repeatWindowMs);
+    }
   }, [ensureQuestionTimerRunning]);
 
   // Self-healing watchdog: if the interval is null but seconds > 0 and we are
@@ -3095,6 +3135,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             currentTranscriptRef.current = "";
             liveTranscriptDisplayRef.current = "";
             setIsCandidateTranscriptProcessing(false);
+            // The candidate actually spoke this turn (a real transcript landed),
+            // so drop any "Let's move on…" skip chip we optimistically posted on
+            // a Next click — the transcript IS the record; the chip on top of it
+            // would be redundant/confusing.
+            if (skipChipIdRef.current) {
+              const _chipId = skipChipIdRef.current;
+              skipChipIdRef.current = null;
+              setMessages(prev => prev.filter(m => m.id !== _chipId));
+            }
             // The decoupled/background flow tags late transcripts with the
             // question they answered. `qn` is that number (or null for the
             // synchronous flow, where the answer is always the most recent one).
@@ -3806,7 +3855,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Use data.seconds — the actual candidate answer window sent by the backend.
         // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
         // the backend's auto-skip is calibrated to, so they must match.
-        const dur = data.seconds ?? data.total_seconds ?? data.duration_seconds ?? 120;
+        let dur = data.seconds ?? data.total_seconds ?? data.duration_seconds ?? 120;
+        // REPEAT-QUESTION FREEZE RESUME: this timer event is the re-speak
+        // completing (on_speaking_done → _start_question_timer). Resume the
+        // answer window from the pre-repeat remaining we snapshotted at click
+        // time — the repeat's speech must NOT consume the candidate's time.
+        if (repeatFreezeRef.current) {
+          repeatFreezeRef.current = false;
+          if (repeatFrozenRemainingRef.current != null && repeatFrozenRemainingRef.current > 0) {
+            dur = repeatFrozenRemainingRef.current;
+            console.log(`[Timer ${timestamp}] Repeat re-speak done — resuming frozen answer window: ${dur}s`);
+          }
+          repeatFrozenRemainingRef.current = null;
+        }
         // Fix 2: capture Linda's speech share so the UI can show the candidate
         // WHY they have less than the full 2-min slot.
         if (typeof data.linda_spoke_seconds === 'number') {
@@ -3953,6 +4014,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         questionTimerSecondsRef.current = null;
         questionTimerPausedAtRef.current = null;
         questionTimerPausedMsRef.current = 0;
+        // Fresh question (different Q number) → new repeat allowance. A repeat
+        // re-speak arrives with the SAME number, so this stays true then and the
+        // window does NOT re-arm (one repeat per question).
+        if (!sameQuestion) repeatUsedThisTurnRef.current = false;
 
         // Clamp question number — never exceed totalQuestions (safety net for Q15 follow-up edge cases)
         if (incomingQNum != null) setQuestionNumber(Math.min(incomingQNum, totalQuestions ?? incomingQNum));
@@ -6017,6 +6082,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isUnmountedRef.current = true;
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+      if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
       if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
       if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
       if (checkpointTimerRef.current) { clearInterval(checkpointTimerRef.current); checkpointTimerRef.current = null; }
@@ -6040,16 +6106,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
   }, [teardownRecordingMedia]);
 
-  // Auto-scroll — fires ONLY on real content changes (new/updated messages,
-  // streaming AI text, live candidate transcript, and the processing bubble
-  // appearing). We intentionally do NOT depend on banner toggles anymore: they
-  // add no content, and re-running a smooth scroll each time a banner flips on/
-  // off stacked animations and caused the visible flicker / "jumps to page end"
-  // during the end-of-answer handoff. The reserved bottom padding (pb-52) plus
-  // the fade mask already keep the last message clear of the floating banner.
+  // Auto-scroll — WhatsApp-style: ALWAYS pin the view to the true bottom so the
+  // newest question / response / recording bubble is visible. We set scrollTop =
+  // scrollHeight directly (instant, no smooth animation) rather than
+  // scrollIntoView, for two reasons:
+  //   1) instant = no stacked scroll animations → no flicker (the earlier
+  //      smooth-scroll-on-every-change caused the "jumps to page end" jitter),
+  //   2) scrollHeight accounts for the reserved bottom padding (pb-52) that
+  //      keeps the last message clear of the floating banner — so the newest
+  //      content lands ABOVE the banner instead of hidden behind it.
+  // Layout-affecting states (banners, isRecording, isAiSpeaking, isProcessing)
+  // are dependencies too: when the banner appears the padding grows, and we
+  // must re-pin so the last message isn't left tucked behind the banner (the
+  // bug in image copy 2 where Q3 + the recording bubble were cut off).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing]);
+    const el = chatScrollRef.current;
+    if (!el) return;
+    // rAF so the scroll runs after the DOM has laid out the new content/padding.
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [
+    messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing,
+    isRecording, isAiSpeaking, isProcessing,
+    showNowSpeakBanner, showSilenceBanner, questionTimerExpired,
+  ]);
 
   // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
   useEffect(() => {
@@ -6434,15 +6516,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     questionTimerSeconds !== null && !questionTimerExpired;
 
   // Post a candidate-initiated action into the chat as a distinct chip. Tagged
-  // isActionRequest so the answer-transcript logic never overwrites it.
-  const postCandidateActionMessage = (content: string) => {
+  // isActionRequest so the answer-transcript logic never overwrites it. Returns
+  // the new message id so callers can later remove it (e.g. drop the "moved on"
+  // chip if the candidate actually spoke and a real transcript lands).
+  const postCandidateActionMessage = (content: string): string => {
+    const id = crypto.randomUUID();
     setMessages(prev => [...prev, {
-      id: crypto.randomUUID(),
+      id,
       role: "user" as const,
       content,
       timestamp: nowIST(),
       isActionRequest: true,
     }]);
+    return id;
   };
 
   // "Next" — record any partial answer, then ask the backend for the next
@@ -6467,13 +6553,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
     const hadSpeechForSkip = speechDetectedRef.current;
 
-    // Chat: only post the "move on" chip when the candidate did NOT answer.
-    // If they spoke, their real transcription bubble is the record — showing a
-    // "Let's move on to the next question." chip on top of their answer is
-    // redundant and confusing (see reported bug). So chip == genuine skip only.
-    if (!hadSpeechForSkip) {
-      postCandidateActionMessage("Let's move on to the next question.");
-    }
+    // Chat: ALWAYS post the "move on" chip so the Next click is visible (the
+    // earlier version suppressed it whenever speechDetectedRef was true, which
+    // background people/noise set even when the candidate never really spoke —
+    // so a genuine skip showed NOTHING). We keep the id: if the candidate DID
+    // speak and a real transcript lands for this question, the transcript-final
+    // handler removes this chip so it's not shown on top of their answer.
+    skipChipIdRef.current = postCandidateActionMessage("Let's move on to the next question.");
 
     // 0. If Linda is speaking, stop her immediately.
     if (isAiSpeakingRef.current) {
@@ -6549,6 +6635,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // re-speaks WITHOUT advancing the slot or incrementing the question count.
   const handleRepeatQuestion = () => {
     if (repeatInFlightRef.current) return;
+    // Only allowed within the early VAD window of the turn (see canRepeat).
+    if (!canRepeat) return;
     if (isAiSpeakingRef.current || isProcessingRef.current) return;
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
 
@@ -6571,6 +6659,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setRepeatInFlight(false);
       }
     }, 20000);
+
+    // ── FREEZE the answer timer during the re-speak ──
+    // Snapshot the current remaining seconds and stop the ticking interval now.
+    // The re-speak's question_timer_started (fired by on_speaking_done on the
+    // backend) is intercepted in that handler to RESUME from this frozen value
+    // instead of resetting to a full window — so hearing the question again
+    // never costs the candidate any of their answer time.
+    repeatFrozenRemainingRef.current = questionTimerSecondsRef.current;
+    repeatFreezeRef.current = true;
+    if (questionTimerIntervalRef.current) {
+      clearInterval(questionTimerIntervalRef.current);
+      questionTimerIntervalRef.current = null;
+    }
+    // The candidate has used their one repeat window for this turn — close it
+    // and mark it used so the re-speak's timer resume doesn't re-arm it.
+    repeatUsedThisTurnRef.current = true;
+    setCanRepeat(false);
+    if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
 
     // Chat: the candidate's repeat request.
     postCandidateActionMessage("Could you please repeat the question?");
@@ -7279,6 +7385,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               so the last real message sits fully above the banner. */}
           <div className="relative flex-1 flex flex-col min-h-0">
           <div
+            ref={chatScrollRef}
             className={`flex-1 overflow-y-auto px-4 pt-4 space-y-3 bg-gray-50 ${
               showNowSpeakBanner || showSilenceBanner || questionTimerExpired || isAiSpeaking || isProcessing
                 ? 'pb-52'
@@ -7361,7 +7468,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         <button
                           type="button"
                           onClick={handleRepeatQuestion}
-                          disabled={repeatInFlight}
+                          disabled={repeatInFlight || !canRepeat}
+                          title={!canRepeat ? 'Repeat is only available in the first few seconds of your turn' : undefined}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
