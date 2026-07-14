@@ -543,7 +543,7 @@ export default function AIInterview() {
         try {
           await aiInterviewService.archive(config.id);
           toast.success('Configuration archived');
-          loadData();
+          await Promise.all([loadData(), loadArchivedConfigs()]);
         } catch (error: any) {
           toast.error(error.message || 'Failed to archive');
         }
@@ -1070,7 +1070,7 @@ export default function AIInterview() {
                 { key: 'published', label: 'Active', count: configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length },
                 { key: 'draft', label: 'Draft', count: configs.filter((c) => c.status === 'draft').length },
                 // { key: 'completed', label: 'Completed' },
-                { key: 'archived', label: 'Archived', count: archivedConfigs.length },
+                { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? archivedConfigs.length },
                 // { key: 'processing', label: 'Processing' },
                 { key: 'audit', label: 'Activity Logs' },
                 { key: 'consent', label: 'Consent Logs' },
