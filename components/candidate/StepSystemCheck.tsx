@@ -280,7 +280,7 @@ function ProgressStepper({ phase }: { phase: Phase }) {
 // ~5-second sentence guarantees enough clean voiced speech for an accurate
 // enrollment voiceprint (short spontaneous "hello" samples are too brief).
 const ENROLL_PASSAGE =
-  'Hello, my name is here today for the interview, and I am ready to begin.';
+  'I am ready for my interview today, and I will answer each question to the best of my ability.';
 
 export default function StepSystemCheck({
   token,
