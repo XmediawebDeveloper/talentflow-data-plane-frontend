@@ -1765,6 +1765,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         && !isAiSpeakingRef.current
         && !isProcessingRef.current
         && !isFullscreenExitedRef.current
+        && !repeatFreezeRef.current   // Repeat re-speak in progress — timer is
+                                      // intentionally frozen; do NOT auto-restart
+                                      // it (that was un-freezing it right after
+                                      // the Repeat click, before speaking_started).
         && questionTimerPendingRef.current === null
       );
       // Force-clear a stuck clarification flag if the timer has been
@@ -3871,17 +3875,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
         // the backend's auto-skip is calibrated to, so they must match.
         let dur = data.seconds ?? data.total_seconds ?? data.duration_seconds ?? 120;
-        // REPEAT-QUESTION FREEZE RESUME: this timer event is the re-speak
-        // completing (on_speaking_done → _start_question_timer). Resume the
-        // answer window from the pre-repeat remaining we snapshotted at click
-        // time — the repeat's speech must NOT consume the candidate's time.
+        // ── REPEAT-QUESTION FREEZE RESUME ──────────────────────────────────
+        // This timer event is the re-speak completing (on_speaking_done →
+        // _start_question_timer), and it can arrive while Linda's audio is still
+        // playing on the client. We must NOT start ticking now — the answer
+        // clock resumes ONLY when the candidate's turn actually opens (the mic
+        // goes live → startPendingQuestionTimer("candidate_turn_open")). So we
+        // route the frozen remaining through the PENDING mechanism and bail out
+        // of this handler, leaving the display frozen until then.
         if (repeatFreezeRef.current) {
           repeatFreezeRef.current = false;
-          if (repeatFrozenRemainingRef.current != null && repeatFrozenRemainingRef.current > 0) {
-            dur = repeatFrozenRemainingRef.current;
-            console.log(`[Timer ${timestamp}] Repeat re-speak done — resuming frozen answer window: ${dur}s`);
-          }
+          const resumeSec = (repeatFrozenRemainingRef.current != null && repeatFrozenRemainingRef.current > 0)
+            ? repeatFrozenRemainingRef.current
+            : dur;
           repeatFrozenRemainingRef.current = null;
+          if (data.total_questions != null) setTotalQuestions(data.total_questions);
+          setIsClarification(false); isClarificationRef.current = false;
+          setIsFollowUp(false);
+          setQuestionTimerExpired(false); questionTimerExpiredRef.current = false;
+          // Freeze the display at the resume value; don't run an interval yet.
+          if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+          setQuestionTimerSeconds(resumeSec);
+          questionTimerSecondsRef.current = resumeSec;
+          // Queue it as pending; it starts on the next candidate_turn_open.
+          questionTimerPendingRef.current = resumeSec;
+          questionTimerTotalRef.current = resumeSec;
+          questionTimerReceivedAtRef.current = Date.now();
+          if (!isAiSpeakingRef.current && isRecordingRef.current) {
+            // Mic already open (rare) — start immediately from the frozen value.
+            startPendingQuestionTimer("repeat_resume_turn_already_open");
+          } else {
+            setQuestionTimerPendingTick(t => t + 1);
+          }
+          console.log(`[Timer ${timestamp}] Repeat re-speak done — answer window will RESUME at ${resumeSec}s when the candidate's turn opens`);
+          break;
         }
         // Fix 2: capture Linda's speech share so the UI can show the candidate
         // WHY they have less than the full 2-min slot.
@@ -6144,7 +6171,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => cancelAnimationFrame(raf);
   }, [
     messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing,
-    isRecording, isAiSpeaking, isProcessing, questionNumber,
+    isRecording, isAiSpeaking, isProcessing, questionNumber, isClosing,
     showNowSpeakBanner, showSilenceBanner, questionTimerExpired,
   ]);
 
@@ -6787,6 +6814,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     );
   })();
 
+  // Whether the turn banner is on screen right now — the chat's bottom padding
+  // is tied to THIS (not a separate condition) so content is ALWAYS cleared
+  // above the banner, including during the "Ending…" closing state where the
+  // goodbye message + loading bubble were previously rendering behind it.
+  const bannerVisible = turnBanner !== null;
+
   return (
     <>
       {/* ── Connection lost overlay ── */}
@@ -7391,20 +7424,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           <div
             ref={chatScrollRef}
             className={`flex-1 overflow-y-auto px-4 pt-4 space-y-3 bg-gray-50 ${
-              // Reserve bottom clearance whenever the floating turn banner is
-              // present, so the newest bubble never tucks behind it. This MUST
-              // stay in sync with the banner-visibility logic — the earlier
-              // version omitted isCandidateTranscriptProcessing, so the "Your
-              // Response" loading-dots bubble was cut off behind the "Hold On —
-              // get ready" banner during answer processing (see image copy.png).
-              // The banner shows for effectively the whole active interview
-              // (its 'prepare' fallback covers any gap), so pad whenever a
-              // question is in flight.
-              (isConnected && !isClosing &&
-                (questionNumber !== null || isProcessing || isCandidateTranscriptProcessing ||
-                 isAiSpeaking || showSilenceBanner || questionTimerExpired || showNowSpeakBanner))
-                ? 'pb-52'
-                : 'pb-4'
+              // Reserve bottom clearance EXACTLY when the turn banner is on
+              // screen (bannerVisible = turnBanner !== null). Tying the padding
+              // to the same value that renders the banner guarantees they never
+              // desync — including the "Ending…" closing state, where the old
+              // `!isClosing` guard dropped the padding and let the goodbye
+              // message + loading bubble render BEHIND the banner.
+              bannerVisible ? 'pb-52' : 'pb-4'
             }`}
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
           >
