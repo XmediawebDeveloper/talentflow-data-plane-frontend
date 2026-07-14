@@ -551,8 +551,12 @@ export default function AIInterview() {
 
   const handleUnarchiveConfig = async (config: AIInterviewResponse) => {
     try {
-      await aiInterviewService.unarchive(config.id);
-      toast.success('Configuration restored to draft');
+      const restored = await aiInterviewService.unarchive(config.id);
+      toast.success(
+        restored.status === 'draft'
+          ? 'Configuration restored to Draft'
+          : 'Configuration restored to Active'
+      );
       loadData();
       loadArchivedConfigs();
     } catch (error: any) {
