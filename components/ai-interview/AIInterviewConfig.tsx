@@ -10,7 +10,12 @@ import {
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import type { PublishedJD, AIInterviewRoundConfig, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import type {
+  PublishedJD,
+  AIInterviewRoundConfig,
+  AIInterviewResponse,
+  AIInterviewHRQuestionStage,
+} from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -32,6 +37,7 @@ const CURRENT_STEP = 2 as const;
 
 type InterviewMode = 'fixed' | 'flexible';
 type SkillType = 'Skill' | 'Command';
+type HRQuestionStage = AIInterviewHRQuestionStage;
 
 interface HRBankQuestion {
   id: string;
@@ -66,6 +72,16 @@ interface CategoryConfig {
 /* ─────────────────────────────────────────────────────────────────────── */
 
 const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const; // scoring weights (MOM §default)
+
+function mergeHRBankQuestions(existing: HRBankQuestion[], incoming: HRBankQuestion[]): HRBankQuestion[] {
+  const merged = new Map<string, HRBankQuestion>();
+  existing.forEach(question => merged.set(question.id, question));
+  incoming.forEach(question => {
+    const prev = merged.get(question.id);
+    merged.set(question.id, prev ? { ...prev, ...question } : question);
+  });
+  return Array.from(merged.values());
+}
 
 /**
  * When sections are toggled on/off in flexible mode, proportionally redistribute
@@ -733,11 +749,27 @@ interface HRSectionProps {
   onPctChange: (v: number) => void;
   bankQuestions: HRBankQuestion[];
   selectedIds: string[];
+  selectedStages: Record<string, HRQuestionStage>;
   onSelectedChange: (ids: string[]) => void;
+  onSelectedStagesChange: (stages: Record<string, HRQuestionStage>) => void;
   onBankAdd: (q: HRBankQuestion) => void;
 }
 
-function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, onToggle, onPctChange, bankQuestions, selectedIds, onSelectedChange, onBankAdd }: HRSectionProps) {
+function HRSection({
+  mode,
+  enabled,
+  questionCount,
+  flexibleMinutes,
+  percentage,
+  onToggle,
+  onPctChange,
+  bankQuestions,
+  selectedIds,
+  selectedStages,
+  onSelectedChange,
+  onSelectedStagesChange,
+  onBankAdd,
+}: HRSectionProps) {
   const [hrWeightError, setHrWeightError] = useState(false);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [newQText, setNewQText] = useState('');
@@ -757,12 +789,23 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
     setHrWeightError(percentage < 10);
   }, [enabled, mode, percentage]);
 
+  const setQuestionStage = (id: string, stage: HRQuestionStage) => {
+    onSelectedStagesChange({
+      ...selectedStages,
+      [id]: stage,
+    });
+  };
+
   const toggleQuestion = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectedChange(selectedIds.filter(x => x !== id));
     } else {
       if (atLimit) return; // hard cap — cannot select more than allowed
       onSelectedChange([...selectedIds, id]);
+      onSelectedStagesChange({
+        ...selectedStages,
+        [id]: selectedStages[id] ?? 'closing',
+      });
     }
   };
 
@@ -780,6 +823,10 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
       // Auto-select only if within limit
       if (mode !== 'fixed' || selectedIds.length < questionCount) {
         onSelectedChange([...selectedIds, newQ.id]);
+        onSelectedStagesChange({
+          ...selectedStages,
+          [newQ.id]: 'closing',
+        });
       }
       setNewQText('');
       setNewQType('text');
@@ -864,11 +911,16 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
           {/* Question bank selection — both modes */}
           <>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600">
-                {mode === 'fixed'
-                  ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`
-                  : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`}
-              </span>
+              <div className="space-y-0.5">
+                <span className="block text-xs font-medium text-gray-600">
+                  {mode === 'fixed'
+                    ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`
+                    : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`}
+                </span>
+                <span className="block text-[11px] text-gray-400">
+                  Closing is the default tag. Switch a selected question to Opening when it should be asked before the technical rounds.
+                </span>
+              </div>
               <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-green-600' : 'text-gray-500'}`}>
                 {selectedIds.length} / {effectiveCount} selected
               </span>
@@ -892,6 +944,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 bankQuestions.map(q => {
                   const isSelected = selectedIds.includes(q.id);
                   const isDisabled = atLimit && !isSelected;
+                  const selectedStage = selectedStages[q.id] ?? 'closing';
                   return (
                   <label
                     key={q.id}
@@ -912,6 +965,46 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
+                        <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
+                          <button
+                            type="button"
+                            aria-pressed={selectedStage === 'opening'}
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setQuestionStage(q.id, 'opening');
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                              selectedStage === 'opening'
+                                ? 'bg-green-500 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            Opening
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={selectedStage === 'closing'}
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setQuestionStage(q.id, 'closing');
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                              selectedStage === 'closing'
+                                ? 'bg-green-500 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            Closing
+                          </button>
+                        </div>
+                        {!isSelected && (
+                          <span className="text-[10px] text-gray-400">Select the question to include it in the interview.</span>
+                        )}
+                      </div>
                     </div>
                   </label>
                 );})
@@ -1033,6 +1126,7 @@ export default function AIInterviewConfig() {
   const [hrEnabled, setHrEnabled] = useState(true);
   const [hrBankQuestions, setHrBankQuestions] = useState<HRBankQuestion[]>([]);
   const [hrSelectedIds, setHrSelectedIds] = useState<string[]>([]);
+  const [hrQuestionStages, setHrQuestionStages] = useState<Record<string, HRQuestionStage>>({});
 
   /* Other settings */
   const [recordingEnabled, setRecordingEnabled] = useState(true);
@@ -1321,10 +1415,32 @@ export default function AIInterviewConfig() {
             setHrEnabled(true);
             setHrPct(hrRound.percentage ?? DEFAULT_PCT.hr);
             if (hrRound.hr_questions?.length) {
-              setHrSelectedIds(hrRound.hr_questions.map((q: any) => q.id));
+              setHrSelectedIds(hrRound.hr_questions.map(q => q.id));
+              setHrBankQuestions(prev => mergeHRBankQuestions(
+                prev,
+                hrRound.hr_questions.map(q => ({
+                  id: q.id,
+                  question_text: q.question_text,
+                  answer_type: q.answer_type as 'text' | 'yes_no',
+                  is_default: false,
+                })),
+              ));
+              setHrQuestionStages(
+                Object.fromEntries(
+                  hrRound.hr_questions.map(q => [
+                    q.id,
+                    q.stage === 'opening' ? 'opening' : 'closing',
+                  ]),
+                ),
+              );
+            } else {
+              setHrSelectedIds([]);
+              setHrQuestionStages({});
             }
           } else {
             setHrEnabled(false);
+            setHrSelectedIds([]);
+            setHrQuestionStages({});
           }
 
           // Apply remaining special_instructions fields (clusters, comments, types, etc.)
@@ -1421,12 +1537,12 @@ export default function AIInterviewConfig() {
   useEffect(() => {
     api.get('/hr-question-bank').then(res => {
       const data: any[] = res.data || [];
-      setHrBankQuestions(data.map(q => ({
+      setHrBankQuestions(prev => mergeHRBankQuestions(prev, data.map(q => ({
         id: q.id,
         question_text: q.question_text,
         answer_type: q.answer_type as 'text' | 'yes_no',
         is_default: q.is_default ?? false,
-      })));
+      }))));
     }).catch(() => {/* non-critical */});
   }, []);
 
@@ -1506,7 +1622,7 @@ export default function AIInterviewConfig() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, mode, sttModel, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
+  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, mode, sttModel, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -1838,7 +1954,12 @@ export default function AIInterviewConfig() {
       const selectedHrQuestions = hrSelectedIds
         .map(id => hrBankQuestions.find(q => q.id === id))
         .filter(Boolean)
-        .map(q => ({ id: q!.id, question_text: q!.question_text, answer_type: q!.answer_type }));
+        .map(q => ({
+          id: q!.id,
+          question_text: q!.question_text,
+          answer_type: q!.answer_type,
+          stage: hrQuestionStages[q!.id] ?? 'closing',
+        }));
 
       rounds.push({
         type: 'hr',
@@ -2459,7 +2580,9 @@ export default function AIInterviewConfig() {
               }}
               bankQuestions={hrBankQuestions}
               selectedIds={hrSelectedIds}
+              selectedStages={hrQuestionStages}
               onSelectedChange={setHrSelectedIds}
+              onSelectedStagesChange={setHrQuestionStages}
               onBankAdd={q => setHrBankQuestions(prev => [...prev, q])}
             />
 

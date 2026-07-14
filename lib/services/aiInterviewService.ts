@@ -4,6 +4,15 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+export type AIInterviewHRQuestionStage = 'opening' | 'closing';
+
+export interface AIInterviewHRQuestion {
+  id: string;
+  question_text: string;
+  answer_type: string;
+  stage?: AIInterviewHRQuestionStage;
+}
+
 export interface AIInterviewRoundConfig {
   type: string;
   percentage: number;
@@ -22,7 +31,7 @@ export interface AIInterviewRoundConfig {
   must_have_percentage?: number;
   nice_to_have_percentage?: number;
   // HR round: specific questions selected from the question bank
-  hr_questions?: { id: string; question_text: string; answer_type: string }[];
+  hr_questions?: AIInterviewHRQuestion[];
   // Timed mode: planned question count for this round (set at config time)
   planned_questions?: number;
 }

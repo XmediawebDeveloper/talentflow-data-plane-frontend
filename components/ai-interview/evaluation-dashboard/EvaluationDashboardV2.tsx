@@ -116,6 +116,7 @@ export function EvaluationDashboardV2({ data }: Props) {
  */
 export function SkillsView({ data }: { data: DashboardData }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const isPartialEvaluation = data.isPartialEvaluation;
 
   // Flatten each section's clusters into skill rows tagged with their
   // section so we can render two independent sections + summary blocks.
@@ -243,6 +244,11 @@ export function SkillsView({ data }: { data: DashboardData }) {
           Detailed breakdown of candidate performance across all evaluated skills with AI-powered insights and per-skill scoring.
         </div>
       </div>
+      {isPartialEvaluation && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          This interview ended early. The AI evaluated only the questions the candidate attended, so no final pass/fail or overall match score is shown here.
+        </div>
+      )}
 
       {allSkills.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
@@ -257,7 +263,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
                 <div className="flex items-center gap-2">
                   <div className="text-base font-bold text-gray-900">Must-Have Skills</div>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                    Scored for Pass/Fail
+                    {isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail'}
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
@@ -357,6 +363,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
  */
 export function QuestionsView({ data }: { data: DashboardData }) {
   const delivered = data.perQuestionDetails;
+  const isPartialEvaluation = data.isPartialEvaluation;
 
   // Collapsible "Skills assessed" dropdown per question (keyed by card index).
   // Multi-skill questions list 2-3 skills; collapsing keeps the timeline tidy
@@ -809,9 +816,19 @@ export function QuestionsView({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-3">
+      {isPartialEvaluation && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
+        </div>
+      )}
       {mhQs.length > 0 && (
         <>
-          {sectionHeader('Must-Have Section', 'Scored for Pass/Fail', mhQs.length, 'bg-indigo-50 text-indigo-700')}
+          {sectionHeader(
+            'Must-Have Section',
+            isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail',
+            mhQs.length,
+            'bg-indigo-50 text-indigo-700',
+          )}
           {mhQs.map((q, i) => renderQCard(q, i))}
         </>
       )}
@@ -831,74 +848,76 @@ export function QuestionsView({ data }: { data: DashboardData }) {
       {/* Section Score summary — spec §4 Step 4 + Step 5. HR appears as
           a "Not Scored" info card so the recruiter knows the HR Qs were
           asked but didn't affect the Pass/Fail decision. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-        {mhQs.length > 0 && (
-          <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
-            <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
-              Must-Have Section
-            </div>
-            <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-              <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
-                Section Score = avg of {mhQs.length} question scores
+      {!isPartialEvaluation && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+          {mhQs.length > 0 && (
+            <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
+              <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+                Must-Have Section
               </div>
-              <div className="flex items-baseline justify-between gap-3 mb-2">
-                <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {mhScore.toFixed(2)}
-                </span>
-                <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  / 10
-                </span>
-              </div>
-              <div
-                className={`text-sm font-bold text-center p-2 rounded border-2 ${
-                  mhPass
-                    ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
-                    : 'bg-rose-100 border-rose-500 text-rose-800'
-                }`}
-              >
-                {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} 7.0 → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
-              </div>
-            </div>
-          </div>
-        )}
-        {nhQs.length > 0 && (
-          <div className="rounded-2xl border-2 border-amber-500 overflow-hidden">
-            <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
-              Nice-to-Have Section
-            </div>
-            <div className="p-4 bg-amber-50">
-              <div className="text-xs text-amber-800 mb-1">
-                Section Score = avg of {nhQs.length} question scores
-              </div>
-              <div className="flex items-baseline justify-between gap-3 mb-2">
-                <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
-                <span className="text-sm font-semibold text-amber-700">/ 10</span>
-              </div>
-              <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
-                Informational only — does not affect Pass/Fail
+              <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
+                  Section Score = avg of {mhQs.length} question scores
+                </div>
+                <div className="flex items-baseline justify-between gap-3 mb-2">
+                  <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {mhScore.toFixed(2)}
+                  </span>
+                  <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    / 10
+                  </span>
+                </div>
+                <div
+                  className={`text-sm font-bold text-center p-2 rounded border-2 ${
+                    mhPass
+                      ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
+                      : 'bg-rose-100 border-rose-500 text-rose-800'
+                  }`}
+                >
+                  {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} 7.0 → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {hrQs.length > 0 && (
-          <div className="rounded-2xl border-2 border-violet-500 overflow-hidden">
-            <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
-              HR Round
+          )}
+          {nhQs.length > 0 && (
+            <div className="rounded-2xl border-2 border-amber-500 overflow-hidden">
+              <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+                Nice-to-Have Section
+              </div>
+              <div className="p-4 bg-amber-50">
+                <div className="text-xs text-amber-800 mb-1">
+                  Section Score = avg of {nhQs.length} question scores
+                </div>
+                <div className="flex items-baseline justify-between gap-3 mb-2">
+                  <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
+                  <span className="text-sm font-semibold text-amber-700">/ 10</span>
+                </div>
+                <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
+                  Informational only — does not affect Pass/Fail
+                </div>
+              </div>
             </div>
-            <div className="p-4 bg-violet-50">
-              <div className="text-xs text-violet-800 mb-1">
-                {hrQs.length} HR question{hrQs.length === 1 ? '' : 's'} asked
+          )}
+          {hrQs.length > 0 && (
+            <div className="rounded-2xl border-2 border-violet-500 overflow-hidden">
+              <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+                HR Round
               </div>
-              <div className="text-sm font-semibold text-violet-900 mb-3">
-                Behavioral / cultural fit conversation
-              </div>
-              <div className="text-sm font-bold text-center p-2 rounded bg-violet-100 border-2 border-violet-500 text-violet-800">
-                Not scored — per evaluation spec
+              <div className="p-4 bg-violet-50">
+                <div className="text-xs text-violet-800 mb-1">
+                  {hrQs.length} HR question{hrQs.length === 1 ? '' : 's'} asked
+                </div>
+                <div className="text-sm font-semibold text-violet-900 mb-3">
+                  Behavioral / cultural fit conversation
+                </div>
+                <div className="text-sm font-bold text-center p-2 rounded bg-violet-100 border-2 border-violet-500 text-violet-800">
+                  Not scored — per evaluation spec
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
