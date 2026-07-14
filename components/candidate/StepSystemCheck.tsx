@@ -478,13 +478,6 @@ export default function StepSystemCheck({
     }
   }, []);
 
-  const getRMS = useCallback((a: AnalyserNode): number => {
-    const buf = new Uint8Array(a.frequencyBinCount);
-    a.getByteFrequencyData(buf);
-    const sum = buf.reduce((acc, v) => acc + v * v, 0);
-    return Math.sqrt(sum / buf.length); // RMS 0–255
-  }, []);
-
   // ── Individual checks — each self-contained so it can run standalone (retry) ──
   const runDevice = useCallback(async () => {
     updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
@@ -537,59 +530,12 @@ export default function StepSystemCheck({
       updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       return;
     }
-    // ── Measure the room's noise floor from MANY samples over the window ──
-    // A single reading was skewed by any transient (click/breath) at that
-    // instant → wrong threshold → real speech missed or noise false-detected.
-    // Take the MEDIAN of ~10 samples: robust to spikes AND dead-quiet dropouts.
-    updateSystemCheck('microphone', { status: 'checking', detail: 'Measuring ambient levels...' });
-    const ambientSamples: number[] = [];
-    for (let i = 0; i < 10; i++) {
-      ambientSamples.push(getRMS(analyser));
-      await new Promise((r) => setTimeout(r, 130));
-    }
-    ambientSamples.sort((a, b) => a - b);
-    const ambient = ambientSamples[Math.floor(ambientSamples.length / 2)] || 0;
-
-    // ── Voice threshold is AMBIENT-RELATIVE (ratio + margin), not a fixed floor.
-    // Ratio detection is SCALE-INVARIANT, so it works for quiet headset/jack
-    // mics (low ambient) AND loud built-in mics without any gain boost. The
-    // small absolute MIN only stops near-silence from triggering.
-    const VOICE_RATIO = 2.0;    // speech ≥ 2× the room's noise floor …
-    const VOICE_MARGIN = 4;     // … and at least +4 above it (covers ambient≈0)
-    const VOICE_MIN = 3;        // never trigger below this (near-silence guard)
-    const LOUD_ABS = 22;        // clearly-loud sound also qualifies
-    const voiceThreshold = Math.max(ambient * VOICE_RATIO, ambient + VOICE_MARGIN, VOICE_MIN);
-    // Require CONSECUTIVE frames above threshold (~300 ms) so a single spurious
-    // spike (click / AudioContext startup transient) can't false-trigger "voice
-    // detected" — the "showed detected without speaking" bug.
-    const CONSECUTIVE_NEEDED = 2;
-    let aboveStreak = 0;
-    let voiceEverDetected = false;
-    updateSystemCheck('microphone', { status: 'checking', detail: 'Read the sentence shown below aloud to confirm your mic...' });
-    micIntervalRef.current = setInterval(() => {
-      const a = analyserRef.current;
-      if (!a) return;
-      const lvl = getRMS(a);
-      const isVoice = lvl >= LOUD_ABS || lvl >= voiceThreshold;
-      if (isVoice) {
-        aboveStreak += 1;
-        if (aboveStreak >= CONSECUTIVE_NEEDED) {
-          voiceEverDetected = true;
-          updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
-          // Capture the voiceprint NOW, while the candidate is actively reading
-          // the sentence shown in the Voice Verification panel below.
-          startVoiceEnroll();
-        }
-      } else {
-        aboveStreak = 0;
-        if (!voiceEverDetected) {
-          updateSystemCheck('microphone', lvl > ambient + 1
-            ? { status: 'checking', detail: 'Listening — say something to confirm your microphone...' }
-            : { status: 'checking', detail: 'No audio yet — say something, or check that your mic is unmuted...' });
-        }
-      }
-    }, 150);
-  }, [ensureAudioAnalyser, getRMS, updateSystemCheck, startVoiceEnroll]);
+    // Voice-activity detection was intentionally REMOVED from this check. The
+    // candidate proves their voice in the dedicated, manual Voice Verification
+    // sub-step below (which does server-side speech/silence detection and gates
+    // Continue). Here we only confirm the microphone is accessible.
+    updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
+  }, [ensureAudioAnalyser, updateSystemCheck]);
 
   const runInternet = useCallback(async () => {
     updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
@@ -908,6 +854,11 @@ export default function StepSystemCheck({
   const allSystemPassed = systemChecks.length > 0 && systemChecks.every((c) => c.status === 'pass');
   const allSystemDone = systemChecks.length > 0 && systemChecks.every((c) => c.status === 'pass' || c.status === 'fail');
   const isAnyChecking = systemChecks.some((c) => c.status === 'checking' || c.status === 'pending');
+  // The mic must be accessible before the candidate can record their voice.
+  const micReadyForVoice = systemChecks.some((c) => c.id === 'microphone' && c.status === 'pass');
+  // Voice Verification is a REQUIRED sub-step (when enabled): Continue is blocked
+  // until a valid, non-silent voice sample has been captured.
+  const voiceGateOk = !onEnrollVoice || voiceEnrollStatus === 'success';
 
   const handleProceed = useCallback(async () => {
     if (isProceedLoading) return;
@@ -997,21 +948,10 @@ export default function StepSystemCheck({
             ])
           : Promise.resolve(true),
 
-        // 3. Enroll voice baseline for proctoring. Prefer the capture that was
-        //    ALREADY started mid-check while the candidate read the prompt aloud
-        //    (clean, sufficient speech). Fall back to a fresh capture only if
-        //    voice was never detected. Best-effort + timed-out at 14 s so a hang
-        //    can't block the proceed button.
-        (() => {
-          const enroll = voiceEnrollPromiseRef.current
-            ?? (onEnrollVoice && streamRef.current
-                ? onEnrollVoice(streamRef.current).catch(() => false)
-                : Promise.resolve(true));
-          return Promise.race([
-            enroll,
-            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 14000)),
-          ]);
-        })(),
+        // 3. Voice enrollment already completed as a REQUIRED sub-step before
+        //    Continue was enabled (see the Voice Verification panel + voiceGateOk
+        //    gate). Just await the resolved capture; never start a fresh one here.
+        (voiceEnrollPromiseRef.current ?? Promise.resolve(true)),
       ]);
 
       // Stop remaining streams and intervals
@@ -1476,10 +1416,19 @@ export default function StepSystemCheck({
                   <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                     <Mic className="w-4 h-4 text-indigo-600" />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                        voiceEnrollStatus === 'success'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {voiceEnrollStatus === 'success' ? 'Done' : 'Required'}
+                      </span>
+                    </div>
                     <p className="text-xs text-gray-500">
-                      We record a short voice sample to confirm it&apos;s you throughout the interview.
+                      Click record and read the sentence below — this confirms it&apos;s you throughout the interview.
                     </p>
                   </div>
                 </div>
@@ -1494,19 +1443,38 @@ export default function StepSystemCheck({
                   </p>
                 </div>
 
-                {/* Status area */}
+                {/* Status area + manual record control */}
                 <div className="mt-3">
+                  {/* IDLE — must click to record */}
                   {voiceEnrollStatus === 'idle' && (
-                    <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-gray-300" />
-                      Waiting for you to speak — read the sentence above.
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-gray-500">
+                        {micReadyForVoice
+                          ? 'Click record, then read the sentence aloud.'
+                          : 'Complete the microphone check first, then record your voice.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={startVoiceEnroll}
+                        disabled={!micReadyForVoice}
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors ${
+                          micReadyForVoice
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                        Start recording
+                      </button>
+                    </div>
                   )}
+
+                  {/* RECORDING — live progress */}
                   {voiceEnrollStatus === 'recording' && (
                     <div className="space-y-1.5">
                       <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        Recording your voice — keep reading the sentence aloud…
+                        Recording — read the sentence aloud now…
                       </p>
                       <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
                         <div
@@ -1516,25 +1484,30 @@ export default function StepSystemCheck({
                       </div>
                     </div>
                   )}
+
+                  {/* SUCCESS */}
                   {voiceEnrollStatus === 'success' && (
                     <p className="text-xs font-medium text-green-700 flex items-center gap-1.5">
                       <CheckCircle className="w-4 h-4 text-green-600" />
                       Voice sample captured — you&apos;re all set.
                     </p>
                   )}
+
+                  {/* FAILED — includes the "recorded but silent" case, which the
+                      server/VAD rejects for insufficient speech. Blocks Continue. */}
                   {voiceEnrollStatus === 'failed' && (
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-amber-700 flex items-center gap-1.5">
-                        <XCircle className="w-4 h-4 text-amber-600" />
-                        We couldn&apos;t capture enough audio. Please read the sentence again.
+                      <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
+                        <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                        No speech detected. You must read the sentence aloud — please record again.
                       </p>
                       <button
                         type="button"
                         onClick={retryVoiceEnroll}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-md px-2 py-1 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-2 transition-colors flex-shrink-0"
                       >
-                        <RefreshCw className="w-3 h-3" />
-                        Retry
+                        <Mic className="w-3.5 h-3.5" />
+                        Record again
                       </button>
                     </div>
                   )}
@@ -1587,16 +1560,19 @@ export default function StepSystemCheck({
               {checksCompleted && (
                 <button
                   type="button"
-                  onClick={() => { if (allSystemPassed && !isProceedLoading) handleProceed(); }}
-                  disabled={!allSystemPassed || isProceedLoading}
+                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading) handleProceed(); }}
+                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading}
+                  title={!voiceGateOk ? 'Record your voice sample first' : undefined}
                   className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
-                    allSystemPassed && !isProceedLoading
+                    allSystemPassed && voiceGateOk && !isProceedLoading
                       ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   {isProceedLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
+                  ) : !voiceGateOk ? (
+                    <>Record your voice to continue</>
                   ) : (
                     <>Continue <ArrowRight className="w-4 h-4" /></>
                   )}

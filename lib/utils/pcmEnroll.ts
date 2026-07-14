@@ -18,9 +18,29 @@ export interface Pcm16Capture {
   sampleRate: 16000;
   noiseFloor: number;  // mean-abs energy of the quietest ~10% of frames (0..1)
   durationSec: number;
+  gainApplied: number; // software gain multiplier used (1 = none)
 }
 
 const TARGET_RATE = 16000;
+
+// Mirror the AI interview's capture config so the enrolled voiceprint is
+// measured under the SAME conditions the interview verifies against — otherwise
+// levels differ and verification/VAD degrade. See InterviewUI.tsx:
+//   - getDedicatedRecordingAudioStream(): headset-friendly constraints,
+//     autoGainControl OFF (AGC distorts levels for ASR).
+//   - Adaptive mic gain: boost quiet headset/Bluetooth mics toward a target
+//     avg-abs level (MIC_GAIN_TARGET_PEAK / _FLOOR).
+const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level (matches InterviewUI)
+const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this
+const MIC_GAIN_MAX = 8;             // software gain ceiling (covers quiet headsets)
+
+// Same track constraints the interview's dedicated recording stream requests.
+const INTERVIEW_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  channelCount: { ideal: 1 },
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: false, // keep OFF — AGC distorts quiet speech for ASR
+};
 
 function downsampleTo16k(input: Float32Array, inputRate: number): Float32Array {
   if (inputRate === TARGET_RATE) return input;
@@ -72,7 +92,14 @@ export async function recordPcm16(
   stream: MediaStream,
   durationMs = 12000,
 ): Promise<Pcm16Capture | null> {
-  if (!stream.getAudioTracks().length) return null;
+  const audioTracks = stream.getAudioTracks();
+  if (!audioTracks.length) return null;
+
+  // Match the interview's capture config (autoGainControl OFF, headset-friendly).
+  // Best-effort — some browsers/devices reject applyConstraints; that's fine.
+  await Promise.all(
+    audioTracks.map((t) => t.applyConstraints(INTERVIEW_AUDIO_CONSTRAINTS).catch(() => {})),
+  );
 
   const Ctx: typeof AudioContext =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -103,13 +130,32 @@ export async function recordPcm16(
     off += c.length;
   }
 
-  const noiseFloor = estimateNoiseFloor(combined, nativeRate);
+  const noiseFloor = estimateNoiseFloor(combined, nativeRate); // ambient, pre-gain
   const down = downsampleTo16k(combined, nativeRate);
+
+  // ── Adaptive mic gain — same normalization the interview applies ──
+  // Quiet headset/Bluetooth mics (with AGC off) produce low-amplitude audio;
+  // boost the average level toward the interview's target so the enrolled
+  // voiceprint is captured at the same loudness the interview verifies against.
+  let meanAbs = 0;
+  for (let i = 0; i < down.length; i++) meanAbs += Math.abs(down[i]);
+  meanAbs = down.length ? meanAbs / down.length : 0;
+  const gain = Math.min(
+    MIC_GAIN_MAX,
+    Math.max(1, MIC_GAIN_TARGET_PEAK / Math.max(meanAbs, MIC_GAIN_PEAK_FLOOR)),
+  );
+  if (gain > 1) {
+    for (let i = 0; i < down.length; i++) {
+      down[i] = Math.max(-1, Math.min(1, down[i] * gain)); // boost + clip
+    }
+  }
+
   const pcm16 = floatToInt16(down);
   return {
     blob: new Blob([pcm16.buffer], { type: 'application/octet-stream' }),
     sampleRate: TARGET_RATE,
     noiseFloor,
     durationSec: down.length / TARGET_RATE,
+    gainApplied: gain,
   };
 }
