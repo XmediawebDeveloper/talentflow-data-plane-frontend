@@ -6129,7 +6129,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => cancelAnimationFrame(raf);
   }, [
     messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing,
-    isRecording, isAiSpeaking, isProcessing,
+    isRecording, isAiSpeaking, isProcessing, questionNumber,
     showNowSpeakBanner, showSilenceBanner, questionTimerExpired,
   ]);
 
@@ -7387,7 +7387,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           <div
             ref={chatScrollRef}
             className={`flex-1 overflow-y-auto px-4 pt-4 space-y-3 bg-gray-50 ${
-              showNowSpeakBanner || showSilenceBanner || questionTimerExpired || isAiSpeaking || isProcessing
+              // Reserve bottom clearance whenever the floating turn banner is
+              // present, so the newest bubble never tucks behind it. This MUST
+              // stay in sync with the banner-visibility logic — the earlier
+              // version omitted isCandidateTranscriptProcessing, so the "Your
+              // Response" loading-dots bubble was cut off behind the "Hold On —
+              // get ready" banner during answer processing (see image copy.png).
+              // The banner shows for effectively the whole active interview
+              // (its 'prepare' fallback covers any gap), so pad whenever a
+              // question is in flight.
+              (isConnected && !isClosing &&
+                (questionNumber !== null || isProcessing || isCandidateTranscriptProcessing ||
+                 isAiSpeaking || showSilenceBanner || questionTimerExpired || showNowSpeakBanner))
                 ? 'pb-52'
                 : 'pb-4'
             }`}
