@@ -2115,6 +2115,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   type MicType = 'builtin' | 'wired_headphone' | 'bluetooth' | 'unknown';
   const micTypeRef = useRef<MicType>('unknown');
   const micGainMaxRef = useRef(6);            // (1) gain ceiling
+  // Per-device target level. This — NOT gainMax — is the real gain lever: the
+  // achievable gain is TARGET / PEAK_FLOOR, so a higher target = louder mic.
+  // Headphone/earbud mics run quiet, so they get a higher target for clearer ASR.
+  const micGainTargetRef = useRef(MIC_GAIN_TARGET_PEAK);
   const micSilenceMultiplierRef = useRef(1);  // (4) silence-window multiplier
 
   // Track the room's baseline energy and the candidate's recent speech peak so
@@ -2215,25 +2219,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     micTypeRef.current = type;
     switch (type) {
       case 'bluetooth':
-        // (1) quietest mic → highest gain  (4) HFP latency → longest silence window
-        micGainMaxRef.current = 10;
+        // (1) quietest mic → highest gain + highest target  (4) HFP latency → longest silence window
+        micGainMaxRef.current = 12;
+        micGainTargetRef.current = 0.090;   // ~2× builtin → up to ~7.5× gain
         micSilenceMultiplierRef.current = 1.6;
         break;
       case 'wired_headphone':
-        micGainMaxRef.current = 9;
+        micGainMaxRef.current = 10;
+        micGainTargetRef.current = 0.075;   // louder for quiet headset mics → up to ~6.25× gain
         micSilenceMultiplierRef.current = 1.4;
         break;
       case 'builtin':
         micGainMaxRef.current = 6;
+        micGainTargetRef.current = MIC_GAIN_TARGET_PEAK; // 0.045 (unchanged)
         micSilenceMultiplierRef.current = 1.0;
         break;
       default: // unknown — safe middle ground
-        micGainMaxRef.current = 7;
+        micGainMaxRef.current = 8;
+        micGainTargetRef.current = 0.055;
         micSilenceMultiplierRef.current = 1.2;
     }
     console.log('[InterviewUI] Mic profile applied', {
       type,
       gainMax: micGainMaxRef.current,
+      gainTarget: micGainTargetRef.current,
+      maxEffectiveGain: (micGainTargetRef.current / MIC_GAIN_PEAK_FLOOR).toFixed(1),
       silenceMultiplier: micSilenceMultiplierRef.current,
       echoCancellation: !isHeadphoneType(type),
     });
@@ -5099,7 +5109,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         micRecentPeakRef.current = Math.max(rawLevel, micRecentPeakRef.current * 0.995);
         const micGain = Math.min(
           micGainMaxRef.current,
-          Math.max(1, MIC_GAIN_TARGET_PEAK / Math.max(micRecentPeakRef.current, MIC_GAIN_PEAK_FLOOR)),
+          Math.max(1, micGainTargetRef.current / Math.max(micRecentPeakRef.current, MIC_GAIN_PEAK_FLOOR)),
         );
         const avgLevel = rawLevel * micGain;
         _dbgAvgLevelRef.current = avgLevel; // dev overlay

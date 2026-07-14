@@ -58,11 +58,36 @@ const TARGET_RATE = 16000;
 // levels differ and verification/VAD degrade. See InterviewUI.tsx:
 //   - getDedicatedRecordingAudioStream(): headset-friendly constraints,
 //     autoGainControl OFF (AGC distorts levels for ASR).
-//   - Adaptive mic gain: boost quiet headset/Bluetooth mics toward a target
-//     avg-abs level (MIC_GAIN_TARGET_PEAK / _FLOOR).
-const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level (matches InterviewUI)
+//   - Adaptive mic gain: boost quiet headset/Bluetooth mics toward a per-device
+//     target avg-abs level (see MIC_GAIN_TARGET below).
 const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this
-const MIC_GAIN_MAX = 8;             // software gain ceiling (covers quiet headsets)
+
+// Per-device gain target — MUST match InterviewUI.applyMicProfile so the enrolled
+// voiceprint is captured at the SAME loudness the interview verifies against.
+// Headphone/earbud mics run quiet, so they get a higher target (= louder).
+type MicType = 'builtin' | 'wired_headphone' | 'bluetooth' | 'unknown';
+const MIC_GAIN_TARGET: Record<MicType, number> = {
+  bluetooth: 0.090,
+  wired_headphone: 0.075,
+  builtin: 0.045,
+  unknown: 0.055,
+};
+const MIC_GAIN_MAX: Record<MicType, number> = {
+  bluetooth: 12,
+  wired_headphone: 10,
+  builtin: 6,
+  unknown: 8,
+};
+
+/** Classify the mic from its device label — same heuristic as InterviewUI.classifyMicType. */
+function classifyMicType(label: string): MicType {
+  const l = (label || '').toLowerCase();
+  if (!l) return 'unknown';
+  if (/bluetooth|hands[\s-]?free|\bhfp\b|\bhsp\b|airpod|earpods|galaxy buds|\bbuds\b|\bwh-|\bwf-/.test(l)) return 'bluetooth';
+  if (/headset|headphone|earphone|earbud|jabra|\bplantronics\b|\bsennheiser\b/.test(l)) return 'wired_headphone';
+  if (/built[\s-]?in|internal|realtek|macbook|microphone array|digital microphone|intel smart sound|default/.test(l)) return 'builtin';
+  return 'unknown';
+}
 
 // Same track constraints the interview's dedicated recording stream requests.
 const INTERVIEW_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -218,16 +243,19 @@ export async function recordPcm16(
     speechDetected = h.speechSeconds >= MIN_SPEECH_SECONDS && h.dynamic;
   }
 
-  // ── Adaptive mic gain — same normalization the interview applies ──
+  // ── Adaptive mic gain — same PER-DEVICE normalization the interview applies ──
   // Quiet headset/Bluetooth mics (with AGC off) produce low-amplitude audio;
-  // boost the average level toward the interview's target so the enrolled
+  // boost toward the device's target (higher for headphones) so the enrolled
   // voiceprint is captured at the same loudness the interview verifies against.
+  const micType = classifyMicType(audioTracks[0]?.label || '');
+  const target = MIC_GAIN_TARGET[micType];
+  const gainMax = MIC_GAIN_MAX[micType];
   let meanAbs = 0;
   for (let i = 0; i < down.length; i++) meanAbs += Math.abs(down[i]);
   meanAbs = down.length ? meanAbs / down.length : 0;
   const gain = Math.min(
-    MIC_GAIN_MAX,
-    Math.max(1, MIC_GAIN_TARGET_PEAK / Math.max(meanAbs, MIC_GAIN_PEAK_FLOOR)),
+    gainMax,
+    Math.max(1, target / Math.max(meanAbs, MIC_GAIN_PEAK_FLOOR)),
   );
   if (gain > 1) {
     for (let i = 0; i < down.length; i++) {
