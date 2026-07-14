@@ -6712,6 +6712,81 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     wsRef.current.send(JSON.stringify({ type: 'repeat_question', text: lastQuestion }));
   };
 
+  // ── Turn banner (modern, chat-panel-centred) ───────────────────────────
+  // ONE banner that morphs between states. Rendered INSIDE the chat scroll
+  // wrapper (see {turnBanner} below) as an absolute, chat-centred element — so
+  // it sits in the middle of the chat window and never overlaps the candidate
+  // video. Gradient + frosted-glass styling; exactly one state shows.
+  const turnBanner = (() => {
+    let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
+    if (showSilenceBanner) variant = 'silence';
+    else if (questionTimerExpired) variant = 'timesup';
+    else if (isAiSpeaking) variant = 'hold';                 // ONLY while actually speaking
+    else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
+    else if (isProcessing || isCandidateTranscriptProcessing || (isConnected && !isClosing && questionNumber !== null)) variant = 'prepare';
+    if (!variant) return null;
+
+    const micIcon = (
+      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
+        <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
+      </svg>
+    );
+    const pauseIcon = (
+      <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+        <rect x="6" y="5" width="4" height="14" rx="1" />
+        <rect x="14" y="5" width="4" height="14" rx="1" />
+      </svg>
+    );
+    const spinnerIcon = (
+      <svg className="w-5 h-5 text-white animate-spin" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.3" />
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    );
+    const cfg = {
+      turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Linda is listening',          icon: micIcon,      dismissible: false },
+      hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — Linda is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
+      prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
+      timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
+      silence: { grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-200/60',   glow: 'shadow-amber-500/30',   title: 'Are you still there?',         subtitle: 'Take your time — Linda will move on if there’s no response.', icon: micIcon, dismissible: true },
+    }[variant];
+
+    return (
+      <div className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-300">
+        <div className={`pointer-events-auto relative flex items-center gap-3 pl-3 pr-4 py-3 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[260px] max-w-[94%] overflow-hidden`}>
+          {/* top sheen for a glassy, modern finish */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+          {/* icon in a frosted circle with a soft pulse ring */}
+          <div className="relative shrink-0">
+            <div className="w-10 h-10 rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur flex items-center justify-center shadow-inner">
+              {cfg.icon}
+            </div>
+            <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
+          </div>
+          {/* text */}
+          <div className="relative min-w-0 flex-1">
+            <span className="text-white font-bold block leading-tight tracking-tight drop-shadow-sm" style={{ fontSize: 15 }}>{cfg.title}</span>
+            <span className="text-white/85 text-[11px] leading-snug block">{cfg.subtitle}</span>
+          </div>
+          {cfg.dismissible && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowSilenceBanner(false);
+                if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+              }}
+              className="relative shrink-0 -mr-1 w-6 h-6 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 text-lg leading-none transition-colors"
+              aria-label="Dismiss"
+            >×</button>
+          )}
+        </div>
+      </div>
+    );
+  })();
+
   return (
     <>
       {/* ── Connection lost overlay ── */}
@@ -6824,106 +6899,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         </div>
       )}
 
-      {/* ── Silence detection banner (Req 14b) ──
-          Shown when the backend's 8 s silence clock expires. Banner stays up
-          while Linda says "Are you there?" and during the 5 s grace window
-          that follows. Auto-skip is driven by the backend's question_timer_expired
-          message — we do NOT run a local countdown here anymore, because that
-          used to race with Linda's TTS and skip while she was still speaking. */}
-      {showSilenceBanner && (
-        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-[#F59E0B]/40 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl max-w-sm">
-            <div className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-[#F59E0B] font-medium block" style={{ fontSize: 13 }}>
-                Are you still there? Take your time — or say &quot;skip&quot;.
-              </span>
-              <span className="text-[#94a3b8] text-[11px]">
-                Linda will nudge you, then move on if there&apos;s no response.
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                setShowSilenceBanner(false);
-                if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-              }}
-              className="text-[#475569] hover:text-white shrink-0 text-lg leading-none"
-            >×</button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Turn banner (single, persistent, fixed) ──────────────────────────
-          ONE banner element in ONE fixed spot (bottom-centre). Its SIZE, shape,
-          position and layout never change — only the color, icon and text swap
-          between three mutually-exclusive states, so exactly one shows:
-            • GREEN  "Your turn — speak now"      the moment the mic opens
-            • RED    "Hold On — Linda is speaking" while Linda speaks/thinks
-            • RED    "Time's Up!"                  when the 2-min answer window ends
-          Precedence: Time's Up wins at expiry (so it shows first), then Hold On
-          the instant Linda starts the next question, then Your turn. The GREEN
-          trigger (showNowSpeakBanner && candidatePlaybackEnded) is unchanged. */}
-      {(() => {
-        // 'prepare' is the TRANSITIONAL state that fills the brief gap after
-        // Linda finishes speaking but before the mic is live and GREEN triggers —
-        // so a banner is ALWAYS on screen (no empty flash). It stays RED because,
-        // like 'hold', it means "not your turn yet — don't speak".
-        let variant: 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
-        if (showSilenceBanner) variant = null;               // silence banner owns the slot
-        else if (questionTimerExpired) variant = 'timesup';
-        // "Hold On — Linda is speaking" ONLY while she is ACTUALLY speaking.
-        else if (isAiSpeaking) variant = 'hold';
-        else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
-        // Background processing (generating the next question / transcribing the
-        // answer) and the pre-turn warmup are NOT "speaking" — show the neutral
-        // "Hold On — getting ready" state instead of claiming Linda is speaking.
-        else if (isProcessing || isCandidateTranscriptProcessing || (isConnected && !isClosing && questionNumber !== null)) variant = 'prepare';
-        if (!variant) return null;
-
-        const micIcon = (
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
-            <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
-          </svg>
-        );
-        const pauseIcon = (
-          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <rect x="6" y="5" width="4" height="14" rx="1" />
-            <rect x="14" y="5" width="4" height="14" rx="1" />
-          </svg>
-        );
-        const spinnerIcon = (
-          <svg className="w-5 h-5 text-white animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.3" />
-            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
-        );
-        const cfg = {
-          turn:    { box: 'border-emerald-300 bg-emerald-500 shadow-emerald-500/40', title: 'Your turn — speak now',       subtitle: 'Microphone is active · Linda is listening',   icon: micIcon },
-          hold:    { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — Linda is speaking', subtitle: 'Please wait until Linda finishes the question', icon: pauseIcon },
-          timesup: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: "Time's Up!",                  subtitle: 'Moving to the next question…',                 icon: <Clock className="w-5 h-5 text-white" /> },
-          prepare: { box: 'border-red-400/70 bg-red-600 shadow-red-600/40',           title: 'Hold On — get ready',         subtitle: 'Please wait a moment…',                        icon: spinnerIcon },
-        }[variant];
-
-        return (
-          <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className={`flex items-center gap-3.5 px-7 py-4 rounded-2xl border-2 shadow-2xl min-w-[320px] ${cfg.box}`}>
-              <div className="relative shrink-0">
-                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-                  {cfg.icon}
-                </div>
-                <div className="absolute inset-0 rounded-full border-2 border-white/60 animate-ping opacity-50" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-white font-extrabold block leading-tight" style={{ fontSize: 18 }}>{cfg.title}</span>
-                <span className="text-white/90 text-xs">{cfg.subtitle}</span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Turn/silence banner moved INTO the chat panel (rendered as `turnBanner`
+          inside the chat scroll wrapper) so it centers within the chat window
+          and never overlaps the candidate video. See the {turnBanner} render
+          below the chat messages. */}
 
       {/* ── Interview completion modal (Req 16) ── */}
       {showCompletionModal && (
@@ -7566,6 +7545,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 interactive so it never blocks scrolling or clicks. Sits under
                 the fixed banner (which is z-105) but above the scrolling text. */}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50" />
+            {/* Turn banner — centred within the CHAT panel (never overlaps the
+                video), sitting above the fade mask. All chat content stays above
+                it via the reserved bottom padding. */}
+            {turnBanner}
           </div>
 
           {/* Candidate action buttons (Repeat Question / Next) now live INSIDE
