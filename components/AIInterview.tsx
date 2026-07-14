@@ -143,6 +143,10 @@ export default function AIInterview() {
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Whether the action menu should open UPWARD (flip) — set when there isn't
+  // enough room below the trigger (last cards / near the viewport bottom) so the
+  // menu isn't clipped off-screen.
+  const [menuDropUp, setMenuDropUp] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Quota
@@ -1456,14 +1460,29 @@ export default function AIInterview() {
                           {/* 3-dot menu */}
                           <div className="relative flex-shrink-0 z-50" ref={openMenuId === config.id ? menuRef : undefined}>
                             <button
-                              onClick={() => setOpenMenuId(openMenuId === config.id ? null : config.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const willOpen = openMenuId !== config.id;
+                                if (willOpen) {
+                                  // Flip the menu upward when there isn't enough room
+                                  // below the trigger (last cards near the viewport
+                                  // bottom) so it isn't clipped off-screen.
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                  setMenuDropUp(window.innerHeight - rect.bottom < 280);
+                                }
+                                setOpenMenuId(willOpen ? config.id : null);
+                              }}
                               className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors"
                               aria-label="More actions"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
                             {openMenuId === config.id && (
-                              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70vh] overflow-y-auto p-1">
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70vh] overflow-y-auto p-1 ${
+                                menuDropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                              }`}>
                                 <button
                                   onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
                                   className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"

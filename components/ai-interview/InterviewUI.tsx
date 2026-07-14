@@ -307,8 +307,8 @@ const MessageRow = (({ msg }: MessageRowProps) => {
     // spoken answer.
     return (
       <div className="flex justify-end">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           <p className="text-xs font-medium">{msg.content}</p>
         </div>
       </div>
@@ -1118,10 +1118,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
-    // Suppress voice_detected while Linda is speaking (TTS echo) or while we
-    // are actively recording the candidate's answer — both are expected audio
-    // and must not count as "another voice in the room."
-    shouldSuppressVoiceCheck: () => isAiSpeakingRef.current || isRecordingRef.current,
+    // Suppress voice_detected while Linda is speaking (TTS echo), while we are
+    // actively recording the candidate's answer, OR during the between-question
+    // "Hold On — get ready" transition (isProcessing). All three are expected /
+    // transient states where ambient room noise must NOT raise a false "Voice
+    // Activity Detected" toast. (This check is UI-only; the server speaker-ID
+    // layer is the authoritative "another voice" signal.)
+    shouldSuppressVoiceCheck: () =>
+      isAiSpeakingRef.current || isRecordingRef.current
+      || isProcessingRef.current || isCandidateTranscriptProcessingRef.current,
   });
   // Stable ref so ws.onclose closure can always call the latest flush function
   const flushProctoringEventsRef = useRef(flushEvents);
