@@ -89,26 +89,42 @@ function estimateNoiseFloor(audio: Float32Array, rate: number): number {
 }
 
 /**
- * Seconds of GENUINE speech in the buffer — client-side silence guard so that a
- * silent (or noise-only) recording is caught even when server voice-ID is off.
- * A 100 ms frame counts as speech only when its energy clearly exceeds the room
- * noise floor AND an absolute minimum (so ambient hiss/breathing don't qualify).
+ * Client-side speech guard. Returns { speechSeconds, dynamic }.
+ *
+ * IMPORTANT: this is a HEURISTIC stopgap, not a real VAD. Energy alone can't
+ * perfectly separate speech from noise — the robust detector is the server's
+ * Silero neural VAD. This uses two cues to reject the common false-pass cases:
+ *   1. LOUDNESS  — a 100 ms frame is "loud" only when it clearly exceeds the
+ *      room noise floor AND a speech-level absolute minimum (reading aloud is
+ *      well above ambient/breathing).
+ *   2. DYNAMICS  — real speech is PEAKY (loud syllables + quiet gaps), so its
+ *      high-percentile energy is several× its median. Steady background noise
+ *      (fan/AC/hum) is FLAT (peak≈median) and is rejected even if it's loud.
  */
-function estimateSpeechSeconds(audio: Float32Array, noiseFloor: number): number {
+function analyzeSpeech(audio: Float32Array, noiseFloor: number): { speechSeconds: number; dynamic: boolean } {
   const frame = Math.max(1, Math.floor(TARGET_RATE * 0.1)); // 100 ms
-  const SPEECH_RATIO = 3;      // speech ≥ 3× the noise floor …
-  // … and above this absolute level. Kept low so genuinely quiet headset/earbud
-  // speakers still register, while total silence / faint hiss does not. The
-  // robust check is the server's Silero VAD; this only blocks obvious silence.
-  const SPEECH_ABS_MIN = 0.008;
+  const SPEECH_RATIO = 4;       // loud frame ≥ 4× the noise floor …
+  const SPEECH_ABS_MIN = 0.02;  // … and above a speech-level absolute floor
   const threshold = Math.max(noiseFloor * SPEECH_RATIO, SPEECH_ABS_MIN);
-  let speechFrames = 0;
+
+  const energies: number[] = [];
+  let loudFrames = 0;
   for (let start = 0; start + frame <= audio.length; start += frame) {
     let acc = 0;
     for (let i = start; i < start + frame; i++) acc += Math.abs(audio[i]);
-    if (acc / frame >= threshold) speechFrames++;
+    const e = acc / frame;
+    energies.push(e);
+    if (e >= threshold) loudFrames++;
   }
-  return (speechFrames * frame) / TARGET_RATE;
+  if (!energies.length) return { speechSeconds: 0, dynamic: false };
+
+  const sorted = [...energies].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length * 0.5)] || 1e-9;
+  const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
+  // Peaky (speech) → p90 >> median. Flat (steady noise/silence) → p90 ≈ median.
+  const dynamic = p90 >= median * 3.5;
+
+  return { speechSeconds: (loudFrames * frame) / TARGET_RATE, dynamic };
 }
 
 /**
@@ -161,10 +177,11 @@ export async function recordPcm16(
   const noiseFloor = estimateNoiseFloor(combined, nativeRate); // ambient, pre-gain
   const down = downsampleTo16k(combined, nativeRate);
 
-  // Speech-presence guard — measured on the PRE-gain signal (ambient-relative)
-  // so silence/noise is caught even when server voice-ID is disabled.
-  const speechSeconds = estimateSpeechSeconds(down, noiseFloor);
-  const speechDetected = speechSeconds >= MIN_SPEECH_SECONDS;
+  // Speech-presence guard — measured on the PRE-gain signal so silence/noise is
+  // caught even when server voice-ID is disabled. Requires BOTH enough loud
+  // speech AND speech-like dynamics (rejects flat steady noise).
+  const { speechSeconds, dynamic } = analyzeSpeech(down, noiseFloor);
+  const speechDetected = speechSeconds >= MIN_SPEECH_SECONDS && dynamic;
 
   // ── Adaptive mic gain — same normalization the interview applies ──
   // Quiet headset/Bluetooth mics (with AGC off) produce low-amplitude audio;
