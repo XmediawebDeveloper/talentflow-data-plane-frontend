@@ -279,7 +279,7 @@ function ProgressStepper({ phase }: { phase: Phase }) {
 // Fixed passage the candidate reads aloud during the mic check. A known,
 // ~5-second sentence guarantees enough clean voiced speech for an accurate
 // enrollment voiceprint (short spontaneous "hello" samples are too brief).
-const ENROLL_PASSAGE =
+export const ENROLL_PASSAGE =
   'I am ready for my interview today, and I will answer each question to the best of my ability.';
 
 export default function StepSystemCheck({
@@ -1499,7 +1499,7 @@ export default function StepSystemCheck({
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
                         <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                        No speech detected. You must read the sentence aloud — please record again.
+                        We couldn&apos;t confirm you read the sentence. Please read it aloud exactly, then record again.
                       </p>
                       <button
                         type="button"

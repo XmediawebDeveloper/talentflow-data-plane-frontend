@@ -89,14 +89,6 @@ function classifyMicType(label: string): MicType {
   return 'unknown';
 }
 
-// Same track constraints the interview's dedicated recording stream requests.
-const INTERVIEW_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
-  channelCount: { ideal: 1 },
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: false, // keep OFF — AGC distorts quiet speech for ASR
-};
-
 function downsampleTo16k(input: Float32Array, inputRate: number): Float32Array {
   if (inputRate === TARGET_RATE) return input;
   const ratio = inputRate / TARGET_RATE;
@@ -189,10 +181,23 @@ export async function recordPcm16(
   const audioTracks = stream.getAudioTracks();
   if (!audioTracks.length) return null;
 
-  // Match the interview's capture config (autoGainControl OFF, headset-friendly).
-  // Best-effort — some browsers/devices reject applyConstraints; that's fine.
+  // Classify the device up-front — drives the per-device gain target (below).
+  const micType = classifyMicType(audioTracks[0]?.label || '');
+
+  // Capture config for enrollment. Echo cancellation is turned OFF for ALL
+  // devices here: during the read-aloud NOTHING is playing (Linda isn't
+  // speaking), so there is no echo to cancel — EC would only DUCK/attenuate the
+  // candidate's own (often quiet, on a headset) speech, which garbled the
+  // recording and made headset enrollment fail the transcript match. AGC stays
+  // off (distorts levels for ASR); light noise suppression stays on to help the
+  // transcriber focus on speech. Best-effort — some devices reject this.
   await Promise.all(
-    audioTracks.map((t) => t.applyConstraints(INTERVIEW_AUDIO_CONSTRAINTS).catch(() => {})),
+    audioTracks.map((t) => t.applyConstraints({
+      channelCount: { ideal: 1 },
+      echoCancellation: false,
+      noiseSuppression: true,
+      autoGainControl: false,
+    }).catch(() => {})),
   );
 
   const Ctx: typeof AudioContext =
@@ -247,8 +252,7 @@ export async function recordPcm16(
   // Quiet headset/Bluetooth mics (with AGC off) produce low-amplitude audio;
   // boost toward the device's target (higher for headphones) so the enrolled
   // voiceprint is captured at the same loudness the interview verifies against.
-  const micType = classifyMicType(audioTracks[0]?.label || '');
-  const target = MIC_GAIN_TARGET[micType];
+  const target = MIC_GAIN_TARGET[micType];   // micType classified up-front
   const gainMax = MIC_GAIN_MAX[micType];
   let meanAbs = 0;
   for (let i = 0; i < down.length; i++) meanAbs += Math.abs(down[i]);

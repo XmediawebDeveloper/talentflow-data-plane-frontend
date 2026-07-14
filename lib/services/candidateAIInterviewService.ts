@@ -174,12 +174,16 @@ export const candidateAIInterviewService = {
     stage: 'system_check' | 'practice' = 'system_check',
     sampleRate = 16000,
     noiseFloor = 0,
-  ): Promise<{ enabled: boolean; ok: boolean; reason?: string; speech_seconds?: number }> {
+    expectedText = '',
+  ): Promise<{ enabled: boolean; ok: boolean; reason?: string; speech_seconds?: number; match_ratio?: number; transcript?: string }> {
     const formData = new FormData();
     formData.append('file', pcmBlob, `${stage}.pcm`);
     formData.append('stage', stage);
     formData.append('sample_rate', String(sampleRate));
     formData.append('noise_floor', String(noiseFloor));
+    // Only sent for the read-aloud system-check stage; the backend requires the
+    // transcript to match this before accepting (defeats silence/noise).
+    formData.append('expected_text', expectedText);
     const url = `${API_BASE_URL}/candidate/ai-interview/${token}/enroll-voice`;
     try {
       const response = await fetch(url, { method: 'POST', body: formData });

@@ -17,7 +17,7 @@ import { InterviewEventBus } from '@/components/ai-interview/proctoring/Intervie
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
 import StepConsent from '@/components/candidate/StepConsent';
 import StepIdentity from '@/components/candidate/StepIdentity';
-import StepSystemCheck from '@/components/candidate/StepSystemCheck';
+import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
@@ -2140,14 +2140,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               {
                 const res = await candidateAIInterviewService.enrollVoice(
                   token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
+                  ENROLL_PASSAGE,  // backend requires this sentence to be read aloud
                 );
-                // Server owns voice-ID only when it enrolled successfully. If the
-                // server is on but couldn't capture enough speech, fall through to
-                // the local MFCC baseline so we still have *some* check. When the
-                // server enrolls, we skip local enrollment — so the client-side
-                // verifyVoice() naturally no-ops (no baseline) and never conflicts
-                // with the accurate server-side per-turn verification.
-                if (res.enabled && res.ok) return true;
+                // When the server is ENABLED, its verdict is AUTHORITATIVE — return
+                // it directly. A rejection (silence / sentence mismatch) MUST fail;
+                // we must NOT fall back to the client MFCC baseline (which passes on
+                // noise) or it would bypass the content check. The client fallback
+                // below runs ONLY when the server feature is disabled.
+                if (res.enabled) return res.ok;
               }
             } catch { /* fall through to local baseline */ }
             if (voiceVerification.hasBaseline()) return true;
