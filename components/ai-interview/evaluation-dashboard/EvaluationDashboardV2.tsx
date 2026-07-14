@@ -429,6 +429,9 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   // below stays readable).
   const renderQCard = (q: typeof delivered[number], idx: number) => {
     const answer = (q.answer && q.answer.trim()) || '';
+    const displayOnlyScore = typeof q.displayOnlyQuestionScore === 'number'
+      ? q.displayOnlyQuestionScore
+      : null;
     // Footer arithmetic must use the SAME scored skills the question score was
     // derived from (unscored skills are excluded), so "Σ ÷ Σ = score" is
     // always internally consistent.
@@ -453,6 +456,13 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             {isHr ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
                 HR · Not Scored
+              </span>
+            ) : q.isUnscored && displayOnlyScore !== null ? (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(displayOnlyScore)}`}
+                title="Display-only score from the runtime evaluator snapshot for this attended question. Excluded from terminated-session overall scoring until a full evaluation lands."
+              >
+                Score: {displayOnlyScore.toFixed(1)}/10
               </span>
             ) : q.isUnscored ? (
               <span
@@ -659,6 +669,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       {sumW > 0 ? (
                         <div className="text-[11px] font-mono text-gray-500 pl-1 pt-1">
                           Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
+                        </div>
+                      ) : q.isUnscored && displayOnlyScore !== null ? (
+                        <div className="text-[11px] text-amber-700 italic pl-1 pt-1">
+                          Partial runtime score shown for this attended question. Excluded from the terminated-session section average.
                         </div>
                       ) : q.isUnscored ? (
                         <div className="text-[11px] text-gray-400 italic pl-1 pt-1">
