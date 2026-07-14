@@ -191,6 +191,9 @@ export interface PerQuestionDetail {
 export interface DashboardData {
   candidate: { name: string; role: string; email?: string };
   interview: { mode: 'Timed' | 'Conversational'; duration: string; date: string };
+  /** True when the interview ended early (terminated / disconnect) and the
+   *  dashboard should suppress final hiring outcome messaging. */
+  isPartialEvaluation: boolean;
   scores: {
     mustHave: number;    // 0-10
     niceToHave: number;  // 0-10

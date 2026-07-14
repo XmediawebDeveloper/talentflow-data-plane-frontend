@@ -1767,6 +1767,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 // ── Q&A export helpers ────────────────────────────────────
                 const qaBaseName = `qa_${interview.candidate_name || 'candidate'}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
                 const candidateNameLabel = interview.candidate_name || 'Candidate';
+                const isPartialEvaluation = eval_?.partial === true || eval_?.evaluation_incomplete === true;
 
                 const roundLabelFor = (rt?: string) => {
                   const k = (rt || '').toLowerCase();
@@ -2304,6 +2305,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
 
                 return (
                   <div className="space-y-6">
+                    {isPartialEvaluation && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        This interview ended early. The scores below are for attended questions only; no final pass/fail or overall match score is generated here.
+                      </div>
+                    )}
                     {/* Export toolbar */}
                     <div className="flex justify-end relative">
                       <button
@@ -2333,7 +2339,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                       <section>
                         <SectionHeader
                           title="Must-Have Section"
-                          badge="Scored for Pass/Fail"
+                          badge={isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail'}
                           badgeCls="bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20"
                         />
                         <div className="space-y-3">

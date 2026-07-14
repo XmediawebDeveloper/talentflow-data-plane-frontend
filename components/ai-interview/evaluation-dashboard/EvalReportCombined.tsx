@@ -49,7 +49,7 @@ export function EvalReportCombined({
   const {
     candidate, interview, scores, finalResult, sectionsPresent,
     mustHaveClusters, niceToHaveClusters, interviewResponses, perQuestionDetails,
-    aiSummary, strengths, weaknesses,
+    aiSummary, strengths, weaknesses, isPartialEvaluation,
   } = data;
 
   const [exporting, setExporting] = useState(false);
@@ -139,7 +139,7 @@ export function EvalReportCombined({
       const indigo: RGB = [79, 70, 229], indigoDk: RGB = [67, 56, 202];
       const green: RGB = [16, 185, 129], teal: RGB = [16, 160, 120], red: RGB = [239, 68, 68], amber: RGB = [245, 158, 11];
       const pass = isPassed;
-      const verdict: RGB = pass ? green : red;
+      const verdict: RGB = isPartialEvaluation ? amber : (pass ? green : red);
       const scoreRGB = (s: number): RGB => (s >= 8 ? green : s >= 5 ? teal : s >= 3 ? amber : red);
       const fill = (c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
       const txt = (c: RGB) => doc.setTextColor(c[0], c[1], c[2]);
@@ -162,16 +162,24 @@ export function EvalReportCombined({
       y += 13; stroke(indigo); doc.setLineWidth(0.7); doc.line(M, y, pageW - M, y); doc.setLineWidth(0.2); y += 5;
 
       // Final result + Match Score
-      fill(pass ? [236, 253, 245] : [254, 242, 242]); stroke(verdict); doc.setLineWidth(0.4);
+      fill(isPartialEvaluation ? [255, 251, 235] : (pass ? [236, 253, 245] : [254, 242, 242])); stroke(verdict); doc.setLineWidth(0.4);
       doc.roundedRect(M, y, CW, 18, 2, 2, 'FD'); doc.setLineWidth(0.2);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); txt(verdict);
-      doc.text(`Final Result: ${finalResultLabel}`, M + 4, y + 7.5);
+      doc.text(isPartialEvaluation ? 'Partial Evaluation' : `Final Result: ${finalResultLabel}`, M + 4, y + 7.5);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
-      doc.text(`${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'} · Must-Have ${scores.mustHave.toFixed(2)} / Threshold ${MHS_THRESHOLD.toFixed(1)}`, M + 4, y + 13.5);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(17); txt(verdict);
-      doc.text(`${confidence}%`, pageW - M - 4, y + 8, { align: 'right' });
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); txt(sub);
-      doc.text('Match Score (Must-Have)', pageW - M - 4, y + 13, { align: 'right' });
+      doc.text(
+        isPartialEvaluation
+          ? 'This interview ended before completion. The AI evaluated only the attended questions.'
+          : `${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'} · Must-Have ${scores.mustHave.toFixed(2)} / Threshold ${MHS_THRESHOLD.toFixed(1)}`,
+        M + 4,
+        y + 13.5,
+      );
+      if (!isPartialEvaluation) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(17); txt(verdict);
+        doc.text(`${confidence}%`, pageW - M - 4, y + 8, { align: 'right' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); txt(sub);
+        doc.text('Match Score (Must-Have)', pageW - M - 4, y + 13, { align: 'right' });
+      }
       y += 23;
 
       // Section scores summary
@@ -180,8 +188,11 @@ export function EvalReportCombined({
       let sx = M + 3;
       if (sectionsPresent.mustHave) {
         doc.text(`Must-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Must-Have Section: ');
-        txt(pass ? green : red); doc.text(`${scores.mustHave.toFixed(2)}/10 (${pass ? 'PASS' : 'FAIL'})`, sx, y + 6);
-        sx += doc.getTextWidth(`${scores.mustHave.toFixed(2)}/10 (${pass ? 'PASS' : 'FAIL'})`) + 8; txt(ink);
+        const mustHaveLabel = isPartialEvaluation
+          ? `${scores.mustHave.toFixed(2)}/10 (Partial)`
+          : `${scores.mustHave.toFixed(2)}/10 (${pass ? 'PASS' : 'FAIL'})`;
+        txt(isPartialEvaluation ? amber : (pass ? green : red)); doc.text(mustHaveLabel, sx, y + 6);
+        sx += doc.getTextWidth(mustHaveLabel) + 8; txt(ink);
       }
       if (sectionsPresent.niceToHave) {
         doc.text(`Nice-to-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Nice-to-Have Section: ');
@@ -242,7 +253,7 @@ export function EvalReportCombined({
         y += 3;
       };
 
-      drawSection('mth', 'MUST-HAVE SECTION', scores.mustHave, true, pass ? 'PASS' : 'FAIL', verdict);
+      drawSection('mth', 'MUST-HAVE SECTION', scores.mustHave, true, isPartialEvaluation ? 'Partial' : (pass ? 'PASS' : 'FAIL'), verdict);
       drawSection('nth', 'NICE-TO-HAVE SECTION', scores.niceToHave, true, 'Informational only', indigo);
       drawSection('hr', 'HR SECTION', 0, false, '', faint);
 
@@ -250,9 +261,17 @@ export function EvalReportCombined({
       ensure(16);
       fill(indigo); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
-      doc.text(`AI ANALYSIS — Why this candidate ${pass ? 'Passed' : 'Failed'}`, M + 3, y + 6); y += 12;
+      doc.text(
+        isPartialEvaluation
+          ? 'AI ANALYSIS — Partial Interview Review'
+          : `AI ANALYSIS — Why this candidate ${pass ? 'Passed' : 'Failed'}`,
+        M + 3,
+        y + 6,
+      ); y += 12;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
-      const verdictLine = `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${scores.mustHave.toFixed(2)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${Math.abs(scores.mustHave - MHS_THRESHOLD).toFixed(2)}). This drives the ${finalResultLabel} decision; Nice-to-Have (${scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.`;
+      const verdictLine = isPartialEvaluation
+        ? `${candidate.name}'s interview ended before completion. The Must-Have score of ${scores.mustHave.toFixed(2)}/10 and the Nice-to-Have score of ${scores.niceToHave.toFixed(2)}/10 summarize only the attended questions. HR is not scored, and no final pass/fail or match score is generated for this report.`
+        : `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${scores.mustHave.toFixed(2)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${Math.abs(scores.mustHave - MHS_THRESHOLD).toFixed(2)}). This drives the ${finalResultLabel} decision; Nice-to-Have (${scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.`;
       const vl = doc.splitTextToSize(verdictLine, CW); ensure(vl.length * 4.4 + 2); doc.text(vl, M, y + 3); y += vl.length * 4.4 + 3;
       if (aiSummary) {
         const al = doc.splitTextToSize(aiSummary, CW); ensure(al.length * 4.4 + 2);
@@ -305,7 +324,9 @@ export function EvalReportCombined({
       ensure(18);
       fill([238, 242, 255]); doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt(indigoDk);
-      const foot = `Scoring: Must-Have Section Score (Pass >= ${MHS_THRESHOLD.toFixed(1)}) drives the final result; Nice-to-Have is informational; HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.   Confidentiality: proprietary — for authorized hiring personnel only.`;
+      const foot = isPartialEvaluation
+        ? `Scoring: This terminated interview report evaluates only the attended questions. No final result or match score is generated. Nice-to-Have is informational; HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.   Confidentiality: proprietary — for authorized hiring personnel only.`
+        : `Scoring: Must-Have Section Score (Pass >= ${MHS_THRESHOLD.toFixed(1)}) drives the final result; Nice-to-Have is informational; HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.   Confidentiality: proprietary — for authorized hiring personnel only.`;
       doc.text(doc.splitTextToSize(foot, CW - 6), M + 3, y + 4);
 
       doc.save(`eval_report_${candidate.name || 'candidate'}_${evalId}`.replace(/\s+/g, '_') + '.pdf');
@@ -346,45 +367,68 @@ export function EvalReportCombined({
       {/* ── Everything below is captured into the PDF ─────────────────── */}
       <div className="bg-white space-y-6">
         {/* 1. Verdict hero — compact Pass/Fail + Match Score + candidate */}
-        <div
-          className={`rounded-xl p-5 text-white shadow-md ${
-            isPassed ? 'bg-gradient-to-br from-emerald-500 to-emerald-400' : 'bg-gradient-to-br from-red-500 to-red-400'
-          }`}
-          style={{ pageBreakInside: 'avoid' }}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="relative w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold overflow-hidden ring-2 ring-white/30 shrink-0">
+        {isPartialEvaluation ? (
+          <div
+            className="rounded-xl p-5 text-amber-950 bg-gradient-to-br from-amber-100 to-amber-50 border border-amber-200 shadow-sm"
+            style={{ pageBreakInside: 'avoid' }}
+          >
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="relative w-14 h-14 rounded-xl bg-amber-200/70 flex items-center justify-center text-lg font-bold overflow-hidden ring-2 ring-white/70 shrink-0">
                 {candidateImage
                   ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
                   : <span>{avatarInitials}</span>}
               </div>
               <div className="min-w-0">
                 <div className="text-xl font-bold leading-tight truncate">{candidate.name}</div>
-                <div className="text-sm text-white/90 mb-1.5 truncate">{candidate.role}</div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {isPassed
-                    ? <CheckCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} />
-                    : <XCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} />}
-                  <span className="text-base font-bold">{finalResultLabel}</span>
-                  <span className="text-xs text-white/90">
-                    · {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}
-                  </span>
-                </div>
-                <div className="text-xs text-white/85 mt-1">
-                  Must-Have {scores.mustHave.toFixed(2)} / Threshold {MHS_THRESHOLD.toFixed(1)}
-                  {isPassed
-                    ? ` · +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
-                    : ` · Below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
+                <div className="text-sm text-amber-900/80 mb-1 truncate">{candidate.role}</div>
+                <div className="text-base font-bold">Partial Evaluation</div>
+                <div className="text-xs text-amber-900/80 mt-1">
+                  This interview ended before completion. The AI evaluated only the questions the candidate attended, so no final pass/fail or match score is generated.
                 </div>
               </div>
             </div>
-            <div className="px-5 py-2.5 rounded-xl bg-white/20 backdrop-blur text-center shrink-0">
-              <div className="text-2xl font-bold leading-none">{confidence}%</div>
-              <div className="text-xs font-semibold text-white/95 mt-1">Match Score</div>
+          </div>
+        ) : (
+          <div
+            className={`rounded-xl p-5 text-white shadow-md ${
+              isPassed ? 'bg-gradient-to-br from-emerald-500 to-emerald-400' : 'bg-gradient-to-br from-red-500 to-red-400'
+            }`}
+            style={{ pageBreakInside: 'avoid' }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="relative w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold overflow-hidden ring-2 ring-white/30 shrink-0">
+                  {candidateImage
+                    ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
+                    : <span>{avatarInitials}</span>}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xl font-bold leading-tight truncate">{candidate.name}</div>
+                  <div className="text-sm text-white/90 mb-1.5 truncate">{candidate.role}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {isPassed
+                      ? <CheckCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                      : <XCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} />}
+                    <span className="text-base font-bold">{finalResultLabel}</span>
+                    <span className="text-xs text-white/90">
+                      · {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-white/85 mt-1">
+                    Must-Have {scores.mustHave.toFixed(2)} / Threshold {MHS_THRESHOLD.toFixed(1)}
+                    {isPassed
+                      ? ` · +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
+                      : ` · Below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-2.5 rounded-xl bg-white/20 backdrop-blur text-center shrink-0">
+                <div className="text-2xl font-bold leading-none">{confidence}%</div>
+                <div className="text-xs font-semibold text-white/95 mt-1">Match Score</div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* 2. Interview meta strip (once) */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5" style={{ pageBreakInside: 'avoid' }}>
@@ -443,11 +487,17 @@ export function EvalReportCombined({
                   </div>
                 </div>
                 <div>
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
-                    isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {isPassed ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                    {isPassed ? 'PASS' : 'FAIL'}
-                  </span>
+                  {isPartialEvaluation ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                      Partial
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                      isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {isPassed ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                      {isPassed ? 'PASS' : 'FAIL'}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -488,9 +538,11 @@ export function EvalReportCombined({
             {sectionsPresent.mustHave && (
               <p>
                 The candidate achieved a <strong>Must-Have Section Score of {scores.mustHave.toFixed(2)}/10</strong>,{' '}
-                which {isPassed
-                  ? `exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points`
-                  : `falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points`}.
+                {isPartialEvaluation
+                  ? 'based only on the questions the candidate attended before the interview ended.'
+                  : isPassed
+                    ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points.`
+                    : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points.`}
                 {sectionsPresent.niceToHave && (
                   <> {' '}The Nice-to-Have Section Score was <strong>{scores.niceToHave.toFixed(2)}/10</strong>,{' '}
                   demonstrating {niceToHaveStrong} proficiency in supplementary skills.</>
@@ -498,9 +550,11 @@ export function EvalReportCombined({
               </p>
             )}
             <p>
-              Based on this evaluation, the assessment recommends{' '}
-              <strong>{isPassed ? 'proceeding with the hiring process' : 'not proceeding with the current application'}</strong>{' '}
-              with a match score of <strong>{confidence}%</strong>.
+              {isPartialEvaluation
+                ? <>Because the interview was terminated early, this report provides question-by-question and skill-by-skill analysis only; it does not generate a final hiring recommendation or match score.</>
+                : <>Based on this evaluation, the assessment recommends{' '}
+                  <strong>{isPassed ? 'proceeding with the hiring process' : 'not proceeding with the current application'}</strong>{' '}
+                  with a match score of <strong>{confidence}%</strong>.</>}
             </p>
           </div>
         </div>
@@ -699,21 +753,31 @@ export function EvalReportCombined({
         </div>
 
         {/* 9b. AI Analysis — pass/fail overview (AI narrative + strengths/concerns) */}
-        <div className={`rounded-2xl border overflow-hidden ${isPassed ? 'border-emerald-200' : 'border-rose-200'}`} style={{ pageBreakInside: 'avoid' }}>
-          <div className={`px-5 py-3 border-b flex items-center gap-2 ${isPassed ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-            <Sparkles className={`w-4 h-4 ${isPassed ? 'text-emerald-600' : 'text-rose-600'}`} />
-            <div className={`text-base font-bold ${isPassed ? 'text-emerald-800' : 'text-rose-800'}`}>
-              AI Analysis — {isPassed ? 'Why this candidate Passed' : 'Why this candidate Failed'}
+        <div className={`rounded-2xl border overflow-hidden ${isPartialEvaluation ? 'border-amber-200' : isPassed ? 'border-emerald-200' : 'border-rose-200'}`} style={{ pageBreakInside: 'avoid' }}>
+          <div className={`px-5 py-3 border-b flex items-center gap-2 ${isPartialEvaluation ? 'bg-amber-50 border-amber-200' : isPassed ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <Sparkles className={`w-4 h-4 ${isPartialEvaluation ? 'text-amber-600' : isPassed ? 'text-emerald-600' : 'text-rose-600'}`} />
+            <div className={`text-base font-bold ${isPartialEvaluation ? 'text-amber-800' : isPassed ? 'text-emerald-800' : 'text-rose-800'}`}>
+              {isPartialEvaluation ? 'AI Analysis — Partial Interview Review' : `AI Analysis — ${isPassed ? 'Why this candidate Passed' : 'Why this candidate Failed'}`}
             </div>
           </div>
           <div className="p-6 space-y-4">
             <p className="text-sm leading-relaxed text-gray-900">
-              <strong>{candidate.name}</strong> {isPassed ? 'meets' : 'does not meet'} the Must-Have bar — scoring{' '}
-              <strong>{scores.mustHave.toFixed(2)}/10</strong> against the {MHS_THRESHOLD.toFixed(1)} pass threshold
-              {isPassed
-                ? ` (exceeds by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)})`
-                : ` (below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)})`}.
-              {' '}This Must-Have result drives the <strong>{finalResultLabel}</strong> decision; Nice-to-Have ({scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.
+              {isPartialEvaluation ? (
+                <>
+                  <strong>{candidate.name}</strong> was evaluated only on the portion of the interview completed before termination.
+                  The Must-Have section average shown here is <strong>{scores.mustHave.toFixed(2)}/10</strong>, and Nice-to-Have is <strong>{scores.niceToHave.toFixed(2)}/10</strong>.
+                  These numbers summarize the attended questions only and do not produce a final pass/fail decision.
+                </>
+              ) : (
+                <>
+                  <strong>{candidate.name}</strong> {isPassed ? 'meets' : 'does not meet'} the Must-Have bar — scoring{' '}
+                  <strong>{scores.mustHave.toFixed(2)}/10</strong> against the {MHS_THRESHOLD.toFixed(1)} pass threshold
+                  {isPassed
+                    ? ` (exceeds by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)})`
+                    : ` (below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)})`}.
+                  {' '}This Must-Have result drives the <strong>{finalResultLabel}</strong> decision; Nice-to-Have ({scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.
+                </>
+              )}
             </p>
             {aiSummary && (
               <div className="text-sm leading-relaxed text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-4">
@@ -740,7 +804,9 @@ export function EvalReportCombined({
             </div>
             {!aiSummary && (!strengths || strengths.length === 0) && (!weaknesses || weaknesses.length === 0) && (
               <p className="text-sm text-gray-400 italic">
-                No additional AI narrative was generated for this interview — the {finalResultLabel} decision is based on the Must-Have section score above.
+                {isPartialEvaluation
+                  ? 'No additional AI narrative was generated for this partial interview.'
+                  : `No additional AI narrative was generated for this interview — the ${finalResultLabel} decision is based on the Must-Have section score above.`}
               </p>
             )}
           </div>
