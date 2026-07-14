@@ -633,7 +633,9 @@ export default function StepSamplePractice({
       // Use the audio-only stream (non-null local) rather than the ref.
       recordPcm16(audioStream, 8000)
         .then((cap) => {
-          if (cap) return candidateAIInterviewService.enrollVoice(
+          // Only send a top-up that actually contains speech — never poison the
+          // averaged voiceprint with a silent/noise-only sample.
+          if (cap && cap.speechDetected) return candidateAIInterviewService.enrollVoice(
             token, cap.blob, 'practice', cap.sampleRate, cap.noiseFloor,
           );
         })

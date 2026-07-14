@@ -2133,7 +2133,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             // the local MFCC baseline so behavior is unchanged in that case.
             try {
               const cap = await recordPcm16(stream, 12000);
-              if (cap) {
+              // Client-side silence guard: if the candidate didn't actually
+              // speak, fail immediately — regardless of whether server voice-ID
+              // is enabled. This is what blocks a silent "success".
+              if (!cap || !cap.speechDetected) return false;
+              {
                 const res = await candidateAIInterviewService.enrollVoice(
                   token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
                 );

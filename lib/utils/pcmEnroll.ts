@@ -19,7 +19,12 @@ export interface Pcm16Capture {
   noiseFloor: number;  // mean-abs energy of the quietest ~10% of frames (0..1)
   durationSec: number;
   gainApplied: number; // software gain multiplier used (1 = none)
+  speechSeconds: number;    // estimated seconds of genuine speech
+  speechDetected: boolean;  // false when the capture is silence / noise only
 }
+
+// Minimum genuine speech required for a valid enrollment capture (client guard).
+const MIN_SPEECH_SECONDS = 1.5;
 
 const TARGET_RATE = 16000;
 
@@ -84,6 +89,29 @@ function estimateNoiseFloor(audio: Float32Array, rate: number): number {
 }
 
 /**
+ * Seconds of GENUINE speech in the buffer — client-side silence guard so that a
+ * silent (or noise-only) recording is caught even when server voice-ID is off.
+ * A 100 ms frame counts as speech only when its energy clearly exceeds the room
+ * noise floor AND an absolute minimum (so ambient hiss/breathing don't qualify).
+ */
+function estimateSpeechSeconds(audio: Float32Array, noiseFloor: number): number {
+  const frame = Math.max(1, Math.floor(TARGET_RATE * 0.1)); // 100 ms
+  const SPEECH_RATIO = 3;      // speech ≥ 3× the noise floor …
+  // … and above this absolute level. Kept low so genuinely quiet headset/earbud
+  // speakers still register, while total silence / faint hiss does not. The
+  // robust check is the server's Silero VAD; this only blocks obvious silence.
+  const SPEECH_ABS_MIN = 0.008;
+  const threshold = Math.max(noiseFloor * SPEECH_RATIO, SPEECH_ABS_MIN);
+  let speechFrames = 0;
+  for (let start = 0; start + frame <= audio.length; start += frame) {
+    let acc = 0;
+    for (let i = start; i < start + frame; i++) acc += Math.abs(audio[i]);
+    if (acc / frame >= threshold) speechFrames++;
+  }
+  return (speechFrames * frame) / TARGET_RATE;
+}
+
+/**
  * Record `durationMs` of PCM from `stream` and return a 16 kHz Int16 blob.
  * Uses ScriptProcessorNode (deprecated but universally supported, and already
  * used elsewhere in this app for the same reason).
@@ -133,6 +161,11 @@ export async function recordPcm16(
   const noiseFloor = estimateNoiseFloor(combined, nativeRate); // ambient, pre-gain
   const down = downsampleTo16k(combined, nativeRate);
 
+  // Speech-presence guard — measured on the PRE-gain signal (ambient-relative)
+  // so silence/noise is caught even when server voice-ID is disabled.
+  const speechSeconds = estimateSpeechSeconds(down, noiseFloor);
+  const speechDetected = speechSeconds >= MIN_SPEECH_SECONDS;
+
   // ── Adaptive mic gain — same normalization the interview applies ──
   // Quiet headset/Bluetooth mics (with AGC off) produce low-amplitude audio;
   // boost the average level toward the interview's target so the enrolled
@@ -157,5 +190,7 @@ export async function recordPcm16(
     noiseFloor,
     durationSec: down.length / TARGET_RATE,
     gainApplied: gain,
+    speechSeconds,
+    speechDetected,
   };
 }
