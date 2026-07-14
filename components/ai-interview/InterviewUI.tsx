@@ -6678,12 +6678,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     setCanRepeat(false);
     if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
 
+    // CRITICAL: stop the mic SILENTLY right now (no end_turn), exactly like the
+    // Next button does. The mic is still live at this moment, and if we leave it
+    // running the VAD silence clock can fire stopRecording() → end_turn while
+    // Linda is re-speaking. That queued end_turn is then processed the instant
+    // the re-speak finishes → the backend records an (empty) answer and ADVANCES
+    // to the next question WITHOUT waiting for the candidate — the reported bug.
+    // The mic re-opens for the real answer after the re-speak's audio_end
+    // (handleAllAudioFinished → startRecording), so nothing is lost.
+    abortRecordingForSkipRef.current();
+
     // Chat: the candidate's repeat request.
     postCandidateActionMessage("Could you please repeat the question?");
     setStatus("Linda will repeat the question...");
 
-    // The incoming speaking_started (from the backend re-speak) stops the mic and
-    // flips the banner to RED — same path as a clarification repeat.
+    // The incoming speaking_started (from the backend re-speak) flips the banner
+    // to RED; audio_end then re-opens the mic for the candidate's answer.
     wsRef.current.send(JSON.stringify({ type: 'repeat_question', text: lastQuestion }));
   };
 
