@@ -1282,7 +1282,13 @@ function buildPerQuestionDetailsFromHistory(
     // the display layer. For SKIPPED/IDK responses, the fallback is
     // suppressed (see scoreForSkill) so the misleading evaluator score
     // (often "Behavioural"=5.0 for IDK) doesn't propagate.
-    const entryScore = typeof q?.score === 'number' ? q.score : null;
+    const partialDisplayScore = (
+      String(q?.score_source || '').toLowerCase() === 'partial_runtime'
+      && typeof q?.score === 'number'
+    ) ? Number(q.score) : null;
+    const entryScore = partialDisplayScore === null && typeof q?.score === 'number'
+      ? q.score
+      : null;
     const isSkippedRow = isSkippedOrIdk(q);
 
     const skills: PerQuestionSkill[] = skillNames.map(skillName => {
@@ -1353,6 +1359,7 @@ function buildPerQuestionDetailsFromHistory(
       skills,
       questionScore,
       isUnscored,
+      displayOnlyQuestionScore: partialDisplayScore ?? undefined,
       followUps: followUps && followUps.length > 0 ? followUps : undefined,
       bundledFollowUp,
     };

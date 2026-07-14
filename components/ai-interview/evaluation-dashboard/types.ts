@@ -141,6 +141,11 @@ export interface PerQuestionDetail {
    *  EXCLUDED from the section average — counting it as 0.0 would unfairly
    *  tank the section. Mirrors the backend's "never fabricate a 0.0" rule. */
   isUnscored?: boolean;
+  /** Display-only score for terminated / disconnect sessions. Derived from the
+   *  live runtime evaluator snapshot when the full post-interview evaluation
+   *  never landed. Shown on the question card, but EXCLUDED from section /
+   *  overall aggregates so the UI does not fabricate a final result. */
+  displayOnlyQuestionScore?: number;
   /** Follow-up Q&As that fired within this main question's slot. Each
    *  follow-up shares the parent's `qNum`. Empty/undefined when the
    *  candidate answered the main question well enough not to warrant
