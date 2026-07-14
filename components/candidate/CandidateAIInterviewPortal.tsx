@@ -2133,22 +2133,22 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             // the local MFCC baseline so behavior is unchanged in that case.
             try {
               const cap = await recordPcm16(stream, 12000);
-              // Client-side silence guard: if the candidate didn't actually
-              // speak, fail immediately — regardless of whether server voice-ID
-              // is enabled. This is what blocks a silent "success".
-              if (!cap || !cap.speechDetected) return false;
-              {
-                const res = await candidateAIInterviewService.enrollVoice(
-                  token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
-                  ENROLL_PASSAGE,  // backend requires this sentence to be read aloud
-                );
-                // When the server is ENABLED, its verdict is AUTHORITATIVE — return
-                // it directly. A rejection (silence / sentence mismatch) MUST fail;
-                // we must NOT fall back to the client MFCC baseline (which passes on
-                // noise) or it would bypass the content check. The client fallback
-                // below runs ONLY when the server feature is disabled.
-                if (res.enabled) return res.ok;
-              }
+              if (!cap) return false; // nothing recorded at all
+              // Send to the server FIRST. When server voice-ID is ENABLED, the
+              // server content check (transcript must match the sentence) is the
+              // AUTHORITATIVE gate — do NOT pre-block on the client energy
+              // heuristic, which false-rejected quiet headset reads before the
+              // server ever heard them. Noise/silence is still rejected by the
+              // server (transcript won't match), so nothing slips through.
+              const res = await candidateAIInterviewService.enrollVoice(
+                token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
+                ENROLL_PASSAGE,
+              );
+              if (res.enabled) return res.ok; // server verdict is final
+
+              // Server DISABLED → no content check available, so fall back to the
+              // client energy guard + local MFCC baseline (old behavior).
+              if (!cap.speechDetected) return false;
             } catch { /* fall through to local baseline */ }
             if (voiceVerification.hasBaseline()) return true;
             return voiceVerification.enrollVoice(stream, 10000);

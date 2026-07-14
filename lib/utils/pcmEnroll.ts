@@ -26,31 +26,6 @@ export interface Pcm16Capture {
 // Minimum genuine speech required for a valid enrollment capture.
 const MIN_SPEECH_SECONDS = 1.5;
 
-/**
- * Neural speech detection using the browser Silero VAD (@ricky0123/vad-web).
- * This is noise-ROBUST (unlike the energy heuristic) — it's trained to tell
- * speech from noise. Returns total detected speech seconds, or null if the
- * model can't load (offline / asset path issue) so the caller can fall back.
- *
- * Dynamic import so it never runs at SSR/build time and a load failure can't
- * break enrollment — we degrade to the energy heuristic instead.
- */
-async function sileroSpeechSeconds(audio16k: Float32Array): Promise<number | null> {
-  try {
-    const mod = await import('@ricky0123/vad-web');
-    const NonRealTimeVAD = (mod as unknown as { NonRealTimeVAD?: { new: (o?: unknown) => Promise<{ run: (a: Float32Array, sr: number) => AsyncIterable<{ start: number; end: number }> }> } }).NonRealTimeVAD;
-    if (!NonRealTimeVAD) return null;
-    const vad = await NonRealTimeVAD.new();
-    let total = 0;
-    for await (const { start, end } of vad.run(audio16k, TARGET_RATE)) {
-      total += (end - start) / 1000; // ms → seconds
-    }
-    return total;
-  } catch {
-    return null; // model/assets unavailable → caller uses the energy heuristic
-  }
-}
-
 const TARGET_RATE = 16000;
 
 // Mirror the AI interview's capture config so the enrolled voiceprint is
@@ -232,21 +207,14 @@ export async function recordPcm16(
   const noiseFloor = estimateNoiseFloor(combined, nativeRate); // ambient, pre-gain
   const down = downsampleTo16k(combined, nativeRate);
 
-  // Speech-presence guard (measured on the PRE-gain signal). Prefer the neural
-  // browser Silero VAD (noise-robust); if it can't load, fall back to the energy
-  // heuristic (loudness + dynamics). Either way, silence/noise-only is caught
-  // even when server voice-ID is disabled.
-  let speechSeconds: number;
-  let speechDetected: boolean;
-  const neural = await sileroSpeechSeconds(down);
-  if (neural !== null) {
-    speechSeconds = neural;
-    speechDetected = neural >= MIN_SPEECH_SECONDS; // Silero already rejects noise
-  } else {
-    const h = analyzeSpeech(down, noiseFloor);
-    speechSeconds = h.speechSeconds;
-    speechDetected = h.speechSeconds >= MIN_SPEECH_SECONDS && h.dynamic;
-  }
+  // Lightweight client-side speech-presence hint (energy loudness + dynamics).
+  // This is ONLY a fallback signal for when the server voice-ID feature is
+  // disabled — when it's enabled, the SERVER content check (transcript must match
+  // the sentence) is the authoritative gate, so the caller does NOT block on this
+  // (that previously false-rejected quiet headset reads). Measured pre-gain.
+  const h = analyzeSpeech(down, noiseFloor);
+  const speechSeconds = h.speechSeconds;
+  const speechDetected = h.speechSeconds >= MIN_SPEECH_SECONDS && h.dynamic;
 
   // ── Adaptive mic gain — same PER-DEVICE normalization the interview applies ──
   // Quiet headset/Bluetooth mics (with AGC off) produce low-amplitude audio;
