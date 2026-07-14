@@ -15,6 +15,7 @@ import { jdService } from '@/lib/services/jdService';
 import type {
   AIInterviewResponse,
   AIInterviewVersionHistoryItem,
+  AIInterviewHRQuestion,
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
@@ -66,6 +67,19 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm text-gray-500">{label}</span>
       <span className="text-sm font-medium text-gray-900 text-right">{value}</span>
     </div>
+  );
+}
+
+function HRQuestionStageBadge({ stage }: { stage?: string }) {
+  const normalized = stage === 'opening' ? 'opening' : 'closing';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+      normalized === 'opening'
+        ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+        : 'bg-green-100 text-green-700 ring-1 ring-green-200'
+    }`}>
+      {normalized}
+    </span>
   );
 }
 
@@ -358,18 +372,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
     // ── HR Questions ──
     rows.push('HR ROUND QUESTIONS');
-    const hrQuestions = (hrRound as any)?.hr_questions ?? [];
+    const hrQuestions = hrRound?.hr_questions ?? [];
     if (hrQuestions.length > 0) {
-      rows.push(['#', 'Question', 'Answer Type'].map(esc).join(','));
-      hrQuestions.forEach((q: any, i: number) => {
+      rows.push(['#', 'Question', 'Answer Type', 'Stage'].map(esc).join(','));
+      hrQuestions.forEach((q, i) => {
         rows.push([
           String(i + 1),
           q.question_text ?? '',
           q.answer_type ?? 'text',
+          q.stage === 'opening' ? 'opening' : 'closing',
         ].map(esc).join(','));
       });
     } else {
-      rows.push(['-', 'No HR questions configured or HR round disabled', ''].map(esc).join(','));
+      rows.push(['-', 'No HR questions configured or HR round disabled', '', ''].map(esc).join(','));
     }
 
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -1203,16 +1218,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <InfoRow label="Time" value={`${timedAllocation.hrMinutes} min`} />
                     </div>
                   )}
-                  {(hrRound as any).hr_questions?.length > 0 && (
+                  {hrRound.hr_questions?.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-2">Selected HR Questions</p>
                       <ol className="space-y-2">
-                        {((hrRound as any).hr_questions as { id: string; question_text: string; answer_type: string }[]).map((q, idx) => (
+                        {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
                           <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
                             <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-[10px] font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-gray-800">{q.question_text}</p>
-                              <span className="text-[10px] text-gray-500 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] text-gray-500">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                                <HRQuestionStageBadge stage={q.stage} />
+                              </div>
                             </div>
                           </li>
                         ))}

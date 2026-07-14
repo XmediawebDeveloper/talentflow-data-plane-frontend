@@ -1319,15 +1319,16 @@ function buildPerQuestionDetailsFromHistory(
     // and true 0-scored skills are excluded as well to match the backend's
     // question-score rule (`score > 0` contributes; pure no-evidence rows do not).
     const scoredSkills = skills.filter(k => !k.is_unscored && k.score > 0);
+    const hasEvaluatedSkill = skills.some(k => !k.is_unscored);
     const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
     const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
     const weighted = sumW > 0 ? sumWS / sumW : 0;
     const questionScore = Math.round(weighted * 10) / 10;
-    // Whole question is "Not evaluated" only when it had skills but NONE were
-    // scored (e.g. evaluator produced no rows for this turn). Such a question
-    // is excluded from the section average by the dashboard rather than
-    // dragging it down as a 0.0.
-    const isUnscored = skills.length > 0 && scoredSkills.length === 0;
+    // Whole question is "Not evaluated" only when the evaluator produced NO
+    // usable score rows for any skill on the slot. A real no-answer / skip /
+    // IDK turn is still an evaluated question with score 0, so it must stay
+    // counted instead of collapsing to "Not Evaluated".
+    const isUnscored = skills.length > 0 && !hasEvaluatedSkill;
 
     // Attach explicit follow-ups for this main Q. Looked up by the raw
     // history question_number (origQ) since follow-up entries store the
