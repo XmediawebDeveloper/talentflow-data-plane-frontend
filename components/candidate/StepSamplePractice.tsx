@@ -222,6 +222,9 @@ export default function StepSamplePractice({
   // Accumulated seconds the candidate has spent ANSWERING (excludes time while
   // Linda is speaking) — drives the 2-min countdown and survives Repeat.
   const [answerElapsed, setAnswerElapsed] = useState(0);
+  // True when the 2-minute budget elapsed (as opposed to the candidate clicking
+  // Next) — shows a "Time's up" message before Linda's sign-off.
+  const [timedUp, setTimedUp] = useState(false);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
@@ -367,7 +370,9 @@ export default function StepSamplePractice({
   // ── TTS: Speak the practice question ──────────────────────────────────────
   // Called only on explicit user click so the browser always has a user gesture.
 
-  const speakQuestion = useCallback(() => {
+  // scriptOverride lets Repeat speak ONLY the question (no greeting). The initial
+  // auto-speak passes nothing → full greeting + question.
+  const speakQuestion = useCallback((scriptOverride?: string) => {
     if (!window.speechSynthesis) {
       setTtsSupported(false);
       return;
@@ -376,11 +381,13 @@ export default function StepSamplePractice({
     // Cancel any ongoing speech first
     window.speechSynthesis.cancel();
 
+    const scriptToSpeak = scriptOverride ?? PRACTICE_SPOKEN_SCRIPT;
+
     const doSpeak = (voice: SpeechSynthesisVoice | null) => {
       // Resume in case the synth engine was paused
       window.speechSynthesis.resume();
 
-      const utterance = new SpeechSynthesisUtterance(PRACTICE_SPOKEN_SCRIPT);
+      const utterance = new SpeechSynthesisUtterance(scriptToSpeak);
       utterance.rate = 0.9;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
@@ -894,13 +901,15 @@ export default function StepSamplePractice({
     return () => clearInterval(iv);
   }, [isRecording, aiSpeaking, practiceDone]);
 
-  // Auto-finish the answer at the 2-minute budget — mirrors the real
-  // per-question timeout so the countdown genuinely ends the turn.
+  // Auto-finish at the 2-minute budget — mirrors the real per-question timeout:
+  // show "Time's up", stop the answer, and have Linda play the sign-off (exactly
+  // what the Next button does). Guarded by practiceDone so it fires once.
   useEffect(() => {
-    if (!practiceDone && answerElapsed >= PRACTICE_LIMIT_SECONDS && isRecording) {
-      stopRecordingAndTranscribe();
+    if (!practiceDone && answerElapsed >= PRACTICE_LIMIT_SECONDS) {
+      setTimedUp(true);
+      handlePracticeNext();
     }
-  }, [answerElapsed, isRecording, practiceDone, stopRecordingAndTranscribe]);
+  }, [answerElapsed, practiceDone, handlePracticeNext]);
 
   // Launch the guided coach-mark tour once, shortly after mount (so target
   // elements are laid out). Candidate can re-open it via the "Tips" button.
@@ -1082,7 +1091,7 @@ export default function StepSamplePractice({
                 {ttsSupported && (
                   <button
                     type="button"
-                    onClick={() => { setAutoSpeakBlocked(false); speakQuestion(); }}
+                    onClick={() => { setAutoSpeakBlocked(false); speakQuestion(PRACTICE_QUESTION); }}
                     disabled={aiSpeaking}
                     className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:cursor-not-allowed ${
                       aiSpeaking
@@ -1117,7 +1126,15 @@ export default function StepSamplePractice({
                 </div>
               </div>
             )}
-            {/* Linda's sign-off after Next — "you're ready, all the best". */}
+            {/* Time's-up notice when the 2 minutes elapsed (not a manual Next). */}
+            {timedUp && (
+              <div className="flex justify-center py-1">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-200 bg-amber-500/15 border border-amber-500/30 rounded-full px-3 py-1">
+                  ⏱ Time&apos;s up — that&apos;s the 2 minutes. Moving on…
+                </span>
+              </div>
+            )}
+            {/* Linda's sign-off after Next / timeout — "you're ready, all the best". */}
             {practiceDone && (
               <div className="flex items-start gap-2">
                 <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
@@ -1145,6 +1162,7 @@ export default function StepSamplePractice({
                   }`}>
                     {isRecording ? '● Listening…'
                       : isTranscribing ? 'Processing…'
+                      : timedUp ? "Time's up ✓"
                       : practiceDone ? 'All set ✓'
                       : aiSpeaking ? 'Linda is speaking…'
                       : 'Getting ready…'}
@@ -1154,7 +1172,19 @@ export default function StepSamplePractice({
                 {/* Repeat the question (replays it and re-opens the mic) */}
                 <button
                   type="button"
-                  onClick={() => { practiceDoneRef.current = false; setPracticeDone(false); setAutoSpeakBlocked(false); speakQuestion(); }}
+                  onClick={() => {
+                    // Repeat MID-answer: just replay — the timer pauses while Linda
+                    // speaks and resumes from where it left (no reset). Repeat AFTER
+                    // finishing (done/timed-up): a fresh re-practice → reset the budget.
+                    const wasFinished = practiceDoneRef.current;
+                    practiceDoneRef.current = false;
+                    setPracticeDone(false);
+                    setTimedUp(false);
+                    if (wasFinished) setAnswerElapsed(0);
+                    setAutoSpeakBlocked(false);
+                    // Repeat plays ONLY the question — not the full greeting.
+                    speakQuestion(PRACTICE_QUESTION);
+                  }}
                   disabled={aiSpeaking}
                   title="Replay the question"
                   className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium text-[#E2E8F0] bg-[#1E293B] border border-white/[0.08] hover:bg-[#334155] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
