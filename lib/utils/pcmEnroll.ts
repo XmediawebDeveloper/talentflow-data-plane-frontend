@@ -43,7 +43,7 @@ const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this
 type MicType = 'builtin' | 'wired_headphone' | 'bluetooth' | 'unknown';
 const MIC_GAIN_TARGET: Record<MicType, number> = {
   bluetooth: 0.090,
-  wired_headphone: 0.075,
+  wired_headphone: 0.10,   // louder for quiet wired headset mics (kept in sync with InterviewUI)
   builtin: 0.045,
   unknown: 0.055,
 };

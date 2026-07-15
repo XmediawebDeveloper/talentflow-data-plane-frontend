@@ -1035,6 +1035,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const webcamStreamRef = useRef<MediaStream | null>(null);
+  // Keeps the recording-audio boost graph alive (a GC'd AudioContext would stop
+  // the boost). Used to make quiet headset mics clearly audible in the saved video.
+  const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  // Close the boost AudioContext on unmount so it doesn't leak across sessions.
+  useEffect(() => () => {
+    try { recordingAudioCtxRef.current?.close(); } catch { /* already closed */ }
+    recordingAudioCtxRef.current = null;
+  }, []);
   // Checkpoint upload refs — periodic flushes protect against tab-throttle/abrupt close
   const checkpointTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const checkpointInProgressRef = useRef(false);
@@ -1228,17 +1236,57 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     setWebcamReady(true);
 
     // Start video recording from webcam stream.
-    // Low bitrate: 200 Kbps video + 32 Kbps audio = ~232 Kbps total.
-    // 30-min interview ≈ 52 MB — well within upload limits.
+    // Low bitrate: 200 Kbps video + 64 Kbps audio = ~264 Kbps total.
+    // 30-min interview ≈ 59 MB — well within upload limits.
     const stream = video.srcObject as MediaStream;
     if (stream) {
       webcamStreamRef.current = stream;
+
+      // ── Boost the RECORDING audio so quiet headset/earbud mics are clearly
+      // audible in the saved video (raw webcam audio is too quiet on headphones).
+      // The webcam AUDIO track is routed through gain → limiter and swapped into
+      // the recorded stream; the VIDEO track passes through untouched. Non-
+      // destructive: the original audio track stays live for proctoring, and the
+      // ASR/transcription path uses its own separately-boosted stream. If Web
+      // Audio setup fails for any reason we record the raw stream unchanged.
+      let recordStream: MediaStream = stream;
+      try {
+        const aTracks = stream.getAudioTracks();
+        if (aTracks.length > 0) {
+          const Ctx: typeof AudioContext =
+            window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          const actx = new Ctx();
+          recordingAudioCtxRef.current = actx;
+          if (actx.state === 'suspended') actx.resume().catch(() => {});
+          const srcNode = actx.createMediaStreamSource(new MediaStream(aTracks));
+          const boost = actx.createGain();
+          boost.gain.value = 3.0; // lift quiet headset/earbud speech
+          // Limiter prevents the 3× boost from clipping a loud built-in mic.
+          const limiter = actx.createDynamicsCompressor();
+          limiter.threshold.value = -3;
+          limiter.knee.value = 0;
+          limiter.ratio.value = 20;
+          limiter.attack.value = 0.003;
+          limiter.release.value = 0.1;
+          const dest = actx.createMediaStreamDestination();
+          srcNode.connect(boost).connect(limiter).connect(dest);
+          recordStream = new MediaStream([
+            ...stream.getVideoTracks(),
+            ...dest.stream.getAudioTracks(),
+          ]);
+          console.log('[Recording] audio boost active (gain 3× + limiter) for clearer voice');
+        }
+      } catch (e) {
+        console.warn('[Recording] audio boost setup failed — recording raw audio:', e);
+        recordStream = stream;
+      }
+
       const RECORDER_OPTIONS: MediaRecorderOptions = {
         videoBitsPerSecond: 200_000,  // 200 Kbps — clear face video at talking-head scale
-        audioBitsPerSecond: 32_000,   // 32 Kbps — voice quality
+        audioBitsPerSecond: 64_000,   // 64 Kbps — clearer voice (was 32 Kbps)
       };
       const startRecorder = (opts: MediaRecorderOptions) => {
-        const recorder = new MediaRecorder(stream, opts);
+        const recorder = new MediaRecorder(recordStream, opts);
         recordedChunksRef.current = [];
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) recordedChunksRef.current.push(e.data);
@@ -2237,7 +2285,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case 'wired_headphone':
         micGainMaxRef.current = 10;
-        micGainTargetRef.current = 0.075;   // louder for quiet headset mics → up to ~6.25× gain
+        micGainTargetRef.current = 0.10;    // louder for quiet wired headset mics → up to ~8.3× gain
         micSilenceMultiplierRef.current = 1.4;
         break;
       case 'builtin':
@@ -7387,7 +7435,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
                     questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700'
                   } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
-                    {(questionTimerExpired || questionTimerSeconds <= 0) ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                    {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
                   </span>
                 </div>
               </div>
@@ -7892,7 +7940,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-400' :
                       questionTimerSeconds <= 60 ? 'text-amber-400' : 'text-violet-400'
                     }`}>
-                      {(questionTimerExpired || questionTimerSeconds <= 0) ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                      {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
                     </span>
                     {questionNumber !== null && totalQuestions !== null && (
                       <span className="text-[9px] text-[#475569] font-medium">Q {questionNumber} / {totalQuestions}</span>

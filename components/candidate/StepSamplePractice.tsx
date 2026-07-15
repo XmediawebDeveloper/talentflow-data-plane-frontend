@@ -1144,9 +1144,6 @@ export default function StepSamplePractice({
                 </div>
                 {/* Play/Replay-question button removed — the Repeat button in the
                     control bar does the same thing (replays only the question). */}
-                <p className="inline-flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" /> Practice only — not saved to our database
-                </p>
               </div>
             </div>
             {/* Your answer bubble (right) — live while recording, final after */}
