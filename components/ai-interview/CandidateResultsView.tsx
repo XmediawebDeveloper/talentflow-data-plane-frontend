@@ -2459,7 +2459,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 // Build Q/F/D numbering using question_history intent data.
                 // Strategy: build an intent lookup from ALL question_history entries
                 // (keyed by question text prefix), then classify each assistant message.
-                type QType = 'followup' | 'deepdive' | 'main' | 'closing';
+                type QType = 'followup' | 'deepdive' | 'main' | 'closing' | 'interstitial';
                 const _chatQh = (eval_.question_history || []) as any[];
 
                 // Map: first-60-chars of question → intent ('follow_up'|'probe'|'deep_dive'|'explore')
@@ -2535,8 +2535,38 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
                   );
                 };
+                // Detect informative / silence-ladder utterances ("Are you there?",
+                // "I couldn't get any response…", "…let's move on…"). These are spoken
+                // by Linda outside the question pipeline and must NOT be counted as
+                // questions — otherwise a silence nudge inflates the Q number (e.g. the
+                // nudge showed as "Q5" and stole the candidate's answer). Backend tags
+                // them interstitial:true / kind="silence_*"; we also match text as a
+                // fallback in case those flags don't survive the transcript pipeline.
+                const isInterstitialMsg = (m: any): boolean => {
+                  if (m.interstitial === true) return true;
+                  if (String(m.kind || '').toLowerCase().startsWith('silence')) return true;
+                  const t = (m.content || '').toLowerCase();
+                  return (
+                    t.startsWith('are you there') ||
+                    t.includes("couldn't get any response from you") ||
+                    t.includes('couldn’t get any response from you') ||
+                    t.includes("didn't get any response from you") ||
+                    t.includes('didn’t get any response from you') ||
+                    t.includes("haven't been able to hear any response") ||
+                    t.includes('haven’t been able to hear any response') ||
+                    t.includes("if you're there, please start speaking") ||
+                    t.includes('if you’re there, please start speaking')
+                  );
+                };
                 for (const m of messages) {
                   if (m.role === 'assistant') {
+                    // Interstitial → show in transcript but with NO Q label, and leave
+                    // the running question label untouched so the candidate's next
+                    // answer stays attributed to the real question.
+                    if (isInterstitialMsg(m)) {
+                      labeled.push({ msg: m, label: '', isFollowUp: false, qtype: 'interstitial' });
+                      continue;
+                    }
                     const intent = _lookupIntent(m.content);
                     const isDd = intent === 'deep_dive';
                     const isFu = !isDd && (intent === 'follow_up' || intent === 'probe' || !!m.is_follow_up);
@@ -2624,9 +2654,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           // real candidate reply; otherwise it was skipped and
                           // _skipReason explains how. Only on assistant question
                           // bubbles (never closing / clarification rephrases).
-                          const _nextMsg = labeled[idx + 1]?.msg;
+                          // Skip past interstitial nudges to find the real next turn,
+                          // so a question answered only after "Are you there?" still
+                          // reads as answered (not skipped).
+                          let _niIdx = idx + 1;
+                          while (_niIdx < labeled.length && labeled[_niIdx]?.qtype === 'interstitial') _niIdx++;
+                          const _nextMsg = labeled[_niIdx]?.msg;
                           const _answered = !!_nextMsg && _nextMsg.role === 'user' && !!(_nextMsg.content || '').trim();
-                          const skipNote = isAssistant && qtype !== 'closing' && !isClarificationMsg(msg)
+                          const skipNote = isAssistant && qtype !== 'closing' && qtype !== 'interstitial' && !isClarificationMsg(msg)
                             ? _skipReason(content, _answered)
                             : null;
 
@@ -2793,9 +2828,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
                         );
                       };
+                      // Informative / silence-ladder utterances — not questions.
+                      // Skipped entirely in the table view so they never occupy a Q row
+                      // (mirrors the chat view's isInterstitialMsg).
+                      const _tblIsInterstitial = (m: any): boolean => {
+                        if (m.interstitial === true) return true;
+                        if (String(m.kind || '').toLowerCase().startsWith('silence')) return true;
+                        const t = (m.content || '').toLowerCase();
+                        return (
+                          t.startsWith('are you there') ||
+                          t.includes("couldn't get any response from you") ||
+                          t.includes('couldn’t get any response from you') ||
+                          t.includes("didn't get any response from you") ||
+                          t.includes('didn’t get any response from you') ||
+                          t.includes("haven't been able to hear any response") ||
+                          t.includes('haven’t been able to hear any response') ||
+                          t.includes("if you're there, please start speaking") ||
+                          t.includes('if you’re there, please start speaking')
+                        );
+                      };
 
                       for (const m of messages) {
                         if (m.role === 'assistant') {
+                          // Interstitial nudge → leave current group + pendingAI intact
+                          // so the candidate's answer attaches to the real question.
+                          if (_tblIsInterstitial(m)) continue;
                           const _tblMsgIntent = _tblLookup(m.content);
                           const isDd = _tblMsgIntent === 'deep_dive';
                           const isFu = !isDd && (_tblMsgIntent === 'follow_up' || _tblMsgIntent === 'probe' || !!m.is_follow_up);

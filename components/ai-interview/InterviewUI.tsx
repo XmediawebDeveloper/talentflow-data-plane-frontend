@@ -5657,7 +5657,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
 
-      // No-response detection fallback — fire after 5s of total silence with no
+      // No-response detection fallback — fire after 10s of total silence with no
       // speech. The backend normally drives the canonical silence-nudge flow,
       // but the client fallback should match the same threshold.
       clearNoResponseTimer();
@@ -5665,7 +5665,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 5000);
+      }, 10000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a
