@@ -49,6 +49,32 @@ const PRACTICE_QUESTION =
 // Full script the AI voice reads aloud: greeting first, then the question.
 const PRACTICE_SPOKEN_SCRIPT = `${PRACTICE_GREETING} ${PRACTICE_QUESTION}`;
 
+// Per-question answer window in the REAL interview (timed mode) is 2 minutes.
+// The practice mock mirrors it so the candidate sees the exact same countdown.
+const PRACTICE_LIMIT_SECONDS = 120;
+
+// Format seconds → "M:SS" for the interview-style countdown timer.
+function fmtMMSS(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+// Guided "app tour" coach-marks. Each step highlights one element (by its
+// data-tour id inside the mock panel) and explains it, so the candidate learns
+// the real interview screen before it counts. Purely informational.
+interface TourStep { id: string; title: string; body: string; }
+const PRACTICE_TOUR_STEPS: TourStep[] = [
+  { id: 'header', title: 'Interview header', body: 'During the real interview this bar shows your verified identity, the current question, a live 2-minute timer, and the End button.' },
+  { id: 'linda', title: 'Meet Linda', body: 'Linda is your AI interviewer. She speaks each question aloud — you can replay it any time.' },
+  { id: 'timer', title: 'Your 2-minute timer', body: 'Each question gives you up to 2 minutes. It counts down while you answer; when it reaches 0 the interview moves on automatically.' },
+  { id: 'camera', title: 'Your camera & mic', body: 'Stay centered and clearly visible. The bar shows your live mic level so you know you are being heard.' },
+  { id: 'answer', title: 'Your answer appears here', body: 'As you speak, your words are transcribed and shown here — exactly like the real interview chat.' },
+  { id: 'record', title: 'Speak your answer', body: 'Click to start/stop recording your introduction. Try it now — this is only practice and is never saved.' },
+  { id: 'next', title: 'Move on with Next', body: 'In the real interview, Next moves you to the following question. Here it simply wraps up your practice answer.' },
+];
+
 // ── Helper: pick a good SpeechSynthesis voice ────────────────────────────────
 
 function pickVoice(): SpeechSynthesisVoice | null {
@@ -72,6 +98,79 @@ function pickVoice(): SpeechSynthesisVoice | null {
     (v) => v.lang.startsWith('en') && !v.name.toLowerCase().includes('male')
   );
   return english || voices.find((v) => v.lang.startsWith('en')) || voices[0];
+}
+
+// ── Coach-mark tour overlay ──────────────────────────────────────────────────
+// Renders INSIDE the mock panel (scoped, not fullscreen): dims the panel, draws
+// a spotlight ring around the current step's target ([data-tour="<id>"]), and
+// shows a fixed tooltip card at the bottom with the explanation + Next/Skip.
+function PracticeTour({
+  steps,
+  stepIndex,
+  panelRef,
+  onNext,
+  onClose,
+}: {
+  steps: TourStep[];
+  stepIndex: number;
+  panelRef: { current: HTMLDivElement | null };
+  onNext: () => void;
+  onClose: () => void;
+}) {
+  const [ring, setRing] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const step = steps[stepIndex];
+
+  useEffect(() => {
+    if (!step) { setRing(null); return; }
+    const compute = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const target = panel.querySelector<HTMLElement>(`[data-tour="${step.id}"]`);
+      if (!target) { setRing(null); return; }
+      const p = panel.getBoundingClientRect();
+      const t = target.getBoundingClientRect();
+      setRing({ top: t.top - p.top - 6, left: t.left - p.left - 6, width: t.width + 12, height: t.height + 12 });
+    };
+    compute();
+    const iv = setInterval(compute, 350); // follow layout/state changes
+    window.addEventListener('resize', compute);
+    return () => { clearInterval(iv); window.removeEventListener('resize', compute); };
+  }, [step, stepIndex, panelRef]);
+
+  if (!step) return null;
+  const isLast = stepIndex >= steps.length - 1;
+
+  return (
+    <div className="absolute inset-0 z-30">
+      {/* Spotlight ring — its huge box-shadow dims everything except the target.
+          pointer-events-none so the candidate can still click through. */}
+      {ring ? (
+        <div
+          className="absolute rounded-lg ring-2 ring-white/90 pointer-events-none transition-all duration-200"
+          style={{ top: ring.top, left: ring.left, width: ring.width, height: ring.height, boxShadow: '0 0 0 9999px rgba(2,6,20,0.72)' }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[#020614]/70 pointer-events-none" />
+      )}
+
+      {/* Tooltip card — fixed at the bottom of the panel (reliable placement). */}
+      <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-[min(92%,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-40">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-sm font-bold text-gray-900">{step.title}</p>
+          <span className="text-[11px] font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
+        </div>
+        <p className="text-sm text-gray-600 leading-relaxed">{step.body}</p>
+        <div className="flex items-center justify-end gap-2 mt-3">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
+            Skip tour
+          </button>
+          <button type="button" onClick={onNext} className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] transition-colors">
+            {isLast ? 'Got it' : 'Next'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -110,11 +209,15 @@ export default function StepSamplePractice({
   const [recordedDurationSeconds, setRecordedDurationSeconds] = useState<number | null>(null);
   // Live elapsed seconds shown during recording
   const [recordingElapsed, setRecordingElapsed] = useState(0);
+  // Guided coach-mark tour: -1 = inactive, 0..n-1 = current step index.
+  const [tourStep, setTourStep] = useState<number>(-1);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const replayVideoRef = useRef<HTMLVideoElement>(null);
+  // Scopes the coach-mark tour spotlight to the mock panel (not the browser).
+  const panelRef = useRef<HTMLDivElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -737,6 +840,26 @@ export default function StepSamplePractice({
     : typedAnswer;
   const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
+  // Interview-style countdown: full 2:00 until recording begins, then counts
+  // down with the elapsed time. Shown in the mock header timer.
+  const secondsLeft = Math.max(0, PRACTICE_LIMIT_SECONDS - (isRecording ? recordingElapsed : 0));
+  const timerLow = secondsLeft <= 30;
+
+  // Auto-stop the practice answer at the 2-minute limit — mirrors the real
+  // per-question timeout so the countdown genuinely ends the turn.
+  useEffect(() => {
+    if (isRecording && recordingElapsed >= PRACTICE_LIMIT_SECONDS) {
+      stopRecordingAndTranscribe();
+    }
+  }, [isRecording, recordingElapsed, stopRecordingAndTranscribe]);
+
+  // Launch the guided coach-mark tour once, shortly after mount (so target
+  // elements are laid out). Candidate can re-open it via the "Tips" button.
+  useEffect(() => {
+    const t = setTimeout(() => setTourStep((s) => (s === -1 ? 0 : s)), 900);
+    return () => clearTimeout(t);
+  }, []);
+
   // Practice recording is OPTIONAL — there is no minimum-duration gate. The
   // candidate can start the interview at any time, or skip the practice step.
 
@@ -763,15 +886,49 @@ export default function StepSamplePractice({
         <p className="text-gray-500 text-sm">Answer the practice question to verify your mic and camera — this won&apos;t be scored.</p>
       </div>
 
-      {/* ── Main interview-like panel ── */}
-      <div className="rounded-2xl overflow-hidden border border-gray-800 shadow-2xl bg-[#0A1020]">
+      {/* ── Main interview-like panel (the embedded "screen") ──
+          `relative` so the coach-mark tour overlay is scoped to THIS panel
+          (not the whole browser) — practice stays inside its box, not fullscreen. */}
+      <div ref={panelRef} className="relative rounded-2xl overflow-hidden border border-gray-800 shadow-2xl bg-[#0A1020]">
 
-        {/* Top bar */}
-        <div className="flex items-center px-4 py-2.5 border-b border-white/[0.07] bg-[#060D1A]">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2" />
-          <span className="tf-blink text-xs font-bold tracking-wider px-2.5 py-1 rounded-md bg-amber-400 text-gray-900 shadow-sm">
-            PRACTICE SESSION
-          </span>
+        {/* Interview-style header — mirrors the real interview top bar so the
+            candidate sees exactly what to expect: identity chip, question
+            counter, live 2-minute timer, a PRACTICE badge (where the real one
+            shows LIVE), and a Tips button that re-opens the guided tour. */}
+        <div data-tour="header" className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-white/[0.07] bg-gradient-to-r from-[#7C3AED] to-[#DB2777]">
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare className="w-4 h-4 text-white/90 flex-shrink-0" />
+            <div className="leading-tight min-w-0">
+              <p className="text-sm font-semibold text-white truncate">Practice with Linda</p>
+              <p className="text-[11px] text-white/70">Guided warm-up · nothing is saved</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/15 text-white text-[11px] font-medium ring-1 ring-white/20">
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" /></svg>
+              ID Verified
+            </span>
+            <span className="inline-flex items-center px-2 py-1 rounded-md bg-white/15 text-white text-[11px] font-semibold ring-1 ring-white/20">
+              Practice · Q 1/1
+            </span>
+            <span data-tour="timer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold tabular-nums ring-1 ${
+              timerLow ? 'bg-red-500 text-white ring-red-300/50 tf-blink' : 'bg-white/15 text-white ring-white/20'
+            }`}>
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
+              {fmtMMSS(secondsLeft)}
+            </span>
+            <span className="tf-blink inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-400 text-gray-900 text-[11px] font-bold ring-1 ring-amber-300 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-900" /> PRACTICE
+            </span>
+            <button
+              type="button"
+              onClick={() => setTourStep(0)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium ring-1 ring-white/20 transition-colors"
+              title="Show the guided tour"
+            >
+              ? Tips
+            </button>
+          </div>
         </div>
 
         {/* 2-Column Grid */}
@@ -779,7 +936,7 @@ export default function StepSamplePractice({
         {/* ── Left: AI Question Panel (dark) ── */}
         <div className="flex flex-col bg-[#0A1020] p-5 gap-5" style={{ minHeight: '360px' }}>
           {/* AI Avatar / waveform area */}
-          <div className="flex items-center gap-3">
+          <div data-tour="linda" className="flex items-center gap-3">
             <div className={`relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${aiSpeaking ? 'bg-[#7C3AED]' : 'bg-[#1E293B]'} transition-colors duration-300`}>
               <MessageSquare className="w-5 h-5 text-white" />
               {aiSpeaking && <span className="absolute inset-0 rounded-full bg-[#7C3AED]/40 animate-ping" />}
@@ -863,7 +1020,7 @@ export default function StepSamplePractice({
         {/* ── Right: Your Video + Answer ── */}
         <div className="flex flex-col bg-[#060D1A] p-5 gap-4" style={{ minHeight: '360px' }}>
           {/* Video preview / replay */}
-          <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+          <div data-tour="camera" className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
             {/* Live camera — hidden during replay */}
             <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} />
             {/* Replay video */}
@@ -932,7 +1089,7 @@ export default function StepSamplePractice({
           </div>
 
           {/* Your Answer + transcript */}
-          <div className="flex-1 flex flex-col gap-2">
+          <div data-tour="answer" className="flex-1 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <p className="text-xs text-[#64748B] font-medium uppercase tracking-wide">Your Answer</p>
               <div className="flex items-center gap-2">
@@ -997,22 +1154,37 @@ export default function StepSamplePractice({
             )}
           </div>
 
-          {/* Record button */}
+          {/* Control bar — Record + Next, laid out like the real interview. */}
           {micReady ? (
-            <button
-              type="button"
-              onClick={toggleRecording}
-              disabled={isTranscribing}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
-                isRecording
-                  ? 'bg-[#EF4444] text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
-                  : 'bg-[#1E293B] text-[#E2E8F0] border border-white/[0.08] hover:bg-[#334155]'
-              }`}
-            >
-              {isTranscribing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
-                : isRecording ? <><Square className="w-4 h-4" /> Stop Recording</>
-                : <><Mic className="w-4 h-4" /> {hasAnswer ? 'Re-record' : 'Start Recording'}</>}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                data-tour="record"
+                type="button"
+                onClick={toggleRecording}
+                disabled={isTranscribing}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                  isRecording
+                    ? 'bg-[#EF4444] text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
+                    : 'bg-[#1E293B] text-[#E2E8F0] border border-white/[0.08] hover:bg-[#334155]'
+                }`}
+              >
+                {isTranscribing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
+                  : isRecording ? <><Square className="w-4 h-4" /> Stop Recording</>
+                  : <><Mic className="w-4 h-4" /> {hasAnswer ? 'Re-record' : 'Start Recording'}</>}
+              </button>
+              {/* Next — mirrors the real interview's Next Question. In practice it
+                  simply wraps up the current answer (stops recording if live). */}
+              <button
+                data-tour="next"
+                type="button"
+                onClick={() => { if (isRecording) stopRecordingAndTranscribe(); }}
+                disabled={isTranscribing || (!isRecording && !hasAnswer)}
+                title={isRecording ? 'Finish this answer' : 'Record an answer first'}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Next <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           ) : (
             <div className="bg-amber-950/40 border border-amber-800/30 rounded-xl p-2.5 text-center">
               <p className="text-xs text-amber-400"><MicOff className="w-3.5 h-3.5 inline mr-1" />No microphone — type your answer above.</p>
@@ -1020,6 +1192,17 @@ export default function StepSamplePractice({
           )}
         </div>
       </div>
+
+        {/* Guided coach-mark tour — scoped to this panel (not fullscreen). */}
+        {tourStep >= 0 && (
+          <PracticeTour
+            steps={PRACTICE_TOUR_STEPS}
+            stepIndex={tourStep}
+            panelRef={panelRef}
+            onNext={() => setTourStep((s) => (s >= PRACTICE_TOUR_STEPS.length - 1 ? -1 : s + 1))}
+            onClose={() => setTourStep(-1)}
+          />
+        )}
       </div>{/* end outer dark panel */}
 
       {/* Footer Navigation */}
