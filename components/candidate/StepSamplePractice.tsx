@@ -13,6 +13,9 @@ import {
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { isTranscriptMeaningful } from '@/lib/utils/whisperFilter';
 import { recordPcm16 } from '@/lib/utils/pcmEnroll';
+// Reuse the SAME realtime waveform the live interview uses (canvas equalizer
+// reading the mic AnalyserNode), so practice looks identical.
+import { MicWaveform } from '@/components/ai-interview/MicWaveform';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -99,27 +102,6 @@ function pickVoice(): SpeechSynthesisVoice | null {
     (v) => v.lang.startsWith('en') && !v.name.toLowerCase().includes('male')
   );
   return english || voices.find((v) => v.lang.startsWith('en')) || voices[0];
-}
-
-// ── Live mic waveform ────────────────────────────────────────────────────────
-// Animated bars driven by the mic RMS level — mirrors the real interview's
-// microphone waveform. Idle bars are faint; active bars pulse with the voice.
-function MicWaveform({ level, active }: { level: number; active: boolean }) {
-  const shape = [0.45, 0.75, 1, 0.6, 0.9, 0.5, 0.85, 0.65, 0.4];
-  return (
-    <div className="flex items-center justify-center gap-[3px] h-7">
-      {shape.map((s, i) => {
-        const h = active ? Math.max(12, Math.min(100, level * s * 220 + 12)) : 12;
-        return (
-          <span
-            key={i}
-            className={`w-[3px] rounded-full ${active ? 'bg-emerald-400' : 'bg-white/20'}`}
-            style={{ height: `${h}%`, transition: 'height 90ms linear' }}
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 // ── Coach-mark tour overlay ──────────────────────────────────────────────────
@@ -237,6 +219,9 @@ export default function StepSamplePractice({
   // the auto-record-on-question-end from re-opening the mic.
   const [practiceDone, setPracticeDone] = useState(false);
   const practiceDoneRef = useRef(false);
+  // Accumulated seconds the candidate has spent ANSWERING (excludes time while
+  // Linda is speaking) — drives the 2-min countdown and survives Repeat.
+  const [answerElapsed, setAnswerElapsed] = useState(0);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
@@ -257,6 +242,9 @@ export default function StepSamplePractice({
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const recognitionRef = useRef<any>(null);
   const webSpeechFinalRef = useRef('');
+  // Proactively restarts Web Speech recognition every 50s (it degrades/stops
+  // after ~60s of continuous use) — same policy as the live interview.
+  const webSpeechRestartRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveTranscriptRef = useRef('');
   const audioMimeTypeUsedRef = useRef('');
   const hasAutoSpokeRef = useRef(false);
@@ -334,6 +322,10 @@ export default function StepSamplePractice({
       if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
         try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
         videoRecorderRef.current = null;
+      }
+      if (webSpeechRestartRef.current) {
+        clearInterval(webSpeechRestartRef.current);
+        webSpeechRestartRef.current = null;
       }
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch { /* ignore */ }
@@ -622,9 +614,24 @@ export default function StepSamplePractice({
 
     recognitionRef.current = recognition;
     try { recognition.start(); } catch { /* ignore */ }
+
+    // Restart the recognizer every 50s. The Web Speech API silently degrades /
+    // ends after ~60s of continuous listening, so we stop it at 50s — onend
+    // (above) immediately restarts it, and webSpeechFinalRef keeps the text
+    // accumulated across restarts so nothing is lost. Same as the live interview.
+    if (webSpeechRestartRef.current) clearInterval(webSpeechRestartRef.current);
+    webSpeechRestartRef.current = setInterval(() => {
+      if (mediaRecorderRef.current?.state === 'recording' && recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch { /* onend restarts it */ }
+      }
+    }, 50000);
   }, [startPeriodicTranscription]);
 
   const stopLiveTranscription = useCallback(() => {
+    if (webSpeechRestartRef.current) {
+      clearInterval(webSpeechRestartRef.current);
+      webSpeechRestartRef.current = null;
+    }
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
@@ -871,18 +878,29 @@ export default function StepSamplePractice({
     : typedAnswer;
   const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
-  // Interview-style countdown: full 2:00 until recording begins, then counts
-  // down with the elapsed time. Shown in the mock header timer.
-  const secondsLeft = Math.max(0, PRACTICE_LIMIT_SECONDS - (isRecording ? recordingElapsed : 0));
-  const timerLow = secondsLeft <= 30;
+  // Interview-style countdown from the ACCUMULATED answering time (which pauses
+  // while Linda speaks) — full 2:00 until the candidate starts answering.
+  const secondsLeft = Math.max(0, PRACTICE_LIMIT_SECONDS - answerElapsed);
+  const timerLow = secondsLeft <= 30 && answerElapsed > 0;
 
-  // Auto-stop the practice answer at the 2-minute limit — mirrors the real
+  // Countdown ticks ONLY while the answer window is open AND Linda is NOT
+  // speaking. So Repeat (Linda re-speaks → aiSpeaking) PAUSES the timer, and it
+  // RESUMES from where it left when she finishes — it never resets.
+  useEffect(() => {
+    if (!isRecording || aiSpeaking || practiceDone) return;
+    const iv = setInterval(() => {
+      setAnswerElapsed((s) => Math.min(PRACTICE_LIMIT_SECONDS, s + 1));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [isRecording, aiSpeaking, practiceDone]);
+
+  // Auto-finish the answer at the 2-minute budget — mirrors the real
   // per-question timeout so the countdown genuinely ends the turn.
   useEffect(() => {
-    if (isRecording && recordingElapsed >= PRACTICE_LIMIT_SECONDS) {
+    if (!practiceDone && answerElapsed >= PRACTICE_LIMIT_SECONDS && isRecording) {
       stopRecordingAndTranscribe();
     }
-  }, [isRecording, recordingElapsed, stopRecordingAndTranscribe]);
+  }, [answerElapsed, isRecording, practiceDone, stopRecordingAndTranscribe]);
 
   // Launch the guided coach-mark tour once, shortly after mount (so target
   // elements are laid out). Candidate can re-open it via the "Tips" button.
@@ -1131,7 +1149,7 @@ export default function StepSamplePractice({
                       : aiSpeaking ? 'Linda is speaking…'
                       : 'Getting ready…'}
                   </span>
-                  <MicWaveform level={audioLevel} active={isRecording} />
+                  <MicWaveform analyserRef={analyserRef} active={isRecording} color="#34d399" width={120} height={26} />
                 </div>
                 {/* Repeat the question (replays it and re-opens the mic) */}
                 <button
