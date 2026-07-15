@@ -1573,6 +1573,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const isAiSpeakingRef = useRef(false);
   // True while Linda is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
   const isSilencePromptRef = useRef(false);
+  // True while Linda is speaking the opening "About the role" warm-up message.
+  // It's an uncounted preamble that must NOT open the mic when its audio ends —
+  // the mic opens for the "tell me about yourself" question that immediately
+  // follows. finalizePlayback checks this and skips the mic-open (then it's
+  // cleared by the next speaking_started / greeting).
+  const roleIntroActiveRef = useRef(false);
   const isProcessingRef = useRef(false);
   // Cancellable ref for the 800ms "start recording after Linda stops" setTimeout.
   // Cancelled by the Next Q handler to prevent stale recording after a skip.
@@ -3120,6 +3126,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
+      case "role_intro":
+        // Opening "About the role" warm-up — spoken + rendered as an assistant
+        // bubble, but it's NOT a question: when its audio ends the mic must NOT
+        // open (the 'tell me about yourself' question follows immediately). We
+        // reuse the greeting/interstitial display path and set roleIntroActiveRef
+        // so finalizePlayback skips the mic-open for this message only.
+        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
+        roleIntroActiveRef.current = true;
+        tokenBufferRef.current = (data.text as string) ?? "";
+        revealedCharsRef.current = 0;
+        isAiSpeakingRef.current = true;
+        setIsAiSpeaking(true);
+        avatarState.onAiStartSpeaking();
+        audioEndReceivedRef.current = false;
+        talkingHeadEndedEarlyRef.current = false;
+        setStatus("Linda is speaking...");
+        startRevealingTokens();
+        talkingHeadRef.current?.setText((data.text as string) ?? "");
+        break;
       case "server_end_turn": {
         // Server-side EndOfTurn: the provider's neural turn detector decided the
         // candidate finished. Stop recording now (which sends the normal end_turn,
@@ -3668,6 +3693,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               setTimeout(() => { disconnectRef.current(); }, 1500);
               return;
             }
+            // Role-intro warm-up: this message is NOT a question — do NOT open
+            // the mic. The 'tell me about yourself' question follows immediately
+            // (its own speaking_started/greeting arms the mic). Committing the
+            // bubble (saveAiMessage above) + state cleanup already happened; just
+            // skip the mic-open and clear the flag.
+            if (roleIntroActiveRef.current) {
+              roleIntroActiveRef.current = false;
+              setStatus("Linda is speaking...");
+              return;
+            }
             // Point 4: clarification ends the moment Linda finishes speaking
             setIsClarification(false);
             isClarificationRef.current = false;
@@ -4138,7 +4173,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (!sameQuestion) repeatUsedThisTurnRef.current = false;
 
         // Clamp question number — never exceed totalQuestions (safety net for Q15 follow-up edge cases)
-        if (incomingQNum != null) setQuestionNumber(Math.min(incomingQNum, totalQuestions ?? incomingQNum));
+        // incomingQNum >= 1 is a real numbered question. 0 = the uncounted
+        // "tell me about yourself" warm-up (no HR/TMAY) — leave questionNumber
+        // null so the header hides "Q x/15" until the first counted question.
+        if (incomingQNum != null && incomingQNum >= 1) setQuestionNumber(Math.min(incomingQNum, totalQuestions ?? incomingQNum));
         if (data.total_questions != null) setTotalQuestions(data.total_questions);
 
         // Mark which skill is now being asked — backend sends current_cluster_id + current_skill

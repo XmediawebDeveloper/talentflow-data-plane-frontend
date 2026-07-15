@@ -1079,7 +1079,7 @@ export default function StepSamplePractice({
               ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Linda is listening' }
               : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Linda is speaking', subtitle: 'Please wait until she finishes the question' };
             return (
-              <div className="absolute inset-x-0 bottom-[74px] z-20 flex justify-center px-4 pointer-events-none">
+              <div className="absolute inset-x-0 bottom-[64px] z-30 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[#060D1A] via-[#060D1A] via-70% to-transparent">
                 <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[240px] max-w-[94%]`}>
                   <div className="relative shrink-0">
                     <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">
@@ -1123,7 +1123,7 @@ export default function StepSamplePractice({
             </div>
           )}
           {/* Chat thread — Linda bubbles (left) + your answer bubble (right) */}
-          <div data-tour="answer" className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '420px' }}>
+          <div data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-20 space-y-3" style={{ maxHeight: '420px' }}>
             {/* Linda greeting */}
             <div className="flex items-start gap-2">
               <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
