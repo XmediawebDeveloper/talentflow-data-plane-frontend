@@ -761,22 +761,28 @@ export default function StepSystemCheck({
       return b ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
     };
 
+    // The two checks are FULLY INDEPENDENT, each answering its own question:
+    //   • Face Detection    → is the candidate's OWN face present?  (needs >=1)
+    //   • Multiple People    → are there EXTRA people?  (only 2+ is a violation)
+    // So they never move as a pair: 0 faces → Face fails, Multiple passes (no
+    // extra people); 1 face → both pass; 2+ faces → Face passes, Multiple fails.
+    // Face Detection alone gates "you must be visible" (allSystemPassed needs it),
+    // so passing Multiple at 0 faces can't let anyone through without a face.
     const applyFaceCount = (count: number) => {
-      if (count === 1) {
+      // Face Detection: purely about the candidate's face being present.
+      if (count >= 1) {
         updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
-        updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
-      } else if (count === 0) {
-        updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
-        // No face is a FACE-DETECTION concern, not a multiple-people violation.
-        // Decouple the two: the Multiple People Check must NOT show a red failure
-        // just because the face isn't visible yet — keep it neutral/waiting
-        // ('checking'), and let it resolve to pass (1 face) or fail (2+ faces)
-        // only once a face actually appears. This is what fixes the "both No face
-        // AND Multiple people failed at once" contradiction.
-        updateSystemCheck('multiple', { status: 'checking', detail: 'Waiting for your face…' });
       } else {
-        updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
+        updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
+      }
+      // Multiple People Check: purely about EXTRA people — independent of whether
+      // the face is currently visible. Passes for 0 or 1 person; fails only at 2+.
+      if (count >= 2) {
         updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
+      } else if (count === 1) {
+        updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
+      } else {
+        updateSystemCheck('multiple', { status: 'pass', detail: 'No other people detected' });
       }
     };
 

@@ -2,15 +2,12 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Mic,
   MicOff,
-  RefreshCw,
   MessageSquare,
   Volume2,
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Square,
   Play,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
@@ -49,6 +46,10 @@ const PRACTICE_QUESTION =
 // Full script the AI voice reads aloud: greeting first, then the question.
 const PRACTICE_SPOKEN_SCRIPT = `${PRACTICE_GREETING} ${PRACTICE_QUESTION}`;
 
+// Linda's sign-off, spoken when the candidate finishes the practice (clicks Next).
+const PRACTICE_CLOSING_MESSAGE =
+  "Great — that's the idea! You're all set and ready to begin the real interview. Take a breath, relax, and do your best. All the best!";
+
 // Per-question answer window in the REAL interview (timed mode) is 2 minutes.
 // The practice mock mirrors it so the candidate sees the exact same countdown.
 const PRACTICE_LIMIT_SECONDS = 120;
@@ -71,8 +72,8 @@ const PRACTICE_TOUR_STEPS: TourStep[] = [
   { id: 'timer', title: 'Your 2-minute timer', body: 'Each question gives you up to 2 minutes. It counts down while you answer; when it reaches 0 the interview moves on automatically.' },
   { id: 'camera', title: 'Your camera & mic', body: 'Stay centered and clearly visible. The bar shows your live mic level so you know you are being heard.' },
   { id: 'answer', title: 'Your answer appears here', body: 'As you speak, your words are transcribed and shown here — exactly like the real interview chat.' },
-  { id: 'record', title: 'Speak your answer', body: 'Click to start/stop recording your introduction. Try it now — this is only practice and is never saved.' },
-  { id: 'next', title: 'Move on with Next', body: 'In the real interview, Next moves you to the following question. Here it simply wraps up your practice answer.' },
+  { id: 'record', title: 'Just speak — no buttons', body: 'The mic opens automatically after Linda finishes the question — simply speak your introduction. This waveform shows you are being heard. Use Repeat to hear the question again. Nothing is saved.' },
+  { id: 'next', title: 'Move on with Next', body: 'When you have finished, click Next. In the real interview this goes to the following question; here Linda gives you a quick "all the best" and you can start.' },
 ];
 
 // ── Helper: pick a good SpeechSynthesis voice ────────────────────────────────
@@ -98,6 +99,27 @@ function pickVoice(): SpeechSynthesisVoice | null {
     (v) => v.lang.startsWith('en') && !v.name.toLowerCase().includes('male')
   );
   return english || voices.find((v) => v.lang.startsWith('en')) || voices[0];
+}
+
+// ── Live mic waveform ────────────────────────────────────────────────────────
+// Animated bars driven by the mic RMS level — mirrors the real interview's
+// microphone waveform. Idle bars are faint; active bars pulse with the voice.
+function MicWaveform({ level, active }: { level: number; active: boolean }) {
+  const shape = [0.45, 0.75, 1, 0.6, 0.9, 0.5, 0.85, 0.65, 0.4];
+  return (
+    <div className="flex items-center justify-center gap-[3px] h-7">
+      {shape.map((s, i) => {
+        const h = active ? Math.max(12, Math.min(100, level * s * 220 + 12)) : 12;
+        return (
+          <span
+            key={i}
+            className={`w-[3px] rounded-full ${active ? 'bg-emerald-400' : 'bg-white/20'}`}
+            style={{ height: `${h}%`, transition: 'height 90ms linear' }}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 // ── Coach-mark tour overlay ──────────────────────────────────────────────────
@@ -211,6 +233,10 @@ export default function StepSamplePractice({
   const [recordingElapsed, setRecordingElapsed] = useState(0);
   // Guided coach-mark tour: -1 = inactive, 0..n-1 = current step index.
   const [tourStep, setTourStep] = useState<number>(-1);
+  // True after the candidate clicks Next and Linda plays the sign-off — stops
+  // the auto-record-on-question-end from re-opening the mic.
+  const [practiceDone, setPracticeDone] = useState(false);
+  const practiceDoneRef = useRef(false);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
@@ -369,7 +395,15 @@ export default function StepSamplePractice({
       if (voice) utterance.voice = voice;
 
       utterance.onstart = () => setAiSpeaking(true);
-      utterance.onend = () => { setAiSpeaking(false); };
+      // When Linda finishes the question, AUTO-OPEN the mic (no manual Start
+      // button) — just like the real interview's "your turn, speak now". Guarded
+      // so the practice-complete sign-off never re-opens the mic.
+      utterance.onend = () => {
+        setAiSpeaking(false);
+        if (!practiceDoneRef.current) {
+          setTimeout(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); }, 150);
+        }
+      };
       utterance.onerror = (e) => {
         const err = (e as SpeechSynthesisErrorEvent).error;
         // 'interrupted'/'canceled' are expected when cancel() is called — not real errors
@@ -446,6 +480,15 @@ export default function StepSamplePractice({
       return () => clearTimeout(t);
     }
   }, [micReady, speakQuestion]);
+
+  // Fallback: if TTS autoplay was blocked (Brave) the question's onend never
+  // fires, so the mic would never auto-open. Open it anyway — the question is
+  // still readable in the chat bubble, and the candidate can Repeat to hear it.
+  useEffect(() => {
+    if (autoSpeakBlocked && micReady && !practiceDoneRef.current) {
+      startRecordingRef.current?.();
+    }
+  }, [autoSpeakBlocked, micReady]);
 
   // ── Periodic backend transcription (Brave / Firefox fallback) ────────────
   // Brave blocks webkitSpeechRecognition (Google cloud API). Instead, we send the
@@ -789,46 +832,34 @@ export default function StepSamplePractice({
   // Keep ref in sync so speakQuestion.onend can call the latest startRecording
   useEffect(() => { startRecordingRef.current = startRecording; }, [startRecording]);
 
-  const toggleRecording = useCallback(() => {
-    if (isRecording) {
-      stopRecordingAndTranscribe();
-    } else {
-      startRecording();
-    }
-  }, [isRecording, startRecording, stopRecordingAndTranscribe]);
+  // Linda's spoken sign-off after the candidate finishes the practice. Runs from
+  // the Next-button click (user gesture → Brave-safe). A plain utterance so it
+  // doesn't trip the auto-record-on-end path (that only lives on speakQuestion).
+  const speakClosing = useCallback(() => {
+    if (!window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      const u = new SpeechSynthesisUtterance(PRACTICE_CLOSING_MESSAGE);
+      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+      const v = pickVoice(); if (v) u.voice = v;
+      u.onstart = () => setAiSpeaking(true);
+      u.onend = () => setAiSpeaking(false);
+      u.onerror = () => setAiSpeaking(false);
+      utteranceRef.current = u;
+      window.speechSynthesis.speak(u);
+    } catch { /* best-effort */ }
+  }, []);
 
-  const resetPractice = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
-      mediaRecorderRef.current = null;
-    }
-    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
-      try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
-      videoRecorderRef.current = null;
-    }
-    stopLiveTranscription();
-    audioChunksRef.current = [];
-    videoChunksRef.current = [];
-    setIsRecording(false);
-    setIsTranscribing(false);
-    setTranscript('');
-    setLiveTranscript('');
-    setTypedAnswer('');
-    setInputMode('none');
-    setVoiceReady(false);
-    setTranscribeError('');
-    setAiSpeaking(false);
-    setRecordedVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
-    setShowReplay(false);
-    setRecordedDurationSeconds(null);
-    setRecordingElapsed(0);
-    recordingStartTimeRef.current = null;
-    if (elapsedIntervalRef.current) {
-      clearInterval(elapsedIntervalRef.current);
-      elapsedIntervalRef.current = null;
-    }
-    window.speechSynthesis?.cancel();
-  }, [stopLiveTranscription]);
+  // Next — like the real interview's "Next Question": wrap up the answer (stop
+  // the auto-recording), then Linda plays the "you're ready — all the best"
+  // sign-off. Marks the practice done so the mic doesn't auto-reopen.
+  const handlePracticeNext = useCallback(() => {
+    practiceDoneRef.current = true;
+    setPracticeDone(true);
+    if (isRecording) stopRecordingAndTranscribe();
+    speakClosing();
+  }, [isRecording, stopRecordingAndTranscribe, speakClosing]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -1068,53 +1099,83 @@ export default function StepSamplePractice({
                 </div>
               </div>
             )}
+            {/* Linda's sign-off after Next — "you're ready, all the best". */}
+            {practiceDone && (
+              <div className="flex items-start gap-2">
+                <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
+                <div className="max-w-[88%]">
+                  <p className="text-[10px] font-semibold text-[#A78BFA] mb-1">LINDA</p>
+                  <div className="bg-[#1E293B]/80 border border-emerald-500/25 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
+                    <p className="text-[#E2E8F0] text-sm leading-relaxed">{PRACTICE_CLOSING_MESSAGE}</p>
+                  </div>
+                  <p className="mt-2 text-[11px] text-emerald-300">You can now click <span className="font-semibold">Start Interview</span> below.</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Control bar — Play / Record / Next, like the real interview. */}
-          <div className="border-t border-white/[0.07] p-3 flex items-center gap-2">
+          {/* Control bar — like the real interview: the mic auto-listens (no
+              Start/Stop button), a live waveform shows you're heard, and you
+              Repeat the question or move on with Next. */}
+          <div className="border-t border-white/[0.07] p-3">
             {micReady ? (
-              <>
+              <div className="flex items-center gap-3">
+                {/* Mic status + live waveform (auto-recording) */}
+                <div data-tour="record" className="flex-1 min-w-0 flex items-center gap-3 bg-[#0F1A2E] border border-white/[0.06] rounded-xl px-3 py-2">
+                  <span className={`text-xs font-medium whitespace-nowrap ${
+                    isRecording ? 'text-[#EF4444]' : isTranscribing ? 'text-[#60A5FA]' : practiceDone ? 'text-emerald-400' : aiSpeaking ? 'text-[#A78BFA]' : 'text-[#94A3B8]'
+                  }`}>
+                    {isRecording ? '● Listening…'
+                      : isTranscribing ? 'Processing…'
+                      : practiceDone ? 'All set ✓'
+                      : aiSpeaking ? 'Linda is speaking…'
+                      : 'Getting ready…'}
+                  </span>
+                  <MicWaveform level={audioLevel} active={isRecording} />
+                </div>
+                {/* Repeat the question (replays it and re-opens the mic) */}
                 <button
-                  data-tour="record"
                   type="button"
-                  onClick={toggleRecording}
-                  disabled={isTranscribing}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
-                    isRecording
-                      ? 'bg-[#EF4444] text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
-                      : 'bg-[#1E293B] text-[#E2E8F0] border border-white/[0.08] hover:bg-[#334155]'
-                  }`}
+                  onClick={() => { practiceDoneRef.current = false; setPracticeDone(false); setAutoSpeakBlocked(false); speakQuestion(); }}
+                  disabled={aiSpeaking}
+                  title="Replay the question"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium text-[#E2E8F0] bg-[#1E293B] border border-white/[0.08] hover:bg-[#334155] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
-                  {isTranscribing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
-                    : isRecording ? <><Square className="w-4 h-4" /> Stop Recording</>
-                    : <><Mic className="w-4 h-4" /> {hasAnswer ? 'Re-record' : 'Start Recording'}</>}
+                  <Volume2 className="w-4 h-4" /> Repeat
                 </button>
-                {hasAnswer && !isRecording && !isTranscribing && (
-                  <button type="button" onClick={resetPractice} title="Retry" className="flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium text-[#94A3B8] bg-[#1E293B] border border-white/[0.08] hover:bg-[#334155] transition-all">
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                )}
+                {/* Next — finish the answer; Linda plays the sign-off. */}
                 <button
                   data-tour="next"
                   type="button"
-                  onClick={() => { if (isRecording) stopRecordingAndTranscribe(); }}
-                  disabled={isTranscribing || (!isRecording && !hasAnswer)}
-                  title={isRecording ? 'Finish this answer' : 'Record an answer first'}
+                  onClick={handlePracticeNext}
+                  disabled={aiSpeaking || isTranscribing || practiceDone || (!isRecording && !hasAnswer)}
+                  title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Linda' : 'Answer first'}
                   className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
-              </>
+              </div>
             ) : (
-              <div className="flex-1">
+              <div>
                 <p className="text-xs text-amber-400 mb-2"><MicOff className="w-3.5 h-3.5 inline mr-1" />No microphone — type your answer instead.</p>
-                <textarea
-                  value={typedAnswer}
-                  onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
-                  placeholder="Type your answer here…"
-                  className="w-full min-h-[52px] bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-2.5 text-sm text-[#CBD5E1] placeholder-[#475569] resize-none focus:outline-none focus:border-[#3B82F6]/50"
-                  rows={2}
-                />
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={typedAnswer}
+                    onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
+                    placeholder="Type your answer here…"
+                    className="flex-1 min-h-[52px] bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-2.5 text-sm text-[#CBD5E1] placeholder-[#475569] resize-none focus:outline-none focus:border-[#3B82F6]/50"
+                    rows={2}
+                  />
+                  <button
+                    data-tour="next"
+                    type="button"
+                    onClick={handlePracticeNext}
+                    disabled={aiSpeaking || practiceDone || !typedAnswer.trim()}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
