@@ -767,9 +767,13 @@ export default function StepSystemCheck({
         updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
       } else if (count === 0) {
         updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
-        // No face → by definition NOT multiple people. Keep the two checks
-        // consistent: report "no person" (pending-style), never a people count.
-        updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected — waiting for your face' });
+        // No face is a FACE-DETECTION concern, not a multiple-people violation.
+        // Decouple the two: the Multiple People Check must NOT show a red failure
+        // just because the face isn't visible yet — keep it neutral/waiting
+        // ('checking'), and let it resolve to pass (1 face) or fail (2+ faces)
+        // only once a face actually appears. This is what fixes the "both No face
+        // AND Multiple people failed at once" contradiction.
+        updateSystemCheck('multiple', { status: 'checking', detail: 'Waiting for your face…' });
       } else {
         updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
         updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
