@@ -312,9 +312,9 @@ const MessageRow = (({ msg }: MessageRowProps) => {
     // spoken answer.
     return (
       <div className="flex justify-end">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          <p className="text-xs font-medium">{msg.content}</p>
+        <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+          <p className="text-sm font-medium">{msg.content}</p>
         </div>
       </div>
     );
@@ -656,6 +656,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  // Set true when the candidate clicks End WHILE they were mid-answer. We stop
+  // recording first (→ end_turn → the answer is transcribed and shown as a chat
+  // bubble), then send `end_interview` only AFTER that transcript commits — so
+  // Linda's farewell never pre-empts processing the candidate's final answer.
+  const pendingEndAfterTranscriptRef = useRef(false);
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
   // Seconds left in the 10s grace window before the session hard-pauses.
   // null = no grace period active (either before any exit, or after the
@@ -3213,6 +3218,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               skipChipIdRef.current = null;
               setMessages(prev => prev.filter(m => m.id !== _chipId));
             }
+            // End-while-answering: the candidate clicked End mid-answer; we held
+            // the close until their answer was transcribed. It's committed now —
+            // send end_interview so Linda's farewell starts AFTER their answer
+            // bubble is on screen (not before).
+            if (pendingEndAfterTranscriptRef.current) {
+              pendingEndAfterTranscriptRef.current = false;
+              setStatus("Ending interview…");
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+              }
+            }
             // The decoupled/background flow tags late transcripts with the
             // question they answered. `qn` is that number (or null for the
             // synchronous flow, where the answer is always the most recent one).
@@ -3674,6 +3690,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         };
         break;
       case "silent_discard":
+        // If the candidate clicked End mid-answer but the answer was discarded
+        // (noise / non-English), there's no bubble to wait for — end now instead
+        // of stalling until the 12s safety net.
+        if (pendingEndAfterTranscriptRef.current) {
+          pendingEndAfterTranscriptRef.current = false;
+          setStatus("Ending interview…");
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+          }
+        }
         // Backend silently discarded the transcript (noise, non-English, hallucination).
         // Clear processing and reopen mic. Resume the per-question timer (it was
         // paused by question_timer_stopped on end_turn — since the response was
@@ -7245,10 +7271,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
           {/* ── Bottom half: Candidate webcam ── */}
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* Label row — REC badge and HAND RAISED badge removed per UX request.
-                Only the "You" label remains. */}
-            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center">
+            {/* Label row — "You" on the left, REC badge on the right (moved here
+                from the chat header per UX request). REC is persistent while the
+                interview is live; solid red + pulse while the mic is actively
+                capturing, dimmed between turns. */}
+            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center justify-between">
               <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">You</span>
+              {isConnected && !isClosing && (
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
+                  isRecording && !isMuted
+                    ? 'bg-red-500/40 border-red-400/70'
+                    : 'bg-red-500/20 border-red-400/40'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
+                  <span className="text-red-100 text-[10px] font-bold tracking-wide">REC</span>
+                </div>
+              )}
             </div>
 
             {/* Webcam feed fills this half */}
@@ -7320,6 +7358,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             </div>
 
             <div className="flex items-center gap-2">
+              {/* LIVE badge — FIRST in the header, green. */}
+              <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/25 rounded-full border border-emerald-400/50">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                <span className="text-emerald-100 text-[10px] font-bold">LIVE</span>
+              </div>
               {/* Identity verified */}
               {(faceVerification || voiceVerification) && (
                 <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/15 border border-white/25">
@@ -7353,24 +7396,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 {isFlexibleMode && <span className="text-white/55 text-[9px] font-semibold ml-0.5">REM</span>}
                 {isInBuffer && !isFlexibleMode && <span className="text-amber-200 text-[9px] font-semibold ml-0.5">BUF</span>}
               </div>
-              {/* REC badge — persistent while the interview is live (the session
-                  is recorded end-to-end). Solid red + pulse while the candidate's
-                  mic is actively capturing; dimmed between turns. */}
-              {isConnected && !isClosing && (
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors duration-300 ${
-                  isRecording && !isMuted
-                    ? 'bg-red-500/30 border-red-400/60'
-                    : 'bg-red-500/12 border-red-400/25'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
-                  <span className="text-red-100 text-[10px] font-bold tracking-wide">REC</span>
-                </div>
-              )}
-              {/* LIVE badge */}
-              <div className="flex items-center gap-1 px-2 py-1 bg-white/20 rounded-full border border-white/30">
-                <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                <span className="text-white text-[10px] font-bold">LIVE</span>
-              </div>
+              {/* REC badge moved to the candidate video's top-right corner; LIVE
+                  moved to the front of the header (green) — see above / below. */}
               {/* Closing indicator */}
               {isClosing && (
                 <div className="px-2 py-1 bg-orange-500/30 border border-orange-400/40 text-orange-100 rounded-lg text-[10px] font-medium animate-pulse">Ending...</div>
@@ -7868,15 +7895,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <button
                 onClick={() => {
                   setShowEndConfirm(false);
-                  // Send end_interview and let the backend farewell flow own the
-                  // close. The frontend already waits for the true end of Linda's
-                  // audio on interview_ended/auto_disconnect. Flipping the
-                  // local closing flag here makes finalizePlayback tear down
-                  // the CURRENT Linda audio before the backend farewell starts.
-                  setStatus("Ending interview…");
-                  if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                  const sendEnd = () => {
+                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                      wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                    }
+                  };
+                  // If the candidate is mid-answer (actively recording AND has
+                  // spoken), PROCESS THAT ANSWER FIRST: stop recording so the
+                  // normal end_turn pipeline transcribes it and shows it as a
+                  // chat bubble, THEN send end_interview once the final transcript
+                  // commits (see the `transcript` is_final handler). Linda's
+                  // farewell no longer pre-empts the candidate's last answer.
+                  if (isRecordingRef.current && speechDetectedRef.current) {
+                    pendingEndAfterTranscriptRef.current = true;
+                    setStatus("Processing your answer…");
+                    setIsCandidateTranscriptProcessing(true);
+                    stopRecording();  // → end_turn → transcript → then sendEnd fires
+                    // Safety net: if no transcript lands within 12s (ASR stall /
+                    // discarded answer), end anyway so End can't hang.
+                    setTimeout(() => {
+                      if (pendingEndAfterTranscriptRef.current) {
+                        pendingEndAfterTranscriptRef.current = false;
+                        setStatus("Ending interview…");
+                        sendEnd();
+                      }
+                    }, 12000);
+                    return;
                   }
+                  // Not mid-answer — end immediately (original behavior). The
+                  // backend farewell flow owns the close; the frontend waits for
+                  // the true end of Linda's audio on interview_ended/auto_disconnect.
+                  setStatus("Ending interview…");
+                  sendEnd();
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}
