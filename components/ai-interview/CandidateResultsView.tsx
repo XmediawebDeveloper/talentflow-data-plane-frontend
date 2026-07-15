@@ -107,7 +107,7 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   camera_obstructed:        { label: 'Camera Obstructed',    icon: <Eye className="w-4 h-4" />,           color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20' },
   microphone_disabled:      { label: 'Mic Disabled',         icon: <Mic className="w-4 h-4" />,           color: 'text-slate-600',  bg: 'bg-slate-50',  border: 'border-slate-200'  },
   voice_detected:           { label: 'Voice Detected',       icon: <Volume2 className="w-4 h-4" />,       color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20' },
-  multiple_voices:          { label: 'Multiple Voices',      icon: <Volume2 className="w-4 h-4" />,       color: 'text-brand-teal', bg: 'bg-brand-teal/10', border: 'border-brand-teal/20' },
+  multiple_voices:          { label: 'Multiple Speakers',    icon: <Volume2 className="w-4 h-4" />,       color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
   multiple_faces:           { label: 'Multiple Faces',       icon: <Users className="w-4 h-4" />,         color: 'text-brand-blue', bg: 'bg-brand-blue/10', border: 'border-brand-blue/20' },
   face_missing:             { label: 'Face Not Visible',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-600',    bg: 'bg-red-50',    border: 'border-red-200'    },
   gaze_away:                { label: 'Gaze Away',            icon: <Eye className="w-4 h-4" />,           color: 'text-brand-orange', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
@@ -1325,6 +1325,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     The candidate switched tabs, minimized, lost window focus, or exited fullscreen during the interview. Per the proctoring policy the session was ended automatically and cannot be resumed.
                   </div>
                 )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Multiple speakers / voice-identity malpractice — prominent red banner.
+            The server voice-ID check flags when a SECOND voice is heard in one
+            answer (multiple_voices) or the speaker changes (voice_identity_changed).
+            Surface it up front as a strong malpractice signal; the individual
+            turns' answers are still preserved in the transcript below. */}
+        {(() => {
+          const voiceHits = violations.filter(v =>
+            v.event_type === 'multiple_voices' || v.event_type === 'voice_identity_changed'
+          );
+          if (voiceHits.length === 0) return null;
+          const first = voiceHits[0];
+          return (
+            <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-300 ring-1 ring-red-100 rounded-xl text-sm text-red-800 shadow-sm">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold">Multiple speakers detected — possible malpractice</div>
+                <div className="text-red-700/90 mt-0.5">
+                  A voice other than the enrolled candidate was heard during the interview
+                  {voiceHits.length > 1 ? <> ({voiceHits.length} times)</> : null}
+                  {first.timestamp ? <>, first at <b>{formatTs(first.timestamp)}</b></> : null}.
+                  The affected answers are kept in the transcript (marked, not scored) for your review.
+                </div>
               </div>
             </div>
           );

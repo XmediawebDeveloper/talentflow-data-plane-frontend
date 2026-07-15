@@ -217,6 +217,11 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+/** How long after the candidate's turn opens the "Repeat Question" button stays
+ *  clickable. After this window it disables (so a candidate can't reset their
+ *  answer clock by repeating mid/late answer). One repeat per question. */
+const REPEAT_WINDOW_MS = 12000;
+
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
 function nowIST(): string {
   return new Date().toLocaleTimeString('en-IN', {
@@ -1701,21 +1706,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     ensureQuestionTimerRunning(pendingDur);
 
     // ── Arm the Repeat-Question window ──
-    // The candidate may click "Repeat Question" only during the FIRST VAD window
-    // of the turn (silenceDurationMsRef — the same variable that controls the
-    // silence/no-speech cutoff, currently ~8s and configurable via backend
-    // vad_config). After that it disables, so a candidate can't reset their clock
-    // by repeating mid/late answer. A repeat-resume (repeatFreezeRef path) does
-    // NOT re-arm — one repeat per turn. Skipped for follow-ups/clarifications
-    // (same slot continuing, not a fresh answer window).
+    // The candidate may click "Repeat Question" only during the FIRST
+    // REPEAT_WINDOW_MS of the turn. After that it disables, so a candidate can't
+    // reset their clock by repeating mid/late answer. A repeat-resume
+    // (repeatFreezeRef path) does NOT re-arm — one repeat per turn. Skipped for
+    // follow-ups/clarifications (same slot continuing, not a fresh window).
     if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
     if (!repeatUsedThisTurnRef.current && !repeatFreezeRef.current && !isFollowUpRef.current && !isClarificationRef.current) {
       setCanRepeat(true);
-      const repeatWindowMs = silenceDurationMsRef.current || 8000;
       repeatWindowTimerRef.current = setTimeout(() => {
         setCanRepeat(false);
         repeatWindowTimerRef.current = null;
-      }, repeatWindowMs);
+      }, REPEAT_WINDOW_MS);
     }
   }, [ensureQuestionTimerRunning]);
 

@@ -190,7 +190,8 @@ export default function StepSamplePractice({
   // ── State ────────────────────────────────────────────────────────────────
 
   const [micReady, setMicReady] = useState(false);
-  const [voiceReady, setVoiceReady] = useState(false);
+  // Value no longer read (the Play-question button was removed); keep the setter.
+  const [, setVoiceReady] = useState(false);
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -225,6 +226,9 @@ export default function StepSamplePractice({
   // True when the 2-minute budget elapsed (as opposed to the candidate clicking
   // Next) — shows a "Time's up" message before Linda's sign-off.
   const [timedUp, setTimedUp] = useState(false);
+  // Gate: Linda does NOT speak on entry. The candidate must click "Start
+  // Practice" first (also gives TTS a user gesture, Brave-safe).
+  const [started, setStarted] = useState(false);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
@@ -457,37 +461,19 @@ export default function StepSamplePractice({
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
 
-  // ── Auto-speak question once mic/camera are ready ─────────────────────────
-  useEffect(() => {
-    if (micReady && !hasAutoSpokeRef.current) {
-      hasAutoSpokeRef.current = true;
-      // Small delay so the component fully renders before TTS fires.
-      // NOTE: Brave blocks TTS when called from setTimeout (no user gesture).
-      // If speaking doesn't start within 2s we flag autoSpeakBlocked so the
-      // Play Question button gets a visual hint prompting the user to click it.
-      const t = setTimeout(() => {
-        speakQuestion();
-        // Watch for TTS being silently blocked (Brave) — if aiSpeaking never becomes
-        // true after 2s, assume autoplay was blocked
-        const watchdog = setTimeout(() => {
-          if (!window.speechSynthesis?.speaking) {
-            setAutoSpeakBlocked(true);
-          }
-        }, 2000);
-        return () => clearTimeout(watchdog);
-      }, 600);
-      return () => clearTimeout(t);
-    }
-  }, [micReady, speakQuestion]);
+  // Linda does NOT auto-speak on entry — the candidate starts the practice via
+  // the "Start Practice" button (handleStartPractice), which speaks in the
+  // click's user-gesture context (Brave-safe). See handleStartPractice below.
 
   // Fallback: if TTS autoplay was blocked (Brave) the question's onend never
   // fires, so the mic would never auto-open. Open it anyway — the question is
   // still readable in the chat bubble, and the candidate can Repeat to hear it.
+  // Only after the candidate has started.
   useEffect(() => {
-    if (autoSpeakBlocked && micReady && !practiceDoneRef.current) {
+    if (started && autoSpeakBlocked && micReady && !practiceDoneRef.current) {
       startRecordingRef.current?.();
     }
-  }, [autoSpeakBlocked, micReady]);
+  }, [started, autoSpeakBlocked, micReady]);
 
   // ── Periodic backend transcription (Brave / Firefox fallback) ────────────
   // Brave blocks webkitSpeechRecognition (Google cloud API). Instead, we send the
@@ -875,6 +861,18 @@ export default function StepSamplePractice({
     speakClosing();
   }, [isRecording, stopRecordingAndTranscribe, speakClosing]);
 
+  // Start the practice — Linda speaks the greeting + question NOW (in the click's
+  // user-gesture context so browsers don't block TTS). onend then auto-opens the
+  // mic. Nothing plays before this.
+  const handleStartPractice = useCallback(() => {
+    if (started) return;
+    setStarted(true);
+    hasAutoSpokeRef.current = true;
+    speakQuestion();
+    // If TTS was silently blocked (Brave), flag it so the fallback opens the mic.
+    setTimeout(() => { if (!window.speechSynthesis?.speaking) setAutoSpeakBlocked(true); }, 2000);
+  }, [started, speakQuestion]);
+
   // ── Derived ───────────────────────────────────────────────────────────────
 
   // Show live transcript while recording, final transcript when done
@@ -1067,7 +1065,63 @@ export default function StepSamplePractice({
         </div>
 
         {/* ── Right: chat thread + controls ── */}
-        <div className="lg:col-span-2 flex flex-col bg-[#060D1A]" style={{ minHeight: '360px' }}>
+        <div className="relative lg:col-span-2 flex flex-col bg-[#060D1A]" style={{ minHeight: '360px' }}>
+          {/* Bottom-centered status banner (matches the real interview): red
+              "Hold on — Linda is speaking" while she talks, green "Your turn"
+              while the mic is open. Floats above the control bar. */}
+          {(() => {
+            const variant: 'hold' | 'turn' | null =
+              aiSpeaking ? 'hold'
+              : (started && isRecording) ? 'turn'
+              : null;
+            if (!variant) return null;
+            const cfg = variant === 'turn'
+              ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Linda is listening' }
+              : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Linda is speaking', subtitle: 'Please wait until she finishes the question' };
+            return (
+              <div className="absolute inset-x-0 bottom-[74px] z-20 flex justify-center px-4 pointer-events-none">
+                <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[240px] max-w-[94%]`}>
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">
+                      {variant === 'turn' ? (
+                        <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" /><line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" /></svg>
+                      ) : (
+                        <svg className="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+                      )}
+                    </div>
+                    <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
+                  </div>
+                  <div className="relative min-w-0">
+                    <span className="text-white font-bold block leading-tight" style={{ fontSize: 14 }}>{cfg.title}</span>
+                    <span className="text-white/85 text-[11px] leading-snug block">{cfg.subtitle}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Start-practice gate — Linda stays silent until the candidate clicks
+              Start (also gives TTS a user gesture). Sits over the chat panel. */}
+          {!started && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#060D1A]/85 backdrop-blur-sm p-6">
+              <div className="text-center max-w-sm">
+                <div className="w-14 h-14 rounded-full bg-[#7C3AED]/20 ring-1 ring-[#7C3AED]/40 flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="w-7 h-7 text-[#A78BFA]" />
+                </div>
+                <h3 className="text-white text-lg font-semibold mb-1.5">Ready for a quick practice?</h3>
+                <p className="text-[#94A3B8] text-sm leading-relaxed mb-5">
+                  When you click Start, Linda will greet you and ask you to introduce yourself. Answer just like the real interview — nothing here is saved.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleStartPractice}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] shadow-lg shadow-blue-500/20 transition-all"
+                >
+                  <Play className="w-4 h-4" /> Start Practice
+                </button>
+              </div>
+            </div>
+          )}
           {/* Chat thread — Linda bubbles (left) + your answer bubble (right) */}
           <div data-tour="answer" className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '420px' }}>
             {/* Linda greeting */}
@@ -1088,22 +1142,8 @@ export default function StepSamplePractice({
                   <p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide mb-1">Practice question</p>
                   <p className="text-[#E2E8F0] text-sm leading-relaxed font-medium">&ldquo;{PRACTICE_QUESTION}&rdquo;</p>
                 </div>
-                {ttsSupported && (
-                  <button
-                    type="button"
-                    onClick={() => { setAutoSpeakBlocked(false); speakQuestion(PRACTICE_QUESTION); }}
-                    disabled={aiSpeaking}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:cursor-not-allowed ${
-                      aiSpeaking
-                        ? 'bg-[#7C3AED]/20 text-[#A78BFA] border border-[#7C3AED]/30'
-                        : autoSpeakBlocked
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 animate-pulse'
-                          : 'bg-[#3B82F6]/20 text-[#60A5FA] border border-[#3B82F6]/30 hover:bg-[#3B82F6]/30'
-                    }`}
-                  >
-                    {aiSpeaking ? <><Volume2 className="w-3.5 h-3.5" /> Playing…</> : <><Play className="w-3.5 h-3.5" /> {voiceReady ? 'Replay question' : 'Play question'}</>}
-                  </button>
-                )}
+                {/* Play/Replay-question button removed — the Repeat button in the
+                    control bar does the same thing (replays only the question). */}
                 <p className="inline-flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1">
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" /> Practice only — not saved to our database
                 </p>
@@ -1160,7 +1200,8 @@ export default function StepSamplePractice({
                   <span className={`text-xs font-medium whitespace-nowrap ${
                     isRecording ? 'text-[#EF4444]' : isTranscribing ? 'text-[#60A5FA]' : practiceDone ? 'text-emerald-400' : aiSpeaking ? 'text-[#A78BFA]' : 'text-[#94A3B8]'
                   }`}>
-                    {isRecording ? '● Listening…'
+                    {!started ? 'Press Start to begin'
+                      : isRecording ? '● Listening…'
                       : isTranscribing ? 'Processing…'
                       : timedUp ? "Time's up ✓"
                       : practiceDone ? 'All set ✓'
@@ -1185,8 +1226,8 @@ export default function StepSamplePractice({
                     // Repeat plays ONLY the question — not the full greeting.
                     speakQuestion(PRACTICE_QUESTION);
                   }}
-                  disabled={aiSpeaking}
-                  title="Replay the question"
+                  disabled={aiSpeaking || practiceDone}
+                  title={practiceDone ? 'Practice complete' : 'Replay the question'}
                   className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium text-[#E2E8F0] bg-[#1E293B] border border-white/[0.08] hover:bg-[#334155] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <Volume2 className="w-4 h-4" /> Repeat
