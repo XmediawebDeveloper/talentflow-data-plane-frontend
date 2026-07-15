@@ -266,8 +266,16 @@ export default function StepIdentity({
       if (!liveDetectBusyRef.current) {
         liveDetectBusyRef.current = true;
         try {
-          const info = await detectFaceInfo();
-          if (!cancelled) {
+          // Timeout-guard the detection so a hung/slow detector call can never
+          // wedge the poll: without this, if detectFaceInfo() never resolves,
+          // liveDetectBusyRef stays true forever and every later tick is skipped
+          // — freezing the status (e.g. stuck on "No face detected" even after
+          // the candidate removes their hand). The race releases the busy flag.
+          const info = await Promise.race([
+            detectFaceInfo(),
+            new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 1500)),
+          ]);
+          if (!cancelled && info !== 'timeout') {
             if (info === null) {
               setLiveFaceStatus('unavailable'); // no detector → capture stays disabled
             } else if (info.count === 0) {
@@ -285,11 +293,21 @@ export default function StepIdentity({
         } catch { /* transient detector error — keep prior status */ }
         finally { liveDetectBusyRef.current = false; }
       }
-      if (!cancelled) timer = setTimeout(tick, 700);
+      // Poll a bit faster (~450ms) so the framing feedback feels live — the
+      // warning clears promptly once the candidate uncovers / re-centers.
+      if (!cancelled) timer = setTimeout(tick, 450);
     };
     tick();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [phase, cameraError, detectFaceInfo]);
+
+  // Clear the sticky capture-failure warning as soon as the live check sees a
+  // correctly-framed face again. Without this, a `faceError` set by a failed
+  // capture (e.g. the candidate covered their face) lingered until the NEXT
+  // capture click — so removing the hand didn't make the warning disappear.
+  useEffect(() => {
+    if (liveFaceStatus === 'ok') setFaceError(null);
+  }, [liveFaceStatus]);
 
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;

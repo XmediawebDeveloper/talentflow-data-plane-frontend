@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
+import { filterMultipleFaceCandidates, type FaceRegion } from '@/lib/proctoring/faceDetection';
 import {
   Monitor,
   Globe,
@@ -734,13 +735,41 @@ export default function StepSystemCheck({
     }
 
     const FACE_API_MODEL_URL = '/models/';
+
+    // Count only SIGNIFICANT (real, close-up) faces — tiny background artifacts,
+    // shadows, posters, and reflections that the raw detector weakly flags as
+    // "faces" are filtered out by size. Without this, an EMPTY frame (no one in
+    // front of the camera) intermittently reported 2+ faces, so "Multiple People
+    // Check" falsely failed with "2 people detected" while "Face Detection"
+    // failed with "No face" — the two checks contradicting each other. Filtering
+    // decouples them: an empty frame yields 0 → only the no-face result.
+    const countSignificantFaces = (
+      dets: any[],
+      getRegion: (d: any) => FaceRegion | null,
+    ): number => {
+      const w = video.videoWidth || 0;
+      const h = video.videoHeight || 0;
+      if (w <= 0 || h <= 0) return 0;
+      return filterMultipleFaceCandidates(dets, getRegion, w, h).length;
+    };
+    const nativeRegion = (d: any): FaceRegion | null => {
+      const b = d?.boundingBox;
+      return b ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+    };
+    const faceApiRegion = (d: any): FaceRegion | null => {
+      const b = d?.box;
+      return b ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+    };
+
     const applyFaceCount = (count: number) => {
       if (count === 1) {
         updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
         updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
       } else if (count === 0) {
         updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
-        updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected' });
+        // No face → by definition NOT multiple people. Keep the two checks
+        // consistent: report "no person" (pending-style), never a people count.
+        updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected — waiting for your face' });
       } else {
         updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
         updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
@@ -752,12 +781,12 @@ export default function StepSystemCheck({
     if (hasNative) {
       try {
         const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
-        applyFaceCount((await detector.detect(video)).length);
+        applyFaceCount(countSignificantFaces(Array.from(await detector.detect(video)), nativeRegion));
         setHasFaceDetector(true);
         faceIntervalRef.current = setInterval(async () => {
           if (faceApiBusyRef.current || !video || video.readyState < 2) return;
           faceApiBusyRef.current = true;
-          try { applyFaceCount((await detector.detect(video)).length); } catch { /* skip frame */ }
+          try { applyFaceCount(countSignificantFaces(Array.from(await detector.detect(video)), nativeRegion)); } catch { /* skip frame */ }
           finally { faceApiBusyRef.current = false; }
         }, 2500);
       } catch {
@@ -771,12 +800,12 @@ export default function StepSystemCheck({
           await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
         }
         const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-        applyFaceCount((await faceapi.detectAllFaces(video, opts)).length);
+        applyFaceCount(countSignificantFaces(await faceapi.detectAllFaces(video, opts), faceApiRegion));
         setHasFaceDetector(true);
         faceIntervalRef.current = setInterval(async () => {
           if (faceApiBusyRef.current || !video || video.readyState < 2) return;
           faceApiBusyRef.current = true;
-          try { applyFaceCount((await faceapi.detectAllFaces(video, opts)).length); } catch { /* skip frame */ }
+          try { applyFaceCount(countSignificantFaces(await faceapi.detectAllFaces(video, opts), faceApiRegion)); } catch { /* skip frame */ }
           finally { faceApiBusyRef.current = false; }
         }, 2500);
       } catch {
