@@ -256,6 +256,13 @@ function nowIST(): string {
 // a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
 const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 const REVEAL_DEBUG = true;
+// The text reveal is anchored to audio playback so caption ≈ voice. But tracking
+// the audio position EXACTLY makes the text always trail the word you already
+// hear ("voice comes before text"). We reveal this many ms AHEAD of the audio
+// clock so each word appears just as/before it's spoken — subtitle-style, which
+// reads as tightly in sync instead of laggy. Kept small so text never finishes
+// noticeably before the audio.
+const REVEAL_LEAD_MS = 550;
 
 const formatTimeMMSS = (seconds: number): string => {
   const safe = Math.max(0, Math.floor(seconds || 0));
@@ -2583,11 +2590,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       if (ctxAvailable) {
         const now = pbCtx!.currentTime;
-        if (now < ctxStart!) {
+        // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
+        // first words are already on screen as Linda starts speaking (fixes
+        // "voice comes before text").
+        if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
           if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
           return;  // inside buffer delay
         }
-        progress = (now - ctxStart!) / (ctxEnd - ctxStart!);
+        progress = (now - ctxStart! + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
         if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} prog=${progress.toFixed(3)}`);
       } else if (firstPcmAt !== null) {
         // Fallback: wall-clock math so streaming reveal works even when the
@@ -2595,7 +2605,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // TalkingHead buffer; the denominator is the ACCUMULATED audio
         // duration received so far (a reliable estimate of total playback).
         const audibleStartMs = firstPcmAt + TALKING_HEAD_BUFFER_MS;
-        const elapsedMs = Date.now() - audibleStartMs;
+        const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
         if (elapsedMs < 0) {
           if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
           return;
@@ -2610,7 +2620,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
 
       if (progress === null) return;
-      const cap = audioEndReceivedRef.current ? 1 : 0.85;
+      // During streaming (audio_end not yet received) allow the text to track
+      // the voice closely — 0.94 instead of the old 0.85, so the caption keeps
+      // pace instead of trailing ~15% behind. It still can't fully finish before
+      // audio_end (which flips the cap to 1.0).
+      const cap = audioEndReceivedRef.current ? 1 : 0.94;
       progress = Math.max(0, Math.min(cap, progress));
       target = Math.floor(progress * fullText.length);
       if (target > revealedCharsRef.current) {
