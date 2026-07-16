@@ -1447,6 +1447,32 @@ export default function StepSystemCheck({
               </div>
             </div>
 
+            {/* Status banners — shown ABOVE the Voice Verification panel so the
+                overall system-check result reads first, then the (separate)
+                voice enrollment step. */}
+            {checksCompleted && allSystemPassed && (
+              <div className="mt-5 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-green-800">All Checks Passed!</p>
+                  <p className="text-sm text-green-700">Your environment is ready for the interview.</p>
+                </div>
+              </div>
+            )}
+            {checksCompleted && !allSystemPassed && (
+              <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-800">Some checks failed</p>
+                  <p className="text-sm text-amber-700 mt-0.5">
+                    {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
+                      ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
+                      : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Voice Verification — visible read-aloud enrollment panel.
                 Shown whenever voice enrollment is available (onEnrollVoice set). */}
             {onEnrollVoice && (
@@ -1556,30 +1582,6 @@ export default function StepSystemCheck({
 
             {/* Hidden canvas for frame analysis */}
             <canvas ref={canvasRef} className="hidden" />
-
-            {/* Status banners */}
-            {checksCompleted && allSystemPassed && (
-              <div className="mt-5 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-green-800">All Checks Passed!</p>
-                  <p className="text-sm text-green-700">Your environment is ready for the interview.</p>
-                </div>
-              </div>
-            )}
-            {checksCompleted && !allSystemPassed && (
-              <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-amber-800">Some checks failed</p>
-                  <p className="text-sm text-amber-700 mt-0.5">
-                    {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
-                      ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
-                      : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Action buttons — Run Check / Retry now live in the header's
                 top-right corner (see the gradient header above). The bottom

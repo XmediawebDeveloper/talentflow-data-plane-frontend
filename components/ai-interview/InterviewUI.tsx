@@ -5532,17 +5532,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               speechDetectedAtRef.current != null &&
               (nowMs - speechDetectedAtRef.current) < REALTIME_TRANSCRIPT_BOOTSTRAP_GRACE_MS;
             speechPeakLevelRef.current = Math.max(avgLevel, speechPeakLevelRef.current * 0.99);
+            // Peak-RELATIVE activity thresholds. The candidate's own close-mic
+            // speech is much louder than background people talking in the room
+            // (measured: candidate ~0.043 vs far background ~0.012). The old
+            // caps (0.0048 / 0.008) held the thresholds BELOW background chatter,
+            // so that chatter kept resetting the silence clock and the turn ran
+            // to the 2-min cap. Raising the caps lets the threshold scale up with
+            // the candidate's own volume (≈0.4–0.55 × their speech peak), so
+            // background voices fall BELOW "activity" and the turn ends ~8s after
+            // the candidate stops. A genuinely quiet speaker has a low peak, so
+            // their threshold stays low too — they are not cut off.
             const inTurnActivityThreshold = Math.max(
               QUIET_SPEECH_ACTIVITY_LEVEL,
               ambientNoiseFloorRef.current * IN_TURN_NOISE_MULTIPLIER,
               ambientNoiseFloorRef.current + IN_TURN_ACTIVITY_MARGIN,
-              Math.min(0.0048, speechPeakLevelRef.current * 0.48)
+              Math.min(0.016, speechPeakLevelRef.current * 0.42)
             );
             const strongInTurnActivityThreshold = Math.max(
               MIN_STRONG_IN_TURN_LEVEL,
               ambientNoiseFloorRef.current * STRONG_IN_TURN_NOISE_MULTIPLIER,
               ambientNoiseFloorRef.current + STRONG_IN_TURN_ACTIVITY_MARGIN,
-              Math.min(0.008, speechPeakLevelRef.current * 0.68)
+              Math.min(0.024, speechPeakLevelRef.current * 0.55)
             );
             // A frame keeps the turn "active" (resets the silence clock) ONLY if
             // it is voice-like — loud background noise / music / hum no longer
@@ -7354,22 +7364,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
           {/* ── Bottom half: Candidate webcam ── */}
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* Label row — "You" on the left, REC badge on the right (moved here
-                from the chat header per UX request). REC is persistent while the
-                interview is live; solid red + pulse while the mic is actively
-                capturing, dimmed between turns. */}
-            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center justify-between">
+            {/* Label row — just the "You" label. The REC badge now lives INSIDE
+                the webcam frame (top-right corner) so it reads as an overlay on
+                the candidate's own video, not floating in the dark strip above. */}
+            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center">
               <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">You</span>
-              {isConnected && !isClosing && (
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
-                  isRecording && !isMuted
-                    ? 'bg-red-500/40 border-red-400/70'
-                    : 'bg-red-500/20 border-red-400/40'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
-                  <span className="text-red-100 text-[10px] font-bold tracking-wide">REC</span>
-                </div>
-              )}
             </div>
 
             {/* Webcam feed fills this half */}
@@ -7382,6 +7381,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 showHandIndicator={false}
                 isHandRaised={handDetection.isHandRaised}
               />
+
+              {/* REC badge — overlaid inside the camera frame (top-right). REC is
+                  persistent while the interview is live; solid red + pulse while
+                  the mic is actively capturing, dimmed between turns. */}
+              {isConnected && !isClosing && (
+                <div className={`absolute top-2 right-2 z-20 flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
+                  isRecording && !isMuted
+                    ? 'bg-red-500/60 border-red-300/80'
+                    : 'bg-black/45 border-red-400/50'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
+                  <span className="text-red-50 text-[10px] font-bold tracking-wide">REC</span>
+                </div>
+              )}
 
               {/* Face detection ellipse */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
