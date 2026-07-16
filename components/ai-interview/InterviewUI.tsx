@@ -220,7 +220,7 @@ function getErrorMessage(error: unknown): string {
 /** How long after the candidate's turn opens the "Repeat Question" button stays
  *  clickable. After this window it disables (so a candidate can't reset their
  *  answer clock by repeating mid/late answer). One repeat per question. */
-const REPEAT_WINDOW_MS = 12000;
+const REPEAT_WINDOW_MS = 30000;
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
 function nowIST(): string {
@@ -5721,15 +5721,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
 
-      // No-response detection fallback — fire after 10s of total silence with no
+      // No-response detection fallback — fire after 20s of total silence with no
       // speech. The backend normally drives the canonical silence-nudge flow,
-      // but the client fallback should match the same threshold.
+      // but the client fallback should match the same turn-start threshold.
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 10000);
+      }, 20000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a
