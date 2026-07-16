@@ -25,7 +25,7 @@ interface Props {
   evaluationId?: string | null;
 }
 
-const MHS_THRESHOLD = 7.0;
+const MHS_THRESHOLD = 6.0;
 
 function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3'; weight: number } {
   if (p === 'High')   return { tag: 'P1', weight: 10 };
@@ -35,7 +35,7 @@ function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3';
 
 function scoreColor(score: number) {
   if (score >= 8.0) return { text: 'text-emerald-500', bar: 'bg-emerald-500' };
-  if (score >= 7.0) return { text: 'text-amber-500',   bar: 'bg-amber-500'   };
+  if (score >= MHS_THRESHOLD) return { text: 'text-amber-500',   bar: 'bg-amber-500'   };
   return                   { text: 'text-red-500',     bar: 'bg-red-500'     };
 }
 

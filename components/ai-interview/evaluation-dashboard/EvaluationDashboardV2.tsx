@@ -14,7 +14,7 @@ interface Props {
   data: DashboardData;
 }
 
-const MHS_THRESHOLD = 7.0;
+const MHS_THRESHOLD = 6.0;
 
 type SubView = 'skills' | 'questions' | 'formula';
 
@@ -71,7 +71,7 @@ function trendIcon(score: number) {
 
 function scoreColor(score: number) {
   if (score >= 8.0) return '#10B981';
-  if (score >= 7.0) return '#F59E0B';
+  if (score >= MHS_THRESHOLD) return '#F59E0B';
   return '#EF4444';
 }
 
@@ -110,7 +110,7 @@ export function EvaluationDashboardV2({ data }: Props) {
 
 /* ─── Skills sub-view (from Vite SkillBreakdown.tsx) ────────────────────
  * Per the spec doc — Must-Have and Nice-to-Have are EVALUATED SEPARATELY:
- * MHS drives Pass/Fail (≥7.0), NHS is informational only. Skills must be
+ * MHS drives Pass/Fail (≥6.0), NHS is informational only. Skills must be
  * rendered in their own sections so the recruiter doesn't have to mentally
  * separate which 19 skills were the gate-blocking ones.
  */
@@ -256,7 +256,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
         </div>
       ) : (
         <>
-          {/* Must-Have Section — gate-blocking skills, MHS ≥ 7.0 = Pass */}
+          {/* Must-Have Section — gate-blocking skills, MHS ≥ 6.0 = Pass */}
           {mhSkills.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3 pt-1">
@@ -356,7 +356,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
  * Per the spec doc (timed-mode evaluation):
  *   • Each card: question + answer + skills (with per-skill score + weight)
  *   • Question Score = Σ(skill_score × weight) / Σ(weight), shown beside Q#
- *   • Section Score = avg(question scores), MHS ≥ 7.0 → Pass
+ *   • Section Score = avg(question scores), MHS ≥ 6.0 → Pass
  *   • Per-skill weights: P1=10, P2=7, P3=4
  *   • HR is not scored
  * Source: data.perQuestionDetails — built by adapter.ts:buildPerQuestionDetails.
@@ -394,10 +394,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
     return trimmed + '?';
   };
 
-  // Score color: spec uses ≥7.0 as the Pass threshold for MHS — mirror that
+  // Score color: spec uses ≥6.0 as the Pass threshold for MHS — mirror that
   // in the per-Q badge so the recruiter sees instantly which Qs were strong.
   const scoreColorClass = (s: number): string => {
-    if (s >= 7.0) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+    if (s >= MHS_THRESHOLD) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
     if (s >= 4.0) return 'text-amber-600 bg-amber-50 border-amber-200';
     return 'text-rose-600 bg-rose-50 border-rose-200';
   };
@@ -430,7 +430,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   const nhScore = nhScored.length > 0
     ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhScored.length) * 10) / 10
     : 0;
-  const mhPass = mhScore >= 7.0;
+  const mhPass = mhScore >= MHS_THRESHOLD;
 
   // Per-Q card renderer (extracted so the grouped-by-section rendering
   // below stays readable).
