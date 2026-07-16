@@ -1939,11 +1939,11 @@ export function buildDashboardData(params: {
   const modeNormalized = (interview.mode || '').toLowerCase();
   const mode: 'Timed' | 'Conversational' = modeNormalized === 'fixed' ? 'Timed' : 'Conversational';
 
-  // ── Timed-mode doc-spec result (MHS section_question_avg ≥ 7.0 → Pass) ──
+  // ── Timed-mode doc-spec result (MHS section_question_avg ≥ 6.0 → Pass) ──
   // backendFinal already normalised above ('pass'/'fail'/'') — prefer it.
   // Fall back to recomputing locally so older sessions without `final_result`
   // still render a Pass/Fail when MHS data is available.
-  const MHS_THRESHOLD = 7.0;
+  const MHS_THRESHOLD = 6.0;
   let finalResult: 'Pass' | 'Fail' | null = null;
   if (backendFinal === 'pass') finalResult = 'Pass';
   else if (backendFinal === 'fail') finalResult = 'Fail';

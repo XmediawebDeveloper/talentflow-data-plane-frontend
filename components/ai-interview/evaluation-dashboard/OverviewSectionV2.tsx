@@ -17,7 +17,7 @@ interface Props {
   aiConfidence?: number | null;
 }
 
-const MHS_THRESHOLD = 7.0;
+const MHS_THRESHOLD = 6.0;
 
 export function OverviewSectionV2({
   data,
@@ -34,7 +34,7 @@ export function OverviewSectionV2({
   const allClusters = [...mustHaveClusters, ...niceToHaveClusters];
   const allSkills = allClusters.flatMap(c => c.skills);
 
-  // Doc-spec gate: Pass when MHS section avg ≥ 7.0
+  // Doc-spec gate: Pass when MHS section avg ≥ 6.0
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
   const finalResultLabel = isPartialEvaluation ? 'Partial Evaluation' : (finalResult ?? (isPassed ? 'Pass' : 'Fail'));
 
@@ -70,11 +70,11 @@ export function OverviewSectionV2({
   const topSkills = [...scoredSkills]
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
-  // Heading honesty: when no skill scored above the spec's strong-band
-  // threshold (≥7.0), the panel header should say "Highest Scoring"
+  // Heading honesty: when no skill scored above the section gate
+  // threshold (≥6.0), the panel header should say "Highest Scoring"
   // rather than "Top Performing" so a recruiter doesn't read a fail as
   // a positive signal.
-  const hasStrongSkill = topSkills.some(s => s.score >= 7.0);
+  const hasStrongSkill = topSkills.some(s => s.score >= MHS_THRESHOLD);
   const topPanelHeading = hasStrongSkill ? 'Top Performing Skills' : 'Highest Scoring Skills';
 
   // ── Radar chart data (top 6 by score; pads with 0-score skills only
