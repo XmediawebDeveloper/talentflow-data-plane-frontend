@@ -205,7 +205,11 @@ export default function StepSamplePractice({
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [showReplay, setShowReplay] = useState(false);
   // false in Brave (blocks Google Speech API) and Firefox — backend transcription used instead
-  const [hasLiveTranscript, setHasLiveTranscript] = useState(false);
+  // Web Speech still captures the answer under the hood (for the final
+  // transcript revealed after finishing), but — like the real Live interview
+  // with batch STT — we no longer DISPLAY it growing live. Only the setter is
+  // kept; the value is intentionally not read.
+  const [, setHasLiveTranscript] = useState(false);
   // true when auto-speak was attempted but TTS didn't start (Brave blocks without user gesture)
   const [autoSpeakBlocked, setAutoSpeakBlocked] = useState(false);
   // Face identity warning shown when verification detects a different person
@@ -1153,10 +1157,23 @@ export default function StepSamplePractice({
                 <div className="max-w-[88%]">
                   <p className="text-[10px] font-semibold text-emerald-400 mb-1 text-right">YOUR RESPONSE {isTranscribing && <span className="text-[#60A5FA]">· enhancing…</span>}</p>
                   <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl rounded-tr-sm px-3.5 py-2.5">
-                    {isRecording && !liveTranscript && !hasLiveTranscript ? (
-                      <span className="inline-flex items-center gap-2 text-sm text-[#94A3B8]"><span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-ping" /> Recording your voice…</span>
+                    {isRecording ? (
+                      // Same as the real Live interview: no live transcript — show
+                      // a recording status; the transcript is revealed after the
+                      // candidate finishes speaking.
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-ping shrink-0" />
+                        <span className="text-xs italic text-emerald-200/70 leading-relaxed">Recording… your transcript appears after you finish speaking.</span>
+                      </div>
+                    ) : isTranscribing ? (
+                      // Processing: candidate finished, transcript in flight.
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
                     ) : (
-                      <p className="text-[#E2E8F0] text-sm leading-relaxed">{isRecording ? liveTranscript : (displayAnswer || typedAnswer)}{isRecording && <span className="animate-pulse text-[#3B82F6]">▌</span>}</p>
+                      <p className="text-[#E2E8F0] text-sm leading-relaxed">{displayAnswer || typedAnswer}</p>
                     )}
                   </div>
                   {transcribeError && !isTranscribing && <p className="text-xs text-red-400 mt-1 text-right">{transcribeError}</p>}
