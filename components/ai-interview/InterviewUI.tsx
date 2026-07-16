@@ -2160,10 +2160,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const PLAYBACK_ECHO_GUARD_MS = 800;
   const playbackEchoGuardUntilRef = useRef<number>(0);
 
-  // Consecutive frames above threshold before confirming speech.
-  // At ~93ms/frame, 3 frames ≈ 280ms — catches real speech, rejects single-frame noise.
+  // Consecutive frames above threshold before confirming speech (speech ONSET
+  // → sends speech_started, which suppresses the initial 20s "Are you there?"
+  // nudge). At ~93ms/frame, 5 frames ≈ 460ms of CONTINUOUS voice-like sound.
+  // Raised 3→5 so a short background burst (cough, one nearby word, door click)
+  // can't falsely register as the candidate starting to speak and cancel the
+  // 20s nudge. The counter resets to 0 on any quiet/non-voice frame, so it must
+  // be 5 IN A ROW. The pre-speech ring buffer still captures the first words, so
+  // the slightly longer confirmation window loses no audio.
   const speechFrameCountRef = useRef(0);
-  const MIN_SPEECH_FRAMES = 3;
+  const MIN_SPEECH_FRAMES = 5;
 
   // ── Adaptive mic gain (headset / low-gain mic normalization) ──────────────
   // autoGainControl is OFF (it distorts levels for ASR), so quiet mics —
@@ -2214,6 +2220,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // ?debug=1 overlay: Realtek idle noise Level≈0.0091, VoiceRatio≈0.70, so the
   // old soft-voice guard (ambient×1.5≈0.008) reset the clock every noise blip.
   const lastStrongVoiceAtRef = useRef<number | null>(null);
+  // Sustained-activity gate for the silence-clock RESET. The VAD runs on ~90ms
+  // frames; the old code reset the silence countdown on a SINGLE active frame,
+  // so one ~90ms blip (a cough, a door click, one background word) restarted the
+  // whole 8s countdown → with any intermittent room noise the turn never ended.
+  // We now require the active streak to last at least SUSTAINED_ACTIVE_MS of
+  // CONTINUOUS voice-like frames before it counts as "real speech" and resets
+  // the clock. A momentary blip (< this) is ignored, so the countdown keeps
+  // running through it. `activeStreakStartRef` = when the current unbroken run
+  // of active frames began (null when the last frame was inactive).
+  const activeStreakStartRef = useRef<number | null>(null);
+  const SUSTAINED_ACTIVE_MS = 300; // ~3 frames of continuous voice before reset
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -3543,6 +3560,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         silenceStartRef.current = null;
         lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
         speechPeakLevelRef.current = 0;
         ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
@@ -4785,6 +4803,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechDetectedAtRef.current = null;
     lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -4901,6 +4920,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechDetectedAtRef.current = null;
     lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -4976,6 +4996,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechStartSentRef.current = false;
     lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
     speechPeakLevelRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
@@ -5198,6 +5219,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       speechFrameCountRef.current = 0;
       lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
       speechPeakLevelRef.current = 0;
       micRecentPeakRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
@@ -5565,15 +5587,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // holds the turn open, which is what let the interview idle to the
             // 2-min hard cap. Live transcript advancing is authoritative and
             // bypasses the voice-band check (ASR already confirmed real words).
+            // Is this frame "active" (loud enough + voice-like)? A single active
+            // frame is NOT enough to reset the countdown — we require a SUSTAINED
+            // run (see SUSTAINED_ACTIVE_MS) so a momentary blip can't restart the
+            // 8s clock. Track the unbroken active-streak start here.
+            const _frameIsActive = (avgLevel > inTurnActivityThreshold) && voiceLike;
+            const _frameIsStrong = (avgLevel > strongInTurnActivityThreshold) && voiceLike;
+            if (_frameIsActive) {
+              if (activeStreakStartRef.current == null) activeStreakStartRef.current = nowMs;
+            } else {
+              activeStreakStartRef.current = null;
+            }
+            const _streakMs = activeStreakStartRef.current == null
+              ? 0
+              : (nowMs - activeStreakStartRef.current);
+            const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
+
             if (transcriptRecentlyAdvanced) {
               lastMeaningfulAudioAtRef.current = nowMs;
               silenceStartRef.current = null;
               inTurnSpeechFrameCountRef.current = 0;
-            } else if (avgLevel > strongInTurnActivityThreshold && voiceLike) {
-              // A STRONG voice-band frame — this is unambiguously real speech
-              // (steady mic/BT noise never reaches this level). Stamp it so the
-              // soft-voice guard below only keeps the turn alive while real
-              // speech is recent.
+            } else if (_frameIsStrong && _sustained) {
+              // SUSTAINED strong voice — unambiguously real speech (steady mic/BT
+              // noise never reaches this level, and a blip never lasts this long).
+              // Stamp it so the soft-voice guard below only keeps the turn alive
+              // while real speech is recent, and reset the silence clock.
               lastStrongVoiceAtRef.current = nowMs;
               inTurnSpeechFrameCountRef.current++;
               if (!transcriptLedTurn || inTurnSpeechFrameCountRef.current >= MIN_IN_TURN_SPEECH_FRAMES) {
@@ -5582,7 +5620,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   silenceStartRef.current = null;
                 }
               }
-            } else if (!transcriptLedTurn && avgLevel > inTurnActivityThreshold && voiceLike) {
+            } else if (!transcriptLedTurn && _frameIsActive && _sustained) {
               inTurnSpeechFrameCountRef.current = 0;
               if (!realtimeTranscriptPending || realtimeBootstrapActive) {
                 lastMeaningfulAudioAtRef.current = nowMs;

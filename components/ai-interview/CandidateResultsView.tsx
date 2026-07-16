@@ -1699,6 +1699,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                         };
                       });
                     })();
+                // ── Meta / non-question guard (display last-resort) ──────────
+                // The opening "about the role" warm-up, redirect/deflection, and
+                // farewell turns are NOT interview questions and must never appear
+                // in Question Analysis (only in the Transcript tab). They are
+                // excluded upstream (backend), but if an older/partial evaluation
+                // still carries one in question_history, drop it here so the
+                // report never shows it as a scored question. Matched by unique
+                // meta lead-ins that never open a real interview question.
+                const _isMetaTurn = (q: any): boolean => {
+                  const t = String(q?.question || '').toLowerCase();
+                  if (!t) return false;
+                  const META = [
+                    'your interviewer today', "here's a quick overview", 'here is a quick overview',
+                    'here to conduct the interview', 'here to conduct this interview',
+                    "i'm here to listen", 'im here to listen',
+                    "let's focus on the interview", 'lets focus on the interview',
+                    'completing the interview', 'responses have been recorded',
+                    'wish you all the best', 'future endeavors',
+                    'welcome back',
+                  ];
+                  // Meta turns are statements (no "?"). A real question that merely
+                  // quotes one of these phrases still has a "?" and is kept.
+                  return !t.includes('?') && META.some(m => t.includes(m));
+                };
+                const qaItemsFiltered: any[] = qaItemsRaw.filter((q) => !_isMetaTurn(q));
                 // Some re-evaluated sessions store question_history with every
                 // entry flagged as a main question even when the conversation
                 // clearly contained follow-ups (intent="main_question",
@@ -1753,7 +1778,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 };
                 const _seenKeys = new Set<string>();
                 const qaItems: any[] = [];
-                for (const _it of qaItemsRaw) {
+                for (const _it of qaItemsFiltered) {
                   const _intent = String(_it.question_intent || '').toLowerCase();
                   const _isFu = !!_it.is_follow_up
                     || ['follow_up', 'probe', 'deep_dive'].includes(_intent);
