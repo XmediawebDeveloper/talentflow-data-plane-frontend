@@ -353,9 +353,12 @@ const MessageRow = (({ msg }: MessageRowProps) => {
   }
   return (
     <div className="flex gap-2">
-      <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
-        <span className="text-white text-[8px] font-bold">L</span>
-      </div>
+      <img
+        src="/linda-avatar.webp"
+        onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
+        alt="Linda"
+        className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
+      />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
@@ -388,9 +391,12 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
   }
   return (
     <div className="flex gap-2">
-      <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
-        <span className="text-white text-[8px] font-bold">L</span>
-      </div>
+      <img
+        src="/linda-avatar.webp"
+        onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
+        alt="Linda"
+        className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
+      />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-[10px] font-semibold text-purple-600">LINDA</span>
@@ -7438,44 +7444,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
         <div className="flex-1 flex flex-col min-w-0 bg-white">
 
-          {/* Gradient header */}
+          {/* Header — single light sky-blue color (was a purple→pink gradient).
+              Foreground darkened to sky/slate so text stays readable on the
+              lighter background. */}
           <div
             className="flex-shrink-0 flex items-center justify-between px-4 py-3"
-            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)' }}
+            style={{ background: '#7dd3fc' }}
           >
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                <MessageSquare className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-full bg-white/60 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-4 h-4 text-sky-700" />
               </div>
               <div>
-                <h2 className="text-white font-bold leading-tight" style={{ fontSize: 15 }}>Chat with LINDA</h2>
-                <p className="text-white/65 text-[11px] leading-tight">Live AI-powered interview</p>
+                <h2 className="text-sky-900 font-bold leading-tight" style={{ fontSize: 15 }}>Chat with LINDA</h2>
+                <p className="text-sky-800/70 text-[11px] leading-tight">Live AI-powered interview</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               {/* LIVE badge — FIRST in the header, green. */}
-              <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/25 rounded-full border border-emerald-400/50">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                <span className="text-emerald-100 text-[10px] font-bold">LIVE</span>
+              <div className="flex items-center gap-1 px-2 py-1 bg-white/55 rounded-full border border-white/70">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-emerald-700 text-[10px] font-bold">LIVE</span>
               </div>
               {/* Identity verified */}
               {(faceVerification || voiceVerification) && (
-                <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/15 border border-white/25">
-                  <ShieldCheck className="w-3 h-3 text-white" />
-                  <span className="text-white text-[10px] font-semibold">ID VERIFIED</span>
+                <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/55 border border-white/70">
+                  <ShieldCheck className="w-3 h-3 text-sky-700" />
+                  <span className="text-sky-800 text-[10px] font-semibold">ID VERIFIED</span>
                 </div>
               )}
               {/* Q counter — animates on each change */}
               {questionNumber !== null && totalQuestions !== null && (
                 <div
                   key={questionNumber}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/20 border border-white/30"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/55 border border-white/70"
                   style={{ animation: 'qNumPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}
                 >
-                  <span className="text-white text-xs font-bold tabular-nums">Q {questionNumber}</span>
-                  <span className="text-white/50 text-xs">/</span>
-                  <span className="text-white/70 text-xs font-semibold tabular-nums">{totalQuestions}</span>
+                  <span className="text-sky-900 text-xs font-bold tabular-nums">Q {questionNumber}</span>
+                  <span className="text-sky-700/50 text-xs">/</span>
+                  <span className="text-sky-700 text-xs font-semibold tabular-nums">{totalQuestions}</span>
                 </div>
               )}
               {/* Clarification badge removed per design — no banner indicator
@@ -7488,13 +7496,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   moved to the front of the header (green) — see above / below. */}
               {/* Closing indicator */}
               {isClosing && (
-                <div className="px-2 py-1 bg-orange-500/30 border border-orange-400/40 text-orange-100 rounded-lg text-[10px] font-medium animate-pulse">Ending...</div>
+                <div className="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 rounded-lg text-[10px] font-medium animate-pulse">Ending...</div>
               )}
               {/* End Interview button */}
               <button
                 onClick={() => setShowEndConfirm(true)}
                 disabled={!isConnected}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg border border-white/30 transition-all duration-200 font-semibold text-xs"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-white/60 hover:bg-white/80 disabled:opacity-50 disabled:cursor-not-allowed text-sky-900 rounded-lg border border-white/70 transition-all duration-200 font-semibold text-xs"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">End</span>
@@ -7715,9 +7723,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             {/* Thinking dots — violet (matches AI bubble) */}
             {isProcessing && !isCandidateTranscriptProcessing && !currentAiText && (
               <div className="flex gap-2">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
-                  <span className="text-white text-[8px] font-bold">L</span>
-                </div>
+                <img
+                  src="/linda-avatar.webp"
+                  onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
+                  alt="Linda"
+                  className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
+                />
                 <div className="px-3.5 py-2.5 bg-violet-50 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
