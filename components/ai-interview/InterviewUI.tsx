@@ -2199,6 +2199,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechPeakLevelRef = useRef(0);
   const inTurnSpeechFrameCountRef = useRef(0);
   const MIN_IN_TURN_SPEECH_FRAMES = 3;
+  // Timestamp of the last STRONG voice-band frame (clears strongInTurnActivity-
+  // Threshold). Real speech — even quiet — produces these; steady mic/Bluetooth
+  // self-noise (which reads "voice-like" at ratio ~0.6-0.7 and sits just above
+  // ambient×1.5 on Realtek/BT mics) does NOT. Used to stop the soft-voice guard
+  // from resetting the silence clock forever on noisy mics, so the 8s end-turn
+  // actually fires instead of idling to the 2-min hard cap. Confirmed via the
+  // ?debug=1 overlay: Realtek idle noise Level≈0.0091, VoiceRatio≈0.70, so the
+  // old soft-voice guard (ambient×1.5≈0.008) reset the clock every noise blip.
+  const lastStrongVoiceAtRef = useRef<number | null>(null);
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -3527,6 +3536,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         speechStartSentRef.current = false;
         silenceStartRef.current = null;
         lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
         speechPeakLevelRef.current = 0;
         ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
@@ -4768,6 +4778,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechDetectedRef.current = false;
     speechDetectedAtRef.current = null;
     lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -4883,6 +4894,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechDetectedRef.current = false;
     speechDetectedAtRef.current = null;
     lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -4957,6 +4969,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     speechDetectedAtRef.current = null;
     speechStartSentRef.current = false;
     lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
     speechPeakLevelRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
@@ -5178,6 +5191,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       speechStartSentRef.current = false;
       speechFrameCountRef.current = 0;
       lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
       speechPeakLevelRef.current = 0;
       micRecentPeakRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
@@ -5540,6 +5554,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               silenceStartRef.current = null;
               inTurnSpeechFrameCountRef.current = 0;
             } else if (avgLevel > strongInTurnActivityThreshold && voiceLike) {
+              // A STRONG voice-band frame — this is unambiguously real speech
+              // (steady mic/BT noise never reaches this level). Stamp it so the
+              // soft-voice guard below only keeps the turn alive while real
+              // speech is recent.
+              lastStrongVoiceAtRef.current = nowMs;
               inTurnSpeechFrameCountRef.current++;
               if (!transcriptLedTurn || inTurnSpeechFrameCountRef.current >= MIN_IN_TURN_SPEECH_FRAMES) {
                 if (!realtimeTranscriptPending || realtimeBootstrapActive) {
@@ -5563,14 +5582,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               // accumulates "silence" the whole time it's speaking, and a 2-second
               // breath gap tips the total over silenceDurationMs → premature cut-off.
               const softVoiceFloor = Math.max(POSSIBLE_SPEECH_LEVEL, ambientNoiseFloorRef.current * 1.5);
-              if (avgLevel > softVoiceFloor && voiceLike) {
+              // The soft-voice guard keeps the turn alive for quiet TRAILING
+              // speech — but ONLY if a strong voice frame occurred recently.
+              // Steady mic/Bluetooth self-noise reads "voice-like" and sits just
+              // above ambient×1.5 (Realtek: Level≈0.0091 vs floor≈0.0083), so
+              // without this it reset the silence clock forever and the 8s
+              // end-turn never fired (turn idled to the 2-min cap). A real quiet
+              // speaker produces strong frames (word onsets/emphasis) within the
+              // window; pure noise never does — so noise now falls through to
+              // silence accumulation and the turn ends. Anchor the silence clock
+              // to the last strong voice frame so the turn ends the-window after
+              // real speech stopped, not the-window after the noise stops.
+              const strongSilenceMs = silenceDurationMsRef.current * micSilenceMultiplierRef.current;
+              const lastStrong = lastStrongVoiceAtRef.current ?? speechDetectedAtRef.current ?? nowMs;
+              const strongVoiceRecent = (nowMs - lastStrong) <= strongSilenceMs;
+              if (avgLevel > softVoiceFloor && voiceLike && strongVoiceRecent) {
                 lastMeaningfulAudioAtRef.current = nowMs;
                 silenceStartRef.current = null;
               } else {
+                // Is this frame steady voice-like NOISE holding the turn open
+                // (above soft floor, voice-like, but no strong voice for the
+                // whole window)? If so, anchor the silence clock to the last
+                // STRONG voice frame so the turn ends one window after real
+                // speech actually stopped — not perpetually deferred by the
+                // noise. Genuine quiet (below soft floor / non-voice) keeps the
+                // original lastMeaningfulAudio anchor so a quiet speaker isn't
+                // cut early.
+                const noiseHoldingTurn =
+                  avgLevel > softVoiceFloor && voiceLike && !strongVoiceRecent;
                 const silenceSince =
-                  transcriptLedTurn
-                    ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
-                    : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
+                  noiseHoldingTurn
+                    ? lastStrong
+                    : transcriptLedTurn
+                      ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
+                      : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
                 silenceStartRef.current = silenceSince;
                 // (4) Stretch the silence window for quiet/laggy devices
                 // (headphones, Bluetooth) so a real answer isn't cut off
