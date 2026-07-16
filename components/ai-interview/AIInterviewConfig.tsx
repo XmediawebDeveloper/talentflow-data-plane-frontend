@@ -790,24 +790,13 @@ function HRSection({
   }, [enabled, mode, percentage]);
 
   const setQuestionStage = (id: string, stage: HRQuestionStage) => {
-    if (stage === 'opening') {
-      // STRICT RULE: at most ONE Opening question is allowed. Marking this
-      // question as Opening forces every other question back to Closing (the
-      // default), so there is never more than one opening HR question. The
-      // single opening question is the one Linda asks before the technical
-      // rounds; all others are asked at the end.
-      const next: Record<string, HRQuestionStage> = {};
-      for (const key of Object.keys(selectedStages)) {
-        next[key] = 'closing';
-      }
-      next[id] = 'opening';
-      onSelectedStagesChange(next);
-    } else {
-      onSelectedStagesChange({
-        ...selectedStages,
-        [id]: stage,
-      });
-    }
+    // Any number of questions may be tagged Opening or Closing — no limit.
+    // Opening questions are asked before the technical rounds; Closing ones at
+    // the end. (If every question is Opening, the whole HR section runs first.)
+    onSelectedStagesChange({
+      ...selectedStages,
+      [id]: stage,
+    });
   };
 
   const toggleQuestion = (id: string) => {
@@ -932,7 +921,7 @@ function HRSection({
                     : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`}
                 </span>
                 <span className="block text-[11px] text-gray-400">
-                  Closing is the default tag. You can mark only one question as Opening — it is asked before the technical rounds; all others are asked at the end.
+                  Closing is the default tag. Mark any question as Opening to ask it before the technical rounds; Closing questions are asked at the end.
                 </span>
               </div>
               <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-green-600' : 'text-gray-500'}`}>

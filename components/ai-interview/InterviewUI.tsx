@@ -7424,16 +7424,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   when Linda is re-asking the same question. */}
               <style>{`@keyframes qNumPop{0%{opacity:0;transform:scale(0.7) translateY(-4px)}60%{transform:scale(1.12) translateY(0)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
               {/* Per-question timer removed from header — shown as banner above chat */}
-              {/* Global timer */}
-              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 border border-white/25">
-                <Timer className="w-3 h-3 text-white/80" />
-                <span className={`font-mono font-bold text-xs tabular-nums ${
-                  !isFlexibleMode && !isInBuffer && remainingSeconds <= 60 ? 'text-red-200' :
-                  isInBuffer ? 'text-amber-200' : 'text-white'
-                }`}>{formatTime(remainingSeconds)}</span>
-                {isFlexibleMode && <span className="text-white/55 text-[9px] font-semibold ml-0.5">REM</span>}
-                {isInBuffer && !isFlexibleMode && <span className="text-amber-200 text-[9px] font-semibold ml-0.5">BUF</span>}
-              </div>
+              {/* Global timer removed from the top header per UX request — the
+                  interview time still runs in the backend; it's just not shown here. */}
               {/* REC badge moved to the candidate video's top-right corner; LIVE
                   moved to the front of the header (green) — see above / below. */}
               {/* Closing indicator */}
