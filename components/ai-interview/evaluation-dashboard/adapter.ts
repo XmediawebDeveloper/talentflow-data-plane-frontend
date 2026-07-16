@@ -591,9 +591,34 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
  *  transition ("Let's move on to the next question."), or a closing message.
  *  Used by the source-selection heuristic so these noise turns don't inflate
  *  the transcript Q-count and wrongly out-vote a complete question_history. */
+/** Meta / non-question assistant turns that must NEVER appear as a scored
+ *  question in Question Analysis: the opening "about the role" warm-up, a
+ *  redirect/deflection, a farewell, or a resume ack. Unlike the greeting
+ *  filters below, this has NO word-count cap — the role warm-up is a long
+ *  (~60-word) statement, so a ≤12-word cap let it slip through and show as
+ *  Must-Have Q1 ("Hi, I'm Linda, your interviewer today. In the role of …").
+ *  Matched by unique lead-ins that never open a real interview question; a real
+ *  question that merely quotes one still has a "?" and is kept. */
+function isMetaAssistantTurn(content: string): boolean {
+  const t = (content || '').toLowerCase().trim();
+  if (!t) return false;
+  if (t.includes('?')) return false; // a genuine question keeps its "?"
+  const META = [
+    'your interviewer today', "here's a quick overview", 'here is a quick overview',
+    'here to conduct the interview', 'here to conduct this interview',
+    "i'm here to listen", 'im here to listen',
+    "let's focus on the interview", 'lets focus on the interview',
+    'completing the interview', 'responses have been recorded',
+    'wish you all the best', 'future endeavors', 'welcome back',
+  ];
+  return META.some(m => t.includes(m));
+}
+
 function isNoiseAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return true;
+  // Role warm-up / deflection / farewell / resume ack — length-independent.
+  if (isMetaAssistantTurn(t)) return true;
   // Greeting turn — but ONLY when it's a pure greeting with no question
   // attached. The combined greeting+Q1 ("Hi! I'm Linda — let's start. Can
   // you walk me through your React experience?") IS a real interview turn
@@ -806,6 +831,10 @@ function buildPerQuestionDetailsFromGroups(
 
   for (const g of groups) {
     const mainQ = String(g?.question || '');
+    // Skip the role warm-up / deflection / farewell / resume ack — these are
+    // not interview questions (length-independent guard; the ≤12-word greeting
+    // filter misses the long role message).
+    if (isMetaAssistantTurn(mainQ)) continue;
     const mainA = String(g?.answer || '');
     const matched = historyByText.get(mainQ.trim().toLowerCase());
     const mainScoreRows = scoringRowsForQ(matched?.question_number ?? g?.q_num);
@@ -1134,6 +1163,9 @@ function buildPerQuestionDetailsFromHistory(
   const mains = indexedHistory.filter(q => {
     if (followUpHistoryIds.has(Number(q._historyIdx))) return false;
     if (_isGreeting(q)) return false;
+    // Length-independent meta guard — catches the long role warm-up /
+    // deflection / farewell that the ≤12-word _isGreeting misses.
+    if (isMetaAssistantTurn(String(q?.question || ''))) return false;
     if (!q?.question || !String(q.question).trim()) return false;
     const rt = String(q?.response_type || '').toLowerCase();
     if (rt === 'auto_skipped_by_coverage') return false;
@@ -1583,6 +1615,8 @@ function buildPerQuestionDetailsFromConversation(
     && m.content.trim()
     && !(m.role === 'assistant' && _isClosing(m.content))
     && !(m.role === 'assistant' && _isSilenceNudge(m.content))
+    // Role warm-up / deflection / farewell / resume ack — length-independent.
+    && !(m.role === 'assistant' && isMetaAssistantTurn(m.content))
   );
 
   // Per-skill score lookup from evaluations[]. Match by question text +
