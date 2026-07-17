@@ -559,6 +559,12 @@ function priorityLabelToLevel(raw: any): Level {
  *  picked a different builder — it's keyed off the saved row, not the builder.
  *  See [[project_question_analysis_builder_selection]]. */
 function bundledFollowUpFromRow(row: any): PerQuestionDetail['bundledFollowUp'] {
+  // HR questions are ALWAYS standalone — never a reframed follow-up probing a
+  // technical/Must-Have skill. A backend boundary-lag bug sometimes tags an HR
+  // question (e.g. the closing "Why should we hire you?") with a bundled
+  // follow-up on a Must-Have skill; suppress that here so HR questions never
+  // show as "Follow-up" with a cross-round skill note.
+  if (String(row?.round_type || '').toLowerCase() === 'hr') return undefined;
   const reason = String(row?.followup_reason || '').trim();
   if (!row?.followup_bundled || !reason) return undefined;
   const srcQ = row?.followup_source_qnum;
@@ -602,7 +608,19 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
 function isMetaAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return false;
-  if (t.includes('?')) return false; // a genuine question keeps its "?"
+  // Unambiguous silence / nudge / move-on phrases — these NEVER appear in a
+  // real interview question, so match them even if the turn has a "?" (e.g.
+  // "Are you there? Take your time…").
+  const ALWAYS = [
+    'are you there', "didn't get any response", 'did not get any response',
+    "couldn't get any response", 'could not get any response',
+    'if you’re there, please start speaking', "if you're there, please start speaking",
+    'move on to the next question', "let's move on to the next", 'lets move on to the next',
+  ];
+  if (ALWAYS.some(m => t.includes(m))) return true;
+  // Statement-only meta (role warm-up, deflection, farewell, resume ack). A real
+  // question that merely quotes one of these still has a "?" and is kept.
+  if (t.includes('?')) return false;
   const META = [
     'your interviewer today', "here's a quick overview", 'here is a quick overview',
     'here to conduct the interview', 'here to conduct this interview',

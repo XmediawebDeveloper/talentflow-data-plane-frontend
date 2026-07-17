@@ -2238,6 +2238,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // of active frames began (null when the last frame was inactive).
   const activeStreakStartRef = useRef<number | null>(null);
   const SUSTAINED_ACTIVE_MS = 300; // ~3 frames of continuous voice before reset
+  // Dip tolerance ("hangover") for the active streak. Natural speech is not a
+  // solid block of above-threshold frames — there are ~50-150ms gaps between
+  // words, unstressed syllables, and after plosives that dip BELOW the
+  // peak-relative in-turn threshold. The old code nulled the streak on the
+  // FIRST such frame (activeStreakStartRef = null), so `_sustained` (streak >=
+  // 300ms) could never accumulate for an ordinary speaker: every couple of
+  // frames a dip restarted it from zero. On realtime providers the
+  // transcript-driven reset hid this; on BATCH providers (gpt-4o-transcribe,
+  // gemini, sarvam, assemblyai) there is NO live transcript, so the streak was
+  // the only thing keeping the turn alive — and continuous speech wound up to
+  // the 8s silence clock and got cut off mid-answer. We now let the streak
+  // survive short sub-threshold dips: the streak is only broken when the gap
+  // since the last active frame exceeds STREAK_DIP_GRACE_MS. `lastActiveFrameAtRef`
+  // = timestamp of the most recent active frame within the current streak.
+  const lastActiveFrameAtRef = useRef<number | null>(null);
+  const STREAK_DIP_GRACE_MS = 220; // tolerate ~2 frames of inter-word gap
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -3175,20 +3191,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "role_intro":
         // Opening "About the role" warm-up — spoken + rendered as an assistant
         // bubble, but it's NOT a question: when its audio ends the mic must NOT
-        // open (the 'tell me about yourself' question follows immediately). We
-        // reuse the greeting/interstitial display path and set roleIntroActiveRef
-        // so finalizePlayback skips the mic-open for this message only.
+        // open (the first question follows immediately). roleIntroActiveRef makes
+        // finalizePlayback skip the mic-open for this message only.
+        //
+        // COMMIT IMMEDIATELY as a STATIC chat bubble (not the live-reveal bubble).
+        // The old code seeded the live bubble and relied on finalizePlayback →
+        // saveAiMessage to commit it later; but if the next question's `greeting`
+        // event (or a slow/realtime provider where the reveal lagged to audio-end)
+        // arrived before that commit, the live bubble was overwritten and the role
+        // message VANISHED (reported repeatedly). Appending to `messages` now means
+        // it can never be wiped. We clear the token buffer so the role finalize's
+        // saveAiMessage() is a no-op (no duplicate bubble).
         console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
-        tokenBufferRef.current = (data.text as string) ?? "";
+        setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          content: (data.text as string) ?? "",
+          timestamp: nowIST(),
+        }]);
+        tokenBufferRef.current = "";
         revealedCharsRef.current = 0;
+        currentAiTextRef.current = "";
+        setCurrentAiText("");
         isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
         setStatus("Linda is speaking...");
-        startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "server_end_turn": {
@@ -3575,6 +3606,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
         speechPeakLevelRef.current = 0;
         ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
@@ -3769,7 +3801,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           // the end-of-turn work. If audio has already drained (tracker
           // pending=0 and ctx.currentTime >= scheduledEnd), this fires
           // synchronously. Otherwise it queues on the last chunk's `onended`.
-          whenTrackedPlaybackEnds(finalizePlayback);
+          // Safety timeout is AUDIO-DURATION-BASED (not the fixed 20s default):
+          // when the AudioContext tracker stalls (observed with some providers /
+          // suspended-ctx environments), the old 20s default left the mic /
+          // "Your turn" stuck ~20-30s after the question. Basing it on the
+          // received audio duration + tail fires finalizePlayback right after
+          // the audio should have ended, so the turn opens on time.
+          const _finalizeSafetyMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
+          whenTrackedPlaybackEnds(finalizePlayback, _finalizeSafetyMs);
         };
         break;
       case "silent_discard":
@@ -4818,6 +4857,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -4935,6 +4975,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -5011,6 +5052,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
@@ -5234,6 +5276,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       lastMeaningfulAudioAtRef.current = null;
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
       speechPeakLevelRef.current = 0;
       micRecentPeakRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
@@ -5608,8 +5651,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             const _frameIsActive = (avgLevel > inTurnActivityThreshold) && voiceLike;
             const _frameIsStrong = (avgLevel > strongInTurnActivityThreshold) && voiceLike;
             if (_frameIsActive) {
-              if (activeStreakStartRef.current == null) activeStreakStartRef.current = nowMs;
-            } else {
+              // Start a new streak only if the previous one has fully lapsed
+              // (gap since last active frame exceeded the dip grace). A brief
+              // inter-word dip keeps the SAME streak alive so it can reach
+              // SUSTAINED_ACTIVE_MS instead of restarting from zero every gap.
+              const _gapSinceActive = lastActiveFrameAtRef.current == null
+                ? Infinity
+                : (nowMs - lastActiveFrameAtRef.current);
+              if (activeStreakStartRef.current == null || _gapSinceActive > STREAK_DIP_GRACE_MS) {
+                activeStreakStartRef.current = nowMs;
+              }
+              lastActiveFrameAtRef.current = nowMs;
+            } else if (
+              activeStreakStartRef.current != null &&
+              lastActiveFrameAtRef.current != null &&
+              (nowMs - lastActiveFrameAtRef.current) > STREAK_DIP_GRACE_MS
+            ) {
+              // Sub-threshold for longer than the grace window — the speaker
+              // has genuinely stopped, so break the streak. Short dips fall
+              // through and keep the streak (and _sustained) alive.
               activeStreakStartRef.current = null;
             }
             const _streakMs = activeStreakStartRef.current == null
@@ -5834,15 +5894,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
 
-      // No-response detection fallback — fire after 20s of total silence with no
-      // speech. The backend normally drives the canonical silence-nudge flow,
-      // but the client fallback should match the same turn-start threshold.
+      // No-response detection — LAST-RESORT fallback ONLY. The BACKEND owns the
+      // canonical silence nudge: its ladder fires "Are you there?" at 20s and
+      // skips at ~30-35s (WAIT_1 20s + nudge + WAIT_2 10s), then advances the
+      // turn (which clears this timer). The client used to ALSO fire at 20s,
+      // producing TWO "Are you there?" messages back-to-back (one from each).
+      // We now fire only at 45s — well AFTER the backend's whole ladder — so the
+      // backend always wins and this client nudge fires only if the backend
+      // never responded at all (e.g. silence detection disabled / stuck).
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
-        if (!speechDetectedRef.current && isRecordingRef.current) {
+        if (!speechDetectedRef.current && isRecordingRef.current && !isSilencePromptRef.current) {
           handleNoResponseRef.current();
         }
-      }, 20000);
+      }, 45000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a
