@@ -3213,27 +3213,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "role_intro":
-        // Opening "About the role" warm-up — spoken + STREAMED like every other
-        // Linda turn so the text reveals in sync with (a touch ahead of) her
-        // voice, per the voice/text-sync requirement. It is NOT a question: when
-        // its audio ends the mic must NOT open (the first question follows
-        // immediately). roleIntroActiveRef makes finalizePlayback skip the
-        // mic-open for this message only.
+        // Opening "About the role" warm-up — spoken + rendered as an assistant
+        // bubble, but it's NOT a question: when its audio ends the mic must NOT
+        // open (the first question follows immediately). roleIntroActiveRef makes
+        // finalizePlayback skip the mic-open for this message only.
         //
-        // Streams through the SAME live-bubble reveal as `greeting` /
-        // `interstitial_prompt` (seed tokenBuffer → startRevealingTokens →
-        // committed by finalizePlayback's saveAiMessage at true audio-end).
-        //
-        // VANISH-PROOF: the old static-commit workaround existed because, before
-        // DEFERRED first-question delivery, the next `greeting` could arrive and
-        // overwrite the still-uncommitted live bubble. That no longer happens —
-        // the backend defers Q1 until this message's playback_complete, and on
-        // the client playback_complete is sent INSIDE finalizePlayback right
-        // AFTER saveAiMessage() commits (and clears) this bubble. So the greeting
-        // always lands after the role bubble is safely in `messages`.
+        // COMMIT IMMEDIATELY as a STATIC chat bubble (not the live-reveal bubble).
+        // Streaming the role message via the shared live bubble reintroduced two
+        // regressions (confirmed in arun.log): the bubble VANISHED after streaming,
+        // and Q1's finalizePlayback got confused with the role turn so "Your turn"
+        // (mic_listening) did not fire for ~30s after Q1. Appending to `messages`
+        // now means it can never be wiped; clearing the token buffer makes the
+        // role finalize's saveAiMessage() a no-op (no duplicate bubble) while still
+        // clearing roleIntroActiveRef so Q1 opens the mic normally.
         console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
-        tokenBufferRef.current = (data.text as string) ?? "";
+        setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          content: (data.text as string) ?? "",
+          timestamp: nowIST(),
+        }]);
+        tokenBufferRef.current = "";
         revealedCharsRef.current = 0;
         currentAiTextRef.current = "";
         setCurrentAiText("");
@@ -3243,7 +3244,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
         setStatus("Linda is speaking...");
-        startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "server_end_turn": {
@@ -7639,15 +7639,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               {isClosing && (
                 <div className="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 rounded-lg text-[10px] font-medium animate-pulse">Ending...</div>
               )}
-              {/* End Interview button */}
-              <button
-                onClick={() => setShowEndConfirm(true)}
-                disabled={!isConnected}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-white/60 hover:bg-white/80 disabled:opacity-50 disabled:cursor-not-allowed text-sky-900 rounded-lg border border-white/70 transition-all duration-200 font-semibold text-xs"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">End</span>
-              </button>
+              {/* End Interview button — hidden once closing has started so it
+                  can't be clicked again (the "Ending..." badge shows instead). */}
+              {!isClosing && (
+                <button
+                  onClick={() => setShowEndConfirm(true)}
+                  disabled={!isConnected}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white/60 hover:bg-white/80 disabled:opacity-50 disabled:cursor-not-allowed text-sky-900 rounded-lg border border-white/70 transition-all duration-200 font-semibold text-xs"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">End</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -8166,38 +8169,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <button
                 onClick={() => {
                   setShowEndConfirm(false);
-                  const sendEnd = () => {
-                    if (wsRef.current?.readyState === WebSocket.OPEN) {
-                      wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
-                    }
-                  };
-                  // If the candidate is mid-answer (actively recording AND has
-                  // spoken), PROCESS THAT ANSWER FIRST: stop recording so the
-                  // normal end_turn pipeline transcribes it and shows it as a
-                  // chat bubble, THEN send end_interview once the final transcript
-                  // commits (see the `transcript` is_final handler). Linda's
-                  // farewell no longer pre-empts the candidate's last answer.
-                  if (isRecordingRef.current && speechDetectedRef.current) {
-                    pendingEndAfterTranscriptRef.current = true;
-                    setStatus("Processing your answer…");
-                    setIsCandidateTranscriptProcessing(true);
-                    stopRecording();  // → end_turn → transcript → then sendEnd fires
-                    // Safety net: if no transcript lands within 12s (ASR stall /
-                    // discarded answer), end anyway so End can't hang.
-                    setTimeout(() => {
-                      if (pendingEndAfterTranscriptRef.current) {
-                        pendingEndAfterTranscriptRef.current = false;
-                        setStatus("Ending interview…");
-                        sendEnd();
-                      }
-                    }, 12000);
-                    return;
-                  }
-                  // Not mid-answer — end immediately (original behavior). The
-                  // backend farewell flow owns the close; the frontend waits for
-                  // the true end of Linda's audio on interview_ended/auto_disconnect.
+                  // End means END: go straight to Linda's Thank-you close with NO
+                  // further question. Enter closing on the client immediately
+                  // (hides the End button, stops reacting to further turns), stop
+                  // the mic SILENTLY — abortRecordingForSkip does NOT send end_turn,
+                  // so the backend never runs the answer→next-question pipeline that
+                  // used to make Linda ask a clarification after End — then tell the
+                  // backend to close. The backend cancels any in-flight generation
+                  // and plays ONLY the farewell.
+                  setIsClosing(true);
+                  isClosingRef.current = true;
                   setStatus("Ending interview…");
-                  sendEnd();
+                  try { abortRecordingForSkipRef.current?.(); } catch { /* mic already stopped */ }
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                  }
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}
