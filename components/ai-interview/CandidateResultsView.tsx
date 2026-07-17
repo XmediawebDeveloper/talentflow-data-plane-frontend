@@ -2557,7 +2557,18 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   return (
                     t.includes('thank you for completing the interview') ||
                     t.includes('thank you for your time today') ||
-                    (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+                    (t.includes('your responses have been recorded') && t.includes('wish you all the best')) ||
+                    // Linda's LLM-generated sendoff varies in wording. These phrases
+                    // only appear in the wrap-up turn (often prefixed by an
+                    // acknowledgment of the last answer, e.g. "That's a compelling
+                    // case… This concludes our interview…"), never in a real question.
+                    t.includes('this concludes our interview') ||
+                    t.includes('this concludes the interview') ||
+                    t.includes('that concludes our interview') ||
+                    t.includes('it was a pleasure speaking with you') ||
+                    t.includes('wish you the best of luck with the next steps') ||
+                    t.includes('best of luck with the next steps') ||
+                    t.includes('best of luck in the next steps')
                   );
                 };
                 // Detect informative / silence-ladder utterances ("Are you there?",
