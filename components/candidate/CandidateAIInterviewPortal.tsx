@@ -2151,17 +2151,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             try {
               const cap = await recordPcm16(stream, 12000);
               if (!cap) return false; // nothing recorded at all
-              // Send to the server FIRST. When server voice-ID is ENABLED, the
-              // server content check (transcript must match the sentence) is the
-              // AUTHORITATIVE gate — do NOT pre-block on the client energy
-              // heuristic, which false-rejected quiet headset reads before the
-              // server ever heard them. Noise/silence is still rejected by the
-              // server (transcript won't match), so nothing slips through.
+              // Send to the server. When server voice-ID is ENABLED, the server
+              // enrolls the voiceprint and gates ONLY on whether the candidate
+              // spoke (Silero VAD) — there is NO sentence/word matching. So `ok`
+              // is true whenever real speech was captured. We still pass
+              // ENROLL_PASSAGE (backward-compat), but the server ignores it.
               const res = await candidateAIInterviewService.enrollVoice(
                 token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
                 ENROLL_PASSAGE,
               );
-              if (res.enabled) return res.ok; // server verdict is final
+              if (res.enabled) return res.ok; // server verdict is final (speech present?)
 
               // Server DISABLED → no content check available, so fall back to the
               // client energy guard + local MFCC baseline (old behavior).

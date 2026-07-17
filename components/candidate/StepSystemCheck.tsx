@@ -1493,18 +1493,22 @@ export default function StepSystemCheck({
                       </span>
                     </div>
                     <p className="text-xs text-gray-500">
-                      Click record and read the sentence below — this confirms it&apos;s you throughout the interview.
+                      Click record and speak for a few seconds — this captures your voice so we can confirm it&apos;s you throughout the interview.
                     </p>
                   </div>
                 </div>
 
-                {/* The sentence to read aloud — always visible, not truncated. */}
+                {/* A suggested line — NOT required. The candidate can say anything;
+                    we only need to hear their voice (no word-matching). */}
                 <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500 mb-1">
-                    Please read this sentence aloud
+                    Just speak naturally — say anything, or read this
                   </p>
                   <p className="text-base font-medium text-gray-900 leading-snug">
                     &ldquo;{ENROLL_PASSAGE}&rdquo;
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1.5">
+                    You don&apos;t have to read this exactly — we only check that you spoke.
                   </p>
                 </div>
 
@@ -1515,7 +1519,7 @@ export default function StepSystemCheck({
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs text-gray-500">
                         {micReadyForVoice
-                          ? 'Click record, then read the sentence aloud.'
+                          ? 'Click record, then speak for a few seconds.'
                           : 'Complete the microphone check first, then record your voice.'}
                       </p>
                       <button
@@ -1539,7 +1543,7 @@ export default function StepSystemCheck({
                     <div className="space-y-1.5">
                       <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        Recording — read the sentence aloud now…
+                        Recording — keep speaking…
                       </p>
                       <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
                         <div
@@ -1558,13 +1562,13 @@ export default function StepSystemCheck({
                     </p>
                   )}
 
-                  {/* FAILED — includes the "recorded but silent" case, which the
-                      server/VAD rejects for insufficient speech. Blocks Continue. */}
+                  {/* FAILED — now only the "no speech" case: the server/VAD
+                      rejects a silent or noise-only clip. No word-matching. */}
                   {voiceEnrollStatus === 'failed' && (
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
                         <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                        We couldn&apos;t confirm you read the sentence. Please read it aloud exactly, then record again.
+                        We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.
                       </p>
                       <button
                         type="button"

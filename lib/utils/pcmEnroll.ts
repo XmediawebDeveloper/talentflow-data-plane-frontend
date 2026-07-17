@@ -159,22 +159,11 @@ export async function recordPcm16(
   // Classify the device up-front — drives the per-device gain target (below).
   const micType = classifyMicType(audioTracks[0]?.label || '');
 
-  // Capture config for enrollment. Echo cancellation is turned OFF for ALL
-  // devices here: during the read-aloud NOTHING is playing (Linda isn't
-  // speaking), so there is no echo to cancel — EC would only DUCK/attenuate the
-  // candidate's own (often quiet, on a headset) speech, which garbled the
-  // recording and made headset enrollment fail the transcript match. AGC stays
-  // off (distorts levels for ASR); light noise suppression stays on to help the
-  // transcriber focus on speech. Best-effort — some devices reject this.
-  await Promise.all(
-    audioTracks.map((t) => t.applyConstraints({
-      channelCount: { ideal: 1 },
-      echoCancellation: false,
-      noiseSuppression: true,
-      autoGainControl: false,
-    }).catch(() => {})),
-  );
-
+  // Start capturing IMMEDIATELY on click. We build the AudioContext + processor
+  // FIRST so audio flows from t≈0 — the previous code `await`ed applyConstraints
+  // (a mic re-negotiation that costs ~1-2s) BEFORE starting capture, so the
+  // candidate's first words (spoken the moment they saw "Recording…") were
+  // dropped. Constraints are now applied in the BACKGROUND (best-effort) below.
   const Ctx: typeof AudioContext =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
@@ -187,6 +176,24 @@ export async function recordPcm16(
   };
   source.connect(processor);
   processor.connect(ctx.destination);
+  // The context can start 'suspended' under autoplay policy — resume it. We're
+  // inside the Start-recording user gesture, so this resolves immediately.
+  try { await ctx.resume(); } catch { /* already running */ }
+
+  // Capture config for enrollment, applied in the BACKGROUND so it never delays
+  // capture start. Echo cancellation is OFF for ALL devices here: during the
+  // read-aloud NOTHING is playing (Linda isn't speaking), so there is no echo to
+  // cancel — EC would only DUCK/attenuate the candidate's own (often quiet, on a
+  // headset) speech. AGC stays off (distorts levels for ASR); light noise
+  // suppression stays on. Best-effort — some devices reject this.
+  void Promise.all(
+    audioTracks.map((t) => t.applyConstraints({
+      channelCount: { ideal: 1 },
+      echoCancellation: false,
+      noiseSuppression: true,
+      autoGainControl: false,
+    }).catch(() => {})),
+  );
 
   await new Promise((r) => setTimeout(r, durationMs));
 
