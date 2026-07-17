@@ -58,6 +58,10 @@ interface InterviewUIProps {
   /** Detected device tier + feature flags (from the system-check step). When
    * omitted, the interview assumes a capable device (all features on). */
   deviceCapability?: DeviceCapability;
+  /** Object URL of the candidate's captured identity photo, used for the "You"
+   * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
+   * avatar is shown instead. */
+  candidatePhotoUrl?: string | null;
 }
 
 interface Message {
@@ -289,6 +293,27 @@ const Bar = ({ pct, color = '#818cf8' }: { pct: number; color?: string }) => (
   </div>
 );
 
+// ── YouAvatar ───────────────────────────────────────────────────────────
+// The candidate's chat avatar. Shows their captured identity photo when
+// available (photoUrl), else the green "You" text circle. Kept tiny (24px) to
+// match Linda's avatar; the photo is cropped to a circle via object-cover.
+const YouAvatar = ({ photoUrl }: { photoUrl?: string | null }) => {
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt="You"
+        className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5 shadow-sm ring-1 ring-emerald-300"
+      />
+    );
+  }
+  return (
+    <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+      <span className="text-white text-[8px] font-bold">You</span>
+    </div>
+  );
+};
+
 // ── MessageRow ──────────────────────────────────────────────────────────
 // Single chat bubble. Memoized on the immutable `msg` reference. When
 // `setMessages([...prev, newMsg])` runs, only the newly-appended msg has a
@@ -297,9 +322,10 @@ const Bar = ({ pct, color = '#818cf8' }: { pct: number; color?: string }) => (
 // token-reveal tick (12.5 Hz) re-rendered every prior message bubble.
 interface MessageRowProps {
   msg: Message;
+  candidatePhotoUrl?: string | null;
 }
 
-const MessageRow = (({ msg }: MessageRowProps) => {
+const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
   if (process.env.NODE_ENV !== 'production') {
     console.debug(`[render] MessageRow id=${msg.id}`);
   }
@@ -329,9 +355,7 @@ const MessageRow = (({ msg }: MessageRowProps) => {
   if (msg.role === 'user') {
     return (
       <div className="flex gap-2 flex-row-reverse">
-        <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-          <span className="text-white text-[8px] font-bold">You</span>
-        </div>
+        <YouAvatar photoUrl={candidatePhotoUrl} />
         <div className="max-w-[80%]">
           <div className="flex items-center justify-end gap-2 mb-0.5">
             <span className="text-[10px] font-semibold text-emerald-600">Your Response</span>
@@ -422,7 +446,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -7734,7 +7758,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 (token reveal, timer ticks, WS handlers) don't reconcile
                 prior bubbles. React.memo + stable msg refs skip them. */}
             {messages.map(msg => (
-              <MessageRowMemo key={msg.id} msg={msg} />
+              <MessageRowMemo key={msg.id} msg={msg} candidatePhotoUrl={candidatePhotoUrl} />
             ))}
 
             {/* Candidate live/processing bubble — ONE persistent bubble across
@@ -7747,9 +7771,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 emerald "Your Response" styling → visually seamless handoff). */}
             {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) && (
               <div className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                  <span className="text-white text-[8px] font-bold">You</span>
-                </div>
+                <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[80%]">
                   <span className="text-[10px] font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
@@ -7812,7 +7834,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                           return (
                             <button
                               type="button"
-                              onClick={handleNextQuestion}
+                              onClick={(e) => {
+                                // Blur immediately so the button loses keyboard
+                                // focus. Without this, after the first activation
+                                // the button keeps focus; while it is disabled
+                                // (processing + Linda's TTS) a HELD Enter/Space is
+                                // swallowed, but the instant question_timer_started
+                                // re-enables it the still-held key re-activates it
+                                // — chaining Q3→Q4→Q5→Q6 (one skip per ~2.6s TTS
+                                // cycle). Confirmed in sarath.log: 3 back-to-back
+                                // skip_question(source=candidate), each firing the
+                                // moment the mic reopened (qsize 0 → nothing spoken).
+                                e.currentTarget.blur();
+                                handleNextQuestion();
+                              }}
+                              onKeyDown={(e) => {
+                                // Block OS key auto-repeat: a held Enter/Space fires
+                                // repeated keydown events with e.repeat===true. Those
+                                // are what machine-gun the skip once the button
+                                // re-enables. A single deliberate press (e.repeat
+                                // false) still works.
+                                if (e.repeat && (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) {
+                                  e.preventDefault();
+                                }
+                              }}
                               disabled={nextDisabled}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                                 nextDisabled

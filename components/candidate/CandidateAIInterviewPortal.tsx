@@ -177,10 +177,21 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
   // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
   const identityPhotoRef = useRef<Blob | null>(null);
+  // Object URL of the captured identity photo, passed to InterviewUI so the
+  // candidate's "You" chat avatar can show their own face. Null when the
+  // identity step was skipped (e.g. re-opened authenticated session) → the
+  // interview falls back to the "You" text avatar. Revoked on unmount.
+  const [candidatePhotoUrl, setCandidatePhotoUrl] = useState<string | null>(null);
   // Shared promise for best-effort baseline registration from the verified
   // identity photo. Starting it before system-check avoids proceed-time races
   // where practice opens before face registration finishes.
   const faceRegistrationPromiseRef = useRef<Promise<boolean> | null>(null);
+
+  // Free the identity-photo object URL when it changes or on unmount so the
+  // captured blob isn't retained for the whole session.
+  useEffect(() => {
+    return () => { if (candidatePhotoUrl) URL.revokeObjectURL(candidatePhotoUrl); };
+  }, [candidatePhotoUrl]);
 
   // Screen recording
   const screenRecorderRef = useRef<MediaRecorder | null>(null);
@@ -673,6 +684,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // face-api.js polling corrupts the shared TF.js WebGL backend.
       if (data.photo) {
         identityPhotoRef.current = data.photo;
+        // Expose the photo to InterviewUI as an object URL for the "You" avatar.
+        setCandidatePhotoUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(data.photo as Blob);
+        });
         void ensureFaceBaselineFromIdentityPhoto();
       }
 
@@ -1878,6 +1894,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}
           onTimerChange={setTimerSnapshot}
           deviceCapability={deviceCapability}
+          candidatePhotoUrl={candidatePhotoUrl}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
