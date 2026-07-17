@@ -195,6 +195,68 @@ const TITLE_ROLE_TERMINALS = new Set([
   'cashier', 'dispatcher',
 ]);
 
+const TITLE_DOMAIN_PATTERNS: Record<string, RegExp[]> = {
+  information_technology: [
+    /\bdeveloper\b/i,
+    /\bsoftware engineer\b/i,
+    /\bsoftware architect\b/i,
+    /\bprogrammer\b/i,
+    /\bdevops\b/i,
+    /\bsre\b/i,
+    /\bfrontend\b/i,
+    /\bbackend\b/i,
+    /\bfull[ -]?stack\b/i,
+    /\bqa\b/i,
+    /\btester\b/i,
+    /\bdata engineer\b/i,
+    /\bdata scientist\b/i,
+    /\bcloud engineer\b/i,
+    /\bjava\b/i,
+    /\bpython\b/i,
+    /\breact\b/i,
+    /\bnode(?:\.js)?\b/i,
+  ],
+  healthcare_and_medical: [
+    /\bdoctor\b/i,
+    /\bphysician\b/i,
+    /\bsurgeon\b/i,
+    /\bnurse\b/i,
+    /\bpharmacist\b/i,
+    /\btherapist\b/i,
+    /\bdentist\b/i,
+    /\bradiologist\b/i,
+    /\bcardiologist\b/i,
+    /\bneurologist\b/i,
+    /\bmedical officer\b/i,
+    /\bclinician\b/i,
+  ],
+  financial: [
+    /\baccountant\b/i,
+    /\bauditor\b/i,
+    /\bbanker\b/i,
+    /\btreasury\b/i,
+    /\bfinance manager\b/i,
+    /\btax consultant\b/i,
+    /\bactuary\b/i,
+  ],
+  legal: [
+    /\blawyer\b/i,
+    /\battorney\b/i,
+    /\blegal counsel\b/i,
+    /\badvocate\b/i,
+    /\bparalegal\b/i,
+  ],
+  education: [
+    /\bteacher\b/i,
+    /\bprofessor\b/i,
+    /\blecturer\b/i,
+    /\btutor\b/i,
+    /\bprincipal\b/i,
+    /\bdean\b/i,
+    /\bacademic\b/i,
+  ],
+};
+
 const PLACEHOLDER_TOKENS = new Set([
   'asdf', 'asdfg', 'asdfgh', 'asdfghj', 'qwerty', 'qwertyuiop', 'zxcv',
   'zxcvb', 'zxcvbn', 'lorem', 'ipsum', 'foobar', 'placeholder',
@@ -305,6 +367,13 @@ const suggestSeniorityTokenCorrection = (token: string): string | null => {
 
   Array.from(SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.entries()).forEach(([candidateToken, canonicalToken]) => {
     if (candidateToken.length < 4 || compactToken.slice(0, 2) !== candidateToken.slice(0, 2)) {
+      return;
+    }
+
+    if (
+      Math.abs(compactToken.length - candidateToken.length) > 1 &&
+      (compactToken.startsWith(candidateToken) || candidateToken.startsWith(compactToken))
+    ) {
       return;
     }
 
@@ -441,6 +510,23 @@ const extractRolePhrases = (text: string): Array<{ phrase: string }> => {
   return phrases;
 };
 
+const inferPrimaryTitleDomain = (value: string): string | null => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  const scoredDomains = Object.entries(TITLE_DOMAIN_PATTERNS)
+    .map(([domain, patterns]) => ({
+      domain,
+      score: patterns.reduce((sum, pattern) => sum + (pattern.test(trimmedValue) ? 1 : 0), 0),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return scoredDomains[0]?.domain || null;
+};
+
 const looksLikeValidJobTitle = (value: string): boolean => {
   const tokens = extractRoleTokens(value);
   if (tokens.length === 0) {
@@ -449,6 +535,10 @@ const looksLikeValidJobTitle = (value: string): boolean => {
 
   if (tokens.some((token) => isPlaceholderLikeToken(token))) {
     return false;
+  }
+
+  if (inferPrimaryTitleDomain(value)) {
+    return true;
   }
 
   if (extractRolePhrases(value).length > 0) {
