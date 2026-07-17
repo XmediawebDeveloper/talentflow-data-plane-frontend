@@ -3213,28 +3213,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "role_intro":
-        // Opening "About the role" warm-up — spoken + rendered as an assistant
-        // bubble, but it's NOT a question: when its audio ends the mic must NOT
-        // open (the first question follows immediately). roleIntroActiveRef makes
-        // finalizePlayback skip the mic-open for this message only.
+        // Opening "About the role" warm-up — spoken + STREAMED like every other
+        // Linda turn so the text reveals in sync with (a touch ahead of) her
+        // voice, per the voice/text-sync requirement. It is NOT a question: when
+        // its audio ends the mic must NOT open (the first question follows
+        // immediately). roleIntroActiveRef makes finalizePlayback skip the
+        // mic-open for this message only.
         //
-        // COMMIT IMMEDIATELY as a STATIC chat bubble (not the live-reveal bubble).
-        // The old code seeded the live bubble and relied on finalizePlayback →
-        // saveAiMessage to commit it later; but if the next question's `greeting`
-        // event (or a slow/realtime provider where the reveal lagged to audio-end)
-        // arrived before that commit, the live bubble was overwritten and the role
-        // message VANISHED (reported repeatedly). Appending to `messages` now means
-        // it can never be wiped. We clear the token buffer so the role finalize's
-        // saveAiMessage() is a no-op (no duplicate bubble).
+        // Streams through the SAME live-bubble reveal as `greeting` /
+        // `interstitial_prompt` (seed tokenBuffer → startRevealingTokens →
+        // committed by finalizePlayback's saveAiMessage at true audio-end).
+        //
+        // VANISH-PROOF: the old static-commit workaround existed because, before
+        // DEFERRED first-question delivery, the next `greeting` could arrive and
+        // overwrite the still-uncommitted live bubble. That no longer happens —
+        // the backend defers Q1 until this message's playback_complete, and on
+        // the client playback_complete is sent INSIDE finalizePlayback right
+        // AFTER saveAiMessage() commits (and clears) this bubble. So the greeting
+        // always lands after the role bubble is safely in `messages`.
         console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          content: (data.text as string) ?? "",
-          timestamp: nowIST(),
-        }]);
-        tokenBufferRef.current = "";
+        tokenBufferRef.current = (data.text as string) ?? "";
         revealedCharsRef.current = 0;
         currentAiTextRef.current = "";
         setCurrentAiText("");
@@ -3244,6 +3243,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
         setStatus("Linda is speaking...");
+        startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "server_end_turn": {
