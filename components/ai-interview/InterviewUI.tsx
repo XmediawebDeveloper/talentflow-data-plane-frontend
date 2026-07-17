@@ -7834,29 +7834,39 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                           return (
                             <button
                               type="button"
-                              onClick={(e) => {
-                                // Blur immediately so the button loses keyboard
-                                // focus. Without this, after the first activation
-                                // the button keeps focus; while it is disabled
-                                // (processing + Linda's TTS) a HELD Enter/Space is
-                                // swallowed, but the instant question_timer_started
-                                // re-enables it the still-held key re-activates it
-                                // — chaining Q3→Q4→Q5→Q6 (one skip per ~2.6s TTS
-                                // cycle). Confirmed in sarath.log: 3 back-to-back
-                                // skip_question(source=candidate), each firing the
-                                // moment the mic reopened (qsize 0 → nothing spoken).
-                                e.currentTarget.blur();
-                                handleNextQuestion();
+                              // Skipping a question is IRREVERSIBLE, so Next must
+                              // fire ONLY on a deliberate pointer click — never via
+                              // the keyboard, and it must never keep focus. Root
+                              // cause (confirmed by the tester + sarath.log): during
+                              // testing the tester Alt+Tabs to ChatGPT, copies the
+                              // question, pastes, reads the answer, Alt+Tabs back —
+                              // pressing keys (Space to scroll, Enter after paste)
+                              // throughout. If the Next button holds keyboard focus,
+                              // Space/Enter ACTIVATES it, and each time it re-enables
+                              // after the next question it fires again — chaining
+                              // Q3→Q4→Q5→Q6 (3 back-to-back skip_question(candidate),
+                              // qsize 0 = nothing actually spoken).
+                              onMouseDown={(e) => {
+                                // Don't let the click move focus TO the button, so a
+                                // later stray Space/Enter can't land on it.
+                                e.preventDefault();
                               }}
                               onKeyDown={(e) => {
-                                // Block OS key auto-repeat: a held Enter/Space fires
-                                // repeated keydown events with e.repeat===true. Those
-                                // are what machine-gun the skip once the button
-                                // re-enables. A single deliberate press (e.repeat
-                                // false) still works.
-                                if (e.repeat && (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) {
+                                // Never activate via keyboard. Blocks the default
+                                // Space/Enter → click on a focused button (and its
+                                // OS auto-repeat), which is what accidental skips.
+                                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
                                   e.preventDefault();
                                 }
+                              }}
+                              onClick={(e) => {
+                                // Reached only by a real pointer click/tap — keyboard
+                                // activation is blocked in onKeyDown, and onMouseDown
+                                // keeps focus off the button so stray Space/Enter
+                                // while reading never lands here. Blur anyway as a
+                                // final guard against the button retaining focus.
+                                e.currentTarget.blur();
+                                handleNextQuestion();
                               }}
                               disabled={nextDisabled}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${

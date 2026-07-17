@@ -628,6 +628,12 @@ function isMetaAssistantTurn(content: string): boolean {
     "let's focus on the interview", 'lets focus on the interview',
     'completing the interview', 'responses have been recorded',
     'wish you all the best', 'future endeavors', 'welcome back',
+    // Closing / sendoff turn — LLM wording varies (often prefixed by an
+    // acknowledgment: "That's a compelling case… This concludes our interview…").
+    // None of these appear in a real interview question.
+    'concludes our interview', 'concludes the interview', 'concludes this interview',
+    'pleasure speaking with you', 'best of luck with the next steps',
+    'best of luck in the next steps',
   ];
   return META.some(m => t.includes(m));
 }
@@ -1609,7 +1615,13 @@ function buildPerQuestionDetailsFromConversation(
     return (
       t.includes('thank you for completing the interview') ||
       t.includes('thank you for your time today') ||
-      (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+      (t.includes('your responses have been recorded') && t.includes('wish you all the best')) ||
+      t.includes('concludes our interview') ||
+      t.includes('concludes the interview') ||
+      t.includes('concludes this interview') ||
+      t.includes('pleasure speaking with you') ||
+      t.includes('best of luck with the next steps') ||
+      t.includes('best of luck in the next steps')
     );
   };
   const _isSilenceNudge = (c: string): boolean => {
