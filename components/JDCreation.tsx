@@ -173,89 +173,12 @@ const TITLE_ROLE_HEADWORDS = new Set([
   'president', 'ceo', 'cto', 'cfo', 'coo', 'cio', 'cmo',
 ]);
 
-const TITLE_ROLE_BOUNDARY_STOPWORDS = new Set([
-  'with', 'and', 'or', 'for', 'to', 'of', 'in', 'on', 'at', 'from', 'by',
-  'using', 'need', 'needs', 'needed', 'require', 'requires', 'required',
-  'must', 'musthave', 'should', 'preferred', 'prefer', 'experience', 'years',
-  'year', 'yrs', 'salary', 'package', 'ctc', 'remote', 'hybrid', 'onsite',
-  'full', 'time', 'part', 'contract', 'internship', 'temporary', 'monthly',
-  'yearly', 'hourly', 'daily', 'domain', 'industry',
-]);
-
 const TITLE_ROLE_GENERIC_MODIFIERS = new Set([
   'senior', 'junior', 'lead', 'principal', 'staff', 'expert', 'chief',
   'associate', 'assistant', 'intern', 'trainee',
   'entry', 'entry-level', 'entrylevel', 'fresher',
   'mid', 'mid-level', 'midlevel', 'intermediate',
 ]);
-
-const TITLE_ROLE_TERMINALS = new Set([
-  ...TITLE_ROLE_HEADWORDS,
-  'lead', 'head', 'fellow', 'investigator', 'inspector', 'buyer', 'clerk',
-  'cashier', 'dispatcher',
-]);
-
-const TITLE_DOMAIN_PATTERNS: Record<string, RegExp[]> = {
-  information_technology: [
-    /\bdeveloper\b/i,
-    /\bsoftware engineer\b/i,
-    /\bsoftware architect\b/i,
-    /\bprogrammer\b/i,
-    /\bdevops\b/i,
-    /\bsre\b/i,
-    /\bfrontend\b/i,
-    /\bbackend\b/i,
-    /\bfull[ -]?stack\b/i,
-    /\bqa\b/i,
-    /\btester\b/i,
-    /\bdata engineer\b/i,
-    /\bdata scientist\b/i,
-    /\bcloud engineer\b/i,
-    /\bjava\b/i,
-    /\bpython\b/i,
-    /\breact\b/i,
-    /\bnode(?:\.js)?\b/i,
-  ],
-  healthcare_and_medical: [
-    /\bdoctor\b/i,
-    /\bphysician\b/i,
-    /\bsurgeon\b/i,
-    /\bnurse\b/i,
-    /\bpharmacist\b/i,
-    /\btherapist\b/i,
-    /\bdentist\b/i,
-    /\bradiologist\b/i,
-    /\bcardiologist\b/i,
-    /\bneurologist\b/i,
-    /\bmedical officer\b/i,
-    /\bclinician\b/i,
-  ],
-  financial: [
-    /\baccountant\b/i,
-    /\bauditor\b/i,
-    /\bbanker\b/i,
-    /\btreasury\b/i,
-    /\bfinance manager\b/i,
-    /\btax consultant\b/i,
-    /\bactuary\b/i,
-  ],
-  legal: [
-    /\blawyer\b/i,
-    /\battorney\b/i,
-    /\blegal counsel\b/i,
-    /\badvocate\b/i,
-    /\bparalegal\b/i,
-  ],
-  education: [
-    /\bteacher\b/i,
-    /\bprofessor\b/i,
-    /\blecturer\b/i,
-    /\btutor\b/i,
-    /\bprincipal\b/i,
-    /\bdean\b/i,
-    /\bacademic\b/i,
-  ],
-};
 
 const PLACEHOLDER_TOKENS = new Set([
   'asdf', 'asdfg', 'asdfgh', 'asdfghj', 'qwerty', 'qwertyuiop', 'zxcv',
@@ -277,32 +200,6 @@ const EXCLUSIVE_SENIORITY_BUCKETS = {
 
 const REPEATED_TEXT_MIN_UNIT_CHARS = 12;
 
-const SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP = new Map<string, string>([
-  ['jr', 'junior'],
-  ['junior', 'junior'],
-  ['sr', 'senior'],
-  ['senior', 'senior'],
-  ['entry', 'entry'],
-  ['entrylevel', 'entry'],
-  ['fresher', 'fresher'],
-  ['trainee', 'trainee'],
-  ['intern', 'intern'],
-  ['mid', 'mid'],
-  ['midlevel', 'mid'],
-  ['intermediate', 'intermediate'],
-]);
-
-const SENIORITY_SUGGESTION_LABELS = new Map<string, string>([
-  ['junior', 'junior'],
-  ['senior', 'senior'],
-  ['entry', 'entry'],
-  ['fresher', 'fresher'],
-  ['trainee', 'trainee'],
-  ['intern', 'intern'],
-  ['mid', 'mid-level'],
-  ['intermediate', 'intermediate'],
-]);
-
 const TITLE_WORK_MODE_PATTERN = /\b(?:remote|hybrid|on[\s-]?site|work\s+from\s+home|wfh|field[\s-]?based)\b/i;
 const TITLE_JOB_TYPE_PATTERN = /\b(?:full[\s-]?time|part[\s-]?time|internship|temporary|permanent|contractual)\b/i;
 const TITLE_VACANCY_PATTERN = /\b(?:hiring\s+\d+|(?:no\.?\s+of\s+)?vacanc(?:y|ies)\s*:?\s*\d+|(?:no\.?\s+of\s+)?openings?\s*:?\s*\d+|\d+\s+positions?\s+available)\b/i;
@@ -315,105 +212,6 @@ const normalizeRoleToken = (value: string): string =>
 
 const extractRoleTokens = (text: string): string[] =>
   Array.from(text.matchAll(roleTokenPattern), (match) => normalizeRoleToken(match[0])).filter(Boolean);
-
-const compactSeniorityToken = (value: string): string =>
-  value.toLowerCase().replace(/[^a-z0-9]+/g, '');
-
-const boundedEditDistance = (left: string, right: string, maxDistance: number): number => {
-  if (left === right) {
-    return 0;
-  }
-  if (Math.abs(left.length - right.length) > maxDistance) {
-    return maxDistance + 1;
-  }
-
-  let previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
-    const currentRow = [leftIndex + 1];
-    let rowMin = currentRow[0];
-
-    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
-      const cost = left[leftIndex] === right[rightIndex] ? 0 : 1;
-      const currentValue = Math.min(
-        previousRow[rightIndex + 1] + 1,
-        currentRow[rightIndex] + 1,
-        previousRow[rightIndex] + cost,
-      );
-      currentRow.push(currentValue);
-      rowMin = Math.min(rowMin, currentValue);
-    }
-
-    if (rowMin > maxDistance) {
-      return maxDistance + 1;
-    }
-
-    previousRow = currentRow;
-  }
-
-  return previousRow[previousRow.length - 1];
-};
-
-const canonicalizeSeniorityToken = (token: string): string =>
-  SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.get(compactSeniorityToken(token)) || token;
-
-const suggestSeniorityTokenCorrection = (token: string): string | null => {
-  const compactToken = compactSeniorityToken(token);
-  if (!compactToken || SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.has(compactToken) || compactToken.length < 4) {
-    return null;
-  }
-
-  let bestCandidate: string | null = null;
-  let bestDistance: number | null = null;
-
-  Array.from(SENIORITY_VALIDATION_TOKEN_CANONICAL_MAP.entries()).forEach(([candidateToken, canonicalToken]) => {
-    if (candidateToken.length < 4 || compactToken.slice(0, 2) !== candidateToken.slice(0, 2)) {
-      return;
-    }
-
-    if (
-      Math.abs(compactToken.length - candidateToken.length) > 1 &&
-      (compactToken.startsWith(candidateToken) || candidateToken.startsWith(compactToken))
-    ) {
-      return;
-    }
-
-    const maxDistance = Math.max(compactToken.length, candidateToken.length) < 8 ? 1 : 2;
-    const distance = boundedEditDistance(compactToken, candidateToken, maxDistance);
-    if (distance > maxDistance) {
-      return;
-    }
-
-    if (
-      bestDistance === null ||
-      distance < bestDistance ||
-      (distance === bestDistance && candidateToken.length < (bestCandidate?.length || Number.POSITIVE_INFINITY))
-    ) {
-      bestCandidate = canonicalToken;
-      bestDistance = distance;
-    }
-  });
-
-  return bestCandidate;
-};
-
-const collectSeniorityTokenCorrections = (tokens: string[]): Map<string, string> => {
-  const corrections = new Map<string, string>();
-  tokens.forEach((token) => {
-    const suggestion = suggestSeniorityTokenCorrection(token);
-    if (suggestion) {
-      corrections.set(token, suggestion);
-    }
-  });
-  return corrections;
-};
-
-const applySeniorityTokenCorrections = (tokens: string[], corrections?: Map<string, string>): string[] =>
-  tokens.map((token) => corrections?.get(token) || canonicalizeSeniorityToken(token));
-
-const formatSeniorityCorrectionExamples = (corrections: Map<string, string>): string =>
-  Array.from(corrections.entries())
-    .map(([token, suggestion]) => `"${token}" -> "${SENIORITY_SUGGESTION_LABELS.get(suggestion) || suggestion}"`)
-    .join(', ');
 
 const detectTitleMetadataMarkers = (value: string): string[] => {
   const markers: string[] = [];
@@ -472,87 +270,6 @@ const isPlaceholderLikeToken = (token: string): boolean => {
 const isRoleHeadToken = (token: string): boolean =>
   TITLE_ROLE_HEADWORDS.has(token) || token.endsWith('ologist');
 
-const extractRolePhrases = (text: string): Array<{ phrase: string }> => {
-  const tokens = extractRoleTokens(text);
-  const phrases: Array<{ phrase: string }> = [];
-  const seen = new Set<string>();
-
-  tokens.forEach((token, idx) => {
-    if (!isRoleHeadToken(token)) {
-      return;
-    }
-
-    let start = idx;
-    while (start > 0) {
-      const previous = tokens[start - 1];
-      if (!previous || TITLE_ROLE_BOUNDARY_STOPWORDS.has(previous) || idx - start >= 3) {
-        break;
-      }
-      start -= 1;
-    }
-
-    const phraseTokens = tokens
-      .slice(start, idx + 1)
-      .filter((currentToken) => !TITLE_ROLE_GENERIC_MODIFIERS.has(currentToken));
-    if (phraseTokens.length === 0) {
-      return;
-    }
-
-    const phrase = phraseTokens.join(' ');
-    if (seen.has(phrase)) {
-      return;
-    }
-
-    seen.add(phrase);
-    phrases.push({ phrase });
-  });
-
-  return phrases;
-};
-
-const inferPrimaryTitleDomain = (value: string): string | null => {
-  const trimmedValue = value.trim();
-  if (!trimmedValue) {
-    return null;
-  }
-
-  const scoredDomains = Object.entries(TITLE_DOMAIN_PATTERNS)
-    .map(([domain, patterns]) => ({
-      domain,
-      score: patterns.reduce((sum, pattern) => sum + (pattern.test(trimmedValue) ? 1 : 0), 0),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score);
-
-  return scoredDomains[0]?.domain || null;
-};
-
-const looksLikeValidJobTitle = (value: string): boolean => {
-  const tokens = extractRoleTokens(value);
-  if (tokens.length === 0) {
-    return false;
-  }
-
-  if (tokens.some((token) => isPlaceholderLikeToken(token))) {
-    return false;
-  }
-
-  if (inferPrimaryTitleDomain(value)) {
-    return true;
-  }
-
-  if (extractRolePhrases(value).length > 0) {
-    return true;
-  }
-
-  const distinctTokens = new Set(
-    tokens.filter((token) => !TITLE_ROLE_BOUNDARY_STOPWORDS.has(token))
-  );
-  const lastToken = tokens[tokens.length - 1];
-
-  return TITLE_ROLE_TERMINALS.has(lastToken) && distinctTokens.size >= 2;
-};
-
 const getJobTitleValidationError = (value: string): string => {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
@@ -567,9 +284,6 @@ const getJobTitleValidationError = (value: string): string => {
     return JOB_TITLE_ENGLISH_ONLY_MESSAGE;
   }
 
-  const tokens = extractRoleTokens(trimmedValue);
-  const seniorityCorrections = collectSeniorityTokenCorrections(tokens);
-  const normalizedTokens = applySeniorityTokenCorrections(tokens, seniorityCorrections);
   if (hasRepeatedCompactSequence(trimmedValue)) {
     return 'Job title contains repeated text. Please enter one clear job title only.';
   }
@@ -577,28 +291,6 @@ const getJobTitleValidationError = (value: string): string => {
   const metadataMarkers = detectTitleMetadataMarkers(trimmedValue);
   if (metadataMarkers.length > 0) {
     return `Job title should contain only the role name. Remove ${metadataMarkers.join(', ')} from the title and keep those details in the JD fields instead.`;
-  }
-
-  const seniorityBuckets = extractSeniorityBuckets(normalizedTokens);
-  if (seniorityCorrections.size > 0) {
-    const correctionExamples = formatSeniorityCorrectionExamples(seniorityCorrections);
-    if (seniorityBuckets.length > 1) {
-      return `Job title contains misspelled or conflicting seniority levels (${correctionExamples}). Please correct the seniority terms and choose only one level, such as Junior, Mid-Level, or Senior.`;
-    }
-    return `Job title contains a possible misspelled seniority/level term (${correctionExamples}). Please correct it before generating the JD.`;
-  }
-
-  if (seniorityBuckets.length > 1) {
-    return 'Job title contains conflicting seniority levels. Please choose only one level, such as Junior, Mid-Level, or Senior.';
-  }
-
-  const roleHeadCount = Array.from(countNonGenericRoleHeads(normalizedTokens).values()).reduce((sum, count) => sum + count, 0);
-  if (roleHeadCount > 1) {
-    return 'Job title appears to contain multiple roles. Please enter one primary job title only.';
-  }
-
-  if (!looksLikeValidJobTitle(trimmedValue)) {
-    return 'Please enter a real job title such as "Java Developer" or "HR Executive".';
   }
 
   return '';
@@ -706,18 +398,19 @@ const isEnglishOnly = (text: string): boolean => {
 
 const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English only. Other languages are not supported.';
 
-const validateEnglishOnlyJobTitle = (value: string): boolean => {
-  const trimmedValue = value.trim();
-  const validationError = getJobTitleValidationError(trimmedValue);
-  if (!trimmedValue || !validationError) {
-    return true;
-  }
-
+const showJobTitleValidationToast = (validationError: string): void => {
   toast.error({
     title: validationError === JOB_TITLE_ENGLISH_ONLY_MESSAGE ? 'English Only' : 'Invalid Job Title',
     description: validationError,
   });
-  return false;
+};
+
+const fetchJobTitleValidationError = async (value: string): Promise<string> => {
+  const response = await jdService.validateTitle(value);
+  if (response.is_valid) {
+    return '';
+  }
+  return response.error || 'Please enter a real job title such as "Java Developer" or "HR Executive".';
 };
 
 const validateEnglishOnlyExtractedValue = (value: string, fieldLabel: string): boolean => {
@@ -1489,6 +1182,145 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     industryType?: string;
     salaryRange?: string;
   }>({});
+  const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
+  const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
+  const [isJobTitleValidating, setIsJobTitleValidating] = useState(false);
+  const jobTitleValidationRequestIdRef = useRef(0);
+  const jobTitleValidationCacheRef = useRef(new Map<string, string>());
+
+  const getResolvedJobTitleValidationError = (value: string): string => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return '';
+    }
+
+    // Temporarily bypass semantic job title validation and let AI generation handle it.
+    // const localValidationError = getJobTitleValidationError(trimmedValue);
+    // if (localValidationError) {
+    //   return localValidationError;
+    // }
+    //
+    // if (trimmedValue === jobTitleServerValidatedValue) {
+    //   return jobTitleServerValidationError;
+    // }
+    //
+    // return jobTitleValidationCacheRef.current.get(trimmedValue) || '';
+    return '';
+  };
+
+  const ensureValidJobTitle = async (value: string): Promise<boolean> => {
+    const trimmedValue = value.trim();
+    // Temporarily bypass semantic job title validation and let AI generation handle it.
+    // const localValidationError = getJobTitleValidationError(trimmedValue);
+    // if (!trimmedValue || localValidationError) {
+    //   if (localValidationError) {
+    //     showJobTitleValidationToast(localValidationError);
+    //   }
+    //   return false;
+    // }
+    //
+    // const cachedValidationError = jobTitleValidationCacheRef.current.get(trimmedValue);
+    // if (cachedValidationError !== undefined) {
+    //   setJobTitleServerValidatedValue(trimmedValue);
+    //   setJobTitleServerValidationError(cachedValidationError);
+    //   if (cachedValidationError) {
+    //     showJobTitleValidationToast(cachedValidationError);
+    //     return false;
+    //   }
+    //   return true;
+    // }
+    //
+    // const requestId = jobTitleValidationRequestIdRef.current + 1;
+    // jobTitleValidationRequestIdRef.current = requestId;
+    // setIsJobTitleValidating(true);
+    //
+    // try {
+    //   const remoteValidationError = await fetchJobTitleValidationError(trimmedValue);
+    //   jobTitleValidationCacheRef.current.set(trimmedValue, remoteValidationError);
+    //
+    //   if (jobTitleValidationRequestIdRef.current === requestId) {
+    //     setJobTitleServerValidatedValue(trimmedValue);
+    //     setJobTitleServerValidationError(remoteValidationError);
+    //   }
+    //
+    //   if (remoteValidationError) {
+    //     showJobTitleValidationToast(remoteValidationError);
+    //     return false;
+    //   }
+    //
+    //   return true;
+    // } catch (error) {
+    //   console.error('[JD-CREATION] Failed to validate job title with backend:', error);
+    //
+    //   if (jobTitleValidationRequestIdRef.current === requestId) {
+    //     setJobTitleServerValidatedValue('');
+    //     setJobTitleServerValidationError('');
+    //   }
+    //
+    //   return true;
+    // } finally {
+    //   if (jobTitleValidationRequestIdRef.current === requestId) {
+    //     setIsJobTitleValidating(false);
+    //   }
+    // }
+    return Boolean(trimmedValue);
+  };
+
+  useEffect(() => {
+    // Temporarily disable background job title validation and let AI generation handle it.
+    // const trimmedJobTitle = jobTitle.trim();
+    // const localValidationError = getJobTitleValidationError(trimmedJobTitle);
+    // jobTitleValidationRequestIdRef.current += 1;
+    // const requestId = jobTitleValidationRequestIdRef.current;
+    //
+    // if (!trimmedJobTitle || trimmedJobTitle.length < VALIDATION.JOB_TITLE.min || localValidationError) {
+    //   setJobTitleServerValidatedValue('');
+    //   setJobTitleServerValidationError('');
+    //   setIsJobTitleValidating(false);
+    //   return;
+    // }
+    //
+    // const cachedValidationError = jobTitleValidationCacheRef.current.get(trimmedJobTitle);
+    // if (cachedValidationError !== undefined) {
+    //   setJobTitleServerValidatedValue(trimmedJobTitle);
+    //   setJobTitleServerValidationError(cachedValidationError);
+    //   setIsJobTitleValidating(false);
+    //   return;
+    // }
+    //
+    // setJobTitleServerValidatedValue('');
+    // setJobTitleServerValidationError('');
+    //
+    // const validationTimer = window.setTimeout(async () => {
+    //   setIsJobTitleValidating(true);
+    //
+    //   try {
+    //     const remoteValidationError = await fetchJobTitleValidationError(trimmedJobTitle);
+    //     jobTitleValidationCacheRef.current.set(trimmedJobTitle, remoteValidationError);
+    //
+    //     if (jobTitleValidationRequestIdRef.current === requestId) {
+    //       setJobTitleServerValidatedValue(trimmedJobTitle);
+    //       setJobTitleServerValidationError(remoteValidationError);
+    //     }
+    //   } catch (error) {
+    //     console.error('[JD-CREATION] Background job title validation failed:', error);
+    //
+    //     if (jobTitleValidationRequestIdRef.current === requestId) {
+    //       setJobTitleServerValidatedValue('');
+    //       setJobTitleServerValidationError('');
+    //     }
+    //   } finally {
+    //     if (jobTitleValidationRequestIdRef.current === requestId) {
+    //       setIsJobTitleValidating(false);
+    //     }
+    //   }
+    // }, 300);
+    //
+    // return () => window.clearTimeout(validationTimer);
+    setJobTitleServerValidatedValue('');
+    setJobTitleServerValidationError('');
+    setIsJobTitleValidating(false);
+  }, [jobTitle]);
 
   // Sanitize a salary number from backend/extraction: if > 8 digits (>99999999), clear it
   const sanitizeExtractedSalary = (val: number | null | undefined): string => {
@@ -1883,7 +1715,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Need at least 1 non-space character in job title
     const trimmedJobTitle = jobTitle.trim();
     if (!trimmedJobTitle) return;
-    if (getJobTitleValidationError(trimmedJobTitle)) {
+    if (getResolvedJobTitleValidationError(trimmedJobTitle) || isJobTitleValidating) {
       setAutosaveStatus('idle');
       return;
     }
@@ -1938,7 +1770,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(autosaveTimer);
-  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished]);
+  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished, isJobTitleValidating]);
 
   // Track changes for unsaved changes warning
   useEffect(() => {
@@ -2018,7 +1850,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -2329,7 +2161,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -3509,7 +3341,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -3845,8 +3677,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     if (!trimmedJobTitle) {
       missingFields.push('Job Title');
-    } else if (getJobTitleValidationError(trimmedJobTitle)) {
-      missingFields.push(getJobTitleValidationError(trimmedJobTitle));
+    } else if (getResolvedJobTitleValidationError(trimmedJobTitle)) {
+      missingFields.push(getResolvedJobTitleValidationError(trimmedJobTitle));
     }
 
     if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
@@ -3907,7 +3739,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -3977,7 +3809,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -4312,7 +4144,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -4672,7 +4504,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     );
   }
 
-  const jobTitleValidationError = getJobTitleValidationError(jobTitle);
+  const jobTitleValidationError = getResolvedJobTitleValidationError(jobTitle);
+  const jobTitleLengthInvalid = jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max);
+  const hasJobTitleValidationError = jobTitleLengthInvalid || Boolean(jobTitleValidationError);
+  const isJobTitlePendingValidation = (
+    jobTitle.trim().length >= VALIDATION.JOB_TITLE.min &&
+    !jobTitleValidationError &&
+    isJobTitleValidating
+  );
   const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
 
   return (
@@ -4814,18 +4653,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || Boolean(jobTitleValidationError))
+                            : hasJobTitleValidationError
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
                           {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
+                          {jobTitle.length >= VALIDATION.JOB_TITLE.min && !jobTitleValidationError && !jobTitleLengthInvalid && isJobTitlePendingValidation && 'Validating job title...'}
                         </p>
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -4904,6 +4744,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           isJDInUse ||
                           !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                           Boolean(jobTitleValidationError) ||
+                          isJobTitlePendingValidation ||
                           // Always require AI prompt with min/max length validation (for both generate and regenerate)
                           promptLength < VALIDATION.AI_PROMPT.min ||
                           promptLength > VALIDATION.AI_PROMPT.max ||
@@ -4970,17 +4811,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || Boolean(jobTitleValidationError))
+                            : hasJobTitleValidationError
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
                           {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                          {jobTitle.length >= VALIDATION.JOB_TITLE.min && !jobTitleValidationError && !jobTitleLengthInvalid && isJobTitlePendingValidation && 'Validating job title...'}
                         </p>
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -5208,6 +5050,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                   Boolean(jobTitleValidationError) ||
+                  isJobTitlePendingValidation ||
                   (mode === 'ai'
                     ? !generatedJD || !containsMeaningfulText(generatedJD) || !isEnglishOnly(generatedJD)
                     : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))
