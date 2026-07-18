@@ -44,6 +44,9 @@ interface ShareAIInterviewModalProps {
   onClose: () => void;
   config: AIInterviewResponse;
   onInviteSent: () => void;
+  /** When true, render the share form inline (no backdrop / fixed overlay /
+   *  close button) so it can live inside a tab on the interview details page. */
+  embedded?: boolean;
 }
 
 const ROUND_LABELS: Record<string, string> = {
@@ -57,7 +60,7 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent }: ShareAIInterviewModalProps) {
+export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
 
@@ -843,15 +846,19 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-6 overflow-y-auto"
-      onClick={(e) => {
+      className={embedded
+        ? ''
+        : 'fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-6 overflow-y-auto'}
+      onClick={embedded ? undefined : (e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      role="dialog"
-      aria-modal="true"
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
       aria-label="Send AI Interview via Email"
     >
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-4xl w-full max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className={embedded
+        ? 'bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 w-full flex flex-col'
+        : 'bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-4xl w-full max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col'}>
         {/* Header */}
         <div className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -863,13 +870,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm truncate">{config.jd_title || config.position} — AI Interview</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!embedded && (
+            <button
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Content */}

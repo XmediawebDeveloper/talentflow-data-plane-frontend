@@ -66,6 +66,26 @@ const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
 
 const CONFIG_FETCH_PAGE_SIZE = 20;
 
+// sessionStorage keys for restoring the list page exactly where the user left
+// it after they drill into an Interview Details page and come back. Versioned
+// so a shape change can't crash on stale data.
+const LIST_STATE_KEY = 'aiInterviewListState:v1';
+const LIST_SCROLL_KEY = 'aiInterviewListScroll:v1';
+
+// Walk up from the page root to the nearest vertically-scrollable ancestor.
+// The dashboard layout wraps page content in a `flex-1 overflow-y-auto` div,
+// so the scroll position lives on an ancestor, not window. Falls back to the
+// document scrolling element if nothing matches.
+function getScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement || null;
+  while (node && node !== document.body) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === 'auto' || oy === 'scroll') return node;
+    node = node.parentElement;
+  }
+  return (document.scrollingElement as HTMLElement) || null;
+}
+
 export default function AIInterview() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -148,6 +168,12 @@ export default function AIInterview() {
   // menu isn't clipped off-screen.
   const [menuDropUp, setMenuDropUp] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Root element of the list page — used to locate the scroll container so we
+  // can save/restore scroll position across navigation to Interview Details.
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Skip the very first persist pass so the mount-time write (with default
+  // state) can't clobber the saved snapshot before restore has applied.
+  const skipPersistRef = useRef(true);
 
   // Quota
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
@@ -428,6 +454,84 @@ export default function AIInterview() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // ── Restore list view state (tab / filters / pagination / two-step view) ──
+  // Runs once on mount. Declared BEFORE the persist effect so, on the mount
+  // commit, restore's setState calls are queued before persist first fires.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(LIST_STATE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.activeTab === 'string') setActiveTab(s.activeTab);
+      if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
+      if (typeof s.modeFilter === 'string') setModeFilter(s.modeFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy);
+      if (typeof s.creatorFilter === 'string') setCreatorFilter(s.creatorFilter);
+      if (typeof s.dateFilter === 'string') setDateFilter(s.dateFilter);
+      if (typeof s.customDateFrom === 'string') setCustomDateFrom(s.customDateFrom);
+      if (typeof s.customDateTo === 'string') setCustomDateTo(s.customDateTo);
+      if (typeof s.configListPage === 'number') setConfigListPage(s.configListPage);
+      if (typeof s.configListItemsPerPage === 'number') setConfigListItemsPerPage(s.configListItemsPerPage);
+      if (typeof s.processingPage === 'number') setProcessingPage(s.processingPage);
+      if (typeof s.processingItemsPerPage === 'number') setProcessingItemsPerPage(s.processingItemsPerPage);
+    } catch { /* ignore malformed / unavailable storage */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Persist list view state whenever it changes ──
+  useEffect(() => {
+    if (skipPersistRef.current) { skipPersistRef.current = false; return; }
+    try {
+      sessionStorage.setItem(LIST_STATE_KEY, JSON.stringify({
+        pageView, activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
+        creatorFilter, dateFilter, customDateFrom, customDateTo,
+        configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
+      }));
+    } catch { /* ignore quota / unavailable storage */ }
+  }, [pageView, activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
+      creatorFilter, dateFilter, customDateFrom, customDateTo,
+      configListPage, configListItemsPerPage, processingPage, processingItemsPerPage]);
+
+  // ── Restore + track scroll position ──
+  // Keyed on `loading`: once loading flips false the main content (and rootRef)
+  // is mounted, so we can find the scroll container, restore the saved offset,
+  // and keep it in sync as the user scrolls.
+  useEffect(() => {
+    if (loading) return;
+    const scroller = getScrollParent(rootRef.current);
+    if (!scroller) return;
+
+    // Restore — double rAF so the list has laid out to full height first.
+    try {
+      const saved = Number(sessionStorage.getItem(LIST_SCROLL_KEY) || '0');
+      if (saved > 0) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { scroller.scrollTop = saved; });
+        });
+      }
+    } catch { /* ignore */ }
+
+    // Track (throttled to one write per frame).
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        // If the list content isn't currently mounted (e.g. a data refresh
+        // swapped in the loader), don't clobber the saved offset with 0.
+        if (!rootRef.current) return;
+        try { sessionStorage.setItem(LIST_SCROLL_KEY, String(scroller.scrollTop)); } catch { /* ignore */ }
+      });
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [loading]);
 
   useEffect(() => {
     const wasPublished = searchParams.get('published') === '1';
@@ -834,7 +938,7 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <div className="flex-1 overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />

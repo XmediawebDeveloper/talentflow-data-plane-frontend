@@ -18,6 +18,10 @@ interface AIInterviewResultsProps {
   configTitle?: string;
   jdTitle?: string;
   onBack: () => void;
+  /** When true, render only the results content (stats + filters + table),
+   *  without the page <main>/breadcrumb/back-button chrome. Used when the
+   *  results view is embedded as a tab inside the interview details page. */
+  embedded?: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -100,7 +104,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, onBack }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, onBack, embedded = false }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -208,34 +212,27 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
     router.push(`/recruitment/ai-interviews/${configId}/results/details?session_id=${session.id}`);
   };
 
-  return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb
-            className="mb-4 md:mb-6"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Results' },
-            ]}
-          />
-      {/* Header */}
-      <div className="mb-6">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue px-3 py-1.5 rounded-lg transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to AI Interviews
-        </button>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
-            {jdTitle && <p className="text-sm text-gray-500 mt-1">{jdTitle}</p>}
+  const body = (
+    <>
+      {/* Header — hidden when embedded as a tab (the details page already
+          shows the interview title + breadcrumb + back navigation). */}
+      {!embedded && (
+        <div className="mb-6">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue px-3 py-1.5 rounded-lg transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to AI Interviews
+          </button>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
+              {jdTitle && <p className="text-sm text-gray-500 mt-1">{jdTitle}</p>}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -561,6 +558,24 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
           </>
         )}
         </div>
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: 'Results' },
+            ]}
+          />
+          {body}
         </div>
       </div>
     </main>

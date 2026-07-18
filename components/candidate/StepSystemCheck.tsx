@@ -281,7 +281,9 @@ function ProgressStepper({ phase }: { phase: Phase }) {
 // ~5-second sentence guarantees enough clean voiced speech for an accurate
 // enrollment voiceprint (short spontaneous "hello" samples are too brief).
 export const ENROLL_PASSAGE =
-  'I am ready for my interview today, and I will answer each question to the best of my ability.';
+  'I am ready for my interview today, and I will answer each question to the best of my ability. ' +
+  'I understand the instructions, and I am comfortable with my camera and microphone setup. ' +
+  'Thank you for this opportunity — I am looking forward to getting started.';
 
 export default function StepSystemCheck({
   token,
@@ -1344,14 +1346,25 @@ export default function StepSystemCheck({
                 any FAILED check is retried individually from its own row (below),
                 and a fully-passed run shows the bottom Continue button. */}
             {!checksRunning && !checksCompleted && (
-              <button
-                type="button"
-                onClick={handleRunChecks}
-                className="flex-shrink-0 inline-flex items-center gap-2 bg-white text-gray-900 font-semibold py-2 px-4 rounded-lg text-sm hover:bg-gray-100 transition-all shadow-sm"
-              >
-                <Play className="w-4 h-4" />
-                Run Check
-              </button>
+              <>
+                {/* Attention-grabbing keyframes: a gentle scale "breathe" plus an
+                    expanding ring ripple so the candidate can't miss the button. */}
+                <style>{`
+                  @keyframes tfRunCheckPulse {
+                    0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(251,191,36,0.75); }
+                    50%      { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(251,191,36,0); }
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  onClick={handleRunChecks}
+                  style={{ animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
+                  className="flex-shrink-0 inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold py-2.5 px-5 rounded-lg text-sm ring-2 ring-white/80 shadow-lg transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                  Run Check
+                </button>
+              </>
             )}
           </div>
 

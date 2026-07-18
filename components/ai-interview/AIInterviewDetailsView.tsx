@@ -7,7 +7,7 @@ import {
   ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
-  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
+  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -18,6 +18,8 @@ import type {
   AIInterviewHRQuestion,
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
+import AIInterviewResults from './AIInterviewResults';
+import ShareAIInterviewModal from './ShareAIInterviewModal';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
@@ -124,7 +126,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info'>('overview');
+  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info' | 'results' | 'invites' | 'share'>('overview');
   const [actionLoading, setActionLoading] = useState(false);
 
   // Activity
@@ -601,12 +604,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       <div className="border-b border-gray-100 z-10 mb-4">
         <div>
           <div className="flex gap-1 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide -mb-px">
-            {([
-              { key: 'overview', label: 'Interview Details' },
-              { key: 'activity', label: 'Recent Activity' },
-              { key: 'versions', label: 'Version History' },
-              { key: 'info', label: 'AI Interview Info' },
-            ] as const).map((t) => {
+            {(() => {
+              const tabs: { key: typeof activeTab; label: string }[] = [
+                { key: 'overview', label: 'Interview Details' },
+                { key: 'activity', label: 'Recent Activity' },
+                { key: 'versions', label: 'Version History' },
+                { key: 'info', label: 'AI Interview Info' },
+                { key: 'results', label: 'Results' },
+                { key: 'invites', label: 'Invites' },
+              ];
+              // Share tab mirrors the list card: only for published interviews
+              // and only when the user can share.
+              if (config.status === 'published' && canShareAIInterviews) {
+                tabs.push({ key: 'share', label: 'Share' });
+              }
+              return tabs;
+            })().map((t) => {
               const isActive = activeTab === t.key;
               return (
                 <button
@@ -1712,6 +1725,129 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               </div>
             );
           })()}
+
+          {/* Results Tab — embedded candidate results (stats + filters + table) */}
+          {activeTab === 'results' && (
+            <AIInterviewResults
+              embedded
+              configId={config.id}
+              configTitle={config.position || config.jd_title || 'AI Interview'}
+              jdTitle={config.jd_title || ''}
+              onBack={onBack}
+            />
+          )}
+
+          {/* Invites Tab — candidate invitation overview + list */}
+          {activeTab === 'invites' && (() => {
+            const invited = Math.max(0, invitationStats.total - invitationStats.completed - invitationStats.inProgress);
+            const completionRate = invitationStats.total > 0
+              ? Math.round((invitationStats.completed / invitationStats.total) * 100)
+              : 0;
+            const statCards = [
+              { label: 'Total', value: invitationStats.total, cls: 'text-brand-blue', ring: 'ring-brand-blue/15 from-brand-blue/5 to-brand-cyan/5' },
+              { label: 'Invited', value: invited, cls: 'text-brand-cyan', ring: 'ring-brand-cyan/20 from-brand-cyan/5 to-brand-cyan/5' },
+              { label: 'In Progress', value: invitationStats.inProgress, cls: 'text-brand-orange-deep', ring: 'ring-brand-orange/20 from-brand-orange/5 to-brand-orange-deep/5' },
+              { label: 'Completed', value: invitationStats.completed, cls: 'text-green-600', ring: 'ring-green-200 from-green-50 to-green-50' },
+              { label: 'Completion', value: `${completionRate}%`, cls: 'text-brand-cyan', ring: 'ring-brand-cyan/20 from-brand-cyan/5 to-brand-blue/5' },
+            ];
+            return (
+              <div className="space-y-4 sm:space-y-6">
+                {/* Header + invite action */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 tracking-tight">Candidate Invitations</h3>
+                    <p className="text-sm text-gray-500">{config.jd_title || config.position}</p>
+                  </div>
+                  {config.status === 'published' && canShareAIInterviews && (
+                    <button
+                      onClick={() => setActiveTab('share')}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors self-start sm:self-auto"
+                    >
+                      <Send className="w-4 h-4" /> Invite Candidates
+                    </button>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                  {statCards.map((s) => (
+                    <div key={s.label} className={`bg-gradient-to-br ${s.ring} ring-1 rounded-xl p-4 text-center`}>
+                      <div className={`text-2xl font-semibold tracking-tight ${s.cls}`}>{s.value}</div>
+                      <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Candidate list */}
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+                  {activityLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                    </div>
+                  ) : recentActivity.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                        <Users className="w-10 h-10 text-brand-blue" />
+                      </div>
+                      <p className="text-gray-700 font-medium mb-2">No candidates invited yet</p>
+                      <p className="text-sm text-gray-500">Invite candidates to see them listed here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentActivity.map((activity) => {
+                        const statusIcon = () => {
+                          switch (activity.status) {
+                            case 'completed': return <CheckCircle className="w-5 h-5 text-green-500" />;
+                            case 'in_progress': return <Play className="w-5 h-5 text-brand-orange-deep" />;
+                            case 'invited': return <Mail className="w-5 h-5 text-brand-blue" />;
+                            case 'cancelled': return <XCircle className="w-5 h-5 text-red-500" />;
+                            default: return <Mail className="w-5 h-5 text-gray-400" />;
+                          }
+                        };
+                        return (
+                          <div
+                            key={activity.id}
+                            onClick={() => handleCandidateClick(activity.id)}
+                            className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg cursor-pointer hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors"
+                          >
+                            <div className="flex-shrink-0">{statusIcon()}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900 truncate">
+                                  {activity.candidate_name || 'Unknown'}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(activity.status)}`}>
+                                  {getStatusLabel(activity.status)}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-500 truncate">{activity.candidate_email}</div>
+                            </div>
+                            <div className="flex items-center gap-4 flex-shrink-0">
+                              <div className="text-xs text-gray-400">
+                                {formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-brand-blue" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Share Tab — embedded send-invite form */}
+          {activeTab === 'share' && config.status === 'published' && canShareAIInterviews && (
+            <ShareAIInterviewModal
+              embedded
+              isOpen
+              config={config}
+              onClose={() => setActiveTab('overview')}
+              onInviteSent={() => { loadActivity(); }}
+            />
+          )}
 
       </div>
 

@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
+  CheckCircle,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { isTranscriptMeaningful } from '@/lib/utils/whisperFilter';
@@ -233,9 +234,15 @@ export default function StepSamplePractice({
   // Gate: Linda does NOT speak on entry. The candidate must click "Start
   // Practice" first (also gives TTS a user gesture, Brave-safe).
   const [started, setStarted] = useState(false);
+  // Show the "Practice complete — start the interview" popup once practice ends.
+  // Dismissible so the candidate can scroll back through the practice thread.
+  const [showStartPopup, setShowStartPopup] = useState(false);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
+  // Chat thread scroll container — auto-scrolled to the bottom as new content
+  // appears (Linda speaks → Your turn → transcript → sign-off).
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const replayVideoRef = useRef<HTMLVideoElement>(null);
   // Scopes the coach-mark tour spotlight to the mock panel (not the browser).
@@ -913,6 +920,21 @@ export default function StepSamplePractice({
     }
   }, [answerElapsed, practiceDone, handlePracticeNext]);
 
+  // Keep the chat thread pinned to the bottom as new content appears — Linda
+  // speaking, "Your turn", the transcript, and the sign-off — so the latest
+  // message is always in view (matches the live interview's auto-scroll).
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    return () => cancelAnimationFrame(id);
+  }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone]);
+
+  // Once practice finishes, surface the "start the interview" popup.
+  useEffect(() => {
+    if (practiceDone) setShowStartPopup(true);
+  }, [practiceDone]);
+
   // Launch the guided coach-mark tour once, shortly after mount (so target
   // elements are laid out). Candidate can re-open it via the "Tips" button.
   useEffect(() => {
@@ -1127,7 +1149,7 @@ export default function StepSamplePractice({
             </div>
           )}
           {/* Chat thread — Linda bubbles (left) + your answer bubble (right) */}
-          <div data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-20 space-y-3" style={{ maxHeight: '420px' }}>
+          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-20 space-y-3" style={{ maxHeight: '420px' }}>
             {/* Linda greeting */}
             <div className="flex items-start gap-2">
               <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
@@ -1351,6 +1373,45 @@ export default function StepSamplePractice({
           </div>
         </div>
       </div>
+
+      {/* Practice-complete popup — prompts the candidate to start the real
+          interview once practice ends. Dismissible so they can scroll back
+          through the practice thread first. */}
+      {showStartPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-1.5">Practice complete!</h3>
+            <p className="text-sm text-gray-600 leading-relaxed mb-5">
+              Nice — that&apos;s exactly how the real interview flows. When you&apos;re ready, start your interview. All the best!
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={onStartInterview}
+                disabled={submitting}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+              >
+                {submitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>
+                ) : (
+                  <>Start Interview <ChevronRight className="w-4 h-4" /></>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowStartPopup(false)}
+                disabled={submitting}
+                className="text-xs font-medium text-gray-500 hover:text-gray-800 py-1 transition-colors disabled:opacity-50"
+              >
+                Review my practice first
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
