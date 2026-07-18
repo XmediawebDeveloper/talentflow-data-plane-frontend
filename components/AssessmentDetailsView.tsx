@@ -180,11 +180,12 @@ export default function AssessmentDetailsView({
     fetchSiblings();
   }, [assessment?.id, assessment?.jd_id, activeTab]);
 
-  // Lazy-fetch the linked JD when the View JD tab is opened. Cached per
-  // assessment.jd_id so switching tabs doesn't re-fetch.
+  // Lazy-fetch the linked JD when the View JD OR Assessment Details (overview)
+  // tab is opened — the overview tab now also shows the JD's Assessment
+  // Guidance. Cached per assessment.jd_id so switching tabs doesn't re-fetch.
   useEffect(() => {
     const fetchJd = async () => {
-      if (activeTab !== 'viewjd' || !assessment?.jd_id) return;
+      if ((activeTab !== 'viewjd' && activeTab !== 'overview') || !assessment?.jd_id) return;
       if (jdData && jdData.id === assessment.jd_id) return;
       setJdLoading(true);
       setJdError(null);
@@ -1213,6 +1214,30 @@ export default function AssessmentDetailsView({
                 </div>
               </div>
             </div>
+
+            {/* Assessment Guidance — mirrors the JD view's guidance section so
+                recruiters see it without switching to the View JD tab. */}
+            {jdData?.assessment_guidance && (
+              <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+                    <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                      <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                    </div>
+                    Assessment Guidance
+                  </h3>
+                </div>
+                <div className="p-3 sm:p-4 lg:p-6">
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800">
+                    <div className="markdown-content leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {jdData.assessment_guidance}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

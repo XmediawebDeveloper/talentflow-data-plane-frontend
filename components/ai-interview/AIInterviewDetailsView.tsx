@@ -457,7 +457,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Show candidate detail view
   if (candidateDetail) {
-    return <CandidateResultsView interview={candidateDetail} onBack={() => setCandidateDetail(null)} />;
+    return (
+      <CandidateResultsView
+        interview={candidateDetail}
+        onBack={() => setCandidateDetail(null)}
+        breadcrumbTrail={[{
+          label: config.jd_title || config.position || 'Interview Details',
+          onClick: () => setCandidateDetail(null),
+        }]}
+      />
+    );
   }
 
   return (

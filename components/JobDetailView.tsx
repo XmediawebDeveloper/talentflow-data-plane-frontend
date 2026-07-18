@@ -960,6 +960,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         jobTitle={job.title}
         jobId={job.id}
         onBack={() => setViewingScoredResume(null)}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: job.title || 'Job Details', onClick: () => setViewingScoredResume(null) },
+          { label: 'Candidate Details' },
+        ]}
         currentIndex={_scoredIdx >= 0 ? _scoredIdx : undefined}
         totalCount={scoredResumes.length}
         onPrev={_scoredIdx > 0 ? () => _goToScoredCandidate(_scoredIdx - 1) : undefined}

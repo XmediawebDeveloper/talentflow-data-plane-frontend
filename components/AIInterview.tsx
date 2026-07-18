@@ -114,6 +114,10 @@ export default function AIInterview() {
 
   // Share modal
   const [shareConfig, setShareConfig] = useState<AIInterviewResponse | null>(null);
+  // When the Share modal is opened from the Candidate Invitations modal
+  // ("Invite More"), remember the config so closing Share returns to that
+  // invitations popup instead of dropping the user back on the list.
+  const [shareReturnToInvites, setShareReturnToInvites] = useState<AIInterviewResponse | null>(null);
 
   // View invitations
   const [viewInvitationsConfig, setViewInvitationsConfig] = useState<AIInterviewResponse | null>(null);
@@ -1948,7 +1952,15 @@ export default function AIInterview() {
       {shareConfig && (
         <ShareAIInterviewModal
           isOpen={!!shareConfig}
-          onClose={() => setShareConfig(null)}
+          onClose={() => {
+            setShareConfig(null);
+            // Return to the Candidate Invitations popup if we opened Share
+            // from there (via "Invite More").
+            if (shareReturnToInvites) {
+              setViewInvitationsConfig(shareReturnToInvites);
+              setShareReturnToInvites(null);
+            }
+          }}
           config={shareConfig}
           onInviteSent={() => {
             loadData();
@@ -2284,6 +2296,8 @@ export default function AIInterview() {
                 <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     onClick={() => {
+                      // Remember where we came from so closing Share returns here.
+                      setShareReturnToInvites(viewInvitationsConfig);
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
