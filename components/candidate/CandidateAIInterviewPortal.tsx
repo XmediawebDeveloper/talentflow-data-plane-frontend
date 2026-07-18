@@ -1273,15 +1273,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         } else if (sawFullscreen && !isFullscreen()) {
           terminateNow('left_screen_fullscreen_exit');
         } else if (!screenShareStoppedRef.current) {
-          // Still visible & still fullscreen but focus was lost. The candidate
-          // moved to something OUTSIDE the interview — the Windows / ⌘ key (Start
-          // menu), or another app window. Confirm focus is STILL gone after a
-          // longer window so a brief blur that immediately returns focus (share
-          // bar, notification) does NOT terminate; onFocus cancels this.
+          // Still visible & still fullscreen, only focus was lost. This is NO
+          // LONGER a termination: it is INDISTINGUISHABLE from a legitimate
+          // interaction with Chrome's "<site> is sharing your screen" bar —
+          // clicking or DRAGGING that bar moves focus to browser chrome and
+          // `document.hasFocus()` can stay false even after the drag ends (until
+          // the candidate clicks back into the page). That was terminating real
+          // candidates in production (reason=left_screen_focus_lost). A genuine
+          // "left the screen" always trips one of the hard signals instead: the
+          // tab becomes hidden (handled above + visibilitychange) or fullscreen
+          // is dropped (fullscreenchange), and Alt+Tab / Esc / F11 / Meta are
+          // caught by the keydown handler. So here we only LOG a non-terminating
+          // violation for the recruiter timeline and let the interview continue.
           focusLossTimer = setTimeout(() => {
             focusLossTimer = null;
             if (!done && !document.hasFocus() && !document.hidden && !screenShareStoppedRef.current) {
-              terminateNow('left_screen_focus_lost');
+              try {
+                void candidateAIInterviewService.reportProctorEvent(token, {
+                  event_type: 'window_blur',
+                  severity: 'minor',
+                  details: { reason: 'focus_lost_no_leave', note: 'focus left the page but it stayed visible & fullscreen (e.g. screen-share bar / OS notification) — not terminated' },
+                });
+              } catch { /* non-blocking */ }
             }
           }, 1200);
         }
