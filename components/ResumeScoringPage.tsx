@@ -18,6 +18,7 @@ import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -372,6 +373,38 @@ export default function ResumeScoringPage({
 
   // Locally uploaded resumes (from Resume Selection Modal)
   const [uploadedResumes, setUploadedResumes] = useState<SharedResume[]>([]);
+
+  // Persist list scroll position + view state across detail-page navigation, so
+  // returning from a candidate/details drill-in lands the user exactly where
+  // they left off. The scrollable content is the history-list view (the ref
+  // walks up to the route's overflow container). Re-detect the scroller when a
+  // toggle that drastically changes page height flips (cards<->list drill-in,
+  // grid<->list, global view).
+  const rootRef = useScrollRestoration<HTMLElement>('resume-scoring', !historyLoading, [pageView, isGlobalView, historyViewMode]);
+  useListStatePersistence(
+    'resume-scoring',
+    {
+      pageView, isGlobalView, globalSearchQuery, historyViewMode,
+      historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo,
+      historyLocation, historyJobType, historyIndustry,
+      historyCurrentPage, historyItemsPerPage,
+    },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
+      if (typeof s.globalSearchQuery === 'string') setGlobalSearchQuery(s.globalSearchQuery);
+      if (s.historyViewMode === 'grid' || s.historyViewMode === 'list') setHistoryViewMode(s.historyViewMode);
+      if (typeof s.historySearchQuery === 'string') setHistorySearchQuery(s.historySearchQuery);
+      if (typeof s.historyCreatedBy === 'string') setHistoryCreatedBy(s.historyCreatedBy);
+      if (typeof s.historyScoredFrom === 'string') setHistoryScoredFrom(s.historyScoredFrom);
+      if (typeof s.historyScoredTo === 'string') setHistoryScoredTo(s.historyScoredTo);
+      if (typeof s.historyLocation === 'string') setHistoryLocation(s.historyLocation);
+      if (typeof s.historyJobType === 'string') setHistoryJobType(s.historyJobType);
+      if (typeof s.historyIndustry === 'string') setHistoryIndustry(s.historyIndustry);
+      if (typeof s.historyCurrentPage === 'number') setHistoryCurrentPage(s.historyCurrentPage);
+      if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
+    },
+  );
 
   // Fetch all scored resumes for global view
   const fetchGlobalScoredResumes = async () => {
@@ -1588,7 +1621,7 @@ export default function ResumeScoringPage({
     ].filter(Boolean).length;
 
     return (
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100vh-7rem)]' : ''}`}>
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />

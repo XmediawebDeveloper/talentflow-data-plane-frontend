@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketCategory, InternalTicketPriority, InternalTicketStatus } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
 
@@ -51,6 +52,23 @@ export default function InternalTicketAdmin() {
 
   const hasFetched = useRef(false);
   const hasHandledUrlTicket = useRef(false);
+
+  // Persist scroll + view state so returning from a ticket detail lands the user
+  // where they left off. Re-detect the scroll container when the view flips
+  // (overview / tickets / detail have very different heights). The 'detail' view
+  // isn't restored because it depends on a selectedTicket that isn't persisted.
+  const rootRef = useScrollRestoration<HTMLElement>('org-internal-tickets', !loading, [view]);
+  useListStatePersistence(
+    'org-internal-tickets',
+    { view, searchQuery, filterStatus, filterPriority, filterAssignment },
+    (s) => {
+      if (s.view === 'overview' || s.view === 'tickets') setView(s.view);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
+      if (typeof s.filterPriority === 'string') setFilterPriority(s.filterPriority);
+      if (typeof s.filterAssignment === 'string') setFilterAssignment(s.filterAssignment);
+    },
+  );
 
   useEffect(() => {
     if (hasFetched.current) return;
@@ -279,7 +297,7 @@ export default function InternalTicketAdmin() {
   const totalTickets = stats?.total_tickets ?? 0;
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Internal Tickets' }]} />

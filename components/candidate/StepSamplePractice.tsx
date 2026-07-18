@@ -847,7 +847,17 @@ export default function StepSamplePractice({
   // the Next-button click (user gesture → Brave-safe). A plain utterance so it
   // doesn't trip the auto-record-on-end path (that only lives on speakQuestion).
   const speakClosing = useCallback(() => {
-    if (!window.speechSynthesis) return;
+    // The "start the interview" popup should appear only AFTER Linda finishes
+    // speaking the sign-off — not the instant practice ends. Show it from the
+    // utterance's onend/onerror, with a fallback timer for when TTS is
+    // unavailable/blocked (Brave, no voices) so the popup still appears.
+    const revealPopup = () => setShowStartPopup(true);
+    if (!window.speechSynthesis) {
+      window.setTimeout(revealPopup, 1200);
+      return;
+    }
+    let shown = false;
+    const showOnce = () => { if (!shown) { shown = true; revealPopup(); } };
     try {
       window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
@@ -855,11 +865,14 @@ export default function StepSamplePractice({
       u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
       const v = pickVoice(); if (v) u.voice = v;
       u.onstart = () => setAiSpeaking(true);
-      u.onend = () => setAiSpeaking(false);
-      u.onerror = () => setAiSpeaking(false);
+      u.onend = () => { setAiSpeaking(false); showOnce(); };
+      u.onerror = () => { setAiSpeaking(false); showOnce(); };
       utteranceRef.current = u;
       window.speechSynthesis.speak(u);
-    } catch { /* best-effort */ }
+      // Safety net: if onend never fires (some browsers drop it), reveal after a
+      // generous window so the candidate is never stuck without the popup.
+      window.setTimeout(showOnce, 9000);
+    } catch { showOnce(); }
   }, []);
 
   // Next — like the real interview's "Next Question": wrap up the answer (stop
@@ -929,11 +942,9 @@ export default function StepSamplePractice({
     const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
   }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone]);
-
-  // Once practice finishes, surface the "start the interview" popup.
-  useEffect(() => {
-    if (practiceDone) setShowStartPopup(true);
-  }, [practiceDone]);
+  // NOTE: the "start the interview" popup is NOT triggered here on practiceDone
+  // (that showed it too early). It's revealed from speakClosing()'s onend so it
+  // appears only after Linda finishes the sign-off. See speakClosing().
 
   // Launch the guided coach-mark tour once, shortly after mount (so target
   // elements are laid out). Candidate can re-open it via the "Tips" button.

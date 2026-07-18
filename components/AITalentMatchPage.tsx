@@ -24,6 +24,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface Job {
   id: string;
@@ -220,6 +221,46 @@ export default function AITalentMatchPage({
 
   // Scored resume IDs for current JD
   const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
+
+  // Persist + restore the Matched Jobs list scroll position and view state
+  // (two-step view, filters, search, pagination) so returning from a detail
+  // page lands the user where they left off instead of a reset list. Scroll is
+  // only tracked while the history list is mounted (viewMode === 'history').
+  const rootRef = useScrollRestoration<HTMLElement>('ai-talent-match', viewMode === 'history', [historyPageView]);
+  useListStatePersistence(
+    'ai-talent-match',
+    {
+      historyPageView, showHistoryFilters,
+      historySearchQuery, historyDateFrom, historyDateTo,
+      historyFilterPhone, historyFilterLocation, historyFilterExpMin, historyFilterExpMax,
+      historyCurrentPage, historyItemsPerPage,
+      searchQuery, filterThreshold, filterPhone, filterLocation,
+      filterExperienceMin, filterExperienceMax, sortBy,
+      currentPage, itemsPerPage,
+    },
+    (s) => {
+      if (s.historyPageView === 'cards' || s.historyPageView === 'list') setHistoryPageView(s.historyPageView);
+      if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
+      if (typeof s.historySearchQuery === 'string') setHistorySearchQuery(s.historySearchQuery);
+      if (typeof s.historyDateFrom === 'string') setHistoryDateFrom(s.historyDateFrom);
+      if (typeof s.historyDateTo === 'string') setHistoryDateTo(s.historyDateTo);
+      if (typeof s.historyFilterPhone === 'string') setHistoryFilterPhone(s.historyFilterPhone);
+      if (typeof s.historyFilterLocation === 'string') setHistoryFilterLocation(s.historyFilterLocation);
+      if (typeof s.historyFilterExpMin === 'number' || s.historyFilterExpMin === '') setHistoryFilterExpMin(s.historyFilterExpMin as number | '');
+      if (typeof s.historyFilterExpMax === 'number' || s.historyFilterExpMax === '') setHistoryFilterExpMax(s.historyFilterExpMax as number | '');
+      if (typeof s.historyCurrentPage === 'number') setHistoryCurrentPage(s.historyCurrentPage);
+      if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterThreshold === 'number') setFilterThreshold(s.filterThreshold);
+      if (typeof s.filterPhone === 'string') setFilterPhone(s.filterPhone);
+      if (typeof s.filterLocation === 'string') setFilterLocation(s.filterLocation);
+      if (typeof s.filterExperienceMin === 'number' || s.filterExperienceMin === '') setFilterExperienceMin(s.filterExperienceMin as number | '');
+      if (typeof s.filterExperienceMax === 'number' || s.filterExperienceMax === '') setFilterExperienceMax(s.filterExperienceMax as number | '');
+      if (s.sortBy === 'rank' || s.sortBy === 'name' || s.sortBy === 'score' || s.sortBy === 'experience') setSortBy(s.sortBy);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
 
   // Fetch scored resumes when viewing details or results for a JD
   useEffect(() => {
@@ -1665,7 +1706,7 @@ export default function AITalentMatchPage({
   // View: History List
   if (viewMode === 'history') {
     return (
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />

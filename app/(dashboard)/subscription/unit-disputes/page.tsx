@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { TableSkeleton } from '@/components/ui/skeleton';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -121,6 +122,23 @@ export default function UnitDisputesPage() {
     setStatusFilter(filter);
     setPageView('list');
   };
+
+  // Persist/restore list view state + scroll position across navigation.
+  // Re-detect the scroll container when the two-step view flips.
+  const rootRef = useScrollRestoration<HTMLElement>('sub-unit-disputes', !loading, [pageView]);
+  useListStatePersistence(
+    'sub-unit-disputes',
+    { pageView, statusFilter, searchQuery, startDate, endDate, currentPage, itemsPerPage },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.startDate === 'string') setStartDate(s.startDate);
+      if (typeof s.endDate === 'string') setEndDate(s.endDate);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
 
   useEffect(() => {
     fetchDisputes();
@@ -416,7 +434,7 @@ export default function UnitDisputesPage() {
   // --- Render ---
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Unit Disputes' }]} />

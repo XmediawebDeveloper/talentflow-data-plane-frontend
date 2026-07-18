@@ -29,6 +29,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
@@ -228,6 +229,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     units_consumed: 0,
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Persist scroll position + view state so returning from a detail/results
+  // page lands the user exactly where they left off. Re-detect the scroll
+  // container when the two-step view flips (cards overview vs. full list —
+  // its height changes drastically).
+  const rootRef = useScrollRestoration('assessments', !isLoading, [pageView]);
+  useListStatePersistence(
+    'assessments',
+    { pageView, activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
+      if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
+      if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
+      if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
+      if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
+    },
+  );
 
   const getAssessmentStatusFilter = (tab: typeof activeTab) => {
     if (tab === 'active') return 'published';
@@ -1245,7 +1264,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     : `Showing ${trackingStartIndex} to ${trackingEndIndex} of ${trackingTotalItems} invites`;
 
   return (
-    <div className="flex-1 overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />

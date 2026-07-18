@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
 
@@ -55,6 +56,21 @@ export default function InternalHelpDesk() {
 
   const hasFetched = useRef(false);
   const hasHandledUrlTicket = useRef(false);
+
+  // Persist scroll + list view state so returning to the Help Desk restores it.
+  // 'detail'/'submit' are excluded from restore since they depend on a selected
+  // ticket / in-progress form that don't survive the remount.
+  const rootRef = useScrollRestoration<HTMLElement>('help-desk', !loading);
+  useListStatePersistence(
+    'help-desk',
+    { view, searchQuery, filterStatus, filterPriority },
+    (s) => {
+      if (s.view === 'overview' || s.view === 'tickets') setView(s.view);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
+      if (typeof s.filterPriority === 'string') setFilterPriority(s.filterPriority);
+    },
+  );
 
   useEffect(() => {
     if (hasFetched.current) return;
@@ -226,7 +242,7 @@ export default function InternalHelpDesk() {
   const totalTickets = stats?.total_tickets ?? 0;
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk' }]} />

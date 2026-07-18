@@ -14,6 +14,7 @@ import { internalTicketService, InternalTicket, InternalTicketAdminStats, Intern
 import ListPagination from '@/components/ListPagination';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Main API - Local backend handles everything including support tickets
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -136,6 +137,28 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   // Prevent duplicate API calls
   const hasFetched = useRef(false);
   const hasInternalFetched = useRef(false);
+
+  // Persist scroll + list view state so returning to Support restores it.
+  // 'detail'/'submit' are excluded from restore since they depend on a selected
+  // ticket / in-progress form that don't survive the remount.
+  const rootRef = useScrollRestoration('support-tickets', !loading);
+  useListStatePersistence(
+    'support-tickets',
+    { activeTab, view, searchQuery, filterStatus, filterPriority, internalFilterAssignment,
+      myCurrentPage, myItemsPerPage, teamCurrentPage, teamItemsPerPage },
+    (s) => {
+      if (s.activeTab === 'external' || s.activeTab === 'team') setActiveTab(s.activeTab);
+      if (s.view === 'overview' || s.view === 'tickets' || s.view === 'knowledge-base') setView(s.view);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
+      if (typeof s.filterPriority === 'string') setFilterPriority(s.filterPriority);
+      if (typeof s.internalFilterAssignment === 'string') setInternalFilterAssignment(s.internalFilterAssignment);
+      if (typeof s.myCurrentPage === 'number') setMyCurrentPage(s.myCurrentPage);
+      if (typeof s.myItemsPerPage === 'number') setMyItemsPerPage(s.myItemsPerPage);
+      if (typeof s.teamCurrentPage === 'number') setTeamCurrentPage(s.teamCurrentPage);
+      if (typeof s.teamItemsPerPage === 'number') setTeamItemsPerPage(s.teamItemsPerPage);
+    },
+  );
 
   const categories = [
     { value: 'resume-upload', label: 'Resume Upload Issues', icon: Upload },
@@ -717,7 +740,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = internalStats?.total_tickets ?? 0;
 
   return (
-    <div className="flex-1 bg-slate-50 overflow-x-hidden overflow-y-auto">
+    <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-hidden overflow-y-auto">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <div className="px-4 md:px-8 pt-4 md:pt-6">

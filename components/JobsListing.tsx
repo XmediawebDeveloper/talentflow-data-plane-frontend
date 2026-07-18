@@ -11,6 +11,7 @@ import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -157,6 +158,39 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // Show/hide the Experience/Education/Industry quick-links group.
   const [showConfig, setShowConfig] = useState(false);
+
+  // Persist this list's view state (filters / search / sort / pagination / view
+  // toggles) so returning from a job-details page restores it. Declared after the
+  // useState + URL-sync effects above so restore wins over the mount-time resets.
+  useListStatePersistence(
+    'job-openings-list',
+    {
+      searchQuery, statusFilter, creationMethodFilter, locationFilter, viewMode, pageView,
+      departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
+      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
+      sortBy, sortOrder, currentPage, itemsPerPage,
+    },
+    (s) => {
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter);
+      if (s.creationMethodFilter === null || s.creationMethodFilter === 'manual' || s.creationMethodFilter === 'ai') setCreationMethodFilter(s.creationMethodFilter);
+      if (typeof s.locationFilter === 'string') setLocationFilter(s.locationFilter);
+      if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.departmentFilter === 'string') setDepartmentFilter(s.departmentFilter);
+      if (typeof s.industryFilter === 'string') setIndustryFilter(s.industryFilter);
+      if (typeof s.experienceFilter === 'string') setExperienceFilter(s.experienceFilter);
+      if (typeof s.employmentTypeFilter === 'string') setEmploymentTypeFilter(s.employmentTypeFilter);
+      if (typeof s.applicantsFilter === 'string') setApplicantsFilter(s.applicantsFilter);
+      if (typeof s.salaryRangeFilter === 'string') setSalaryRangeFilter(s.salaryRangeFilter);
+      if (typeof s.datePostedFromFilter === 'string') setDatePostedFromFilter(s.datePostedFromFilter);
+      if (typeof s.datePostedToFilter === 'string') setDatePostedToFilter(s.datePostedToFilter);
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy as 'date' | 'applicants' | 'title' | 'status' | 'industry');
+      if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
 
   const filteredJobs = jobs.filter(job => {
     // Enhanced search - search across multiple fields

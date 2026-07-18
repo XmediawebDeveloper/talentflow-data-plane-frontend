@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { TableSkeleton } from '@/components/ui/skeleton';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface LineItem {
   description: string;
@@ -131,6 +132,23 @@ export default function BillingHistoryPage() {
     setStatusFilter(filter);
     setPageView('list');
   };
+
+  // Persist/restore list view state + scroll position across navigation.
+  // Re-detect the scroll container when the two-step view flips.
+  const rootRef = useScrollRestoration<HTMLElement>('sub-billing-history', !loading, [pageView]);
+  useListStatePersistence(
+    'sub-billing-history',
+    { pageView, statusFilter, searchQuery, invoicePage, invoicePageSize, addonPage, addonPageSize },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.statusFilter === 'all' || s.statusFilter === 'paid' || s.statusFilter === 'open') setStatusFilter(s.statusFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.invoicePage === 'number') setInvoicePage(s.invoicePage);
+      if (typeof s.invoicePageSize === 'number') setInvoicePageSize(s.invoicePageSize);
+      if (typeof s.addonPage === 'number') setAddonPage(s.addonPage);
+      if (typeof s.addonPageSize === 'number') setAddonPageSize(s.addonPageSize);
+    },
+  );
 
   useEffect(() => {
     fetchBillingData();
@@ -267,7 +285,7 @@ export default function BillingHistoryPage() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Billing History' }]} />

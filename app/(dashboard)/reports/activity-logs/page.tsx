@@ -3,6 +3,7 @@
 import { BarChart3, Search, Filter, Download, Clock, User, FileText, Target, Video, Settings, Calendar } from 'lucide-react';
 import { useState } from 'react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const mockActivityLogs = [
   { id: '1', user: 'John Admin', action: 'Created job posting', details: 'Senior Frontend Developer', timestamp: '2 min ago', category: 'jobs' },
@@ -41,6 +42,18 @@ export default function ActivityLogsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
 
+  // Persist the search + category filter and scroll position so returning to
+  // this page restores exactly where the user left off.
+  const rootRef = useScrollRestoration<HTMLElement>('reports-activity-logs', true);
+  useListStatePersistence(
+    'reports-activity-logs',
+    { searchQuery, filterCategory },
+    (s) => {
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterCategory === 'string') setFilterCategory(s.filterCategory);
+    },
+  );
+
   const categories = ['all', ...new Set(mockActivityLogs.map(log => log.category))];
 
   const filteredLogs = mockActivityLogs.filter(log => {
@@ -53,7 +66,7 @@ export default function ActivityLogsPage() {
   });
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Activity Logs' }]} />

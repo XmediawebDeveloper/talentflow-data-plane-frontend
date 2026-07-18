@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   ERROR_ORIGIN_LABELS,
   ERROR_ORIGIN_COLORS,
@@ -107,6 +108,20 @@ export default function ActivityLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(50);
+
+  // Persist the tab + fetch limit and the scroll position so returning to this
+  // page (browser back / remount) lands the user where they left off. The
+  // active tab swaps between the embedded Audit Trail and the Activity timeline,
+  // which changes the page height drastically — re-detect the scroller on it.
+  const rootRef = useScrollRestoration<HTMLElement>('audits-activity', !loading, [activeTab]);
+  useListStatePersistence(
+    'audits-activity',
+    { activeTab, limit },
+    (s) => {
+      if (s.activeTab === 'activity' || s.activeTab === 'audit') setActiveTab(s.activeTab);
+      if (typeof s.limit === 'number') setLimit(s.limit);
+    },
+  );
 
   const fetchRecentActivity = useCallback(async () => {
     setLoading(true);
@@ -199,7 +214,7 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs' }]} />

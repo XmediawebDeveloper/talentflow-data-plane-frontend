@@ -3,10 +3,22 @@
 import { BarChart3, TrendingUp, TrendingDown, Users, Briefcase, Clock, Target, Award, Calendar, Download, Filter, Eye, CheckCircle, XCircle, Activity, AlertCircle, ThumbsUp, MessageSquare, Zap, TrendingDown as Down } from 'lucide-react';
 import { useState } from 'react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 export default function Analytics() {
   const [timeRange, setTimeRange] = useState('30days');
   const [selectedMetric, setSelectedMetric] = useState('overview');
+
+  // This is a static analytics view — only the time-range selector meaningfully
+  // changes what's shown, so persist just that plus the scroll position.
+  const rootRef = useScrollRestoration<HTMLElement>('reports-performance', true);
+  useListStatePersistence(
+    'reports-performance',
+    { timeRange },
+    (s) => {
+      if (typeof s.timeRange === 'string') setTimeRange(s.timeRange);
+    },
+  );
 
   // Mock data - Recruiter-focused metrics
   const stats = {
@@ -35,7 +47,7 @@ export default function Analytics() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Reports' }, { label: 'Performance Reports' }]} />

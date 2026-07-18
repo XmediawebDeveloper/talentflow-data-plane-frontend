@@ -45,6 +45,7 @@ import {
 import { formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -289,6 +290,26 @@ export default function AuditTrailPage() {
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
   const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter });
+
+  // Persist the cards<->list view, filters and pagination + scroll position so
+  // returning to this page restores exactly where the user left off. The
+  // cards-first overview and the list differ a lot in height, so re-detect the
+  // scroll container when pageView flips.
+  const rootRef = useScrollRestoration<HTMLElement>('audits-trail', !loading, [pageView]);
+  useListStatePersistence(
+    'audits-trail',
+    { pageView, searchQuery, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter, page },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.actionFilter === 'string') setActionFilter(s.actionFilter);
+      if (typeof s.entityFilter === 'string') setEntityFilter(s.entityFilter);
+      if (typeof s.dateRange === 'string') setDateRange(s.dateRange);
+      if (typeof s.errorOriginFilter === 'string') setErrorOriginFilter(s.errorOriginFilter as '' | ErrorOrigin);
+      if (typeof s.userFilter === 'string') setUserFilter(s.userFilter);
+      if (typeof s.page === 'number') setPage(s.page);
+    },
+  );
 
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
@@ -766,7 +787,7 @@ export default function AuditTrailPage() {
   });
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Trail' }]} />

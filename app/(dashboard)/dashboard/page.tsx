@@ -48,6 +48,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import DashboardQuickAccess from '@/components/dashboard/DashboardQuickAccess';
+import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
   dashboardService,
@@ -374,6 +375,10 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [interviewStats, setInterviewStats] = useState<AIInterviewStatsResponse | null>(null);
 
+  // Restore scroll position when returning to the dashboard (scroll-only — the
+  // page has no persisted view state; tabs/toggles here are all commented out).
+  const rootRef = useScrollRestoration('dashboard', !loading);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -616,7 +621,7 @@ export default function DashboardPage() {
     // NOTE: no `overflow-hidden` here — on a `flex-1` item it zeroes the
     // automatic `min-height`, which clips content below the fold and breaks
     // vertical scrolling (the layout's scroll container can never see overflow).
-    <div className="relative flex-1">
+    <div ref={rootRef} className="relative flex-1">
       {/* parent layout bg removed — inner card provides the surface */}
 
       <div className="mx-auto w-full max-w-[1400px]">

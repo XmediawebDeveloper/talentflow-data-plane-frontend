@@ -57,6 +57,7 @@ import {
 import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/lib/services/teamService';
 import dashboardService, { SubscriptionUnits } from '@/lib/services/dashboardService';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -1227,6 +1228,28 @@ export default function UsageHistory() {
     };
   }, [defaultEndDate, defaultStartDate, endDateInput, startDateInput]);
 
+  // Persist scroll + view state so returning to Usage History lands the user
+  // where they left off. Re-detect the scroll container when the active tab
+  // flips (each tab renders a differently-sized table). Per-tab page numbers are
+  // intentionally not persisted — they auto-reset whenever the tab/filters/dates
+  // change, which restore itself triggers.
+  const rootRef = useScrollRestoration('org-usage-history', !isLoadingPools, [activeTab]);
+  useListStatePersistence(
+    'org-usage-history',
+    { activeTab, startDateInput, endDateInput, quickPeriod, filterUnitType, filterStatus, searchUser },
+    (s) => {
+      if (s.activeTab === 'feature' || s.activeTab === 'user' || s.activeTab === 'team' || s.activeTab === 'refunds') {
+        setActiveTab(s.activeTab as TabId);
+      }
+      if (typeof s.startDateInput === 'string') setStartDateInput(s.startDateInput);
+      if (typeof s.endDateInput === 'string') setEndDateInput(s.endDateInput);
+      if (typeof s.quickPeriod === 'string') setQuickPeriod(s.quickPeriod);
+      if (typeof s.filterUnitType === 'string') setFilterUnitType(s.filterUnitType as UnitType | 'all');
+      if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
+      if (typeof s.searchUser === 'string') setSearchUser(s.searchUser);
+    },
+  );
+
   // ── Access guard ─────────────────────────────────────────────────────────
   if (!isTenantAdmin) {
     return (
@@ -1412,7 +1435,7 @@ export default function UsageHistory() {
   ];
 
   return (
-    <div className="flex-1 bg-slate-50">
+    <div ref={rootRef} className="flex-1 bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
+  Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   X, BarChart3, Ban,
 } from 'lucide-react';
@@ -104,7 +104,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, onBack, embedded = false }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -215,16 +215,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
   const body = (
     <>
       {/* Header — hidden when embedded as a tab (the details page already
-          shows the interview title + breadcrumb + back navigation). */}
+          shows the interview title + breadcrumb + back navigation).
+          The standalone page relies on the breadcrumb's "AI Interviews" link
+          for back navigation, so no separate Back button is rendered. */}
       {!embedded && (
         <div className="mb-6">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue px-3 py-1.5 rounded-lg transition-colors mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to AI Interviews
-          </button>
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
@@ -413,7 +408,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   {paginatedSessions.map((session) => {
                     const risk = getProctoringRisk(session);
                     return (
-                      <tr key={session.id} className="hover:bg-brand-blue/5 transition-colors">
+                      <tr
+                        key={session.id}
+                        onClick={() => handleViewDetails(session)}
+                        className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
+                      >
                         <td className="px-4 py-3 whitespace-nowrap">
                           {session.candidate_cid ? (
                             <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
@@ -514,7 +513,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <button
-                            onClick={() => handleViewDetails(session)}
+                            onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />

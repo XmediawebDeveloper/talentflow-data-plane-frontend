@@ -2379,8 +2379,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         micSilenceMultiplierRef.current = 1.4;
         break;
       case 'builtin':
-        micGainMaxRef.current = 6;
-        micGainTargetRef.current = MIC_GAIN_TARGET_PEAK; // 0.045 (unchanged)
+        // Quiet built-in mics (e.g. laptop Realtek) can sit at ~0.006 avgLevel —
+        // BELOW the VAD activity threshold (0.0076) and never reaching the
+        // strong threshold (0.0107) — so the candidate is cut off as "silence"
+        // while actually speaking (production auto-skips, console 1.txt: Q8/Q10
+        // ended ~12s in at avgLevel 0.004-0.006). Raise the gain ceiling + target
+        // so quiet built-in audio is boosted (~6.8×) above the activity/strong
+        // thresholds. The peak-relative thresholds scale with the boosted signal
+        // too, but the FIXED absolute floors (activity 0.0076 / strong 0.0107)
+        // are what quiet speech now clears. silenceMultiplier stays 1.0 — NO
+        // grace window, so a genuinely finished answer still ends promptly.
+        micGainMaxRef.current = 10;
+        micGainTargetRef.current = 0.080;   // ~6.8× effective gain (was 0.045 → 3.8×)
         micSilenceMultiplierRef.current = 1.0;
         break;
       default: // unknown — safe middle ground
@@ -5856,8 +5866,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // ScriptProcessor is deprecated but kept as fallback for older browsers.
       let audioNodeConnected = false;
 
-      // false = pass-through off-thread (no WASM denoising); true = full RNNoise
-      const RNNOISE_ENABLED = false;
+      // false = pass-through off-thread (no WASM denoising); true = full RNNoise.
+      // ENABLED (2026-07-18): RNNoise gates background noise and normalizes the
+      // signal, which helps quiet built-in mics stand out above the VAD floor
+      // (paired with the raised built-in gain above) — reducing the "cut off
+      // while speaking" auto-skips on low-level mics. The worklet still falls
+      // back to pass-through automatically if the WASM can't instantiate.
+      const RNNOISE_ENABLED = true;
 
       if (ctx.audioWorklet) {
         try {

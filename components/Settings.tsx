@@ -6,6 +6,7 @@ import Link from 'next/link';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 
@@ -234,6 +235,19 @@ export default function Settings() {
     }
   }, [activeTab, visibleTabs]);
 
+  // Persist scroll position + the active settings tab so returning to this page
+  // lands the user on the same section, scrolled where they left off. Called
+  // unconditionally, before the loading early-return. activeTab is a scroll dep
+  // because switching tabs swaps content of very different heights.
+  const rootRef = useScrollRestoration<HTMLElement>('settings-general', !isLoading, [activeTab]);
+  useListStatePersistence(
+    'settings-general',
+    { activeTab },
+    (s) => {
+      if (typeof s.activeTab === 'string') setActiveTab(s.activeTab);
+    },
+  );
+
   if (isLoading) {
     return (
       <main className="flex-1 overflow-x-hidden bg-slate-50 flex items-center justify-center">
@@ -246,7 +260,7 @@ export default function Settings() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />

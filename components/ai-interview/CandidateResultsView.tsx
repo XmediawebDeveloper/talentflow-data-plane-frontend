@@ -52,6 +52,12 @@ interface CandidateResultsViewProps {
    * clearing the inline state instead.
    */
   onNavigateToList?: () => void;
+  /**
+   * Extra breadcrumb items inserted between "AI Interviews" and "Candidate
+   * Results" — e.g. a "Results" crumb linking back to the Results page the
+   * recruiter drilled in from, so the trail reflects where they came from.
+   */
+  breadcrumbTrail?: { label: string; href?: string; onClick?: () => void }[];
 }
 
 type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
@@ -555,7 +561,7 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
-export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList }: CandidateResultsViewProps) {
+export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail }: CandidateResultsViewProps) {
   // Default to the combined "Evaluation Report" (key 'eval'). The old
   // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
   // content is merged into the Eval tab. The render blocks are kept so any
@@ -1206,6 +1212,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 onNavigateToList
                   ? { label: 'AI Interviews', onClick: onNavigateToList }
                   : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                ...(breadcrumbTrail ?? []),
                 { label: 'Candidate Results' },
               ]}
             />

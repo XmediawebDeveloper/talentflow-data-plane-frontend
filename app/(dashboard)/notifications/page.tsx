@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import notificationService, { Notification } from '@/lib/services/notificationService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -28,6 +29,17 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Persist scroll + filter state so returning to this page restores it exactly.
+  const rootRef = useScrollRestoration<HTMLElement>('notifications', !loading);
+  useListStatePersistence(
+    'notifications',
+    { filter, categoryFilter },
+    (s) => {
+      if (s.filter === 'all' || s.filter === 'unread') setFilter(s.filter);
+      if (typeof s.categoryFilter === 'string') setCategoryFilter(s.categoryFilter);
+    },
+  );
 
   const fetchNotifications = useCallback(async (reset = false) => {
     if (reset) {
@@ -150,7 +162,7 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Notifications' }]} />

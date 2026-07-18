@@ -37,6 +37,7 @@ import {
   TeamUsageAnalytics,
 } from '@/components/teams';
 import TeamHistory from '@/components/teams/TeamHistory';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -84,6 +85,29 @@ export default function TeamManagementPage() {
     setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : 'teams-by-size');
     setPageView('list');
   };
+
+  // Persist scroll + view state so returning to this page lands where the user
+  // left off. Re-detect the scroll container when the tab or two-step view flips
+  // (height changes drastically between the cards overview and the list).
+  const rootRef = useScrollRestoration<HTMLElement>('org-team-management', !isLoading, [pageView, activeTab]);
+  // currentPage is intentionally not persisted: the existing
+  // `setCurrentPage(1)` effect on [searchQuery, filterTeamLead] resets it on
+  // mount, so a restored page would be immediately clobbered.
+  useListStatePersistence(
+    'org-team-management',
+    { activeTab, pageView, listView, searchQuery, filterTeamLead },
+    (s) => {
+      if (s.activeTab === 'teams' || s.activeTab === 'usage' || s.activeTab === 'analytics' || s.activeTab === 'history') {
+        setActiveTab(s.activeTab as typeof activeTab);
+      }
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.listView === 'teams-all' || s.listView === 'members' || s.listView === 'teams-by-size') {
+        setListView(s.listView as typeof listView);
+      }
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterTeamLead === 'string') setFilterTeamLead(s.filterTeamLead);
+    },
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -382,7 +406,7 @@ export default function TeamManagementPage() {
 
   return (
     <FeatureGate feature="teams">
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
