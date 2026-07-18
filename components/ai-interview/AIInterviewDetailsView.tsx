@@ -479,7 +479,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
                 { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                { label: 'Interview Details' },
+                { label: config.jd_title || config.position || 'Interview Details' },
               ]}
             />
             <RecordPager

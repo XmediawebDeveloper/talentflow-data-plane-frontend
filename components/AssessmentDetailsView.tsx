@@ -459,7 +459,7 @@ export default function AssessmentDetailsView({
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: assessment.short_id || stripVersionFromTitle(assessment.title) || 'Assessment Details' },
+              { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
             ]}
           />
           <RecordPager
