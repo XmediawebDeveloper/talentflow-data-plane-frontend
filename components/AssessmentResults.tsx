@@ -14,6 +14,7 @@ import {
 } from '@/lib/utils/assessmentScoring';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -269,6 +270,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Track total items from server (for pagination)
   const [totalItems, setTotalItems] = useState(0);
+
+  // Persist the list's view state + scroll so returning from a candidate's
+  // details lands the recruiter exactly where they left off. Keyed per
+  // assessment so different assessments keep independent filters/scroll.
+  const persistKey = `assessment-results:${assessmentId}`;
+  const rootRef = useScrollRestoration<HTMLDivElement>(persistKey, !isLoading, [pageView]);
+  useListStatePersistence(
+    persistKey,
+    { pageView, statusFilter, searchQuery, sortField, sortDirection, currentPage, passFailFilter, dateFrom, dateTo, roundFilters },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.sortField === 'string') setSortField(s.sortField as typeof sortField);
+      if (s.sortDirection === 'asc' || s.sortDirection === 'desc') setSortDirection(s.sortDirection);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.passFailFilter === 'string') setPassFailFilter(s.passFailFilter as typeof passFailFilter);
+      if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
+      if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
+      if (s.roundFilters && typeof s.roundFilters === 'object') setRoundFilters(s.roundFilters as typeof roundFilters);
+    },
+  );
 
   // Fetch results from API with server-side pagination and filters
   useEffect(() => {
@@ -924,6 +947,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Use server-paginated results directly (no client-side slice needed)
   const paginatedCandidates = filteredCandidates;
 
+  // Open a candidate's result details. Stores the visible (non-Pending) order
+  // first so the details view can offer Prev/Next between candidates. Used by
+  // the row/card click AND the View Details button.
+  const viewCandidateDetails = (candidate: CandidateResult) => {
+    try {
+      sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
+        paginatedCandidates
+          .filter(c => c.status !== 'Pending')
+          .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
+      ));
+    } catch { /* ignore quota errors */ }
+    router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
+  };
+
   // Calculate pagination from server total
   const totalPages = Math.ceil(totalItems / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
@@ -952,7 +989,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   return (
-    <div className="flex-1 overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb className="mb-4 md:mb-8" items={[
@@ -1348,12 +1385,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 const overallScore = getMobileOverallScore(candidate);
                 const passFail = getMobilePassFail(candidate);
                 return (
-                  <div key={candidate.id} className="p-4 space-y-3" role="article" aria-label={`Candidate result for ${candidate.name || 'Unknown'}`}>
+                  <div
+                    key={candidate.id}
+                    onClick={() => viewCandidateDetails(candidate)}
+                    className="p-4 space-y-3 cursor-pointer hover:bg-brand-blue/5 transition-colors"
+                    role="article"
+                    aria-label={`Candidate result for ${candidate.name || 'Unknown'}`}
+                  >
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
                         checked={selectedRows.includes(candidate.id)}
                         onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
                         className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                       />
                       <div className="flex-1 min-w-0">
@@ -1435,18 +1479,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <div className="mt-2 text-xs text-gray-500">Phone: {candidate.phone}</div>
                         )}
 
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={() => {
-                              try {
-                                sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
-                                  paginatedCandidates
-                                    .filter(c => c.status !== 'Pending')
-                                    .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
-                                ));
-                              } catch { /* ignore quota errors */ }
-                              router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
-                            }}
+                            onClick={() => viewCandidateDetails(candidate)}
                             className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
@@ -1612,8 +1647,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </tr>
                 ) : (
                   paginatedCandidates.map((candidate) => (
-                    <tr key={candidate.id} className={`hover:bg-brand-blue/5 transition-colors ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5' : ''}`}>
-                      <td className="px-4 py-4">
+                    <tr
+                      key={candidate.id}
+                      onClick={() => viewCandidateDetails(candidate)}
+                      className={`hover:bg-brand-blue/5 transition-colors cursor-pointer ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5' : ''}`}
+                    >
+                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(candidate.id)}
@@ -1753,19 +1792,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      <td className="px-2 sm:px-4 py-4">
+                      <td className="px-2 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           <button
-                            onClick={() => {
-                              try {
-                                sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
-                                  paginatedCandidates
-                                    .filter(c => c.status !== 'Pending')
-                                    .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
-                                ));
-                              } catch { /* ignore quota errors */ }
-                              router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
-                            }}
+                            onClick={() => viewCandidateDetails(candidate)}
                             className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}

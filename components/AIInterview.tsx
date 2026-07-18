@@ -1459,15 +1459,14 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Results — primary for published */}
-                          {normalizedStatus === 'published' && (
+                          {/* Share — secondary, hidden on smallest screens (available via 3-dot menu) */}
+                          {normalizedStatus === 'published' && canShareAIInterviews && (
                             <button
-                              onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
-                              aria-label="View interview results" title="View interview results"
+                              onClick={() => setShareConfig(config)}
+                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
                             >
-                              <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
-                              Results
+                              <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                              Share
                             </button>
                           )}
 
@@ -1483,14 +1482,15 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Share — secondary, hidden on smallest screens (available via 3-dot menu) */}
-                          {normalizedStatus === 'published' && canShareAIInterviews && (
+                          {/* Results — primary for published */}
+                          {normalizedStatus === 'published' && (
                             <button
-                              onClick={() => setShareConfig(config)}
-                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
+                              onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              aria-label="View interview results" title="View interview results"
                             >
-                              <Send className="w-3.5 h-3.5 flex-shrink-0" />
-                              Share
+                              <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
+                              Results
                             </button>
                           )}
 
