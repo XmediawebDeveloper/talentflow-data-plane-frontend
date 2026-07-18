@@ -2438,10 +2438,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 setShowShareModal(true);
                               }}
                               disabled={isShareBlocked}
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
+                              className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-all text-xs whitespace-nowrap ${
                                 isShareBlocked
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                  ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                               }`}
                               title={shareBlockedReason || 'Share via email'}
                             >
@@ -2453,7 +2453,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {assessment.candidates > 0 && (
                           <button
                             onClick={() => handleTrackInvites(assessment)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
                             aria-label="Track invitation status" title="Track invitation status"
                           >
                             <Mail className="w-3.5 h-3.5" />
@@ -2468,10 +2468,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           }}
                           disabled={assessment.status === 'Draft'}
                           title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-colors text-xs whitespace-nowrap ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
                             assessment.status === 'Draft'
-                              ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                           }`}
                         >
                           <BarChart className="w-3.5 h-3.5" />
@@ -2591,10 +2591,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               setShowShareModal(true);
                             }}
                             disabled={isShareBlocked}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg transition-all text-xs ${
                               isShareBlocked
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                             }`}
                             title={shareBlockedReason || 'Share via email'}
                           >
@@ -2613,10 +2613,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         }}
                         disabled={assessment.status === 'Draft'}
                         title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg transition-colors text-xs ${
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
                           assessment.status === 'Draft'
-                            ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                            : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                         }`}
                       >
                         <BarChart className="w-3.5 h-3.5" />
@@ -2855,10 +2855,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   setShowShareModal(true);
                                 }}
                                 disabled={isShareBlocked}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
+                                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg transition-all text-xs whitespace-nowrap ${
                                   isShareBlocked
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                    ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                    : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                                 }`}
                                 title={shareBlockedReason || 'Share via email'}
                               >
@@ -2872,7 +2872,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {assessment.candidates > 0 && (
                             <button
                               onClick={() => handleTrackInvites(assessment)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
                               aria-label="Track invitation status" title="Track invitation status"
                             >
                               <Mail className="w-3.5 h-3.5" />
@@ -2890,10 +2890,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             }}
                             disabled={assessment.status === 'Draft'}
                             title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg transition-colors text-xs whitespace-nowrap ${
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
                               assessment.status === 'Draft'
-                                ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                             }`}
                           >
                             <BarChart className="w-3.5 h-3.5" />
