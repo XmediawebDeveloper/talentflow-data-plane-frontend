@@ -7,6 +7,7 @@ import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringSer
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -27,6 +28,13 @@ interface CandidateResultDetailsProps {
    * parent page already shows the pager (e.g. on its breadcrumb row).
    */
   showRecordPager?: boolean;
+  /**
+   * Optional breadcrumb rendered at the very top. Provide it when this view is
+   * shown inline inside another page that doesn't already wrap it with a
+   * breadcrumb (e.g. JobDetailView's assessment-result view). The standalone
+   * results/details route wraps its own breadcrumb externally and omits this.
+   */
+  breadcrumbItems?: BreadcrumbCrumb[];
 }
 
 interface CandidateBasicInfo {
@@ -150,6 +158,7 @@ export default function CandidateResultDetails({
   onPrev,
   onNext,
   showRecordPager = true,
+  breadcrumbItems,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -431,6 +440,11 @@ export default function CandidateResultDetails({
 
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto">
+      {breadcrumbItems && breadcrumbItems.length > 0 && (
+        <div className="px-3 sm:px-4 pt-3">
+          <PageBreadcrumb className="mb-0" sticky={false} items={breadcrumbItems} />
+        </div>
+      )}
       {showRecordPager && totalCount != null && totalCount > 0 && (
         <div className="flex justify-end px-3 sm:px-4 pt-3">
           <RecordPager

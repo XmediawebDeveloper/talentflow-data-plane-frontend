@@ -22,6 +22,11 @@ interface AIInterviewResultsProps {
    *  without the page <main>/breadcrumb/back-button chrome. Used when the
    *  results view is embedded as a tab inside the interview details page. */
   embedded?: boolean;
+  /** When provided (embedded case), clicking a candidate opens their details
+   *  inline via this callback (passing the session id) instead of navigating
+   *  to the standalone results-details route. Keeps the breadcrumb anchored to
+   *  the interview details page the user came from. */
+  onViewCandidate?: (sessionId: string) => void;
 }
 
 const STATUS_OPTIONS = [
@@ -104,7 +109,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -203,6 +208,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   };
 
   const handleViewDetails = (session: AIInterviewResponse) => {
+    // Embedded (Results tab inside the interview details page): open the
+    // candidate inline so the breadcrumb stays anchored to that page instead
+    // of jumping to the standalone results-details route.
+    if (onViewCandidate) {
+      onViewCandidate(session.id);
+      return;
+    }
     // Persist the currently-visible session order so the details view can offer
     // Previous/Next navigation between candidates (mirrors AssessmentResults).
     try {

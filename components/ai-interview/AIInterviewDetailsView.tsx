@@ -1750,6 +1750,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               configTitle={config.position || config.jd_title || 'AI Interview'}
               jdTitle={config.jd_title || ''}
               onBack={onBack}
+              onViewCandidate={handleCandidateClick}
             />
           )}
 

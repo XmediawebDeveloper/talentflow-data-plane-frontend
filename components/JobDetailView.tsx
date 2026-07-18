@@ -989,6 +989,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     return (
       <CandidateResultDetails
         onBack={() => setViewingAssessmentResult(null)}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: job.title || 'Job Details', onClick: () => setViewingAssessmentResult(null) },
+          { label: 'Candidate Details' },
+        ]}
         assessmentId={aId}
         assessmentShortId={viewingAssessmentResult.assessmentShortId}
         candidateId={viewingAssessmentResult.id}
