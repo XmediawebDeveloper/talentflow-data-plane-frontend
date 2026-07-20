@@ -2110,6 +2110,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const error = validateSalaryRange(fromVal, toVal);
         setValidationErrors(prev => ({ ...prev, salaryRange: error }));
       }
+
+      // Generation already extracted these params for THIS exact JD text. Record it
+      // as the last-extracted JD so clicking "Next" does NOT run a SECOND extraction
+      // that would overwrite these skills/comments with differently-worded results
+      // (the surprising "single word" change + "extracted" toast the user saw). If
+      // the user edits the JD before Next, jdText won't match and extraction re-runs.
+      // Guard: only skip re-extraction when generation actually produced skills, so
+      // an empty extraction never strands Step 2 with no skills.
+      const generationHasSkills =
+        (params.must_have_skills?.length || 0) > 0 ||
+        (params.nice_to_have_skills?.length || 0) > 0;
+      if (experienceSourceText && experienceSourceText.trim() && generationHasSkills) {
+        setLastExtractedJD(experienceSourceText);
+      }
     };
 
     // Fallback function for non-streaming
