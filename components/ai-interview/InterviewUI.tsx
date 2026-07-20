@@ -2270,7 +2270,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // running through it. `activeStreakStartRef` = when the current unbroken run
   // of active frames began (null when the last frame was inactive).
   const activeStreakStartRef = useRef<number | null>(null);
-  const SUSTAINED_ACTIVE_MS = 300; // ~3 frames of continuous voice before reset
+  const SUSTAINED_ACTIVE_MS = 400; // ~4-5 frames of continuous voice before reset
   // Dip tolerance ("hangover") for the active streak. Natural speech is not a
   // solid block of above-threshold frames — there are ~50-150ms gaps between
   // words, unstressed syllables, and after plosives that dip BELOW the
@@ -2286,7 +2286,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // since the last active frame exceeds STREAK_DIP_GRACE_MS. `lastActiveFrameAtRef`
   // = timestamp of the most recent active frame within the current streak.
   const lastActiveFrameAtRef = useRef<number | null>(null);
-  const STREAK_DIP_GRACE_MS = 220; // tolerate ~2 frames of inter-word gap
+  const STREAK_DIP_GRACE_MS = 400; // tolerate ~4-5 frames of inter-word gap
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -2377,15 +2377,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     micTypeRef.current = type;
     switch (type) {
       case 'bluetooth':
-        // (1) quietest mic → highest gain + highest target  (4) HFP latency → longest silence window
+        // (1) quietest mic → highest gain + highest target.
         micGainMaxRef.current = 12;
         micGainTargetRef.current = 0.090;   // ~2× builtin → up to ~7.5× gain
-        micSilenceMultiplierRef.current = 1.6;
+        // Silence window is UNIFORM 8s for every mic type (multiplier 1.0). The
+        // gain boost above lifts quiet BT/wired audio above the VAD threshold,
+        // so the old stretched windows (×1.6/×1.4 → 11-13s) are no longer needed
+        // — and they made these mics wait far too long before ending the turn.
+        micSilenceMultiplierRef.current = 1.0;
         break;
       case 'wired_headphone':
         micGainMaxRef.current = 10;
         micGainTargetRef.current = 0.10;    // louder for quiet wired headset mics → up to ~8.3× gain
-        micSilenceMultiplierRef.current = 1.4;
+        micSilenceMultiplierRef.current = 1.0;  // uniform 8s (see bluetooth note)
         break;
       case 'builtin':
         // Quiet built-in mics (e.g. laptop Realtek) can sit at ~0.006 avgLevel —
@@ -2405,7 +2409,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       default: // unknown — safe middle ground
         micGainMaxRef.current = 8;
         micGainTargetRef.current = 0.055;
-        micSilenceMultiplierRef.current = 1.2;
+        micSilenceMultiplierRef.current = 1.0;  // uniform 8s (see bluetooth note)
     }
     console.log('[InterviewUI] Mic profile applied', {
       type,

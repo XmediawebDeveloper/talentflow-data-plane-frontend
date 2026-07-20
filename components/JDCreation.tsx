@@ -1282,9 +1282,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
-  // Snapshot of the 4 requirement lists last run through de-duplication on Next,
-  // so returning to review without new edits doesn't re-run the AI dedup pass.
-  const dedupSnapshot = useRef<string>('');
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -3616,12 +3613,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
 
-    // --- De-duplicate the four requirement lists on Next ---
-    // Each skill/comment may exist only ONCE across Must-Have/Nice-to-Have skills
-    // and comments. We run a cheap deterministic pass here (exact/near-exact,
-    // cross-list); the AI reformat pass (server-side) additionally merges items
-    // that mean the same thing but are worded differently. `finalLists` holds the
-    // authoritative deduped lists used for both the DB save and the review UI.
+    // --- De-duplication is folded into the reformat pass ---
+    // IMPORTANT: the AI reformat (which also de-duplicates) must fire ONLY when the
+    // user actually changed Step 2 data, i.e. `shouldReformat`. On a no-op edit
+    // pass-through (e.g. editing a published JD and clicking Next without changes)
+    // we make NO AI call and leave the lists untouched. `clientDeduped` is only used
+    // as cleaned input WHEN we reformat; otherwise `finalLists` stays as the loaded
+    // lists so nothing is silently mutated or re-saved.
     const baseLists: Record<DuplicateListKey, string[]> = {
       mustHaveSkills: extractedData.mustHaveSkills || [],
       niceToHaveSkills: extractedData.niceToHaveSkills || [],
@@ -3629,21 +3627,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       niceToHaveComments: extractedData.niceToHaveComments || [],
     };
     const clientDeduped = dedupeListsDeterministic(baseLists);
-    const clientDedupChanged = totalListItems(clientDeduped) !== totalListItems(baseLists);
-    const dedupListsKey = JSON.stringify(clientDeduped);
-    // Run the semantic (AI) dedup at least once per content version - even on the
-    // first Next with no edits - so "same skill, different words" gets merged too.
-    const needsSemanticDedup = dedupListsKey !== dedupSnapshot.current && totalListItems(baseLists) >= 2;
-    let finalLists: Record<DuplicateListKey, string[]> = clientDeduped;
-    const effectiveReformat = shouldReformat || clientDedupChanged || needsSemanticDedup;
+    let finalLists: Record<DuplicateListKey, string[]> = baseLists;  // unchanged unless we reformat
+    const effectiveReformat = shouldReformat;
 
     // Track the final description to use (avoiding React state async issues)
     let finalDescription = currentDescription;
 
-    // Reformat with AI if user edited something in Step 2, or if we still need to
-    // de-duplicate the requirement lists. Uses flag-based check AND data snapshot.
+    // Reformat with AI ONLY when the user edited something in Step 2 (shouldReformat).
+    // The reformat pass also de-duplicates the requirement lists. No edits → no AI call.
     if (effectiveReformat) {
-      console.log('[DEBUG] Reformatting/de-duplicating with AI... (shouldReformat:', shouldReformat, 'clientDedupChanged:', clientDedupChanged, 'needsSemanticDedup:', needsSemanticDedup, ')');
+      console.log('[DEBUG] Reformatting/de-duplicating with AI... (shouldReformat:', shouldReformat, ') - triggered only by Step 2 changes');
       setIsRegenerating(true);
 
       try {
@@ -3666,10 +3659,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // additionally merges semantically-equivalent items and returns the
           // final, fully de-duplicated lists.
           const reformatParams = {
-            must_have_skills: finalLists.mustHaveSkills,
-            nice_to_have_skills: finalLists.niceToHaveSkills,
-            must_have_comments: finalLists.mustHaveComments,
-            nice_to_have_comments: finalLists.niceToHaveComments,
+            must_have_skills: clientDeduped.mustHaveSkills,
+            nice_to_have_skills: clientDeduped.niceToHaveSkills,
+            must_have_comments: clientDeduped.mustHaveComments,
+            nice_to_have_comments: clientDeduped.niceToHaveComments,
             experience_min: experienceMin,
             experience_max: experienceMax,
             job_level: persistedExperiencePayload.jobLevel,
@@ -3685,13 +3678,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
 
-          // Adopt the server's de-duplicated lists (falls back to the client pass
-          // if the response omits any list).
+          // Adopt the server's de-duplicated lists (falls back to the cleaned
+          // client-deduped input if the response omits any list).
           finalLists = {
-            mustHaveSkills: reformattedJD.must_have_skills ?? finalLists.mustHaveSkills,
-            niceToHaveSkills: reformattedJD.nice_to_have_skills ?? finalLists.niceToHaveSkills,
-            mustHaveComments: reformattedJD.must_have_comments ?? finalLists.mustHaveComments,
-            niceToHaveComments: reformattedJD.nice_to_have_comments ?? finalLists.niceToHaveComments,
+            mustHaveSkills: reformattedJD.must_have_skills ?? clientDeduped.mustHaveSkills,
+            niceToHaveSkills: reformattedJD.nice_to_have_skills ?? clientDeduped.niceToHaveSkills,
+            mustHaveComments: reformattedJD.must_have_comments ?? clientDeduped.mustHaveComments,
+            niceToHaveComments: reformattedJD.nice_to_have_comments ?? clientDeduped.niceToHaveComments,
           };
 
           // Store the reformatted description for saving (React state is async)
@@ -3770,7 +3763,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
     step2DataSnapshot.current = JSON.stringify(reviewData);  // Update snapshot so returning without new edits skips
-    dedupSnapshot.current = JSON.stringify(finalLists);  // Remember the deduped lists so we don't re-run dedup unchanged
     // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
     // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed

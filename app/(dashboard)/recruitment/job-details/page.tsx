@@ -24,6 +24,7 @@ interface ExtendedJob extends Job {
   hasAiMatchResults?: boolean;
   rawDescription?: string;
   mustHaveComments?: string[];
+  niceToHaveComments?: string[];
   education?: string;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
@@ -114,6 +115,7 @@ function JobDetailsContent() {
         currentVersion: data.current_version || 1, // Use from response, fallback to 1
         internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
         mustHaveComments: data.must_have_comments || [],
+        niceToHaveComments: data.nice_to_have_comments || [],
         assessmentGuidance: data.assessment_guidance,
         salaryMin: data.salary_min,
         salaryMax: data.salary_max,

@@ -103,6 +103,7 @@ interface ExtendedJob extends Job {
   hasAiMatchResults?: boolean;
   rawDescription?: string;
   mustHaveComments?: string[];
+  niceToHaveComments?: string[];
   education?: string;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
@@ -1519,6 +1520,41 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Must-Have / Nice-to-Have Comments - Side by Side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Must-Have Comments */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Must-Have Comments</h3>
+              <div className="text-sm text-gray-600 dark:text-slate-400">
+                {job.mustHaveComments && job.mustHaveComments.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1">
+                    {job.mustHaveComments.map((comment, index) => (
+                      <li key={index}>{comment}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500 dark:text-slate-500 italic">No must-have comments added</p>
+                )}
+              </div>
+            </div>
+
+            {/* Nice-to-Have Comments */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Nice-to-Have Comments</h3>
+              <div className="text-sm text-gray-600 dark:text-slate-400">
+                {job.niceToHaveComments && job.niceToHaveComments.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1">
+                    {job.niceToHaveComments.map((comment, index) => (
+                      <li key={index}>{comment}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500 dark:text-slate-500 italic">No nice-to-have comments added</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
