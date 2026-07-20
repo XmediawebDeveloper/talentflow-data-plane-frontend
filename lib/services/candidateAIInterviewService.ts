@@ -324,4 +324,21 @@ export const candidateAIInterviewService = {
     );
     return response.data;
   },
+
+  // Forward a batch of browser-side diagnostic lines to the backend so they
+  // land in journald tagged by session id (grep "ai-<token8>"). Fire-and-forget.
+  async reportClientLog(token: string, lines: string[]): Promise<void> {
+    if (!lines || lines.length === 0) return;
+    try {
+      await candidateApi.post(`/candidate/ai-interview/${token}/client-log`, { lines });
+    } catch {
+      /* best-effort logging channel — never surface errors to the candidate */
+    }
+  },
+
+  // Absolute URL for navigator.sendBeacon (used on disconnect/unload, when the
+  // axios instance / page may be tearing down).
+  clientLogBeaconUrl(token: string): string {
+    return `${API_BASE_URL}/candidate/ai-interview/${token}/client-log`;
+  },
 };

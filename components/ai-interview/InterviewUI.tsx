@@ -13,6 +13,7 @@ import {
   InterviewProctoringWarnings,
 } from './proctoring';
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
+import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
@@ -1616,6 +1617,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // follows. finalizePlayback checks this and skips the mic-open (then it's
   // cleared by the next speaking_started / greeting).
   const roleIntroActiveRef = useRef(false);
+  // Role-message text kept ONLY for TalkingHead lip-sync. The role message is
+  // committed as a static bubble (tokenBufferRef is cleared, so it doesn't
+  // stream), but the speaking_started handler feeds tokenBufferRef to
+  // TalkingHead for phoneme lip-sync — which for the role turn would be "" and
+  // leave Linda's mouth static ("audio plays, Linda silent"). We stash the role
+  // text here so speaking_started can feed it to TalkingHead without putting it
+  // in the reveal buffer.
+  const roleIntroTextRef = useRef("");
   const isProcessingRef = useRef(false);
   // Cancellable ref for the 800ms "start recording after Linda stops" setTimeout.
   // Cancelled by the Next Q handler to prevent stale recording after a skip.
@@ -3238,6 +3247,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // clearing roleIntroActiveRef so Q1 opens the mic normally.
         console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
+        roleIntroTextRef.current = (data.text as string) ?? "";  // for lip-sync in speaking_started
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: "assistant" as const,
@@ -3735,8 +3745,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             questionTimerIntervalRef.current = null;
           }
         }
-        // Feed accumulated text for phoneme lip sync before starting audio
-        talkingHeadRef.current?.setText(tokenBufferRef.current);
+        // Feed accumulated text for phoneme lip sync before starting audio.
+        // For the ROLE intro turn tokenBufferRef is intentionally empty (static
+        // bubble, no streaming) — so fall back to the stashed role text, else
+        // TalkingHead gets "" and Linda's mouth stays still while the audio
+        // plays ("audio plays, Linda silent" bug).
+        talkingHeadRef.current?.setText(
+          tokenBufferRef.current || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
+        );
         // Defer streamStart until the first PCM chunk arrives (see pendingStreamStartRef).
         // Calling streamStart here (empty buffer) can cause TalkingHead to fire onAudioEnd
         // immediately on Q1 when AudioContext is cold, clearing isAiSpeaking mid-speech.
@@ -6211,6 +6227,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       const timestamp = new Date().toISOString();
       console.log(`[IV-DIAG] WS CLOSE code=${event.code} reason="${event.reason}" wasClean=${event.wasClean} ts=${timestamp}`);
       console.log(`[WS ${timestamp}] WebSocket closed: code=${event.code}, reason=${event.reason}`);
+      // Explicit, forwarded diagnostic line (the [INTERVIEW-DEBUG] prefix is on
+      // the client-log allowlist) so a WebSocket drop is unmistakable in the
+      // journald-forwarded logs — code 1006=abnormal/network, 1012=service
+      // restart, 1001=tab closed, 1000=normal. Flush it immediately (beacon)
+      // since the socket is already gone and the page may be tearing down.
+      console.warn(`[INTERVIEW-DEBUG] WebSocket closed code=${event.code} reason="${event.reason || ''}" wasClean=${event.wasClean} qNum=${questionNumberRef.current ?? '?'} isClosing=${isClosingRef.current} recording=${isRecordingRef.current}`);
+      flushClientLogBeacon();
       setIsConnected(false);
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
@@ -6512,10 +6535,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Fire-and-forget: sendBeacon is best effort but survives page close
       // candidateAIInterviewService uses unauthenticated token-based URLs, so no auth header needed
       flushProctoringEventsRef.current?.().catch(() => {});
+      // Beacon the buffered browser diagnostic lines too, so the last moments
+      // (incl. a WebSocket drop) reach journald even as the page tears down.
+      flushClientLogBeacon();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
   }, []);
+
+  // Client-log forwarder: ship the browser's interview diagnostic console lines
+  // (VAD / silence / stopRecording / mic / WebSocket-close) to the backend so
+  // they land in journald tagged `[ai-<token8>]` — readable alongside the
+  // backend logs via `grep`. Started once the token is known; flushed + stopped
+  // on unmount. See clientLogForwarder.ts (allowlisted, PII-guarded, batched).
+  useEffect(() => {
+    if (!token) return;
+    startClientLogForwarder(token);
+    return () => { stopClientLogForwarder(); };
+  }, [token]);
 
   // Fullscreen exit — track UI state + ENFORCE fullscreen by force-muting the
   // mic while the overlay is shown. The proctoring monitor logs the
