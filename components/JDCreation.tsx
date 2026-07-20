@@ -454,6 +454,116 @@ const applyEnglishOnlyInputChange = (
 const isPromptConflictMessage = (message: string): boolean =>
   /conflicts with the job title|different role|change the job title/i.test(message);
 
+// ---------------------------------------------------------------------------
+// Duplicate detection across the four requirement lists
+// (Must-Have Skills, Nice-to-Have Skills, Must-Have Comments, Nice-to-Have Comments).
+// A given requirement is only allowed to exist ONCE anywhere across all four.
+// ---------------------------------------------------------------------------
+type DuplicateListKey =
+  | 'mustHaveSkills'
+  | 'niceToHaveSkills'
+  | 'mustHaveComments'
+  | 'niceToHaveComments';
+
+const DUPLICATE_LIST_LABELS: Record<DuplicateListKey, string> = {
+  mustHaveSkills: 'Must-Have Skills',
+  niceToHaveSkills: 'Nice-to-Have Skills',
+  mustHaveComments: 'Must-Have Comments',
+  niceToHaveComments: 'Nice-to-Have Comments',
+};
+
+// Small filler-word list so "Strong expertise in Python" and "Python" compare
+// as the same near-exact item. True semantic merging is handled server-side.
+const DUPLICATE_STOPWORDS = new Set<string>([
+  'a', 'an', 'the', 'of', 'in', 'on', 'with', 'and', 'or', 'to', 'for',
+  'is', 'are', 'be', 'using', 'use', 'used', 'strong', 'solid', 'good',
+  'experience', 'expertise', 'knowledge', 'proficiency', 'proficient',
+  'familiarity', 'familiar', 'skills', 'skill', 'ability', 'hands',
+]);
+
+const normalizeForDuplicate = (value: string): string => {
+  if (!value) return '';
+  const withoutParens = value.toLowerCase().replace(/\(.*?\)/g, ' ');
+  const tokens = withoutParens
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((token) => token && !DUPLICATE_STOPWORDS.has(token));
+  tokens.sort();
+  return tokens.join(' ');
+};
+
+interface DuplicateHit {
+  listKey: DuplicateListKey;
+  existingValue: string;
+}
+
+// Returns the first list where `value` already exists (normalized match), or
+// null when it is unique. `skip` lets an inline edit ignore its own slot.
+const findDuplicateAcrossLists = (
+  value: string,
+  lists: Record<DuplicateListKey, string[]>,
+  skip?: { listKey: DuplicateListKey; index: number },
+): DuplicateHit | null => {
+  const target = normalizeForDuplicate(value);
+  if (!target) return null;
+
+  const order: DuplicateListKey[] = [
+    'mustHaveSkills',
+    'niceToHaveSkills',
+    'mustHaveComments',
+    'niceToHaveComments',
+  ];
+
+  for (const listKey of order) {
+    const items = lists[listKey] || [];
+    for (let index = 0; index < items.length; index++) {
+      if (skip && skip.listKey === listKey && skip.index === index) continue;
+      if (normalizeForDuplicate(items[index]) === target) {
+        return { listKey, existingValue: items[index] };
+      }
+    }
+  }
+  return null;
+};
+
+// Deterministic (no-AI) cross-list de-duplication. Keeps the first occurrence of
+// each normalized item, following the priority order below, so every requirement
+// survives in exactly one list. Mirrors the backend's _dedupe_exact_across_lists.
+const dedupeListsDeterministic = (
+  lists: Record<DuplicateListKey, string[]>,
+): Record<DuplicateListKey, string[]> => {
+  const seen = new Set<string>();
+  const result: Record<DuplicateListKey, string[]> = {
+    mustHaveSkills: [],
+    niceToHaveSkills: [],
+    mustHaveComments: [],
+    niceToHaveComments: [],
+  };
+  const order: DuplicateListKey[] = [
+    'mustHaveSkills',
+    'niceToHaveSkills',
+    'mustHaveComments',
+    'niceToHaveComments',
+  ];
+  for (const listKey of order) {
+    for (const raw of lists[listKey] || []) {
+      const value = (raw ?? '').trim();
+      if (!value) continue;
+      const norm = normalizeForDuplicate(value);
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      result[listKey].push(value);
+    }
+  }
+  return result;
+};
+
+const totalListItems = (lists: Record<DuplicateListKey, string[]>): number =>
+  (lists.mustHaveSkills?.length || 0) +
+  (lists.niceToHaveSkills?.length || 0) +
+  (lists.mustHaveComments?.length || 0) +
+  (lists.niceToHaveComments?.length || 0);
+
 interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
@@ -1172,6 +1282,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
+  // Snapshot of the 4 requirement lists last run through de-duplication on Next,
+  // so returning to review without new edits doesn't re-run the AI dedup pass.
+  const dedupSnapshot = useRef<string>('');
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -2658,12 +2771,44 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // Blocks a value that already exists in ANY of the four lists (Must/Nice
+  // Skills + Comments). Shows a clear toast naming where the duplicate lives.
+  // `skip` lets an inline edit ignore the slot it is editing. Returns true when
+  // a duplicate was found (i.e. the caller should abort).
+  const isDuplicateAcrossLists = (
+    value: string,
+    skip?: { listKey: DuplicateListKey; index: number },
+  ): boolean => {
+    const hit = findDuplicateAcrossLists(
+      value,
+      {
+        mustHaveSkills: extractedData.mustHaveSkills || [],
+        niceToHaveSkills: extractedData.niceToHaveSkills || [],
+        mustHaveComments: extractedData.mustHaveComments || [],
+        niceToHaveComments: extractedData.niceToHaveComments || [],
+      },
+      skip,
+    );
+
+    if (!hit) return false;
+
+    toast.error({
+      title: 'Already added',
+      description: `"${hit.existingValue}" already exists under ${DUPLICATE_LIST_LABELS[hit.listKey]}. Each skill or comment can be added only once across Must-Have and Nice-to-Have lists.`,
+    });
+    return true;
+  };
+
   const handleAddSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
     if (newSkill.trim()) {
       const skillToAdd = newSkill.trim();
       const fieldLabel = category === 'mustHaveSkills' ? 'Must-have skills' : 'Nice-to-have skills';
 
       if (!validateEnglishOnlyExtractedValue(skillToAdd, fieldLabel)) {
+        return;
+      }
+
+      if (isDuplicateAcrossLists(skillToAdd)) {
         return;
       }
 
@@ -2800,6 +2945,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
+      if (isDuplicateAcrossLists(commentToAdd)) {
+        return;
+      }
+
       const updatedComments = [...extractedData.mustHaveComments, commentToAdd];
 
       setExtractedData(prev => ({
@@ -2864,6 +3013,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
+      if (isDuplicateAcrossLists(newValue, { listKey: category, index })) {
+        return;
+      }
+
       // Calculate updated arrays
       const updatedMustHave = category === 'mustHaveSkills'
         ? extractedData.mustHaveSkills.map((skill, i) => i === index ? newValue : skill)
@@ -2914,6 +3067,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
+      if (isDuplicateAcrossLists(newValue, { listKey: 'mustHaveComments', index: editingCommentIndex })) {
+        return;
+      }
+
       const updatedComments = extractedData.mustHaveComments.map((comment, i) =>
         i === editingCommentIndex ? newValue : comment
       );
@@ -2951,6 +3108,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const commentToAdd = newComment.trim();
 
       if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Nice-to-have comments')) {
+        return;
+      }
+
+      if (isDuplicateAcrossLists(commentToAdd)) {
         return;
       }
 
@@ -2995,6 +3156,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const newValue = editingNiceCommentValue.trim();
 
       if (!validateEnglishOnlyExtractedValue(newValue, 'Nice-to-have comments')) {
+        return;
+      }
+
+      if (isDuplicateAcrossLists(newValue, { listKey: 'niceToHaveComments', index: editingNiceCommentIndex })) {
         return;
       }
 
@@ -3451,19 +3616,37 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
 
+    // --- De-duplicate the four requirement lists on Next ---
+    // Each skill/comment may exist only ONCE across Must-Have/Nice-to-Have skills
+    // and comments. We run a cheap deterministic pass here (exact/near-exact,
+    // cross-list); the AI reformat pass (server-side) additionally merges items
+    // that mean the same thing but are worded differently. `finalLists` holds the
+    // authoritative deduped lists used for both the DB save and the review UI.
+    const baseLists: Record<DuplicateListKey, string[]> = {
+      mustHaveSkills: extractedData.mustHaveSkills || [],
+      niceToHaveSkills: extractedData.niceToHaveSkills || [],
+      mustHaveComments: extractedData.mustHaveComments || [],
+      niceToHaveComments: extractedData.niceToHaveComments || [],
+    };
+    const clientDeduped = dedupeListsDeterministic(baseLists);
+    const clientDedupChanged = totalListItems(clientDeduped) !== totalListItems(baseLists);
+    const dedupListsKey = JSON.stringify(clientDeduped);
+    // Run the semantic (AI) dedup at least once per content version - even on the
+    // first Next with no edits - so "same skill, different words" gets merged too.
+    const needsSemanticDedup = dedupListsKey !== dedupSnapshot.current && totalListItems(baseLists) >= 2;
+    let finalLists: Record<DuplicateListKey, string[]> = clientDeduped;
+    const effectiveReformat = shouldReformat || clientDedupChanged || needsSemanticDedup;
+
     // Track the final description to use (avoiding React state async issues)
     let finalDescription = currentDescription;
 
-    // Reformat with AI if user edited something in Step 2
-    // Uses both flag-based check AND data snapshot comparison for reliability
-    if (shouldReformat) {
-      console.log('[DEBUG] Data modified in Step 2, reformatting with AI...');
+    // Reformat with AI if user edited something in Step 2, or if we still need to
+    // de-duplicate the requirement lists. Uses flag-based check AND data snapshot.
+    if (effectiveReformat) {
+      console.log('[DEBUG] Reformatting/de-duplicating with AI... (shouldReformat:', shouldReformat, 'clientDedupChanged:', clientDedupChanged, 'needsSemanticDedup:', needsSemanticDedup, ')');
       setIsRegenerating(true);
 
       try {
-        const mustHaveComments = extractedData.mustHaveComments || [];
-        const niceToHaveComments = extractedData.niceToHaveComments || [];
-
         if (editingId) {
           const persistedExperiencePayload = resolvePersistedExperiencePayload(extractedData.experience);
           const experienceMin = persistedExperiencePayload.experienceMin;
@@ -3479,12 +3662,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             }
           }
 
-          // Call reformat endpoint with ALL parameters directly in the request
+          // Call reformat endpoint with the (client-deduped) lists. The endpoint
+          // additionally merges semantically-equivalent items and returns the
+          // final, fully de-duplicated lists.
           const reformatParams = {
-            must_have_skills: extractedData.mustHaveSkills,
-            nice_to_have_skills: extractedData.niceToHaveSkills,
-            must_have_comments: mustHaveComments,
-            nice_to_have_comments: niceToHaveComments,
+            must_have_skills: finalLists.mustHaveSkills,
+            nice_to_have_skills: finalLists.niceToHaveSkills,
+            must_have_comments: finalLists.mustHaveComments,
+            nice_to_have_comments: finalLists.niceToHaveComments,
             experience_min: experienceMin,
             experience_max: experienceMax,
             job_level: persistedExperiencePayload.jobLevel,
@@ -3500,6 +3685,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
 
+          // Adopt the server's de-duplicated lists (falls back to the client pass
+          // if the response omits any list).
+          finalLists = {
+            mustHaveSkills: reformattedJD.must_have_skills ?? finalLists.mustHaveSkills,
+            niceToHaveSkills: reformattedJD.nice_to_have_skills ?? finalLists.niceToHaveSkills,
+            mustHaveComments: reformattedJD.must_have_comments ?? finalLists.mustHaveComments,
+            niceToHaveComments: reformattedJD.nice_to_have_comments ?? finalLists.niceToHaveComments,
+          };
+
           // Store the reformatted description for saving (React state is async)
           finalDescription = reformattedJD.description;
 
@@ -3510,10 +3704,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             setManualJD(reformattedJD.description);
           }
 
-          toast.success({
-            title: 'JD Reformatted',
-            description: 'Job description has been regenerated with your changes.',
-          });
+          const mergedCount = totalListItems(baseLists) - totalListItems(finalLists);
+          if (mergedCount > 0) {
+            toast.success({
+              title: 'Duplicates combined',
+              description: `${mergedCount} duplicate ${mergedCount === 1 ? 'entry was' : 'entries were'} merged. Job description has been regenerated.`,
+            });
+          } else {
+            toast.success({
+              title: 'JD Reformatted',
+              description: 'Job description has been regenerated with your changes.',
+            });
+          }
         } else if (mode === 'manual') {
           finalDescription = normalizeManualJDToMarkdown(currentDescription);
           setManualJD(finalDescription);
@@ -3549,11 +3751,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
+    // Reflect the de-duplicated lists into the extracted data used by the review
+    // UI and the DB save below (setExtractedData is async, so we also keep a local
+    // `reviewData` copy to avoid reading stale state).
+    const reviewData = {
+      ...extractedData,
+      mustHaveSkills: finalLists.mustHaveSkills,
+      niceToHaveSkills: finalLists.niceToHaveSkills,
+      mustHaveComments: finalLists.mustHaveComments,
+      niceToHaveComments: finalLists.niceToHaveComments,
+    };
+    if (effectiveReformat) {
+      setExtractedData(reviewData);
+    }
+
     // Go to review step to show the reformatted summary
     setStep('review');
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
-    step2DataSnapshot.current = JSON.stringify(extractedData);  // Update snapshot so returning without new edits skips
+    step2DataSnapshot.current = JSON.stringify(reviewData);  // Update snapshot so returning without new edits skips
+    dedupSnapshot.current = JSON.stringify(finalLists);  // Remember the deduped lists so we don't re-run dedup unchanged
     // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
     // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed
@@ -3570,10 +3787,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         creation_stage: 'review' as const,
         creation_method: (mode === 'ai' ? 'ai_generated' : 'manual') as 'ai_generated' | 'manual',
         ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
-        must_have_skills: extractedData.mustHaveSkills,
-        nice_to_have_skills: extractedData.niceToHaveSkills,
-        must_have_comments: extractedData.mustHaveComments,
-        nice_to_have_comments: extractedData.niceToHaveComments,
+        must_have_skills: finalLists.mustHaveSkills,
+        nice_to_have_skills: finalLists.niceToHaveSkills,
+        must_have_comments: finalLists.mustHaveComments,
+        nice_to_have_comments: finalLists.niceToHaveComments,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
         experience_max: experienceMax,

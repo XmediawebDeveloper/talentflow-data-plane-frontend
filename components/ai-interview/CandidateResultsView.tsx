@@ -908,11 +908,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   //
   // Detection: v2 has evaluation_version; v1 has capability_score or cluster_insights.
   // If completed but none of these exist, evaluation is still pending.
+  // Invariant: a PARTIAL ("attended questions only — no pass/fail") result is
+  // allowed ONLY when the interview was actually TERMINATED (production
+  // proctoring: candidate left the screen / tab switch / focus loss). Every
+  // other interview — staging always, and any production interview that ran to
+  // the end — must resolve to a FULL evaluation. If a non-terminated interview
+  // carries an "eval did not run" stub (evaluation_incomplete / evaluation_error,
+  // e.g. the WS dropped mid-eval or the eval timed out), it is NOT partial — the
+  // transcript is intact and can be fully scored, so we treat it as still
+  // generating and kick off a re-evaluation (see the auto-reeval effect below).
+  const _closingReasonLc = (eval_.closing_reason || '').toString().toLowerCase();
+  const wasTerminated =
+    (liveSession.status || '').toString().toLowerCase() === 'terminated' ||
+    _closingReasonLc.includes('proctor') ||
+    _closingReasonLc.includes('terminate') ||
+    _closingReasonLc.includes('left_screen');
+  const evalIncomplete =
+    eval_.evaluation_incomplete === true || !!eval_.evaluation_error;
+
   const evaluationReady = !!(
-    eval_.evaluation_version ||
-    eval_.capability_score ||
-    eval_.cluster_insights?.length ||
-    eval_.evaluations?.length
+    (eval_.evaluation_version ||
+      eval_.capability_score ||
+      eval_.cluster_insights?.length ||
+      eval_.evaluations?.length)
+    // A non-terminated "eval did not run" stub is NOT ready: keep the
+    // "Generating results" spinner (which polls) and let the auto-reeval below
+    // populate real results, instead of rendering the stub as a partial report.
+    && !(evalIncomplete && !wasTerminated)
   );
   const evaluationPending = isCompleted && !evaluationReady;
 
@@ -932,6 +954,23 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     }, 5000);
     return () => { cancelled = true; clearInterval(poll); };
   }, [evaluationPending, liveSession.id]);
+
+  // Auto re-evaluation — a NON-terminated interview that carries an "eval did
+  // not run" stub must be scored fully from its saved transcript (invariant:
+  // partial ⟺ terminated). Fire the re-eval endpoint ONCE per session so the
+  // "Generating results" spinner above converges to a real evaluation instead
+  // of spinning forever. Guarded by a ref so the 5s poll can't re-trigger it.
+  const _autoReevalFiredRef = useRef<string | null>(null);
+  const [retryingEval, setRetryingEval] = useState(false);
+  useEffect(() => {
+    if (!isCompleted || !evalIncomplete || wasTerminated) return;
+    if (_autoReevalFiredRef.current === liveSession.id) return;
+    _autoReevalFiredRef.current = liveSession.id;
+    aiInterviewService.triggerEvaluation(liveSession.id)
+      .then(() => aiInterviewService.get(liveSession.id))
+      .then(updated => setLiveSession(updated))
+      .catch(() => { /* poll fallback keeps trying; stub remains re-evaluable */ });
+  }, [isCompleted, evalIncomplete, wasTerminated, liveSession.id]);
 
   // Live elapsed counter for the evaluation wait. The post-interview
   // multi-agent eval genuinely runs ~1-3 min (sequential gpt-4o-mini agents);
@@ -1181,6 +1220,39 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
           Processing… {mm}:{ss}
         </span>
       </div>
+      {/* Bounded fallback — after the typical 1–3 min window the eval may have
+          failed to land (OpenAI hiccup / interrupted save). Offer an explicit
+          Retry so a non-terminated interview never spins forever: it re-runs
+          the same transcript evaluation and refreshes. */}
+      {evalElapsedSec >= 180 && (
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <p className="text-xs text-gray-400 text-center max-w-xs">
+            Taking longer than usual. You can retry the evaluation — it re-scores
+            from the saved transcript.
+          </p>
+          <button
+            type="button"
+            disabled={retryingEval}
+            onClick={async () => {
+              setRetryingEval(true);
+              _autoReevalFiredRef.current = null; // allow the auto-effect to re-fire too
+              try {
+                await aiInterviewService.triggerEvaluation(liveSession.id);
+                const updated = await aiInterviewService.get(liveSession.id);
+                setLiveSession(updated);
+              } catch { /* keep spinner + polling; user can retry again */ }
+              finally { setRetryingEval(false); }
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            {retryingEval ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Retrying…</>
+            ) : (
+              <><RefreshCw className="w-4 h-4" /> Retry evaluation</>
+            )}
+          </button>
+        </div>
+      )}
     </div>
     );
   };
@@ -1826,7 +1898,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 // ── Q&A export helpers ────────────────────────────────────
                 const qaBaseName = `qa_${interview.candidate_name || 'candidate'}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
                 const candidateNameLabel = interview.candidate_name || 'Candidate';
-                const isPartialEvaluation = eval_?.partial === true || eval_?.evaluation_incomplete === true;
+                // Partial banner ONLY for a genuine early-end: a real
+                // termination, or a truncated interview explicitly marked
+                // `partial`. A non-terminated "eval did not run" stub is NOT
+                // partial — it is handled by the generating spinner + auto-reeval
+                // above (invariant: partial ⟺ terminated / truncated).
+                const isPartialEvaluation =
+                  eval_?.partial === true || (wasTerminated && eval_?.evaluation_incomplete === true);
 
                 const roundLabelFor = (rt?: string) => {
                   const k = (rt || '').toLowerCase();
