@@ -1282,6 +1282,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
+  // Baseline of Step-1 content captured when an existing JD is loaded for editing.
+  // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
+  // the extraction / reformat LLM calls on a no-op edit pass-through.
+  const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -2259,6 +2263,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // True when every Step-1 field matches what was loaded for an existing JD, i.e.
+  // the user opened an existing/published JD to edit but changed nothing in Step 1.
+  const isStage1UnchangedFromLoad = (): boolean => {
+    const b = stage1LoadBaseline.current;
+    if (!b) return false;
+    return (
+      jobTitle.trim() === b.jobTitle.trim() &&
+      aiPrompt.trim() === b.aiPrompt.trim() &&
+      generatedJD.trim() === b.generatedJD.trim() &&
+      manualJD.trim() === b.manualJD.trim()
+    );
+  };
+
+  const hasExtractedRequirementData = (): boolean =>
+    (extractedData.mustHaveSkills?.length || 0) +
+      (extractedData.niceToHaveSkills?.length || 0) +
+      (extractedData.mustHaveComments?.length || 0) +
+      (extractedData.niceToHaveComments?.length || 0) >
+    0;
+
   const handleNext = async () => {
     const trimmedJobTitle = jobTitle.trim();
     const jdText = mode === 'ai' ? generatedJD : manualJD;
@@ -2315,6 +2339,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Note: Removed code pattern validation here since AI-generated content is trusted
     // Validation only applies to AI prompt input, not the generated JD content
+
+    // EDIT FLOW — NO CHANGE, NO LLM:
+    // If we loaded an existing JD (draft or published) and the user has not changed
+    // ANY Step-1 field since load, and extracted data already exists, skip extraction
+    // entirely and go straight to Step 2. This prevents an extraction LLM call when
+    // the user just clicks Next through an unchanged Step 1.
+    if (effectiveEditingJD && isStage1UnchangedFromLoad() && hasExtractedRequirementData()) {
+      console.log('[TalentFlow] Editing existing JD, Step 1 unchanged since load — skipping extraction LLM');
+      setHasProceededToExtract(true);
+      setStep('extract');
+      return;
+    }
 
     // Check if any Stage 1 field has changed since last extraction
     // If user has proceeded to review and comes back to Stage 1:
@@ -4044,7 +4080,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         /^[-*+]\s/m.test(publishDescription)          // bullet points
       );
 
-      if (lacksMarkdownFormatting && editingId) {
+      // NO CHANGE, NO LLM: when republishing an existing JD that the user did not
+      // change (Step 1 unchanged since load AND no Step 2 edits), never call the
+      // reformat LLM here — publish the description exactly as it is.
+      const contentChangedSinceLoad = extractedDataModified || !isStage1UnchangedFromLoad();
+
+      if (lacksMarkdownFormatting && editingId && contentChangedSinceLoad) {
         console.log('[DEBUG] handleConfirmPublish - manual JD lacks formatting, reformatting before publish');
         try {
           const reformatParams = {
@@ -4559,6 +4600,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else if (effectiveEditingJD.creation_method === 'manual') {
         setManualJD(prev => prev || effectiveEditingJD.description || '');  // Preserve user edits
       }
+
+      // Capture the Step-1 baseline for change detection on Next (used to skip the
+      // extraction LLM when the user edits an existing JD but changes nothing here).
+      stage1LoadBaseline.current = {
+        jobTitle: effectiveEditingJD.title || '',
+        aiPrompt: effectiveEditingJD.ai_prompt || '',
+        generatedJD: effectiveEditingJD.description || '',
+        manualJD: effectiveEditingJD.creation_method === 'manual' ? (effectiveEditingJD.description || '') : '',
+      };
 
       // Set lastExtractedJD to the loaded description only if extraction has already happened.
       // For drafts saved at 'create' stage, leave it empty so handleNext triggers extraction.
@@ -5615,7 +5665,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       }
 
                       setShowCustomExperienceInput(false);
-                      setExperienceYearsExplicit(false);
+                      // A level picked from the dropdown is a deliberate user choice,
+                      // and each level carries a definitional year range (e.g. "Junior
+                      // Level" = 2-4 years). Mark years as explicit so the range
+                      // persists into Step 3 and the published JD. (Without this, the
+                      // selected experience was silently dropped before reaching Step 3.)
+                      const selectedLevel = getExperienceLevelByCode(nextValue);
+                      const levelHasYears = !!selectedLevel
+                        && (selectedLevel.min_years != null || selectedLevel.max_years != null);
+                      setExperienceYearsExplicit(levelHasYears);
                       setExtractedData(prev => ({ ...prev, experience: nextValue }));
                       markExtractedDataModified();
                       // Clear validation error when user makes a selection
