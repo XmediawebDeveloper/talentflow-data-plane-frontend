@@ -165,8 +165,14 @@ function detectDevice(): DeviceInfo {
   const mobile = isMobileDevice();
   const browser = detectBrowser(ua);
   const os = detectOS();
-  const screenWidth = typeof window !== 'undefined' ? window.screen.width : 0;
-  const screenHeight = typeof window !== 'undefined' ? window.screen.height : 0;
+  // window.screen.width/height are CSS pixels — i.e. PHYSICAL ÷ display scale.
+  // On Windows at 150% scaling a 1920×1080 panel reports 1280×720, which reads
+  // as "wrong". Multiply by devicePixelRatio to recover the true hardware
+  // resolution (dpr = OS scale × browser zoom; at 100% zoom this is exactly the
+  // scale factor, so 1280 × 1.5 → 1920). Round to undo tiny float drift.
+  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+  const screenWidth = typeof window !== 'undefined' ? Math.round(window.screen.width * dpr) : 0;
+  const screenHeight = typeof window !== 'undefined' ? Math.round(window.screen.height * dpr) : 0;
 
   return {
     isMobile: mobile,

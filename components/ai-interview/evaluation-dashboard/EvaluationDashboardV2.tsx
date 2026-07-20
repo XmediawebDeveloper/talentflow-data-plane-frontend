@@ -577,6 +577,24 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
         </div>
 
+        {/* 2b. Why this score — deterministic per-question rationale (what the
+            candidate demonstrated, what was missing, and the overall reason).
+            Shown in ALL environments, INCLUDING production where the per-skill
+            dropdown below is hidden — this is the reviewer's one explanation of
+            the score. HR turns carry no rationale (never scored), so this hides
+            for them automatically. */}
+        {q.scoreRationale && q.scoreRationale.trim() && (
+          <div className="border-l-2 border-amber-200 pl-3">
+            <div className="text-xs font-medium text-gray-500 mb-1">
+              Score Rationale
+            </div>
+            <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 whitespace-pre-wrap break-words leading-relaxed">
+              <Brain className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+              <span>{q.scoreRationale}</span>
+            </div>
+          </div>
+        )}
+
         {/* 3. Per-skill rows — collapsible dropdown. For HR, skipped entirely
             (HR isn't scored). Multi-skill questions list 2-3 skills, so the
             block collapses by default; expanding shows each skill's score AND

@@ -186,6 +186,12 @@ export interface PerQuestionDetail {
    *  Rendered in the Question Analysis answer block; mirrors the Transcript
    *  tab so the two views agree. */
   skipReason?: { text: string; tone: 'amber' | 'gray' };
+  /** Deterministic per-question explanation of WHY this score was awarded —
+   *  what the candidate demonstrated, what was missing/weak, and the overall
+   *  reason for the band. Composed backend-side from the per-skill evidence
+   *  notes (no LLM). Empty for HR / review-only turns (never scored). Rendered
+   *  under the Candidate's Answer block on the Question Analysis tab. */
+  scoreRationale?: string;
 }
 
 export interface DashboardData {

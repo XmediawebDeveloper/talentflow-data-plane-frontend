@@ -893,6 +893,8 @@ function buildPerQuestionDetailsFromGroups(
       // Recover the bundled-followup note from the matched history row so it
       // survives even when this (groups) builder is the one selected.
       bundledFollowUp: bundledFollowUpFromRow(matched),
+      // Per-question "why this score" rationale (backend-composed).
+      scoreRationale: String(g?.score_rationale || matched?.score_rationale || ''),
     });
 
     // Follow-ups inherit the parent's skill set when their own entry
@@ -933,6 +935,7 @@ function buildPerQuestionDetailsFromGroups(
             ? Math.round(fuMatched.score * 10) / 10
             : 0,
         bundledFollowUp: bundledFollowUpFromRow(fuMatched),
+        scoreRationale: String(fu?.score_rationale || fuMatched?.score_rationale || ''),
       });
     }
     void _isGreeting; // greeting filter intentionally NOT applied here —
