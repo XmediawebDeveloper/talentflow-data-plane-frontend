@@ -41,7 +41,7 @@ interface StepSamplePracticeProps {
 // confirm their mic + video work, the recording can be replayed, and nothing
 // here is stored in our database.
 const PRACTICE_GREETING =
-  "Hi, this is Linda. Welcome — this is just a practice session. Before the real interview begins, let's make sure everything is working correctly, especially your microphone and camera. Go ahead and record a short answer, then play it back to check that you can be seen and heard clearly. Don't worry — this practice recording is only for you to test yourself and is not stored in our database.";
+  "Hi, this is Biona. Welcome — this is just a practice session. Before the real interview begins, let's make sure everything is working correctly, especially your microphone and camera. Go ahead and record a short answer, then play it back to check that you can be seen and heard clearly. Don't worry — this practice recording is only for you to test yourself and is not stored in our database.";
 
 // The actual practice question, asked AFTER the greeting.
 const PRACTICE_QUESTION =
@@ -50,7 +50,7 @@ const PRACTICE_QUESTION =
 // Full script the AI voice reads aloud: greeting first, then the question.
 const PRACTICE_SPOKEN_SCRIPT = `${PRACTICE_GREETING} ${PRACTICE_QUESTION}`;
 
-// Linda's sign-off, spoken when the candidate finishes the practice (clicks Next).
+// Biona's sign-off, spoken when the candidate finishes the practice (clicks Next).
 const PRACTICE_CLOSING_MESSAGE =
   "Great — that's the idea! You're all set and ready to begin the real interview. Take a breath, relax, and do your best. All the best!";
 
@@ -72,12 +72,12 @@ function fmtMMSS(totalSeconds: number): string {
 interface TourStep { id: string; title: string; body: string; }
 const PRACTICE_TOUR_STEPS: TourStep[] = [
   { id: 'header', title: 'Interview header', body: 'During the real interview this bar shows your verified identity, the current question, a live 2-minute timer, and the End button.' },
-  { id: 'linda', title: 'Meet Linda', body: 'Linda is your AI interviewer. She speaks each question aloud — you can replay it any time.' },
+  { id: 'linda', title: 'Meet Biona', body: 'Biona is your AI interviewer. She speaks each question aloud — you can replay it any time.' },
   { id: 'timer', title: 'Your 2-minute timer', body: 'Each question gives you up to 2 minutes. It counts down while you answer; when it reaches 0 the interview moves on automatically.' },
   { id: 'camera', title: 'Your camera & mic', body: 'Stay centered and clearly visible. The bar shows your live mic level so you know you are being heard.' },
   { id: 'answer', title: 'Your answer appears here', body: 'As you speak, your words are transcribed and shown here — exactly like the real interview chat.' },
-  { id: 'record', title: 'Just speak — no buttons', body: 'The mic opens automatically after Linda finishes the question — simply speak your introduction. This waveform shows you are being heard. Use Repeat to hear the question again. Nothing is saved.' },
-  { id: 'next', title: 'Move on with Next', body: 'When you have finished, click Next. In the real interview this goes to the following question; here Linda gives you a quick "all the best" and you can start.' },
+  { id: 'record', title: 'Just speak — no buttons', body: 'The mic opens automatically after Biona finishes the question — simply speak your introduction. This waveform shows you are being heard. Use Repeat to hear the question again. Nothing is saved.' },
+  { id: 'next', title: 'Move on with Next', body: 'When you have finished, click Next. In the real interview this goes to the following question; here Biona gives you a quick "all the best" and you can start.' },
 ];
 
 // ── Helper: pick a good SpeechSynthesis voice ────────────────────────────────
@@ -221,17 +221,17 @@ export default function StepSamplePractice({
   const [recordingElapsed, setRecordingElapsed] = useState(0);
   // Guided coach-mark tour: -1 = inactive, 0..n-1 = current step index.
   const [tourStep, setTourStep] = useState<number>(-1);
-  // True after the candidate clicks Next and Linda plays the sign-off — stops
+  // True after the candidate clicks Next and Biona plays the sign-off — stops
   // the auto-record-on-question-end from re-opening the mic.
   const [practiceDone, setPracticeDone] = useState(false);
   const practiceDoneRef = useRef(false);
   // Accumulated seconds the candidate has spent ANSWERING (excludes time while
-  // Linda is speaking) — drives the 2-min countdown and survives Repeat.
+  // Biona is speaking) — drives the 2-min countdown and survives Repeat.
   const [answerElapsed, setAnswerElapsed] = useState(0);
   // True when the 2-minute budget elapsed (as opposed to the candidate clicking
-  // Next) — shows a "Time's up" message before Linda's sign-off.
+  // Next) — shows a "Time's up" message before Biona's sign-off.
   const [timedUp, setTimedUp] = useState(false);
-  // Gate: Linda does NOT speak on entry. The candidate must click "Start
+  // Gate: Biona does NOT speak on entry. The candidate must click "Start
   // Practice" first (also gives TTS a user gesture, Brave-safe).
   const [started, setStarted] = useState(false);
   // Show the "Practice complete — start the interview" popup once practice ends.
@@ -241,7 +241,7 @@ export default function StepSamplePractice({
   // ── Refs ─────────────────────────────────────────────────────────────────
 
   // Chat thread scroll container — auto-scrolled to the bottom as new content
-  // appears (Linda speaks → Your turn → transcript → sign-off).
+  // appears (Biona speaks → Your turn → transcript → sign-off).
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const replayVideoRef = useRef<HTMLVideoElement>(null);
@@ -409,7 +409,7 @@ export default function StepSamplePractice({
       if (voice) utterance.voice = voice;
 
       utterance.onstart = () => setAiSpeaking(true);
-      // When Linda finishes the question, AUTO-OPEN the mic (no manual Start
+      // When Biona finishes the question, AUTO-OPEN the mic (no manual Start
       // button) — just like the real interview's "your turn, speak now". Guarded
       // so the practice-complete sign-off never re-opens the mic.
       utterance.onend = () => {
@@ -472,7 +472,7 @@ export default function StepSamplePractice({
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
 
-  // Linda does NOT auto-speak on entry — the candidate starts the practice via
+  // Biona does NOT auto-speak on entry — the candidate starts the practice via
   // the "Start Practice" button (handleStartPractice), which speaks in the
   // click's user-gesture context (Brave-safe). See handleStartPractice below.
 
@@ -843,11 +843,11 @@ export default function StepSamplePractice({
   // Keep ref in sync so speakQuestion.onend can call the latest startRecording
   useEffect(() => { startRecordingRef.current = startRecording; }, [startRecording]);
 
-  // Linda's spoken sign-off after the candidate finishes the practice. Runs from
+  // Biona's spoken sign-off after the candidate finishes the practice. Runs from
   // the Next-button click (user gesture → Brave-safe). A plain utterance so it
   // doesn't trip the auto-record-on-end path (that only lives on speakQuestion).
   const speakClosing = useCallback(() => {
-    // The "start the interview" popup should appear only AFTER Linda finishes
+    // The "start the interview" popup should appear only AFTER Biona finishes
     // speaking the sign-off — not the instant practice ends. Show it from the
     // utterance's onend/onerror, with a fallback timer for when TTS is
     // unavailable/blocked (Brave, no voices) so the popup still appears.
@@ -876,7 +876,7 @@ export default function StepSamplePractice({
   }, []);
 
   // Next — like the real interview's "Next Question": wrap up the answer (stop
-  // the auto-recording), then Linda plays the "you're ready — all the best"
+  // the auto-recording), then Biona plays the "you're ready — all the best"
   // sign-off. Marks the practice done so the mic doesn't auto-reopen.
   const handlePracticeNext = useCallback(() => {
     practiceDoneRef.current = true;
@@ -885,7 +885,7 @@ export default function StepSamplePractice({
     speakClosing();
   }, [isRecording, stopRecordingAndTranscribe, speakClosing]);
 
-  // Start the practice — Linda speaks the greeting + question NOW (in the click's
+  // Start the practice — Biona speaks the greeting + question NOW (in the click's
   // user-gesture context so browsers don't block TTS). onend then auto-opens the
   // mic. Nothing plays before this.
   const handleStartPractice = useCallback(() => {
@@ -908,12 +908,12 @@ export default function StepSamplePractice({
   const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
   // Interview-style countdown from the ACCUMULATED answering time (which pauses
-  // while Linda speaks) — full 2:00 until the candidate starts answering.
+  // while Biona speaks) — full 2:00 until the candidate starts answering.
   const secondsLeft = Math.max(0, PRACTICE_LIMIT_SECONDS - answerElapsed);
   const timerLow = secondsLeft <= 30 && answerElapsed > 0;
 
-  // Countdown ticks ONLY while the answer window is open AND Linda is NOT
-  // speaking. So Repeat (Linda re-speaks → aiSpeaking) PAUSES the timer, and it
+  // Countdown ticks ONLY while the answer window is open AND Biona is NOT
+  // speaking. So Repeat (Biona re-speaks → aiSpeaking) PAUSES the timer, and it
   // RESUMES from where it left when she finishes — it never resets.
   useEffect(() => {
     if (!isRecording || aiSpeaking || practiceDone) return;
@@ -924,7 +924,7 @@ export default function StepSamplePractice({
   }, [isRecording, aiSpeaking, practiceDone]);
 
   // Auto-finish at the 2-minute budget — mirrors the real per-question timeout:
-  // show "Time's up", stop the answer, and have Linda play the sign-off (exactly
+  // show "Time's up", stop the answer, and have Biona play the sign-off (exactly
   // what the Next button does). Guarded by practiceDone so it fires once.
   useEffect(() => {
     if (!practiceDone && answerElapsed >= PRACTICE_LIMIT_SECONDS) {
@@ -933,7 +933,7 @@ export default function StepSamplePractice({
     }
   }, [answerElapsed, practiceDone, handlePracticeNext]);
 
-  // Keep the chat thread pinned to the bottom as new content appears — Linda
+  // Keep the chat thread pinned to the bottom as new content appears — Biona
   // speaking, "Your turn", the transcript, and the sign-off — so the latest
   // message is always in view (matches the live interview's auto-scroll).
   useEffect(() => {
@@ -944,7 +944,7 @@ export default function StepSamplePractice({
   }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone]);
   // NOTE: the "start the interview" popup is NOT triggered here on practiceDone
   // (that showed it too early). It's revealed from speakClosing()'s onend so it
-  // appears only after Linda finishes the sign-off. See speakClosing().
+  // appears only after Biona finishes the sign-off. See speakClosing().
 
   // Launch the guided coach-mark tour once, shortly after mount (so target
   // elements are laid out). Candidate can re-open it via the "Tips" button.
@@ -992,7 +992,7 @@ export default function StepSamplePractice({
           <div className="flex items-center gap-2 min-w-0">
             <MessageSquare className="w-4 h-4 text-white/90 flex-shrink-0" />
             <div className="leading-tight min-w-0">
-              <p className="text-sm font-semibold text-white truncate">Practice with Linda</p>
+              <p className="text-sm font-semibold text-white truncate">Practice with Biona</p>
               <p className="text-[11px] text-white/70">Guided warm-up · nothing is saved</p>
             </div>
           </div>
@@ -1024,16 +1024,16 @@ export default function StepSamplePractice({
           </div>
         </div>
 
-        {/* 2-Column Grid — LEFT: Linda avatar + your webcam · RIGHT: chat.
+        {/* 2-Column Grid — LEFT: Biona avatar + your webcam · RIGHT: chat.
             Mirrors the real interview screen (kept inside this panel, not fullscreen). */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
-        {/* ── Left: Linda avatar (top) + your webcam (bottom) ── */}
+        {/* ── Left: Biona avatar (top) + your webcam (bottom) ── */}
         <div className="lg:col-span-1 flex flex-col bg-[#0A1020] divide-y divide-white/[0.06]">
-          {/* Linda avatar */}
+          {/* Biona avatar */}
           <div data-tour="linda" className="relative flex-1 flex flex-col items-center justify-center p-5 gap-2.5" style={{ minHeight: '220px' }}>
             <div className="absolute top-3 left-3 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
-              <span className="text-[10px] font-medium tracking-wide uppercase text-[#64748B]">Linda · AI Interviewer</span>
+              <span className="text-[10px] font-medium tracking-wide uppercase text-[#64748B]">Biona · AI Interviewer</span>
             </div>
             <div
               className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 transition-colors duration-300 ${aiSpeaking ? 'border-[#7C3AED]/70' : 'border-white/15'}`}
@@ -1042,13 +1042,13 @@ export default function StepSamplePractice({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/linda-avatar.webp"
-                alt="Linda — AI Interviewer"
+                alt="Biona — AI Interviewer"
                 className="w-full h-full object-cover"
                 onError={(e) => { const el = e.currentTarget; if (!el.dataset.fb) { el.dataset.fb = '1'; el.src = '/linda-3.png'; } }}
               />
               {aiSpeaking && <span className="absolute inset-0 rounded-full ring-2 ring-[#7C3AED]/40 animate-ping" />}
             </div>
-            <p className="text-white font-semibold text-lg leading-none">Linda</p>
+            <p className="text-white font-semibold text-lg leading-none">Biona</p>
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
               aiSpeaking ? 'bg-[#7C3AED]/20 text-[#C4B5FD]' : isRecording ? 'bg-red-500/15 text-red-300' : 'bg-white/10 text-[#94A3B8]'
             }`}>
@@ -1104,7 +1104,7 @@ export default function StepSamplePractice({
         {/* ── Right: chat thread + controls ── */}
         <div className="relative lg:col-span-2 flex flex-col bg-[#060D1A]" style={{ minHeight: '360px' }}>
           {/* Bottom-centered status banner (matches the real interview): red
-              "Hold on — Linda is speaking" while she talks, green "Your turn"
+              "Hold on — Biona is speaking" while she talks, green "Your turn"
               while the mic is open. Floats above the control bar. */}
           {(() => {
             const variant: 'hold' | 'turn' | null =
@@ -1113,8 +1113,8 @@ export default function StepSamplePractice({
               : null;
             if (!variant) return null;
             const cfg = variant === 'turn'
-              ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Linda is listening' }
-              : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Linda is speaking', subtitle: 'Please wait until she finishes the question' };
+              ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Biona is listening' }
+              : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Biona is speaking', subtitle: 'Please wait until she finishes the question' };
             return (
               <div className="absolute inset-x-0 bottom-[64px] z-30 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[#060D1A] via-[#060D1A] via-70% to-transparent">
                 <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[240px] max-w-[94%]`}>
@@ -1137,7 +1137,7 @@ export default function StepSamplePractice({
             );
           })()}
 
-          {/* Start-practice gate — Linda stays silent until the candidate clicks
+          {/* Start-practice gate — Biona stays silent until the candidate clicks
               Start (also gives TTS a user gesture). Sits over the chat panel. */}
           {!started && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#060D1A]/85 backdrop-blur-sm p-6">
@@ -1147,7 +1147,7 @@ export default function StepSamplePractice({
                 </div>
                 <h3 className="text-white text-lg font-semibold mb-1.5">Ready for a quick practice?</h3>
                 <p className="text-[#94A3B8] text-sm leading-relaxed mb-5">
-                  When you click Start, Linda will greet you and ask you to introduce yourself. Answer just like the real interview — nothing here is saved.
+                  When you click Start, Biona will greet you and ask you to introduce yourself. Answer just like the real interview — nothing here is saved.
                 </p>
                 <button
                   type="button"
@@ -1159,19 +1159,19 @@ export default function StepSamplePractice({
               </div>
             </div>
           )}
-          {/* Chat thread — Linda bubbles (left) + your answer bubble (right) */}
+          {/* Chat thread — Biona bubbles (left) + your answer bubble (right) */}
           <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-20 space-y-3" style={{ maxHeight: '420px' }}>
-            {/* Linda greeting */}
+            {/* Biona greeting */}
             <div className="flex items-start gap-2">
               <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
               <div className="max-w-[88%]">
-                <p className="text-[10px] font-semibold text-[#A78BFA] mb-1">LINDA</p>
+                <p className="text-[10px] font-semibold text-[#A78BFA] mb-1">BIONA</p>
                 <div className="bg-[#1E293B]/80 border border-white/[0.08] rounded-2xl rounded-tl-sm px-3.5 py-2.5">
                   <p className="text-[#E2E8F0] text-sm leading-relaxed">{PRACTICE_GREETING}</p>
                 </div>
               </div>
             </div>
-            {/* Linda practice question + play + reassurance chip */}
+            {/* Biona practice question + play + reassurance chip */}
             <div className="flex items-start gap-2">
               <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
               <div className="max-w-[88%] space-y-2">
@@ -1221,12 +1221,12 @@ export default function StepSamplePractice({
                 </span>
               </div>
             )}
-            {/* Linda's sign-off after Next / timeout — "you're ready, all the best". */}
+            {/* Biona's sign-off after Next / timeout — "you're ready, all the best". */}
             {practiceDone && (
               <div className="flex items-start gap-2">
                 <div className="w-6 h-6 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
                 <div className="max-w-[88%]">
-                  <p className="text-[10px] font-semibold text-[#A78BFA] mb-1">LINDA</p>
+                  <p className="text-[10px] font-semibold text-[#A78BFA] mb-1">BIONA</p>
                   <div className="bg-[#1E293B]/80 border border-emerald-500/25 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
                     <p className="text-[#E2E8F0] text-sm leading-relaxed">{PRACTICE_CLOSING_MESSAGE}</p>
                   </div>
@@ -1252,7 +1252,7 @@ export default function StepSamplePractice({
                       : isTranscribing ? 'Processing…'
                       : timedUp ? "Time's up ✓"
                       : practiceDone ? 'All set ✓'
-                      : aiSpeaking ? 'Linda is speaking…'
+                      : aiSpeaking ? 'Biona is speaking…'
                       : 'Getting ready…'}
                   </span>
                   <MicWaveform analyserRef={analyserRef} active={isRecording} color="#34d399" width={120} height={26} />
@@ -1261,7 +1261,7 @@ export default function StepSamplePractice({
                 <button
                   type="button"
                   onClick={() => {
-                    // Repeat MID-answer: just replay — the timer pauses while Linda
+                    // Repeat MID-answer: just replay — the timer pauses while Biona
                     // speaks and resumes from where it left (no reset). Repeat AFTER
                     // finishing (done/timed-up): a fresh re-practice → reset the budget.
                     const wasFinished = practiceDoneRef.current;
@@ -1279,13 +1279,13 @@ export default function StepSamplePractice({
                 >
                   <Volume2 className="w-4 h-4" /> Repeat
                 </button>
-                {/* Next — finish the answer; Linda plays the sign-off. */}
+                {/* Next — finish the answer; Biona plays the sign-off. */}
                 <button
                   data-tour="next"
                   type="button"
                   onClick={handlePracticeNext}
                   disabled={aiSpeaking || isTranscribing || practiceDone || (!isRecording && !hasAnswer)}
-                  title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Linda' : 'Answer first'}
+                  title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Biona' : 'Answer first'}
                   className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   Next <ChevronRight className="w-4 h-4" />

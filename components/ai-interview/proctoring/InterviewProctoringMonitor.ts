@@ -41,7 +41,7 @@ interface UseInterviewProctoringMonitorOptions {
   obstructionThreshold?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; severity: string; details: Record<string, any> }) => Promise<any>;
   // Returns true when voice-detection must be suppressed because the audio
-  // currently in the candidate's mic is expected (Linda's TTS echo or the
+  // currently in the candidate's mic is expected (Biona's TTS echo or the
   // candidate's own answer). Without this, both phases are misclassified as
   // "another voice detected" and the proctor floods the report with false
   // violations.
@@ -603,7 +603,7 @@ export function useInterviewProctoringMonitor({
         if (!isMonitoringRef.current || !analyserRef.current || !audioWorkerRef.current) return;
 
         // Skip the check entirely while the audio in the mic is expected —
-        // Linda's TTS echo or the candidate's own answer. Otherwise the
+        // Biona's TTS echo or the candidate's own answer. Otherwise the
         // candidate's own speech is flagged as voice_detected (~60+ false
         // violations per session observed in production).
         // Worker state is reset so consecutive-frame counters don't carry

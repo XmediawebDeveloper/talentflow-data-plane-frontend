@@ -2,7 +2,7 @@
  * Shared skip-reason derivation for the Transcript tab and the Question
  * Analysis answer block, so both label a skipped question identically.
  *
- * WHY transcript-first: a question the candidate didn't answer shows as a Linda
+ * WHY transcript-first: a question the candidate didn't answer shows as a Biona
  * message with no reply after it, and the saved `question_history.skip_source`
  * is frequently null after the finalization rebuild (most skips are synthetic
  * "[SKIPPED]" pairs inferred from the transcript, never a runtime entry that

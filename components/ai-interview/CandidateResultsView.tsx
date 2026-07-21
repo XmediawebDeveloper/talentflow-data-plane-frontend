@@ -2540,7 +2540,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             {!evaluationPending && activeTab === 'transcript' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
                 // Silence prompts ("Are you there?…") and closing thank-yous are
-                // meta-messages from Linda, not real questions. They must not
+                // meta-messages from Biona, not real questions. They must not
                 // count toward Q#/F# numbering or the message total — match
                 // the backend's _is_silence_or_closing_prompt filter.
                 const _isMetaAssistant = (msg: any) => {
@@ -2608,7 +2608,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 };
 
                 // Skip-status detection: a skipped question shows in the chat as
-                // a Linda bubble with NO candidate reply after it, so the viewer
+                // a Biona bubble with NO candidate reply after it, so the viewer
                 // can't tell HOW it was skipped. Shared with the Question Analysis
                 // answer block via buildSkipReasoner (transcript-sequence first —
                 // reliable; skip_source enhancement). "answered" is decided by the
@@ -2624,7 +2624,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 let ddCounter = 0;
                 let clCounter = 0;  // Clarifications under current main Q
                 // Detect clarifications by either explicit flag (backend) or
-                // the recognizable rephrase opener Linda uses.
+                // the recognizable rephrase opener Biona uses.
                 const isClarificationMsg = (m: any): boolean => {
                   if (m.is_clarification === true) return true;
                   const t = (m.content || '').toLowerCase().trim();
@@ -2643,7 +2643,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     t.includes('thank you for completing the interview') ||
                     t.includes('thank you for your time today') ||
                     (t.includes('your responses have been recorded') && t.includes('wish you all the best')) ||
-                    // Linda's LLM-generated sendoff varies in wording. These phrases
+                    // Biona's LLM-generated sendoff varies in wording. These phrases
                     // only appear in the wrap-up turn (often prefixed by an
                     // acknowledgment of the last answer, e.g. "That's a compelling
                     // case… This concludes our interview…"), never in a real question.
@@ -2658,7 +2658,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 };
                 // Detect informative / silence-ladder utterances ("Are you there?",
                 // "I couldn't get any response…", "…let's move on…"). These are spoken
-                // by Linda outside the question pipeline and must NOT be counted as
+                // by Biona outside the question pipeline and must NOT be counted as
                 // questions — otherwise a silence nudge inflates the Q number (e.g. the
                 // nudge showed as "Q5" and stole the candidate's answer). Backend tags
                 // them interstitial:true / kind="silence_*"; we also match text as a
@@ -2741,7 +2741,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
                             <Bot className="w-3.5 h-3.5 text-white" />
                           </div>
-                          <span className="text-xs text-gray-500">Linda (AI Interviewer)</span>
+                          <span className="text-xs text-gray-500">Biona (AI Interviewer)</span>
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
@@ -2770,7 +2770,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           const language: string | undefined = !isAssistant ? msg.language : undefined;
                           const hasCorrection = !isAssistant && rawContent && rawContent !== content;
                           const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
-                          // For a Linda question that was skipped, show WHY. A
+                          // For a Biona question that was skipped, show WHY. A
                           // question is "answered" when the NEXT chat message is a
                           // real candidate reply; otherwise it was skipped and
                           // _skipReason explains how. Only on assistant question

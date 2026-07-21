@@ -29,7 +29,7 @@ interface USStateOption {
 const VALIDATION = {
   JOB_TITLE: { min: 2, max: 100 },
   AI_PROMPT: { min: 30, max: 1500 },
-  MANUAL_JD: { min: 100, max: 10000 },
+  MANUAL_JD: { min: 1000, max: 10000 },
   ASSESSMENT_GUIDANCE: { min: 10, max: 100 },
 };
 
@@ -2320,6 +2320,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         description: 'Please provide a valid job description with at least 50 characters.',
       });
       return;
+    }
+
+    // Manual JD: enforce a content-length range so there is enough detail for AI
+    // extraction, without exceeding what the model handles cleanly. Bounds come
+    // from the single source of truth (VALIDATION.MANUAL_JD) that also drives the
+    // live character counter, inline hints, and the Next-button disabled state.
+    if (mode === 'manual') {
+      const manualLength = jdText.trim().length;
+      if (manualLength < VALIDATION.MANUAL_JD.min) {
+        toast.error({
+          title: 'Job Description Too Short',
+          description: `Please provide at least ${VALIDATION.MANUAL_JD.min.toLocaleString()} characters for accurate AI processing and skill extraction. Currently ${manualLength.toLocaleString()}.`,
+        });
+        return;
+      }
+      if (manualLength > VALIDATION.MANUAL_JD.max) {
+        toast.error({
+          title: 'Job Description Too Long',
+          description: `Please keep the job description under ${VALIDATION.MANUAL_JD.max.toLocaleString()} characters. Currently ${manualLength.toLocaleString()}.`,
+        });
+        return;
+      }
     }
 
     // Validate JD contains meaningful text (not just symbols or garbage)

@@ -46,9 +46,9 @@ interface Props {
   /** Low-power / audio-only mode (passed for low-tier devices). When true, the
    *  heavy 3D avatar is NEVER loaded or rendered (no GLB download, no Three.js
    *  scene, no render loop) — saving the CPU/GPU that overwhelms 2-core
-   *  machines. Linda's voice still plays via the internal Web Audio fallback
+   *  machines. Biona's voice still plays via the internal Web Audio fallback
    *  (headRef stays null → streamStart/streamAudio use fbPlayChunk). The parent
-   *  shows the static Linda image. onReady + onFallback fire immediately. */
+   *  shows the static Biona image. onReady + onFallback fire immediately. */
   audioOnly?: boolean;
 }
 
@@ -120,14 +120,14 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       // Skip the ENTIRE 3D pipeline (GLB download, Three.js scene, render loop,
       // FPS watchdog) — that's what pegs 2-core machines at 100% CPU. headRef
       // stays null, so streamStart/streamAudio/notifyEnd automatically use the
-      // internal Web Audio fallback (fbPlayChunk) → Linda's voice still plays.
-      // Tell the parent to show the static Linda image (onFallback) and to
+      // internal Web Audio fallback (fbPlayChunk) → Biona's voice still plays.
+      // Tell the parent to show the static Biona image (onFallback) and to
       // connect the WebSocket (onReady). No cleanup needed (nothing was created).
       if (audioOnly) {
         console.log("[TalkingHead] audio-only mode (low-tier) — 3D avatar NOT loaded; voice via Web Audio fallback");
         // "ready" renders just the dark studio background — NO loading spinner,
         // NO "Avatar Not Loaded" error message. The parent overlays the static
-        // Linda image (onFallback → avatarFailed). onReady connects the WS.
+        // Biona image (onFallback → avatarFailed). onReady connects the WS.
         setStatus("ready");
         onFallback?.();
         onReady?.();
@@ -213,7 +213,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               head.audioSpeechGainNode.connect(head.audioReverbNode);
               head.audioStreamGainNode.connect(head.audioReverbNode);
               head.audioReverbNode.connect(preCreated.destination);
-              // Also route Linda's voice to the screen recording mix (if active)
+              // Also route Biona's voice to the screen recording mix (if active)
               const recordingDest = (window as any).__interviewRecordingDest as AudioNode | null;
               if (recordingDest) {
                 try { head.audioReverbNode.connect(recordingDest); } catch {}

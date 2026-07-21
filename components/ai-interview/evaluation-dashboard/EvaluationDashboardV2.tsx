@@ -379,7 +379,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
     );
   }
 
-  // Linda's TTS-bound question text occasionally lands in question_history /
+  // Biona's TTS-bound question text occasionally lands in question_history /
   // conversation_transcript without a trailing question mark — usually
   // because the LLM's stop token cut the sentence mid-punctuation, or the
   // backend stripped trailing whitespace too aggressively. Append "?" when
@@ -413,7 +413,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
 
   // Section grouping — render Qs grouped by section so the recruiter sees
   // MHS / NHS / HR in distinct sections (matches the spec doc's framing).
-  // HR rounds are not scored per spec but the questions Linda asked are
+  // HR rounds are not scored per spec but the questions Biona asked are
   // shown so the recruiter can review the conversation.
   const mhQs = delivered.filter(q => q.section === 'mth');
   const nhQs = delivered.filter(q => q.section === 'nth');
@@ -520,7 +520,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                   Reframed as a follow-up — the candidate volunteered{' '}
                   <span className="font-semibold">{focus}</span>{' '}
                   {priorPhrase && <>{priorPhrase} </>}
-                  in {srcRef}, so Linda probed it at this planned slot instead
+                  in {srcRef}, so Biona probed it at this planned slot instead
                   of asking it fresh.
                 </div>
                 {excerpt && (
@@ -713,7 +713,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
         )}
 
         {/* 4. Follow-ups (when any fired for this slot) — surfaced so
-            the recruiter knows whether Linda probed deeper and how the
+            the recruiter knows whether Biona probed deeper and how the
             candidate responded. Nothing rendered when followUps is
             empty/undefined (the common case in timed mode after
             strict-distribution turned probe-mode off). */}
@@ -736,15 +736,15 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                     : 'an earlier answer';
                   switch (fu.reason) {
                     case 'validate_volunteered_primary':
-                      return `Follow-up asked because the candidate mentioned ${focus} in ${srcRef} (volunteered earlier). Linda validated the claim at this slot.`;
+                      return `Follow-up asked because the candidate mentioned ${focus} in ${srcRef} (volunteered earlier). Biona validated the claim at this slot.`;
                     case 'probe_touched_secondary':
-                      return `Follow-up asked because ${focus} was already volunteered in ${srcRef}. Linda probed depth at this slot instead of asking it fresh.`;
+                      return `Follow-up asked because ${focus} was already volunteered in ${srcRef}. Biona probed depth at this slot instead of asking it fresh.`;
                     case 'volunteered_skill':
-                      return `Follow-up asked because the candidate volunteered ${focus} while answering this question — Linda validated the claim.`;
+                      return `Follow-up asked because the candidate volunteered ${focus} while answering this question — Biona validated the claim.`;
                     case 'weak_answer':
                       return `Follow-up asked because the main answer scored low — giving the candidate a second chance.`;
                     case 'incomplete':
-                      return `Follow-up asked because the main answer was incomplete — Linda probed for more detail.`;
+                      return `Follow-up asked because the main answer was incomplete — Biona probed for more detail.`;
                     default:
                       return null;
                   }
@@ -785,10 +785,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
         )}
 
-        {/* 5. Clarifications (when the candidate asked Linda to repeat /
+        {/* 5. Clarifications (when the candidate asked Biona to repeat /
             rephrase). Surfaced here so the Question Analysis tab agrees with
             the Transcript tab, which labels these "Clarify"/CL1, CL2…. Each
-            shows Linda's repeated question and the candidate's reply after it.
+            shows Biona's repeated question and the candidate's reply after it.
             Nothing rendered when no clarification fired for this slot. */}
         {q.clarifications && q.clarifications.length > 0 && (
           <div className="border-l-2 border-brand-orange/40 pl-3 mt-1">

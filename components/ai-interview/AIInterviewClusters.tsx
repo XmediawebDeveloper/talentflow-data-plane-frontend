@@ -383,7 +383,7 @@ function ClusterRow({
           </div>
 
           {/* Reason / description was removed per UX request. cluster.reason
-              is still preserved on the data model so Linda's prompts can use
+              is still preserved on the data model so Biona's prompts can use
               it. Edit it from the JD config page if needed. */}
 
           {/* Skills — single section, type-coded chip colors (Skill = violet, Command = sky-blue) */}
@@ -2588,7 +2588,7 @@ export default function AIInterviewClusters() {
                         ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                       ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
                       // 2026-05-26 fix: this stealth-dot popover MUST mirror the
-                      // SAVED skill_distribution (what Linda actually asks at runtime
+                      // SAVED skill_distribution (what Biona actually asks at runtime
                       // AND what the post-publish "View Skill Clusters" popover shows),
                       // NOT a fresh local distribute() recompute. The local algorithm
                       // produces a DIFFERENT layout than the backend AI distribution
@@ -3155,7 +3155,7 @@ export default function AIInterviewClusters() {
             // 2026-05-22 fix: Distribution panel must mirror the saved
             // skill_distribution that the runtime actually follows. The
             // older local `distribute()` recomputed a DIFFERENT layout
-            // (priority-block layout) which never matched what Linda
+            // (priority-block layout) which never matched what Biona
             // asked. Read from saved si.skill_distribution when present;
             // fall back to local distribute() only for fresh sessions
             // that haven't generated/saved yet.

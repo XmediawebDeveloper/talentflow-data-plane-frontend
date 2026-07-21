@@ -593,7 +593,7 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
 }
 
 /** True when an assistant transcript turn is NOT a real interview question:
- *  Linda's greeting, a silence nudge ("Are you there?"), a bare filler
+ *  Biona's greeting, a silence nudge ("Are you there?"), a bare filler
  *  transition ("Let's move on to the next question."), or a closing message.
  *  Used by the source-selection heuristic so these noise turns don't inflate
  *  the transcript Q-count and wrongly out-vote a complete question_history. */
@@ -602,7 +602,7 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
  *  redirect/deflection, a farewell, or a resume ack. Unlike the greeting
  *  filters below, this has NO word-count cap — the role warm-up is a long
  *  (~60-word) statement, so a ≤12-word cap let it slip through and show as
- *  Must-Have Q1 ("Hi, I'm Linda, your interviewer today. In the role of …").
+ *  Must-Have Q1 ("Hi, I'm Biona, your interviewer today. In the role of …").
  *  Matched by unique lead-ins that never open a real interview question; a real
  *  question that merely quotes one still has a "?" and is kept. */
 function isMetaAssistantTurn(content: string): boolean {
@@ -644,7 +644,7 @@ function isNoiseAssistantTurn(content: string): boolean {
   // Role warm-up / deflection / farewell / resume ack — length-independent.
   if (isMetaAssistantTurn(t)) return true;
   // Greeting turn — but ONLY when it's a pure greeting with no question
-  // attached. The combined greeting+Q1 ("Hi! I'm Linda — let's start. Can
+  // attached. The combined greeting+Q1 ("Hi! I'm Biona — let's start. Can
   // you walk me through your React experience?") IS a real interview turn
   // and must NOT be filtered out, or the convoQApprox count drops below the
   // history count and the builder-selection heuristic incorrectly routes
@@ -1122,22 +1122,22 @@ function buildPerQuestionDetailsFromHistory(
   //   then appears 2-5 times in the UI with only the first being the real
   //   ask. Collapse later skip rows that share question text + round_type
   //   with an earlier row in the same section.
-  // Greeting filter: Linda's opening turn often contains "I'm Linda" intro
-  // text. The PURE greeting ("Hi! I'm Linda, your AI interviewer. Let's
+  // Greeting filter: Biona's opening turn often contains "I'm Biona" intro
+  // text. The PURE greeting ("Hi! I'm Biona, your AI interviewer. Let's
   // begin.") has no question mark and should be dropped. But the COMBINED
-  // greeting+Q1 ("Hi! I'm Linda — let's start. Can you tell me about your
+  // greeting+Q1 ("Hi! I'm Biona — let's start. Can you tell me about your
   // React experience?") DOES carry the actual Q1 and must NOT be dropped —
   // dropping it makes Q1 disappear from Question Analysis entirely.
   //
   // 2026-05-28 fix: gate on "no question mark" AND "no substantive content
   // beyond the greeting". The original blanket drop ("i'm linda" anywhere
-  // → discard") was hiding Q1 whenever Linda's first turn combined intro
+  // → discard") was hiding Q1 whenever Biona's first turn combined intro
   // and question. Restoring Q1 requires being more discriminating about
   // what counts as a "pure greeting" turn.
   const _isGreeting = (q: any): boolean => {
     const txt = String(q?.question || '').toLowerCase();
     const hasLindaIntro =
-      /\bi['’]?\s*m\s+linda\b/.test(txt) || /\bi\s+am\s+linda\b/.test(txt);
+      /\bi['’]?\s*m\s+biona\b/.test(txt) || /\bi\s+am\s+biona\b/.test(txt);
     if (!hasLindaIntro) return false;
     // If the turn carries an actual question (question mark present), it is
     // the combined greeting+Q1 — keep it so Q1 isn't dropped.
@@ -1453,7 +1453,7 @@ function buildPerQuestionDetailsFromConversation(
   evaluations: any[] = [],
 ): PerQuestionDetail[] {
   // JD skill names (canonical) for the text-scan fallback. When question_
-  // history doesn't have a matching row for a turn, we scan Linda's question
+  // history doesn't have a matching row for a turn, we scan Biona's question
   // text for any JD skill name and surface those as the assessed skills.
   // Catches turns the backend never persisted (skip-flow gaps) where the
   // question clearly probed real JD skills ("Python, R, or Java...").
@@ -1559,7 +1559,7 @@ function buildPerQuestionDetailsFromConversation(
       || /\bhow do you handle (?:pressure|stress|deadlines|conflict)\b/.test(t)
       // Credentials — certifications are factual recall, treated as HR-style
       // verification rather than skill-evaluative (the skill itself is
-      // scored elsewhere when Linda actually probes it).
+      // scored elsewhere when Biona actually probes it).
       || /\bdo you have (?:any|the) (?:.{0,20})?certification/.test(t)
       || /\bcertification(?:s|s? to mention)?\b/.test(t)
     );
@@ -1576,7 +1576,7 @@ function buildPerQuestionDetailsFromConversation(
   // Docker, Q14 "open to learning", Q15 "available onsite" all matched
   // qh entries by suffix but not by exact text.
   //
-  // Build a SUFFIX index keyed on the stored qh question — Linda's
+  // Build a SUFFIX index keyed on the stored qh question — Biona's
   // transition prefix is always at the START in the transcript, never
   // at the end, so suffix containment is a safe heuristic.
   const roundTypeBySuffix: Array<{ key: string; rt: string }> = [];
@@ -1608,7 +1608,7 @@ function buildPerQuestionDetailsFromConversation(
     return 'mth';
   };
 
-  // Drop noise: system messages, empty content, Linda's meta-only chatter
+  // Drop noise: system messages, empty content, Biona's meta-only chatter
   // (greeting prefixes with no follow-up question, closing thank-yous,
   // and silence-nudge prompts like "Are you there?" — those aren't real
   // interview questions, they're attention probes that shouldn't get
@@ -1634,7 +1634,7 @@ function buildPerQuestionDetailsFromConversation(
       t.startsWith('are you still there?') ||
       t.startsWith('are you there ') ||
       // "Take your time — share whatever comes to mind" is the standard
-      // soft prompt Linda fires after the first silence wait; not a Q.
+      // soft prompt Biona fires after the first silence wait; not a Q.
       t.includes('take your time') && t.includes('share whatever') ||
       // "Can you hear me?" mic-check prompts
       t.startsWith('can you hear me?') ||
@@ -1708,11 +1708,11 @@ function buildPerQuestionDetailsFromConversation(
   };
 
   // Resolve skills for a question text. Priority order:
-  //   1. Text scan against JD skill names — PREFERRED because Linda's
+  //   1. Text scan against JD skill names — PREFERRED because Biona's
   //      actual question wording is the ground truth for "what was asked",
   //      and the planner-side assigned_skills frequently drift when the LLM
   //      ignores the slot rule (observed: Q2 planned for "Semantic Search /
-  //      LLMs / AI Agents" but Linda asked about "NLP pipelines / BERT /
+  //      LLMs / AI Agents" but Biona asked about "NLP pipelines / BERT /
   //      Hugging Face" — the displayed skills should match the question).
   //   2. Planner snapshot (question_history.assigned_skills) — fallback
   //      when the question text contains no recognizable JD skill names

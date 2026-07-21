@@ -622,7 +622,7 @@ export function EvalReportCombined({
               )}
               <hr className="my-4 border-gray-200" />
               <div className="text-xs text-gray-500 leading-relaxed">
-                <strong>Question Coverage</strong> reflects how much of the planned skill set Linda actually probed — not how
+                <strong>Question Coverage</strong> reflects how much of the planned skill set Biona actually probed — not how
                 well the candidate answered (that's the Section Score above).
               </div>
             </div>

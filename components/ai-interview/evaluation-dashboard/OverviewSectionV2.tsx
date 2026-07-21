@@ -381,14 +381,14 @@ export function OverviewSectionV2({
                     : 'bg-rose-50 border-rose-200 text-rose-800'
               }`}
             >
-              {/* Frame this as a QUESTION coverage metric (was Linda asked
+              {/* Frame this as a QUESTION coverage metric (was Biona asked
                   enough?) — NOT a performance signal (did the candidate
                   answer well?). A failing candidate can still have 100%
                   coverage; an excellent candidate with under-coverage is
                   the recruiter's planner-side bug, not the candidate's. */}
               <strong>Question Coverage:</strong>{' '}
               {mhCov.pct >= 80 ? 'Excellent' : mhCov.pct >= 60 ? 'Good' : 'Needs Improvement'}
-              {' '}— Linda asked about {mhCov.pct}% of the Must-Have skills
+              {' '}— Biona asked about {mhCov.pct}% of the Must-Have skills
               {sectionsPresent.niceToHave && ` and ${nhCov.pct}% of the Nice-to-Have skills`}.
               {' '}This reflects what the interview probed; candidate performance is shown in the Section Score Breakdown below.
             </div>
