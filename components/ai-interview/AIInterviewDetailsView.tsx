@@ -1375,7 +1375,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     return (
                       <div
                         key={activity.id}
-                        onClick={() => handleCandidateClick(activity.id)}
+                        onClick={() => handleCandidateClick(activity.id, recentActivity.map(a => a.id))}
                         className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg cursor-pointer hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors"
                       >
                         <div className="flex-shrink-0">{statusIcon()}</div>
