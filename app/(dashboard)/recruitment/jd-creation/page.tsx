@@ -333,7 +333,12 @@ function JDCreationContent() {
       education_requirements: editingJD.education_requirements,
       experience_min: editingJD.experience_min,
       experience_max: editingJD.experience_max,
+      // job_level carries a custom experience value (e.g. "20.5 months") that has
+      // no numeric min/max — omitting it here silently cleared the custom
+      // experience on edit. Forward it so it round-trips.
+      job_level: editingJD.job_level,
       industry_type: editingJD.industry_type,
+      department: editingJD.department,
       salary_min: editingJD.salary_min,
       salary_max: editingJD.salary_max,
       salary_currency: editingJD.salary_currency,
@@ -344,6 +349,9 @@ function JDCreationContent() {
       internal_comments: editingJD.internal_comments,
       must_have_comments: editingJD.must_have_comments,
       nice_to_have_comments: editingJD.nice_to_have_comments,
+      // Also forwarded (previously dropped on edit → silent data loss):
+      certifications: editingJD.certifications,
+      domain_keywords: editingJD.domain_keywords,
       allow_overqualified: editingJD.allow_overqualified,
       job_id: editingJD.job_id,
       current_version: editingJD.current_version,
