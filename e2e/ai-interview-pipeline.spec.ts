@@ -336,13 +336,13 @@ async function simulateGreeting(ws: WsMock & { _sendJson: Function; _sendBinary:
   });
 
   // 2. Backend streams LLM tokens for greeting
-  const greetingTokens = ["Hello", "!", " Welcome", " to", " your", " interview", ".", " I'm", " Biona", "."];
+  const greetingTokens = ["Hello", "!", " Welcome", " to", " your", " interview", ".", " I'm", " Bina", "."];
   for (const token of greetingTokens) {
     await ws._sendJson({ type: "llm_token", token });
   }
 
   // 3. Backend sends greeting text
-  await ws._sendJson({ type: "greeting", text: "Hello! Welcome to your interview. I'm Biona." });
+  await ws._sendJson({ type: "greeting", text: "Hello! Welcome to your interview. I'm Bina." });
 
   // 4. Backend starts speaking (TTS)
   await ws._sendJson({ type: "speaking_started" });
@@ -413,8 +413,8 @@ test.describe("AI Interview — ASR → LLM → TTS Pipeline", () => {
     // Simulate greeting
     await simulateGreeting(ws);
 
-    // Verify the interviewer name appears (header shows "BIONA · AI INTERVIEWER")
-    await expect(page.locator("body")).toContainText(/biona/i, { timeout: 5_000 });
+    // Verify the interviewer name appears (header shows "BINA · AI INTERVIEWER")
+    await expect(page.locator("body")).toContainText(/bina/i, { timeout: 5_000 });
   });
 
   test("2. Full Q&A turn: greeting → candidate speaks → next question", async ({ page }) => {
@@ -494,7 +494,7 @@ test.describe("AI Interview — ASR → LLM → TTS Pipeline", () => {
     await ws._sendJson({ type: "speaking_ended" });
 
     // Frontend should recover — mic should restart after safety-net timeout
-    // Verify it doesn't freeze (status should update, not stay on "Biona is speaking")
+    // Verify it doesn't freeze (status should update, not stay on "Bina is speaking")
     await page.waitForTimeout(500);
 
     // The page should still be interactive — not frozen

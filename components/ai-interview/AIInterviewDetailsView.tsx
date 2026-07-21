@@ -1026,7 +1026,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                           ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
                           // 2026-05-22 fix: stealth-dot popover MUST mirror
-                          // the saved skill_distribution (what Biona actually
+                          // the saved skill_distribution (what Bina actually
                           // asks at runtime). Previously it ran a local
                           // distribute() with the old priority-block layout
                           // and drifted from the DB-stored priority-mixed

@@ -182,7 +182,7 @@ export async function recordPcm16(
 
   // Capture config for enrollment, applied in the BACKGROUND so it never delays
   // capture start. Echo cancellation is OFF for ALL devices here: during the
-  // read-aloud NOTHING is playing (Biona isn't speaking), so there is no echo to
+  // read-aloud NOTHING is playing (Bina isn't speaking), so there is no echo to
   // cancel — EC would only DUCK/attenuate the candidate's own (often quiet, on a
   // headset) speech. AGC stays off (distorts levels for ASR); light noise
   // suppression stays on. Best-effort — some devices reject this.

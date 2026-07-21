@@ -248,7 +248,7 @@ function nowIST(): string {
 //
 // Background: InterviewUI is a single ~6000-line component. Every setState
 // in here reconciles the whole tree, including the messages list (which
-// grows over the interview) and Biona's live AI bubble. During an AI turn
+// grows over the interview) and Bina's live AI bubble. During an AI turn
 // the parent fires setState many times per second (token reveal at 80 ms,
 // silence/timer ticks, WS audio/JSON events). The fix below isolates the
 // two heaviest leaf renders into memoized child components so a parent
@@ -297,7 +297,7 @@ const Bar = ({ pct, color = '#818cf8' }: { pct: number; color?: string }) => (
 // ── YouAvatar ───────────────────────────────────────────────────────────
 // The candidate's chat avatar. Shows their captured identity photo when
 // available (photoUrl), else the green "You" text circle. Kept tiny (24px) to
-// match Biona's avatar; the photo is cropped to a circle via object-cover.
+// match Bina's avatar; the photo is cropped to a circle via object-cover.
 const YouAvatar = ({ photoUrl }: { photoUrl?: string | null }) => {
   if (photoUrl) {
     return (
@@ -388,12 +388,12 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
       <img
         src="/linda-avatar.webp"
         onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
-        alt="Biona"
+        alt="Bina"
         className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
       />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[10px] font-semibold text-purple-600">BIONA</span>
+          <span className="text-[10px] font-semibold text-purple-600">BINA</span>
         </div>
         <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
           <p className="text-sm leading-relaxed">{msg.content}</p>
@@ -408,7 +408,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
 const MessageRowMemo = memo(MessageRow);
 
 // ── LiveAIBubble ────────────────────────────────────────────────────────
-// Biona's streaming-text bubble (token-reveal at 80 ms). Lifted out of the
+// Bina's streaming-text bubble (token-reveal at 80 ms). Lifted out of the
 // parent JSX so the bubble can re-render on its own without forcing the
 // surrounding messages list / chrome to reconcile. React.memo on the
 // single `text` prop — when token reveal pushes a new substring, only
@@ -426,12 +426,12 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
       <img
         src="/linda-avatar.webp"
         onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
-        alt="Biona"
+        alt="Bina"
         className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
       />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[10px] font-semibold text-purple-600">BIONA</span>
+          <span className="text-[10px] font-semibold text-purple-600">BINA</span>
         </div>
         <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
           <div className="flex items-center gap-1 mb-1.5">
@@ -506,7 +506,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [lindaAvatarSrc, setLindaAvatarSrc] = useState("/linda-avatar.webp");
-  /** True while Biona is currently streaming a question that the backend
+  /** True while Bina is currently streaming a question that the backend
    *  flagged as a follow-up (`question_meta` with is_followup=true).
    *  NOT shown in the live chat (no chip, no note) — the Follow-up chip and
    *  inline "Reframed as a follow-up" note live ONLY on the post-interview
@@ -528,10 +528,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionMessage, setCompletionMessage] = useState("");
   const shouldDisconnectAfterAudioRef = useRef(false);
-  // Defer the completion modal until Biona's farewell audio actually ends.
+  // Defer the completion modal until Bina's farewell audio actually ends.
   // Backend sends `interview_completion_message` right after `interview_ended`
   // without waiting for TTS playback to drain — if we show the modal
-  // immediately it pops up while Biona is still speaking.
+  // immediately it pops up while Bina is still speaking.
   const pendingCompletionModalRef = useRef(false);
 
   // 5-minute buffer state (MOM: buffer when allocated time expires)
@@ -549,7 +549,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // (silence_duration_ms, ~8s) of the candidate's turn — after that it disables.
   const [canRepeat, setCanRepeat] = useState(false);
   const repeatWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // repeatFreeze: from a Repeat click until Biona finishes re-speaking, the
+  // repeatFreeze: from a Repeat click until Bina finishes re-speaking, the
   // per-question answer timer is FROZEN (doesn't count down). We snapshot the
   // remaining seconds at click time and resume from it after the re-speak, so
   // the repeat's speech never eats the candidate's answer window.
@@ -563,9 +563,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // actually spoke and a real transcript lands for the skipped question.
   const skipChipIdRef = useRef<string | null>(null);
 
-  // Bridge phrase caption — shown while Biona speaks a pre-cached transition
+  // Bridge phrase caption — shown while Bina speaks a pre-cached transition
   // clip after the 2-min hard-cap fires. Distinct from the question card
-  // (rendered as a "Biona · Transition" chip below the avatar) so reviewers
+  // (rendered as a "Bina · Transition" chip below the avatar) so reviewers
   // and candidates don't mistake it for an interview question.
   const [bridgeCaption, setBridgeCaption] = useState<string | null>(null);
   // Bumped whenever questionTimerPendingRef is set to a new duration. The
@@ -606,17 +606,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const questionTimerTotalRef = useRef<number>(120);
   // Fix 1 (Server-timestamp-driven timer): anchor the per-question countdown to
   // a monotonic `performance.now()` taken the instant the timer actually starts
-  // ticking on the client (AFTER Biona finishes and during candidate's turn).
+  // ticking on the client (AFTER Bina finishes and during candidate's turn).
   // All subsequent ticks compute remaining = duration − elapsed, instead of
   // the legacy `prev - 1` decrement. This eliminates accumulated drift when
   // the tab is backgrounded / throttled, and makes the displayed timer match
   // the backend's monotonic question timer to the nearest second.
   const questionTimerStartedAtMsRef = useRef<number | null>(null);
-  // Time spent paused (while Biona speaks) — subtracted from wall-clock elapsed.
+  // Time spent paused (while Bina speaks) — subtracted from wall-clock elapsed.
   const questionTimerPausedMsRef = useRef<number>(0);
   const questionTimerPausedAtRef = useRef<number | null>(null);
-  // Fix 2: track the seconds Biona used out of the 120s slot so we can render
-  // "Biona spoke 23s — you have 97s" under the timer. The candidate is
+  // Fix 2: track the seconds Bina used out of the 120s slot so we can render
+  // "Bina spoke 23s — you have 97s" under the timer. The candidate is
   // otherwise surprised when the displayed time is less than the documented
   // 2 minutes; exposing this explicitly sets expectations.
   const [lindaSpokeSeconds, setLindaSpokeSeconds] = useState<number | null>(null);
@@ -638,7 +638,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     const elapsedSec = Math.floor((now - startedAt - pausedMs) / 1000);
     return Math.max(0, total - elapsedSec);
   }, []);
-  // Pending: timer duration received but interval not started yet (waiting for Biona to stop)
+  // Pending: timer duration received but interval not started yet (waiting for Bina to stop)
   const questionTimerPendingRef = useRef<number | null>(null);
   // Timestamp when question_timer_started was received — used to adjust for TTS playback lag
   const questionTimerReceivedAtRef = useRef<number | null>(null);
@@ -653,9 +653,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Follow-up mode — true when backend signals is_follow_up on question_timer_started
   const [isFollowUp, setIsFollowUp] = useState(false);
   // Sync ref for isFollowUp — readable synchronously in stale interval callbacks.
-  // Used to let the 2-min timer keep running during Biona's follow-up speech.
-  // Main questions: timer pauses while Biona speaks (candidate gets full window).
-  // Follow-ups: timer runs continuously (remaining time already accounts for Biona's speech).
+  // Used to let the 2-min timer keep running during Bina's follow-up speech.
+  // Main questions: timer pauses while Bina speaks (candidate gets full window).
+  // Follow-ups: timer runs continuously (remaining time already accounts for Bina's speech).
   const isFollowUpRef = useRef(false);
 
   // When true, the per-question countdown is frozen at its initial duration
@@ -688,7 +688,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // Figma UI state
   // Note (2026-05-28): `waveHeights` state previously fired setState every
-  // 120 ms while Biona was speaking, but the value was never consumed in
+  // 120 ms while Bina was speaking, but the value was never consumed in
   // any JSX. Dead state removed — saves ~8 full-tree re-renders/sec during
   // every AI turn. The 120 ms interval effect is gone too (see below).
   const [isMuted, setIsMuted] = useState(false);
@@ -697,7 +697,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Set true when the candidate clicks End WHILE they were mid-answer. We stop
   // recording first (→ end_turn → the answer is transcribed and shown as a chat
   // bubble), then send `end_interview` only AFTER that transcript commits — so
-  // Biona's farewell never pre-empts processing the candidate's final answer.
+  // Bina's farewell never pre-empts processing the candidate's final answer.
   const pendingEndAfterTranscriptRef = useRef(false);
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
   // Seconds left in the 10s grace window before the session hard-pauses.
@@ -753,10 +753,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const connectRef = useRef<() => void>(() => {});
 
   // Timer modes:
-  //   isFlexibleMode      = duration 0 (legacy unlimited) → count UP, pause while Biona speaks
+  //   isFlexibleMode      = duration 0 (legacy unlimited) → count UP, pause while Bina speaks
   //   isNewFlexibleMode   = duration > 0, interview_mode='flexible' → count DOWN, runs NON-STOP
   //   timed / fixed       = duration > 0, interview_mode='fixed'  → count DOWN
-  //                         Both timers pause while Biona speaks; run during candidate
+  //                         Both timers pause while Bina speaks; run during candidate
   //                         recording, processing, and idle phases.
   // Flexible mode is now determined by special_instructions.interview_mode
   // (authoritative). duration_minutes holds the real budget (30 / 35 / N),
@@ -780,21 +780,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
       // Global timer pauses — mirrors the per-question timer:
-      //   - clarification: Biona re-explains → don't burn 30-min budget
-      //   - Biona is speaking (non-silence-prompt): between-question TTS
+      //   - clarification: Bina re-explains → don't burn 30-min budget
+      //   - Bina is speaking (non-silence-prompt): between-question TTS
       //     and the next main-question TTS should NOT eat the candidate's
       //     global budget either. The per-question timer isn't running
       //     during those windows (it was cleared at end_turn and only
-      //     starts again after Biona finishes), so pausing global here
+      //     starts again after Bina finishes), so pausing global here
       //     keeps both clocks visually aligned.
       // Silence prompts ("Are you there?") are explicitly excluded — those
       // fire DURING the candidate's answer window and the global clock
       // must keep ticking so the 30-min budget is enforced.
       if (isClarificationRef.current) return;
       // Both global AND per-question timer only tick during the candidate's
-      // turn (when they can actually speak). Pause during Biona's regular
+      // turn (when they can actually speak). Pause during Bina's regular
       // speech. EXCEPTION: keep ticking during the silence nudge ("Are you
-      // there?") — candidate is still "on the clock" even while Biona prompts
+      // there?") — candidate is still "on the clock" even while Bina prompts
       // them. Combined with the slot-deduct logic in stopRecording (which
       // jumps global to the next 2-min boundary on answer), this gives the
       // slot-based global semantics: 30:00 → 28:00 → 26:00 per Q.
@@ -823,7 +823,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
 
-  // "Now Speak" banner — shown when mic opens for candidate after Biona stops
+  // "Now Speak" banner — shown when mic opens for candidate after Bina stops
   const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
   // Sync gates for the "Your turn — speak now" popup. The banner shows only once
@@ -960,7 +960,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // to false on `speaking_started` so the next turn starts clean. The "Your
   // turn" banner gates on this instead of just `!isAiSpeaking`, because
   // setIsAiSpeaking(false) in the audio_end path can race ahead of the
-  // actual audible end of Biona's speech.
+  // actual audible end of Bina's speech.
   const candidatePlaybackEndedRef = useRef(false);
   const [candidatePlaybackEnded, setCandidatePlaybackEnded] = useState(false);
 
@@ -991,10 +991,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
   }, [isRecording]);
 
-  // Bulletproof hide: whenever Biona starts speaking (any path — greeting,
+  // Bulletproof hide: whenever Bina starts speaking (any path — greeting,
   // follow-up, clarification, interstitial), tear down the banner AND the
   // pending show-timer. This is the last line of defence against the
-  // "Your turn — speak now" popup appearing while Biona is mid-sentence.
+  // "Your turn — speak now" popup appearing while Bina is mid-sentence.
   useEffect(() => {
     if (isAiSpeaking) {
       setShowNowSpeakBanner(false);
@@ -1061,7 +1061,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Avatar ready state — WebSocket connects only after avatar is loaded
   const [avatarReady, setAvatarReady] = useState(false);
   // Fix #2: true when the 3D avatar (TalkingHead) fails to initialise OR is
-  // taking too long to load. When set, we render a static Biona image over the
+  // taking too long to load. When set, we render a static Bina image over the
   // (blank) 3D canvas so the candidate sees a proper face. Audio still plays via
   // TalkingHead's internal Web Audio fallback, and playback_complete is
   // delivered by the avatar-decoupled timer from fix #1 — so the interview runs
@@ -1174,7 +1174,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
-    // Suppress voice_detected while Biona is speaking (TTS echo), while we are
+    // Suppress voice_detected while Bina is speaking (TTS echo), while we are
     // actively recording the candidate's answer, OR during the between-question
     // "Hold On — get ready" transition (isProcessing). All three are expected /
     // transient states where ambient room noise must NOT raise a false "Voice
@@ -1416,7 +1416,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const pendingBuffersRef = useRef(0); // buffers scheduled but not yet finished
 
   // ── Audio playback tracker ──
-  // The REAL "Biona's audio has finished" signal. A dedicated, silent
+  // The REAL "Bina's audio has finished" signal. A dedicated, silent
   // AudioContext that mirrors every PCM chunk TalkingHead receives by
   // scheduling a gain=0 AudioBufferSourceNode of the same length. Tracked
   // fields:
@@ -1449,7 +1449,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // Ensure we have a tracker context. Reuses a single instance for the
   // entire session; AudioContext creation is not free, so we avoid
-  // spawning one per Biona turn. The tracker prefers to share the
+  // spawning one per Bina turn. The tracker prefers to share the
   // pre-created, already-unlocked `__interviewAudioContext` (set by the
   // fullscreen-prompt user-gesture button in CandidateAIInterviewPortal)
   // so it starts in the 'running' state even on the very first question.
@@ -1609,9 +1609,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // (WhatsApp-style) so the newest question/response is always visible.
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
-  // True while Biona is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
+  // True while Bina is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
   const isSilencePromptRef = useRef(false);
-  // True while Biona is speaking the opening "About the role" warm-up message.
+  // True while Bina is speaking the opening "About the role" warm-up message.
   // It's an uncounted preamble that must NOT open the mic when its audio ends —
   // the mic opens for the "tell me about yourself" question that immediately
   // follows. finalizePlayback checks this and skips the mic-open (then it's
@@ -1621,12 +1621,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // committed as a static bubble (tokenBufferRef is cleared, so it doesn't
   // stream), but the speaking_started handler feeds tokenBufferRef to
   // TalkingHead for phoneme lip-sync — which for the role turn would be "" and
-  // leave Biona's mouth static ("audio plays, Biona silent"). We stash the role
+  // leave Bina's mouth static ("audio plays, Bina silent"). We stash the role
   // text here so speaking_started can feed it to TalkingHead without putting it
   // in the reveal buffer.
   const roleIntroTextRef = useRef("");
   const isProcessingRef = useRef(false);
-  // Cancellable ref for the 800ms "start recording after Biona stops" setTimeout.
+  // Cancellable ref for the 800ms "start recording after Bina stops" setTimeout.
   // Cancelled by the Next Q handler to prevent stale recording after a skip.
   const startRecordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1643,20 +1643,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Set true when TalkingHead's worklet fires onAudioEnd BEFORE backend audio_end —
   // i.e. its internal buffer drained during a streaming hiccup. New PCM chunks
   // arriving after this point would go to a stopped worklet and be silently lost
-  // (the "Biona's voice cuts mid-sentence" bug). When set, the next chunk that
+  // (the "Bina's voice cuts mid-sentence" bug). When set, the next chunk that
   // arrives must call streamStart() again to wake the worklet back up.
   const talkingHeadEndedEarlyRef = useRef(false);
 
-  // Total PCM audio received for the current Biona turn (ms).
+  // Total PCM audio received for the current Bina turn (ms).
   // Used to set the audio_end fallback timeout so it always fires AFTER
   // TalkingHead finishes playing — not after a fixed 3s regardless of length.
   const currentTurnAudioMsRef = useRef(0);
   // Wall-clock timestamp (Date.now()) of when the FIRST PCM chunk for the
-  // current Biona turn was received. Used by the token-reveal system to
+  // current Bina turn was received. Used by the token-reveal system to
   // compute audio progress (once audio_end fires).
   const firstPcmAtMsRef = useRef<number | null>(null);
   // Wall-clock timestamp of the LAST PCM chunk received for the current
-  // Biona turn. Updated on every queueAudio call. This is the right anchor
+  // Bina turn. Updated on every queueAudio call. This is the right anchor
   // for "when does playback actually end on the speakers":
   //   trueEndMs = lastPcmAtMs + AUDIO_TAIL_MARGIN_MS
   // (the margin covers TalkingHead's internal buffer + the last chunk's
@@ -1674,16 +1674,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const AUDIO_TAIL_MARGIN_MS = 3000;
   // TalkingHead buffers incoming PCM before its speaker goes audible.
   // Text reveal must wait this long after the first chunk arrives, else
-  // the bubble paints while Biona is still silent. 1500ms gives generous
+  // the bubble paints while Bina is still silent. 1500ms gives generous
   // headroom for network jitter + TalkingHead's internal codec init.
   const TALKING_HEAD_BUFFER_MS = 1500;
   // Set to true to pipe reveal timing to the browser console — invaluable
   // for diagnosing text-before-voice reports from candidates.
-  // AudioContext clock (in seconds) at which Biona's audio is expected to
+  // AudioContext clock (in seconds) at which Bina's audio is expected to
   // become audible. Stamped when the first PCM chunk is received:
   //   audibleStartCtxSec = ctx.currentTime + (TALKING_HEAD_BUFFER_MS / 1000)
   // The reveal loop uses this — NOT wall-clock, NOT chunk rates — as the
-  // single source of truth for "how far into Biona's voice are we".
+  // single source of truth for "how far into Bina's voice are we".
   const audibleStartCtxSecRef = useRef<number | null>(null);
 
   // Token reveal system
@@ -1696,7 +1696,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Keep refs in sync with state — refs are always current inside stale closures
   useEffect(() => {
     isAiSpeakingRef.current = isAiSpeaking;
-    // Clear silence prompt flag when Biona stops speaking
+    // Clear silence prompt flag when Bina stops speaking
     if (!isAiSpeaking) isSilencePromptRef.current = false;
   }, [isAiSpeaking]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
@@ -1748,7 +1748,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // it flushes captured audio (<=120s) into the natural end_turn pipeline
     // and sends `question_window_hard_cap` to us. The client used to also
     // send skip_question(source=timer_expired) here as a fallback, which
-    // raced with the backend's flush and cancelled Biona's TTS mid-sentence.
+    // raced with the backend's flush and cancelled Bina's TTS mid-sentence.
     // Don't send anything from the client — let the backend drive the
     // advance. The watchdog below still has the 25s stuck-detection re-send.
   }, [clearNoResponseTimer]);
@@ -1769,7 +1769,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // (`computeQuestionRemaining`), so accuracy vs. backend is preserved.
     questionTimerIntervalRef.current = setInterval(() => {
       // (2026-07-20, per user spec) The per-question answer clock runs ONLY
-      // during the candidate's turn ("Your Turn"). Whenever Biona is speaking —
+      // during the candidate's turn ("Your Turn"). Whenever Bina is speaking —
       // a question repeat (Repeat button or voice-asked), an "Are you there?"
       // nudge, or any prompt — the timer PAUSES, and resumes when the mic
       // reopens. pauseQuestionTimer()/resumeQuestionTimer() drive
@@ -1796,7 +1796,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }, 200);
   }, [computeQuestionRemaining, startQuestionTimerExpiry]);
 
-  // Pause the per-question answer clock while Biona is speaking (repeat / "Are
+  // Pause the per-question answer clock while Bina is speaking (repeat / "Are
   // you there?" / any prompt). Idempotent; only pauses a timer that is actually
   // running (started, not already paused). The displayed value freezes until
   // resumeQuestionTimer() is called when the candidate's turn reopens.
@@ -1849,7 +1849,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, [ensureQuestionTimerRunning]);
 
   // Self-healing watchdog: if the interval is null but seconds > 0 and we are
-  // NOT legitimately paused (Biona speaking, clarification, fullscreen exit,
+  // NOT legitimately paused (Bina speaking, clarification, fullscreen exit,
   // expired, awaiting a pending dispatch), restart from the frozen value.
   // Catches the "stuck timer" class of bugs caused by missed/dropped WS
   // events (interrupted without a follow-up question_timer_started, etc.).
@@ -1953,9 +1953,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // pipeline (ASR + LLM evaluation + LLM next-Q + TTS) takes 15-40s, so a
   // watchdog firing mid-pipeline DISCARDED a successfully captured answer
   // (observed on session ai-1f145baf Q#3 — full 2-min Tamil/English
-  // transcript captured then dropped by the 25s watchdog before Biona
+  // transcript captured then dropped by the 25s watchdog before Bina
   // finished generating Q#4). Trust the hard-cap + the backend's own 180s
-  // pipeline-level timeout. If Biona's pipeline genuinely hangs, the
+  // pipeline-level timeout. If Bina's pipeline genuinely hangs, the
   // backend cancels and unblocks itself.
 
   // Fullscreen-exit watchdog: the per-question + global timers both pause
@@ -2052,14 +2052,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, [isConnected, isClosing, ensureQuestionTimerRunning]);
 
   // ── Pending Timer Watchdog ──────────────────────────────────────────────
-  // Recovery for the "Biona finished but timer stuck" race. Three known
+  // Recovery for the "Bina finished but timer stuck" race. Three known
   // causes: (1) avatar 3D load timeout breaks the playback-ended callback,
   // (2) WebSocket drops the audio_end event so audioEndReceivedRef stays
   // false, (3) playback-ended fires before audio_end arrives and the guard
   // rejects it. In all three cases isAiSpeaking stays TRUE indefinitely and
   // the pending timer never starts.
   //
-  // 20s threshold: normal Biona TTS playback completes in 5-15s. If we still
+  // 20s threshold: normal Bina TTS playback completes in 5-15s. If we still
   // have a pending dur AND isAiSpeaking is still true after 20s, the
   // playback callback chain is broken — force-flip and start the timer so
   // the candidate isn't frozen.
@@ -2076,7 +2076,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
       setStatus("Your turn — speak now...");
-      // Re-open mic if it was disabled while Biona was "speaking" but never
+      // Re-open mic if it was disabled while Bina was "speaking" but never
       // re-enabled (since the normal handleAllAudioFinished path didn't run).
       if (mediaStreamRef.current && !isMutedRef.current) {
         mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
@@ -2207,13 +2207,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // VAD warmup: suppress speech detection for the first N ms after the mic opens.
   // The browser echo canceller needs a few hundred ms of audio to build its model.
-  // Without this, Biona's TTS echo can trigger VAD immediately after she stops speaking.
+  // Without this, Bina's TTS echo can trigger VAD immediately after she stops speaking.
   const VAD_WARMUP_MS = 600;
   const vadWarmupUntilRef = useRef<number>(0); // timestamp after which VAD is live
 
   // Fix 3: ALSO suppress VAD for a short window after TalkingHead's audible
   // playback actually ends. 600ms of post-mic-open warmup isn't enough for
-  // Bluetooth headsets or rooms with long reverb tails — Biona's TTS tail can
+  // Bluetooth headsets or rooms with long reverb tails — Bina's TTS tail can
   // bleed through the echo canceller for 500–1500ms and trigger a false
   // speech_started, which in turn cancels the backend's silence nudge and
   // triggers bogus follow-up flows. `playbackEchoGuardUntilRef` is stamped
@@ -2591,7 +2591,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // as one committed assistant message. Because finalizePlayback is gated
   // on firstPcmAt + audioMs, this can only fire AFTER the audio has
   // actually finished playing — guaranteeing the live bubble transitioning
-  // into the chat message coincides with Biona's audio ending, which is
+  // into the chat message coincides with Bina's audio ending, which is
   // exactly when "Your turn" should surface.
   const saveAiMessage = useCallback(() => {
     if (revealTimerRef.current) {
@@ -2622,7 +2622,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
   }, []);
 
-  // Token reveal system — the live "Biona" bubble that reveals tokens as
+  // Token reveal system — the live "Bina" bubble that reveals tokens as
   // they stream.
   //
   // There are TWO reveal phases, because the total audio duration is
@@ -2641,7 +2641,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   //   (`firstPcmAt + audioMs`). Compute progress from the anchor and
   //   drive the reveal to finish exactly at that wall-clock moment.
   //
-  // The reveal loop KEEPS ticking while Biona is still audible, even once
+  // The reveal loop KEEPS ticking while Bina is still audible, even once
   // all text is revealed, so the bubble cannot "finish" before audio does.
   // `saveAiMessage` (which commits the bubble into the chat) is triggered
   // exclusively by `finalizePlayback`, which itself fires at true end-of-
@@ -2660,7 +2660,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Reveal progress. Primary clock: AudioContext's scheduled timeline.
       // Fallback: wall-clock (used when the tracker context is suspended,
       // which happens post-fullscreen-exit / cold start — the exact failure
-      // mode where "text appears only after Biona finishes speaking").
+      // mode where "text appears only after Bina finishes speaking").
       const pbCtx = playbackTrackerCtxRef.current;
       const ctxStart = audibleStartCtxSecRef.current;
       const ctxEnd = playbackScheduledEndAtRef.current;
@@ -2676,7 +2676,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (ctxAvailable) {
         const now = pbCtx!.currentTime;
         // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
-        // first words are already on screen as Biona starts speaking (fixes
+        // first words are already on screen as Bina starts speaking (fixes
         // "voice comes before text").
         if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
           if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
@@ -2729,7 +2729,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // in larger character batches per tick. Visually imperceptible, but
       // drops the LiveAIBubble re-render rate from 12.5 Hz → 5 Hz, which
       // matters for low-end candidates running heavy MediaPipe proctoring
-      // alongside Biona's speech.
+      // alongside Bina's speech.
     }, 200);
   }, []);
 
@@ -2839,12 +2839,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       markListeningStarted();
     };
     recognition.onresult = (event: BrowserSpeechRecognitionEventLike) => {
-      // HARD GUARD: if Biona is currently speaking (or the post-playback echo
+      // HARD GUARD: if Bina is currently speaking (or the post-playback echo
       // guard is still armed), whatever the Web Speech API picked up is almost
-      // certainly Biona's own TTS bleeding back in through the speakers — NOT
+      // certainly Bina's own TTS bleeding back in through the speakers — NOT
       // the candidate. Drop those results entirely so they can't contaminate
       // the finalized buffer OR the live "speaking…" bubble. This is what was
-      // showing "what strategies do you use to" (verbatim echo of Biona's
+      // showing "what strategies do you use to" (verbatim echo of Bina's
       // question) under the candidate's live transcript.
       //
       // Also drop during the silence nudge ("Are you there?") — per spec,
@@ -3020,8 +3020,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Only auto-restart if:
       //   • no fatal (permission) error
       //   • candidate mic is open
-      //   • Biona is not speaking (avoids picking up her TTS)
-      //   • past the post-Biona echo-guard window
+      //   • Bina is not speaking (avoids picking up her TTS)
+      //   • past the post-Bina echo-guard window
       //   • this recognition object is still the active one (not replaced by
       //     stopWebSpeechRecognition/startWebSpeechRecognition)
       if (
@@ -3062,7 +3062,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // before a silence nudge restarts the recognizer, causing second-round speech to
     // be lost from browser_transcript. webSpeechFinalizedRef is reset in two places:
     //   • startWebSpeechRecognition() — new question, intentional fresh start
-    //   • explicitly in the "Biona starts speaking" handler — clears stale display text
+    //   • explicitly in the "Bina starts speaking" handler — clears stale display text
     liveTranscriptDisplayRef.current = "";
     lastBrowserTranscriptTextRef.current = "";
     lastBrowserTranscriptUpdateAtRef.current = null;
@@ -3099,7 +3099,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const queueAudio = useCallback((pcmData: ArrayBuffer) => {
     // TalkingHead handles audio playback (gain:1) + lip sync.
     // Accumulate turn audio duration so the audio_end fallback timeout is
-    // proportional to how long Biona actually spoke (not a fixed 3 s).
+    // proportional to how long Bina actually spoke (not a fixed 3 s).
     // Int16 PCM @ 24 kHz: byteLength / 2 samples × (1000 ms / 24000 samples)
     currentTurnAudioMsRef.current += (pcmData.byteLength / 2 / 24000) * 1000;
     // Stamp the wall-clock of the most recent chunk — the TRUE anchor for
@@ -3203,7 +3203,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           });
         }
         // Trust the backend's authoritative `prior_question_count` (the number
-        // of questions Biona actually asked) instead of deriving it from
+        // of questions Bina actually asked) instead of deriving it from
         // `elapsed_seconds / 120`. The elapsed-based formula over-counts by
         // assuming every question consumes the full 2-min slot, which is why
         // candidates saw "Q12/15" after only 7 real questions: elapsed was
@@ -3229,13 +3229,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
-        setStatus("Biona is speaking...");
+        setStatus("Bina is speaking...");
         startRevealingTokens();
         // Feed text for word-level phoneme lip sync
         talkingHeadRef.current?.setText(data.text);
         break;
       case "interstitial_prompt":
-        // Biona says a hardcoded line that bypasses the LLM (e.g. the silence
+        // Bina says a hardcoded line that bypasses the LLM (e.g. the silence
         // nudge "Are you there?"). Seed the token buffer so it:
         //   1) renders in the chat panel as an assistant message (saved on audio_end)
         //   2) is fed to TalkingHead for lip sync
@@ -3254,7 +3254,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (["silence_nudge", "silence_follow_up", "silence_move_on"].includes(String(data.kind || ""))) {
           isSilencePromptRef.current = true;
         }
-        setStatus("Biona is speaking...");
+        setStatus("Bina is speaking...");
         startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
@@ -3290,14 +3290,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
-        setStatus("Biona is speaking...");
+        setStatus("Bina is speaking...");
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "server_end_turn": {
         // Server-side EndOfTurn: the provider's neural turn detector decided the
         // candidate finished. Stop recording now (which sends the normal end_turn,
         // reusing the whole existing pipeline). Only act while actually recording
-        // and not during Biona's speech, so a stray signal can't misfire.
+        // and not during Bina's speech, so a stray signal can't misfire.
         if (isRecordingRef.current && !isAiSpeakingRef.current) {
           console.log(`[WS ${timestamp}] server_end_turn → stopRecording`);
           stopRecording();
@@ -3311,7 +3311,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // "transcript" (is_final) message, which clears this bubble and
         // commits the chat message.
         const liveText = (data.text ?? "").trim();
-        // Echo guard: ignore partials that arrive while Biona is talking or
+        // Echo guard: ignore partials that arrive while Bina is talking or
         // during the post-playback echo window — those are her TTS bleeding
         // back through the mic, not the candidate.
         if (isAiSpeakingRef.current) break;
@@ -3393,7 +3393,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             }
             // End-while-answering: the candidate clicked End mid-answer; we held
             // the close until their answer was transcribed. It's committed now —
-            // send end_interview so Biona's farewell starts AFTER their answer
+            // send end_interview so Bina's farewell starts AFTER their answer
             // bubble is on screen (not before).
             if (pendingEndAfterTranscriptRef.current) {
               pendingEndAfterTranscriptRef.current = false;
@@ -3469,7 +3469,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 // bubble. That keeps BOTH the 1st and 2nd clarify visible even
                 // when the candidate repeats the IDENTICAL phrase ("Please
                 // clarify the question." twice). isClarification is only true
-                // from Biona's repeat onward, so the 1st clarify still flows
+                // from Bina's repeat onward, so the 1st clarify still flows
                 // through the normal provisional→upgrade path below.
                 if (isClarificationRef.current) {
                   updated.push({
@@ -3598,11 +3598,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         tokenBufferRef.current += data.token;
         // Feed updated text for word-level phoneme lip sync
         talkingHeadRef.current?.setText(tokenBufferRef.current);
-        // Mark Biona as speaking the moment she starts *generating* text.
+        // Mark Bina as speaking the moment she starts *generating* text.
         // Without this, there's a 1-3s gap between the last LLM token and
         // `speaking_started` (TTS synthesis latency) during which
         // isAiSpeaking flips false → the "Your turn — speak now" banner
-        // flashes before Biona's voice actually begins. Holding this true
+        // flashes before Bina's voice actually begins. Holding this true
         // from first-token closes that window.
         if (!isAiSpeakingRef.current) {
           isAiSpeakingRef.current = true;
@@ -3616,7 +3616,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           // Reset turn-scoped audio anchors so Fix 2's reveal gate works for
           // THIS turn. Without this, `firstPcmAtMsRef` stays set from the
           // previous question's audio — Phase A sees it as non-null, runs
-          // immediately with CPS pacing, and Q2+ text races ahead of Biona's
+          // immediately with CPS pacing, and Q2+ text races ahead of Bina's
           // voice while Q1 correctly waits.
           firstPcmAtMsRef.current = null;
           lastPcmAtMsRef.current = null;
@@ -3627,12 +3627,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           startRevealingTokens();
         }
         if (!isPlayingRef.current) {
-          setStatus("Biona is thinking...");
+          setStatus("Bina is thinking...");
         }
         break;
       case "llm_correction":
         // Backend replaced the streamed response (flexible-mode validation retry/fallback).
-        // Swap the token buffer so the displayed text matches what Biona actually says.
+        // Swap the token buffer so the displayed text matches what Bina actually says.
         console.log(`[WS ${timestamp}] LLM correction received: text_length=${data.text?.length}`);
         if (data.text) {
           tokenBufferRef.current = data.text;
@@ -3644,25 +3644,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
-        // Biona is speaking (question / repeat / prompt) — PAUSE the per-question
+        // Bina is speaking (question / repeat / prompt) — PAUSE the per-question
         // answer clock. It resumes when the candidate's turn reopens (mic start).
         // For a brand-new question the pause is harmless — the incoming
         // question_timer_started resets the clock fresh.
         pauseQuestionTimer();
         // Any pending candidate-processing bubble belongs to the PREVIOUS turn.
-        // Once Biona takes over, that turn is resolved (accepted, discarded, or
+        // Once Bina takes over, that turn is resolved (accepted, discarded, or
         // skipped) and the stale loader must not remain on screen.
         setIsCandidateTranscriptProcessing(false);
         setCurrentTranscript("");
         currentTranscriptRef.current = "";
         provisionalAnswerQnRef.current = null;
-        // Stop any stale recording or pending start-recording timer — Biona is speaking.
+        // Stop any stale recording or pending start-recording timer — Bina is speaking.
         stopRecordingSilentRef.current();
         if (startRecordingTimerRef.current) {
           clearTimeout(startRecordingTimerRef.current);
           startRecordingTimerRef.current = null;
         }
-        // Belt-and-suspenders: hard-disable the mic audio track while Biona
+        // Belt-and-suspenders: hard-disable the mic audio track while Bina
         // speaks so even if the stream is still held somewhere, nothing can
         // be captured or streamed upstream. Re-enabled when her audio ends
         // (handleAllAudioFinished / audio_end path) or the next mic open.
@@ -3674,7 +3674,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // closed before speaking_started arrived, stopRecordingSilent no-ops
         // (see the isRecording guard) and leaves speechDetectedRef stale —
         // then the next mic open would start with speechDetectedRef=true and
-        // immediately stream PCM (including Biona's echo) to the backend.
+        // immediately stream PCM (including Bina's echo) to the backend.
         speechDetectedRef.current = false;
         speechFrameCountRef.current = 0;
         speechStartSentRef.current = false;
@@ -3686,7 +3686,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         speechPeakLevelRef.current = 0;
         ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
-        // stale live-transcript text. If we leave it running while Biona
+        // stale live-transcript text. If we leave it running while Bina
         // speaks, it eagerly transcribes her TTS leaking back through the
         // speakers and renders it in the candidate's "speaking…" bubble
         // (the "what strategies do you use to" bug). Recognition will be
@@ -3704,26 +3704,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // audioEndFallbackRef on wall-clock delays; if the prior turn ended via
         // a path that didn't clear them, a stale timer could fire DURING this
         // new generation and send a premature `playback_complete`, making the
-        // backend think Biona finished → it advances/skips this question.
+        // backend think Bina finished → it advances/skips this question.
         if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
         if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
-        // Bug C fix: new Biona turn starting — retract the "candidate can
+        // Bug C fix: new Bina turn starting — retract the "candidate can
         // speak" signal immediately so the banner can't linger from Q(n-1).
         candidatePlaybackEndedRef.current = false;
         setCandidatePlaybackEnded(false);
-        // CRITICAL: reset ALL playback-tracking state so the new Biona turn
+        // CRITICAL: reset ALL playback-tracking state so the new Bina turn
         // starts from a clean slate. Previously `isPlayingRef` was NOT reset
         // here; if it was stale `true` from a previous turn (TalkingHead
         // onAudioEnd never fired correctly), `queueAudio` would skip setting
         // `firstPcmAtMsRef`, the `finalizePlayback` deferral math would use
         // the stale anchor, compute `remainingPlaybackMs = 0`, and fire
-        // immediately — surfacing "Your turn" while Biona was still speaking
+        // immediately — surfacing "Your turn" while Bina was still speaking
         // the "Are you there?" prompt.
         isPlayingRef.current = false;
         pendingBuffersRef.current = 0;
         nextPlayTimeRef.current = 0;
         // Only reset the no-response retry counter for genuine NEW turns
-        // (Biona asking a new question, ack, follow-up). During silence-nudge
+        // (Bina asking a new question, ack, follow-up). During silence-nudge
         // flows (isSilencePromptRef = true) the backend is driving the
         // "Are you there?" → auto-skip pipeline. Resetting the counter here
         // would let the CLIENT's handleNoResponse fire again with retry=0
@@ -3751,16 +3751,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         } else {
           playbackScheduledEndAtRef.current = 0;
         }
-        // Clear silence banner + countdown when Biona starts speaking
+        // Clear silence banner + countdown when Bina starts speaking
         setShowSilenceBanner(false);
         if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
         // Clear the "Your turn — speak now" banner IMMEDIATELY so it never lingers
-        // visibly while Biona speaks (follow-ups, next questions, clarifications).
+        // visibly while Bina speaks (follow-ups, next questions, clarifications).
         setShowNowSpeakBanner(false);
         nowSpeakShownForSessionRef.current = false; // allow a fresh banner after she finishes
-        setStatus("Biona is speaking...");
+        setStatus("Bina is speaking...");
         startRevealingTokens();
-        // Clear stale expired timer when Biona starts speaking the NEXT question
+        // Clear stale expired timer when Bina starts speaking the NEXT question
         // so "TIME UP" doesn't linger while she's asking Q2.
         // Guard: skip this during silence-nudge turns (isSilencePromptRef).
         // If the question timer expired while the candidate was silent and the
@@ -3780,8 +3780,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Feed accumulated text for phoneme lip sync before starting audio.
         // For the ROLE intro turn tokenBufferRef is intentionally empty (static
         // bubble, no streaming) — so fall back to the stashed role text, else
-        // TalkingHead gets "" and Biona's mouth stays still while the audio
-        // plays ("audio plays, Biona silent" bug).
+        // TalkingHead gets "" and Bina's mouth stays still while the audio
+        // plays ("audio plays, Bina silent" bug).
         talkingHeadRef.current?.setText(
           tokenBufferRef.current || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
         );
@@ -3794,7 +3794,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           // e.g. on a brief silence between PCM chunks, or when its internal
           // queue drains before the backend has actually finished streaming
           // TTS audio. For Q2+ this was surfacing the "Your turn" banner
-          // and starting the per-question timer while Biona was still
+          // and starting the per-question timer while Bina was still
           // audibly speaking. Q1 didn't hit this because the greeting flow
           // sends a dedicated `greeting` event that pre-arms state
           // differently; every subsequent question has to rely purely on
@@ -3813,7 +3813,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // Arm the re-start flag so the next PCM chunk wakes the worklet
             // back up. Without this, mid-sentence buffer drains cause the
             // remaining audio to stream into a stopped worklet and be lost
-            // (Biona's voice cuts off mid-sentence).
+            // (Bina's voice cuts off mid-sentence).
             talkingHeadEndedEarlyRef.current = true;
             return;
           }
@@ -3836,13 +3836,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             candidatePlaybackEndedRef.current = true;
             setCandidatePlaybackEnded(true);
             // Flush any deferred "Interview Completed" modal that arrived
-            // from the backend before Biona's farewell finished playing.
+            // from the backend before Bina's farewell finished playing.
             if (pendingCompletionModalRef.current) {
               pendingCompletionModalRef.current = false;
               setShowCompletionModal(true);
             }
             // Fix 3: arm echo guard — VAD ignores speech input for
-            // PLAYBACK_ECHO_GUARD_MS after Biona's real end-of-playback so TTS
+            // PLAYBACK_ECHO_GUARD_MS after Bina's real end-of-playback so TTS
             // tail / reverb can't register as candidate speech.
             playbackEchoGuardUntilRef.current = Date.now() + PLAYBACK_ECHO_GUARD_MS;
             saveAiMessage();
@@ -3862,15 +3862,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // skip the mic-open and clear the flag.
             if (roleIntroActiveRef.current) {
               roleIntroActiveRef.current = false;
-              setStatus("Biona is speaking...");
+              setStatus("Bina is speaking...");
               return;
             }
-            // Point 4: clarification ends the moment Biona finishes speaking
+            // Point 4: clarification ends the moment Bina finishes speaking
             setIsClarification(false);
             isClarificationRef.current = false;
             setStatus("Your turn - speak now...");
-            // 800ms delay before opening mic — lets room echo of Biona's TTS fully decay
-            // so Whisper doesn't transcribe Biona's audio as the candidate's speech.
+            // 800ms delay before opening mic — lets room echo of Bina's TTS fully decay
+            // so Whisper doesn't transcribe Bina's audio as the candidate's speech.
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
               startRecordingTimerRef.current = null;
@@ -4033,7 +4033,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Safety-net: if TalkingHead's onAudioEnd callback doesn't fire, start the
         // mic manually so the interview doesn't hang.
         // Timeout = actual audio duration + 2500 ms buffer (minimum 4 s).
-        // Using a fixed 3 s caused the fallback to fire MID-SPEECH for any Biona
+        // Using a fixed 3 s caused the fallback to fire MID-SPEECH for any Bina
         // response longer than ~2 s, opening the mic while she was still talking.
         const _fallbackDelayMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
 
@@ -4079,7 +4079,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               return;
             }
             console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
-            // Point 4: clarification ends when Biona stops speaking
+            // Point 4: clarification ends when Bina stops speaking
             setIsClarification(false);
             isClarificationRef.current = false;
             setStatus("Your turn - speak now...");
@@ -4157,7 +4157,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         let dur = data.seconds ?? data.total_seconds ?? data.duration_seconds ?? 120;
         // ── REPEAT-QUESTION FREEZE RESUME ──────────────────────────────────
         // This timer event is the re-speak completing (on_speaking_done →
-        // _start_question_timer), and it can arrive while Biona's audio is still
+        // _start_question_timer), and it can arrive while Bina's audio is still
         // playing on the client. We must NOT start ticking now — the answer
         // clock resumes ONLY when the candidate's turn actually opens (the mic
         // goes live → startPendingQuestionTimer("candidate_turn_open")). So we
@@ -4190,7 +4190,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           console.log(`[Timer ${timestamp}] Repeat re-speak done — answer window will RESUME at ${resumeSec}s when the candidate's turn opens`);
           break;
         }
-        // Fix 2: capture Biona's speech share so the UI can show the candidate
+        // Fix 2: capture Bina's speech share so the UI can show the candidate
         // WHY they have less than the full 2-min slot.
         if (typeof data.linda_spoke_seconds === 'number') {
           setLindaSpokeSeconds(Math.round(data.linda_spoke_seconds));
@@ -4201,9 +4201,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setFullSlotSeconds(data.total_seconds);
         }
         console.log(`[WS ${timestamp}] Timer duration: ${dur}s, question_number=${data.question_number}, total_questions=${data.total_questions}, is_follow_up=${data.is_follow_up}, is_clarification=${data.is_clarification}`);
-        // DON'T show the timer yet if Biona is still speaking — it will be shown
-        // once Biona stops (via the pending timer useEffect below).
-        // When Biona IS still speaking the next question, hold the "TIME UP"
+        // DON'T show the timer yet if Bina is still speaking — it will be shown
+        // once Bina stops (via the pending timer useEffect below).
+        // When Bina IS still speaking the next question, hold the "TIME UP"
         // state (keep questionTimerExpired=true) until the pending timer
         // actually starts. Otherwise the display would flicker
         // "TIME UP" → "00:00" → "02:00" because seconds is still 0 from the
@@ -4214,8 +4214,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questionTimerExpiredRef.current = false;
         }
         // Classify this event:
-        //  is_follow_up=true, is_clarification=true  → Biona clarifying; PAUSE per-Q timer
-        //  is_follow_up=true, is_clarification=false → Biona ack/follow-up; keep timer running
+        //  is_follow_up=true, is_clarification=true  → Bina clarifying; PAUSE per-Q timer
+        //  is_follow_up=true, is_clarification=false → Bina ack/follow-up; keep timer running
         //  is_follow_up=false                        → new question; start fresh countdown
         const incomingQNum = data.question_number ?? null;
         const sameQuestion = incomingQNum !== null && incomingQNum === questionNumberRef.current;
@@ -4247,15 +4247,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           //   • clarification  (is_clarification=true, is_follow_up=false)
           // Clarification is NOT a follow-up — they're gated independently below
           // so the follow-up path/state is never entered for a clarification.
-          // The main question's 2-min slot is shared between Biona's repeat/
+          // The main question's 2-min slot is shared between Bina's repeat/
           // follow-up and the candidate's answer — the countdown must continue
           // from wherever it was, never jump back to the full duration.
           //
           // We deliberately do NOT "drift-correct" toward `data.seconds`
           // here. The frontend timer ticks ONLY while the candidate is on
-          // the clock (paused during Biona's speech / clarification),
+          // the clock (paused during Bina's speech / clarification),
           // whereas the backend's `remaining` is plain wall-clock from main-Q
-          // start and so always includes Biona's TTS time. Snapping the
+          // start and so always includes Bina's TTS time. Snapping the
           // frontend to that value made the timer visibly drop on every
           // follow-up (e.g. 1:00 → 0:45). The frontend countdown is what
           // the candidate is reading and what the auto-skip is calibrated
@@ -4270,7 +4270,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
           if (data.is_clarification === true) {
             // CLARIFICATION — its OWN concept, NOT a follow-up. Keep the running
-            // countdown and pause it during Biona's repeat. Explicitly mark this
+            // countdown and pause it during Bina's repeat. Explicitly mark this
             // as NOT a follow-up so the two concepts never bleed together.
             setIsFollowUp(false);
             // Bug H fix: if the interval was stray-cleared (e.g., remaining
@@ -4284,7 +4284,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // (2026-06-03) Clarification keeps the SAME running countdown — it
             // does NOT pause and does NOT reset. The timer interval no longer
             // pauses on isClarification, so the window keeps ticking through
-            // Biona's repeat (per user spec).
+            // Bina's repeat (per user spec).
             console.log('[INTERVIEW-DEBUG] clarification — timer keeps running (no pause/reset)', {
               question_number: data.question_number,
               currentSeconds: questionTimerSecondsRef.current,
@@ -4327,7 +4327,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Also clear any frozen value left behind by the previous question's
         // question_timer_stopped (we no longer null it there to keep the banner
         // visible during silent_discard) — otherwise the NEW question would
-        // briefly display the OLD answer's leftover seconds while Biona speaks
+        // briefly display the OLD answer's leftover seconds while Bina speaks
         // her next question.
         setIsClarification(false);
         isClarificationRef.current = false;
@@ -4384,7 +4384,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         if (isAiSpeakingRef.current || !isRecordingRef.current) {
           // Keep the timer pending until the candidate turn is ACTUALLY open:
-          // Biona has finished, the mic is active, and the listening UI is visible.
+          // Bina has finished, the mic is active, and the listening UI is visible.
           console.log(`[Timer ${timestamp}] Candidate turn not open yet, storing pending timer: ${dur}s`);
           questionTimerPendingRef.current = dur;
           questionTimerTotalRef.current = dur;
@@ -4427,7 +4427,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questionTimerPausedAtRef.current = performance.now();
         }
         // Note: questionTimerSeconds / questionTimerSecondsRef intentionally NOT
-        // cleared. questionTimerPendingRef is also kept — if Biona hadn't yet
+        // cleared. questionTimerPendingRef is also kept — if Bina hadn't yet
         // finished speaking when end_turn fired (rare), the next audio_end will
         // still pick it up.
         break;
@@ -4469,7 +4469,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "question_window_hard_cap":
         // Backend hit the 2:00 mark while candidate was still answering. It
         // has already flushed the captured audio (<=120s) into the natural
-        // end_turn pipeline; Biona will ask the next question in a few
+        // end_turn pipeline; Bina will ask the next question in a few
         // seconds. Stop the mic so nothing said after 2:00 is sent.
         console.log('[INTERVIEW-DEBUG] question_window_hard_cap received', {
           question_number: data.question_number,
@@ -4495,7 +4495,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         isProcessingRef.current = false;
         clearNoResponseTimer();
         stopRecordingSilentRef.current();
-        // Backend now plays a bridge phrase (Biona actually speaks) immediately
+        // Backend now plays a bridge phrase (Bina actually speaks) immediately
         // after this event. Only fall back to the legacy text overlay when the
         // bridge has been suppressed (empty `message`) — preserves backwards
         // compatibility with pre-bridge backends that still ship the text.
@@ -4505,7 +4505,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "bridge_phrase_started":
         // Pre-cached transition clip is about to stream. Show the phrase text
-        // as a distinct "Biona · Transition" chip — NOT in the question card.
+        // as a distinct "Bina · Transition" chip — NOT in the question card.
         // Mic stays disabled (gated by the speaking_started that follows).
         setBridgeCaption(typeof data.text === 'string' ? data.text : null);
         break;
@@ -4531,19 +4531,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "silence_detected": {
         // Backend detected the first silence threshold. Show a banner telling
-        // the candidate Biona is about to prompt them. The BACKEND drives the
+        // the candidate Bina is about to prompt them. The BACKEND drives the
         // actual silence ladder and auto-skip from here. We previously ran our
         // OWN countdown on the client and sent skip_question — that raced with
-        // Biona's TTS and caused multiple "Are you there?" messages to stack up
+        // Bina's TTS and caused multiple "Are you there?" messages to stack up
         // because the client skipped before she finished speaking.
         //
         // Banner is dismissed by:
         //   - speaking_started  (candidate responded)
-        //   - speaking_started from backend for Biona's silence nudge (covered
+        //   - speaking_started from backend for Bina's silence nudge (covered
         //     below in the interstitial_prompt/speaking_started handlers)
         //   - question_timer_expired (backend auto-skip completed)
         //   - X button in the banner itself
-        isSilencePromptRef.current = true; // Biona's "Are you there?" — timer must keep running
+        isSilencePromptRef.current = true; // Bina's "Are you there?" — timer must keep running
         setShowSilenceBanner(true);
         if (silenceBannerTimerRef.current) clearTimeout(silenceBannerTimerRef.current);
         if (silenceCountdownRef.current) {
@@ -4560,7 +4560,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "speech_threshold_not_met":
         // Backend decided the speech_started we sent was noise-floor audio, not
         // real speech — it's keeping the silence-nudge watcher armed. Reset our
-        // speechDetected flag so that when Biona's nudge fires speaking_started,
+        // speechDetected flag so that when Bina's nudge fires speaking_started,
         // stopRecordingSilent does NOT send end_turn with the hallucinated ASR text.
         speechDetectedRef.current = false;
         speechDetectedAtRef.current = null;
@@ -4576,10 +4576,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "interview_completion_message":
         // Show the official completion message (Req 16) — but ONLY after
-        // Biona's farewell has finished playing. Backend sends this event
+        // Bina's farewell has finished playing. Backend sends this event
         // immediately after `interview_ended` without waiting for TTS
         // playback to drain. If we flip the modal on now, it appears while
-        // Biona is still audibly speaking. Defer via pendingCompletionModalRef
+        // Bina is still audibly speaking. Defer via pendingCompletionModalRef
         // which finalizePlayback flushes at the true end-of-audio.
         setCompletionMessage(data.message || "Thank you for completing the interview. Your responses have been recorded successfully.");
         if (candidatePlaybackEndedRef.current) {
@@ -4591,10 +4591,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
         setClosingReason(data.reason);
-        setStatus("Interview ending - Biona is saying goodbye...");
+        setStatus("Interview ending - Bina is saying goodbye...");
         break;
       case "interview_ended":
-        setStatus("Biona is saying goodbye...");
+        setStatus("Bina is saying goodbye...");
         shouldDisconnectAfterAudioRef.current = true;
         setIsClosing(true); isClosingRef.current = true;
         setCompletionMessage(prev =>
@@ -4606,7 +4606,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         );
         // Tear down the per-question timer — interview is over, no more answer
         // window. Without this clear, the frozen-on-stop change above would
-        // leave the answer-time banner visible during Biona's farewell.
+        // leave the answer-time banner visible during Bina's farewell.
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
@@ -4633,7 +4633,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // end of Q15). Same guard as interview_ended: only disconnect
         // immediately if finalizePlayback has already run — otherwise the
         // closing flags will be picked up by finalizePlayback when the
-        // real end-of-audio fires. This is what keeps Biona's farewell
+        // real end-of-audio fires. This is what keeps Bina's farewell
         // from being cut off mid-sentence.
         setIsClosing(true); isClosingRef.current = true;
         shouldDisconnectAfterAudioRef.current = true;
@@ -5005,7 +5005,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Stop the per-question countdown interval — candidate answered.
       // Keep the state (questionTimerSeconds) showing the frozen last value so the
       // candidate can still see the timer while the backend processes their answer.
-      // A fresh question_timer_started will reset it when Biona asks the next question.
+      // A fresh question_timer_started will reset it when Bina asks the next question.
       if (questionTimerIntervalRef.current) {
         clearInterval(questionTimerIntervalRef.current);
         questionTimerIntervalRef.current = null;
@@ -5027,7 +5027,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // talking right as the timer hit 0:00, the expired flag was set by
       // startQuestionTimerExpiry and represents the truth — wiping it here
       // causes the "Question time: 00:00" stuck-label bug (label flips back
-      // to non-expired state while Biona speaks the next question). The
+      // to non-expired state while Bina speaks the next question). The
       // pending-timer useEffect clears expired immediately before starting
       // the next countdown, so the flag transitions cleanly TIME UP → 02:00.
       questionTimerPendingRef.current = null;
@@ -5219,7 +5219,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // which throws NotSupportedError (processors can only be registered once).
     isRecordingRef.current = true;
     // "Your Turn" is now open — resume the per-question answer clock if it was
-    // paused while Biona spoke (repeat / "Are you there?" / prompt). No-op for a
+    // paused while Bina spoke (repeat / "Are you there?" / prompt). No-op for a
     // fresh question (its timer starts un-paused via ensureQuestionTimerRunning).
     resumeQuestionTimer();
     console.log('[INTERVIEW-DEBUG] Recording STARTED', {
@@ -5385,7 +5385,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       preSpeechPCMRingRef.current = [];
       preSpeechPCMSampleCountRef.current = 0;
       // Suppress VAD for the first VAD_WARMUP_MS after mic opens.
-      // Gives the echo canceller time to calibrate so Biona's TTS echo doesn't
+      // Gives the echo canceller time to calibrate so Bina's TTS echo doesn't
       // immediately register as candidate speech.
       vadWarmupUntilRef.current = Date.now() + VAD_WARMUP_MS;
 
@@ -5407,7 +5407,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (isMutedRef.current) return;
 
         // Collect raw audio at native sample rate for voice verification.
-        // Skip while Biona is speaking or during the post-TTS echo-guard
+        // Skip while Bina is speaking or during the post-TTS echo-guard
         // window — capturing those frames poisons the verification buffer
         // with the AI's voice (re-entering via speakers→mic) and causes
         // false voice_identity_changed events on the candidate's own turns.
@@ -5529,7 +5529,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           pcmEarly[i] = Math.max(-32768, Math.min(32767, samplesEarly[i] * micGain * 32768));
         }
 
-        // While Biona is mid-speech the mic might still be hot — never buffer
+        // While Bina is mid-speech the mic might still be hot — never buffer
         // those frames (they're TTS echo). Otherwise, if speech hasn't been
         // confirmed yet, push into the pre-speech ring so the first word is
         // captured.
@@ -5546,13 +5546,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
 
         // During warmup period, mic frames are being captured into the ring
-        // buffer above. Skip VAD analysis for the warmup window — Biona's TTS
+        // buffer above. Skip VAD analysis for the warmup window — Bina's TTS
         // echo may still be present and would otherwise falsely trip speech
         // detection. The ring buffer will flush to backend the moment VAD
         // does confirm speech (post-warmup), preserving the warmup-window
         // audio that used to be discarded.
         if (nowMs < vadWarmupUntilRef.current) {
-          // …but DO calibrate the ambient noise floor during warmup (when Biona's
+          // …but DO calibrate the ambient noise floor during warmup (when Bina's
           // echo has settled). This gives the floor a head start so it already
           // reflects the room noise the instant the candidate's turn opens —
           // otherwise the first ~300ms of noise could trip the soft gate before
@@ -5569,13 +5569,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
           return;
         }
-        // Fix 3 (revised): the echo guard and "Biona still speaking" check
+        // Fix 3 (revised): the echo guard and "Bina still speaking" check
         // must NOT `return` — that drops the PCM send block at the bottom of
         // this function and silently kills candidate audio. Instead, fold
         // them into a flag that gates only NEW speech_started detection. Once
         // speech is in progress, frames keep flowing so the candidate's
         // answer reaches the backend.
-        // Suppress new speech detection during ANY Biona speech, including
+        // Suppress new speech detection during ANY Bina speech, including
         // the silence nudge. Per spec: candidate's response must only be
         // captured AFTER "Are you there?" finishes speaking.
         const suppressNewSpeechDetection =
@@ -6166,7 +6166,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (isSilencePromptRef.current) return;
 
     if (noResponseRetryRef.current === 0) {
-      // First timeout: Biona asks "Are you there?"
+      // First timeout: Bina asks "Are you there?"
       stopRecordingSilent();
       noResponseRetryRef.current = 1;
 
@@ -6177,10 +6177,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         content: areYouThereMsg,
       }]);
 
-      setStatus("Biona is speaking...");
+      setStatus("Bina is speaking...");
 
       // Mark this as a silence prompt so the question timer keeps ticking
-      // while Biona asks "Are you there?" (her speaking time counts against
+      // while Bina asks "Are you there?" (her speaking time counts against
       // the candidate's answer window). Auto-reset at line 569 when speaking ends.
       isSilencePromptRef.current = true;
 
@@ -6246,7 +6246,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // LLM greeting + TTS warms up (can take 2-4s). Without this the chat
       // sits blank and the candidate thinks the page is frozen — which is
       // exactly the "first message appears late" complaint.
-      setStatus("Biona is joining your interview...");
+      setStatus("Bina is joining your interview...");
       isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
       reconnectAttemptsRef.current = 0;
@@ -6286,7 +6286,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // interview to in_progress (backend reject: "Interview not in progress
         // (status: system_check)"). This is transient — /start completes within
         // ~1-3s — so retry quickly instead of treating it as terminal. Without
-        // this the candidate had to manually REFRESH for Biona to start. We keep
+        // this the candidate had to manually REFRESH for Bina to start. We keep
         // a dedicated fast counter (short backoff) separate from the network
         // reconnect budget.
         if (preStartRetryRef.current < PRE_START_MAX_RETRIES && !isUnmountedRef.current && !isClosingRef.current) {
@@ -6360,7 +6360,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           // Recovery path: TalkingHead's worklet ended early (buffer drained
           // during a streaming hiccup) but new chunks are still arriving.
           // Restart the worklet so this chunk plays instead of being lost.
-          // Without this, Biona's voice cuts off mid-sentence and the rest
+          // Without this, Bina's voice cuts off mid-sentence and the rest
           // of the audio is silent.
           console.log("[TalkingHead] re-arming streamStart after early end — chunk arrived");
           talkingHeadEndedEarlyRef.current = false;
@@ -6403,14 +6403,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // Fix #2: visual fallback. If the 3D avatar hasn't signalled ready within 12s
   // (it normally loads in 2-5s), assume it's failed/hung on this device and show
-  // the static Biona image so the candidate isn't staring at a blank canvas.
+  // the static Bina image so the candidate isn't staring at a blank canvas.
   // The TalkingHead onFallback callback also sets this immediately on a hard
   // error; this timer covers the silent-hang case where no error is thrown.
   useEffect(() => {
     if (avatarReady || avatarFailed) return;
     const t = setTimeout(() => {
       if (!avatarReady) {
-        console.warn('[InterviewUI] 3D avatar slow/failed to load — showing static Biona fallback');
+        console.warn('[InterviewUI] 3D avatar slow/failed to load — showing static Bina fallback');
         setAvatarFailed(true);
       }
     }, 12000);
@@ -6426,10 +6426,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // ── AudioContext unlock safety-net ────────────────────────────────────────
   // Chrome's autoplay policy can leave the shared 24kHz AudioContext SUSPENDED
   // (especially on the resume entry-path, where it's created outside a gesture).
-  // A suspended context = Biona's TTS never plays → "she only speaks after a
+  // A suspended context = Bina's TTS never plays → "she only speaks after a
   // refresh". This installs a one-time listener that resumes the context on the
   // candidate's FIRST interaction (pointer/key/touch) with the interview screen,
-  // guaranteeing it's 'running' before/at Biona's first audio. Self-removes once
+  // guaranteeing it's 'running' before/at Bina's first audio. Self-removes once
   // resumed. Polls briefly too, in case the context is created slightly later.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -6467,7 +6467,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, []);
 
   // Low-tier device → skip waiting on the heavy 3D avatar: show the static
-  // Biona image immediately and let the interview connect right away (audio
+  // Bina image immediately and let the interview connect right away (audio
   // still routes through the mounted TalkingHead). On capable devices the 3D
   // avatar loads normally.
   useEffect(() => {
@@ -6615,7 +6615,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   //     dedicated when possible, shared-webcam fallback otherwise). Checking
   //     getVideoTracks()
   //     against that stream always reports `length === 0` → false positive
-  //     "camera revoked" after every Biona turn ended.
+  //     "camera revoked" after every Bina turn ended.
   //   - Between turns, the audio stream is torn down, so getAudioTracks()
   //     returns `ended` tracks → false positive "microphone revoked".
   //
@@ -6707,7 +6707,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, [isConnected, mediaBlocked, probeMediaPermissions, armMediaBlock]);
 
   // Also run the probe once on connect so any permission that was revoked
-  // BEFORE the interview UI mounted is caught before Biona even speaks.
+  // BEFORE the interview UI mounted is caught before Bina even speaks.
   useEffect(() => {
     if (!isConnected) return;
     (async () => {
@@ -6744,7 +6744,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     const executeHardPause = () => {
       // KEEP-RUNNING POLICY (2026-05-26): fullscreen exit must NOT pause or
       // freeze the interview — it now behaves like a tab switch (see
-      // handleVisibilityChange below): the timer keeps ticking and Biona keeps
+      // handleVisibilityChange below): the timer keeps ticking and Bina keeps
       // going; time spent outside fullscreen is the candidate's penalty.
       //
       // The OLD code froze the timers + stopped TTS + sent session_pause here,
@@ -6957,9 +6957,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     backendLiveTranscriptEnabled || browserSpeechRecognitionSupported;
 
   // ── Candidate turn state + action buttons ──────────────────────────────
-  // It's the candidate's turn to answer when Biona has fully finished speaking
+  // It's the candidate's turn to answer when Bina has fully finished speaking
   // AND the answer timer is open. Drives the RED↔GREEN turn banner and gates the
-  // Repeat/Next action buttons (they must NOT show while Biona is speaking).
+  // Repeat/Next action buttons (they must NOT show while Bina is speaking).
   const isCandidateTurn =
     isConnected && !isClosing &&
     !isAiSpeaking && !isProcessing &&
@@ -7011,7 +7011,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // handler removes this chip so it's not shown on top of their answer.
     skipChipIdRef.current = postCandidateActionMessage("Let's move on to the next question.");
 
-    // 0. If Biona is speaking, stop her immediately.
+    // 0. If Bina is speaking, stop her immediately.
     if (isAiSpeakingRef.current) {
       talkingHeadRef.current?.streamStop();
       isPlayingRef.current = false;
@@ -7042,7 +7042,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
     if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
 
-    setStatus("Biona is preparing the next question...");
+    setStatus("Bina is preparing the next question...");
     setIsFollowUp(false);
 
     // Optimistically clear active-skill highlight so the coverage panel doesn't freeze.
@@ -7081,7 +7081,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     questionTimerExpiredRef.current = false;
   };
 
-  // "Repeat Question" — ask Biona to re-read the CURRENT question. The backend
+  // "Repeat Question" — ask Bina to re-read the CURRENT question. The backend
   // re-speaks WITHOUT advancing the slot or incrementing the question count.
   const handleRepeatQuestion = () => {
     if (repeatInFlightRef.current) return;
@@ -7090,7 +7090,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (isAiSpeakingRef.current || isProcessingRef.current) return;
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
 
-    // Most recent question Biona asked (last non-action assistant bubble).
+    // Most recent question Bina asked (last non-action assistant bubble).
     let lastQuestion = "";
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
@@ -7131,7 +7131,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // CRITICAL: stop the mic SILENTLY right now (no end_turn), exactly like the
     // Next button does. The mic is still live at this moment, and if we leave it
     // running the VAD silence clock can fire stopRecording() → end_turn while
-    // Biona is re-speaking. That queued end_turn is then processed the instant
+    // Bina is re-speaking. That queued end_turn is then processed the instant
     // the re-speak finishes → the backend records an (empty) answer and ADVANCES
     // to the next question WITHOUT waiting for the candidate — the reported bug.
     // The mic re-opens for the real answer after the re-speak's audio_end
@@ -7140,7 +7140,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
     // Chat: the candidate's repeat request.
     postCandidateActionMessage("Could you please repeat the question?");
-    setStatus("Biona will repeat the question...");
+    setStatus("Bina will repeat the question...");
 
     // The incoming speaking_started (from the backend re-speak) flips the banner
     // to RED; audio_end then re-opens the mic for the candidate's answer.
@@ -7182,11 +7182,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       </svg>
     );
     const cfg = {
-      turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Biona is listening',          icon: micIcon,      dismissible: false },
-      hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — Biona is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
+      turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Bina is listening',          icon: micIcon,      dismissible: false },
+      hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
       prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
       timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
-      silence: { grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-200/60',   glow: 'shadow-amber-500/30',   title: 'Are you still there?',         subtitle: 'Take your time — Biona will move on if there’s no response.', icon: micIcon, dismissible: true },
+      silence: { grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-200/60',   glow: 'shadow-amber-500/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
     }[variant];
 
     return (
@@ -7488,12 +7488,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
         <div className="w-[40%] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
 
-          {/* ── Top half: BIONA AI Avatar ── */}
+          {/* ── Top half: BINA AI Avatar ── */}
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Label */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
-              <span className="text-gray-400 text-[11px] font-medium tracking-wide uppercase">Biona · AI Interviewer</span>
+              <span className="text-gray-400 text-[11px] font-medium tracking-wide uppercase">Bina · AI Interviewer</span>
             </div>
 
             {/* TalkingHead fills this half */}
@@ -7506,7 +7506,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 className="w-full h-full rounded-none"
                 // Low-tier devices: skip the 3D avatar entirely (no GLB/Three.js/
                 // render loop) — voice still plays via TalkingHead's Web Audio
-                // fallback, and the static Biona image shows. Silent switch.
+                // fallback, and the static Bina image shows. Silent switch.
                 audioOnly={effectiveDeviceCapability?.use3DAvatar === false}
               />
             </div>
@@ -7514,7 +7514,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             {/* Fix #2: static avatar fallback. Shown when the 3D avatar fails or
                 is too slow to load. Audio still plays (Web Audio fallback) and
                 the interview runs at full speed; only the visual is downgraded
-                to a static Biona image with a speaking/listening indicator so
+                to a static Bina image with a speaking/listening indicator so
                 the candidate sees a proper face instead of a blank canvas. */}
             {avatarFailed && (
               <div className="absolute inset-0 overflow-hidden flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800">
@@ -7527,7 +7527,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   >
                     <Image
                       src={lindaAvatarSrc}
-                      alt="Biona - AI Interviewer"
+                      alt="Bina - AI Interviewer"
                       fill
                       sizes="176px"
                       className="object-cover"
@@ -7538,7 +7538,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       }}
                     />
                   </div>
-                  <div className="mt-4 text-white/90 text-lg font-semibold">Biona</div>
+                  <div className="mt-4 text-white/90 text-lg font-semibold">Bina</div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-white/60">
                     {isAiSpeaking ? (
                       <>
@@ -7565,15 +7565,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               />
             )}
 
-            {/* Bridge-phrase caption — pre-cached transition clip Biona speaks
-                when the 2-min hard-cap fires. Distinct "Biona · Transition"
+            {/* Bridge-phrase caption — pre-cached transition clip Bina speaks
+                when the 2-min hard-cap fires. Distinct "Bina · Transition"
                 chip so it's never mistaken for an interview question. Sits
                 above the status pill at the bottom of the avatar pane. */}
             {bridgeCaption && (
               <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 max-w-[80%] px-4 py-2 rounded-xl bg-purple-950/60 backdrop-blur-md border border-purple-400/40 shadow-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/40 text-[10px] font-semibold uppercase tracking-wider text-purple-100">
-                    Biona · Transition
+                    Bina · Transition
                   </span>
                 </div>
                 <p className="text-xs italic text-purple-50 leading-snug">
@@ -7689,7 +7689,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <MessageSquare className="w-4 h-4 text-sky-700" />
               </div>
               <div>
-                <h2 className="text-sky-900 font-bold leading-tight" style={{ fontSize: 15 }}>Chat with BIONA</h2>
+                <h2 className="text-sky-900 font-bold leading-tight" style={{ fontSize: 15 }}>Chat with BINA</h2>
                 <p className="text-sky-800/70 text-[11px] leading-tight">Live AI-powered interview</p>
               </div>
             </div>
@@ -7720,7 +7720,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 </div>
               )}
               {/* Clarification badge removed per design — no banner indicator
-                  when Biona is re-asking the same question. */}
+                  when Bina is re-asking the same question. */}
               <style>{`@keyframes qNumPop{0%{opacity:0;transform:scale(0.7) translateY(-4px)}60%{transform:scale(1.12) translateY(0)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
               {/* Per-question timer removed from header — shown as banner above chat */}
               {/* Global timer removed from the top header per UX request — the
@@ -7799,14 +7799,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 </div>
               </div>
               {/* Fix 2: subtitle explaining the reduced window. Only shown
-                  when Biona's speech ate a meaningful chunk of the 2-min slot
+                  when Bina's speech ate a meaningful chunk of the 2-min slot
                   (≥5s), to avoid noise on clean cases where her question was
                   short and the candidate effectively has the full window.
                   Rendered as its own row BELOW the icon+timer row so it
                   doesn't overlap (was previously inside the flex-row). */}
               {lindaSpokeSeconds !== null && fullSlotSeconds !== null && lindaSpokeSeconds >= 5 && (
                 <div className="pl-7 mt-1 text-[10px] text-gray-500 leading-snug">
-                  Biona used {lindaSpokeSeconds}s of the {fullSlotSeconds}s question slot — you have {questionTimerTotalRef.current}s to answer.
+                  Bina used {lindaSpokeSeconds}s of the {fullSlotSeconds}s question slot — you have {questionTimerTotalRef.current}s to answer.
                 </div>
               )}
             </div>
@@ -7909,7 +7909,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     {/* Quick actions — INSIDE the response bubble, directly under
                         the waveform/live area (not a separate bottom bar). Shown
                         only during the candidate's turn (recording, not the
-                        processing state). Repeat = Biona re-reads the current
+                        processing state). Repeat = Bina re-reads the current
                         question (no count change); Next = move on. */}
                     {isCandidateTurn && (isRecording || currentTranscript) && (
                       <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-emerald-200/70">
@@ -7993,7 +7993,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <img
                   src="/linda-avatar.webp"
                   onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
-                  alt="Biona"
+                  alt="Bina"
                   className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
                 />
                 <div className="px-3.5 py-2.5 bg-violet-50 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
@@ -8042,7 +8042,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     Disabled when:
                       - questionTimerExpired (existing)
                       - Last question (existing — candidate must actually answer Q N/N)
-                      - Biona is still speaking the question (answer window hasn't opened yet)
+                      - Bina is still speaking the question (answer window hasn't opened yet)
                       - No answer timer is running (questionTimerSeconds === null — nothing
                         to skip; prevents clicks during the gap between turns)
                       - A previous Next-Q click is still in flight (single-click guarantee —
@@ -8069,7 +8069,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       // race where React hasn't repainted yet.
                       if (nextSkipInFlightRef.current) return;
                       // Guard: don't allow skip until the answer timer has started.
-                      // If Biona hasn't finished speaking, there's no open answer
+                      // If Bina hasn't finished speaking, there's no open answer
                       // window — skipping now would queue behind her TTS and look
                       // like a ghost skip.
                       if (isAiSpeakingRef.current && questionTimerSeconds === null) return;
@@ -8104,7 +8104,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       // suddenly pops the transcript.
                       const hadSpeechForSkip = speechDetectedRef.current;
 
-                      // 0. If Biona is speaking, stop her immediately
+                      // 0. If Bina is speaking, stop her immediately
                       if (isAiSpeakingRef.current) {
                         talkingHeadRef.current?.streamStop();
                         isPlayingRef.current = false;
@@ -8158,8 +8158,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         startRecordingTimerRef.current = null;
                       }
 
-                      // 5c. Visual feedback while waiting for Biona to speak the next question
-                      setStatus("Biona is preparing the next question...");
+                      // 5c. Visual feedback while waiting for Bina to speak the next question
+                      setStatus("Bina is preparing the next question...");
 
                       // 5d. Clear follow-up flag immediately — next question is always fresh
                       setIsFollowUp(false);
@@ -8261,12 +8261,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <button
                 onClick={() => {
                   setShowEndConfirm(false);
-                  // End means END: go straight to Biona's Thank-you close with NO
+                  // End means END: go straight to Bina's Thank-you close with NO
                   // further question. Enter closing on the client immediately
                   // (hides the End button, stops reacting to further turns), stop
                   // the mic SILENTLY — abortRecordingForSkip does NOT send end_turn,
                   // so the backend never runs the answer→next-question pipeline that
-                  // used to make Biona ask a clarification after End — then tell the
+                  // used to make Bina ask a clarification after End — then tell the
                   // backend to close. The backend cancels any in-flight generation
                   // and plays ONLY the farewell.
                   setIsClosing(true);

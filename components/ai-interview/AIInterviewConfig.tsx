@@ -917,8 +917,8 @@ function HRSection({
               <div className="space-y-0.5">
                 <span className="block text-xs font-medium text-gray-600">
                   {mode === 'fixed'
-                    ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Biona to ask`
-                    : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Biona to ask`}
+                    ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`
+                    : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`}
                 </span>
                 <span className="block text-[11px] text-gray-400">
                   Closing is the default tag. Mark any question as Opening to ask it before the technical rounds; Closing questions are asked at the end.

@@ -535,10 +535,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== RECORDING AUDIO HELPERS ==========
 
   /**
-   * Mix Biona's voice (TalkingHead AudioContext tap) + candidate mic + optional tab audio
+   * Mix Bina's voice (TalkingHead AudioContext tap) + candidate mic + optional tab audio
    * into one audio track for the MediaRecorder.
    *
-   * Biona's voice is captured by routing TalkingHead's audioReverbNode (and fallback
+   * Bina's voice is captured by routing TalkingHead's audioReverbNode (and fallback
    * BufferSources) to window.__interviewRecordingDest — a MediaStreamDestination created
    * on the same AudioContext. TalkingHeadAvatar checks for this global when it builds
    * its audio graph so no polling or retries are needed.
@@ -547,14 +547,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
    * and BEFORE setStep('interview') so the dest is in place before TalkingHead mounts.
    */
   const buildRecordingStreamWithAudio = async (screenStream: MediaStream): Promise<MediaStream> => {
-    // Tear down mix context from a previous recording or re-share (keeps Biona's dest alive)
+    // Tear down mix context from a previous recording or re-share (keeps Bina's dest alive)
     recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
     recordingMicStreamRef.current = null;
     recordingAudioCtxRef.current?.close().catch(() => {});
     recordingAudioCtxRef.current = null;
 
     try {
-      // ── 1. Biona's voice: tap the TalkingHead AudioContext at source ──
+      // ── 1. Bina's voice: tap the TalkingHead AudioContext at source ──
       // Reuse across re-shares — TalkingHead's audioReverbNode stays connected to it.
       if (!(window as any).__interviewRecordingDest) {
         const ttsCtx = (window as any).__interviewAudioContext as AudioContext | null;
@@ -565,21 +565,21 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       const lindaDest: MediaStreamAudioDestinationNode | null =
         (window as any).__interviewRecordingDest ?? null;
 
-      // ── 2. Mix: Biona + mic + tab audio → one track for MediaRecorder ──
+      // ── 2. Mix: Bina + mic + tab audio → one track for MediaRecorder ──
       const mixCtx = new AudioContext({ sampleRate: 48000 });
       recordingAudioCtxRef.current = mixCtx;
       const mixDest = mixCtx.createMediaStreamDestination();
 
-      // Biona's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
+      // Bina's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
       let lindaCaptured = false;
       if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
         mixCtx.createMediaStreamSource(lindaDest.stream).connect(mixDest);
         lindaCaptured = true;
       }
 
-      // Tab audio is Biona's voice as it plays through the shared tab — so it is
-      // ONLY a FALLBACK. If we already tapped Biona directly above, mixing the tab
-      // audio too records her voice TWICE (the doubled/echoey Biona heard in the
+      // Tab audio is Bina's voice as it plays through the shared tab — so it is
+      // ONLY a FALLBACK. If we already tapped Bina directly above, mixing the tab
+      // audio too records her voice TWICE (the doubled/echoey Bina heard in the
       // saved recording). Only add it when the direct tap was unavailable.
       if (!lindaCaptured && screenStream.getAudioTracks().length > 0) {
         mixCtx.createMediaStreamSource(
@@ -595,7 +595,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         recordingMicStreamRef.current = micStream;
         mixCtx.createMediaStreamSource(micStream).connect(mixDest);
       } catch {
-        // Mic unavailable — record Biona's voice only
+        // Mic unavailable — record Bina's voice only
       }
 
       return new MediaStream([
@@ -886,7 +886,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // Chrome's autoplay policy starts a new AudioContext 'suspended' even inside
     // a gesture — it only reliably flips to 'running' if .resume() is called
     // within the SAME gesture. Without this resume, the context stays suspended,
-    // Biona's TTS audio never plays, and the interview looks stuck ("speaks only
+    // Bina's TTS audio never plays, and the interview looks stuck ("speaks only
     // after a refresh"). resume() here, in the click handler, unlocks it.
     try {
       const ctx = new AudioContext({ sampleRate: 24000 });
@@ -1075,7 +1075,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       phase: 'pre_interview_fullscreen',
     }).catch(() => {});
 
-    // Resume the audio context so Biona's TTS is unlocked (Chrome autoplay
+    // Resume the audio context so Bina's TTS is unlocked (Chrome autoplay
     // policy requires a resume inside a user gesture).
     try {
       const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
@@ -1245,7 +1245,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // sharing Entire Screen, Chrome's "<site> is sharing your screen" bar is
     // browser chrome that can hold focus, and OS notifications / transient focus
     // steals also blur the page — all WITHOUT the candidate leaving. Those also
-    // throttle the tab, which is why Biona's audio stutters right before a false
+    // throttle the tab, which is why Bina's audio stutters right before a false
     // termination. So we do NOT terminate on raw focus loss (the old
     // `!document.hasFocus()` check fired `left_screen_focus_lost` here). Instead,
     // a blur just DEFERS and re-checks the two signals that actually mean "left

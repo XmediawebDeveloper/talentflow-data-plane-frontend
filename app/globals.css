@@ -24,7 +24,7 @@
 .dark .scrollbar-visible::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.6) !important; }
 .dark .scrollbar-visible::-webkit-scrollbar-thumb:hover { background: rgba(203, 213, 225, 0.8) !important; }
 
-/* ── Biona speaking mouth animation ─────────────────────────────────── */
+/* ── Bina speaking mouth animation ─────────────────────────────────── */
 @keyframes linda-talk {
   0%   { transform: scaleY(0.05); }
   10%  { transform: scaleY(0.8);  }

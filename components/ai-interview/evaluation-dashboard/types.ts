@@ -78,7 +78,7 @@ export interface PerQuestionSkill {
 export interface PerQuestionClarification {
   /** 1-based CL index within the parent question (CL1, CL2, ...). */
   number: number;
-  /** Biona's repeated/rephrased question text ("Let's stick to this
+  /** Bina's repeated/rephrased question text ("Let's stick to this
    *  question: …"). Mirrors what the Transcript tab labels "Clarify". */
   question: string;
   /** Candidate's response right after this clarification, if any. May be
@@ -151,10 +151,10 @@ export interface PerQuestionDetail {
    *  candidate answered the main question well enough not to warrant
    *  one (or when timed-mode strict distribution suppresses probes).
    *  Surfaced under the main card so reviewers can verify whether
-   *  Biona actually probed deeper. */
+   *  Bina actually probed deeper. */
   followUps?: PerQuestionFollowUp[];
   /** Clarification turns ("Clarify"/CL1, CL2…) that fired within this
-   *  question's slot — when the candidate asked Biona to repeat/rephrase and
+   *  question's slot — when the candidate asked Bina to repeat/rephrase and
    *  she replied "Let's stick to this question: …". Derived (adapter) from the
    *  raw conversation_transcript so the Question Analysis tab surfaces them the
    *  same way the Transcript tab does. Empty/undefined when none occurred. */
