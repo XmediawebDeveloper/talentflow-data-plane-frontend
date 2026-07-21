@@ -1835,6 +1835,52 @@ export default function AIInterviewClusters() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, config, id, mthSkills.length, nthSkills.length]);
 
+  /* ─── Auto-heal under-filled saved clusters ───────────────────────────────
+     Page load restores saved clusters from special_instructions VERBATIM — it
+     does NOT re-run expansion. So a config whose clusters were saved while a
+     bucket was under-filled (the autogen page-load race, or a pre-expansion
+     generation) permanently shows more questions than skills (e.g. 5 NTH
+     questions / 2 NTH skills) until the recruiter clicks "Regenerate with AI".
+     Removal is locked at the floor, so they can't fix it here either.
+
+     When a restored, enabled bucket has fewer UNIQUE skills than its question
+     budget, re-run generation once with forceExpand so /expand-skills fills the
+     pool to ≥1 skill/question (backend floors to the question count and even
+     tops up with placeholders, so this converges and never loops). Timed mode
+     only — flexible mode has no fixed question floor. The autogen path already
+     regenerates, so skip when that flag is present. ─────────────────────── */
+  const autoHealFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoHealFiredRef.current) return;
+    if (loading || generating || !config || !id) return;
+    if (!isFixed) return;                              // no fixed floor in flexible mode
+    if (searchParams.get('autogen') === '1') return;   // autogen effect handles this entry
+    // Only heal a config that was already generated — leave a fresh, never-
+    // generated config to the autogen path / the recruiter's Generate click.
+    if (mthClusters.length === 0 && nthClusters.length === 0) return;
+    // Need input skills to expand from.
+    if (mthSkills.length === 0 && nthSkills.length === 0) return;
+
+    const mthFloor = timedAllocation.mthQuestions ?? 0;
+    const nthFloor = nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+    const uniqueCount = (clusters: Cluster[]) =>
+      new Set(clusters.flatMap(c => c.skills.map(s => s.toLowerCase()))).size;
+    const mthShort = mthFloor > 0 && uniqueCount(mthClusters) < mthFloor;
+    const nthShort = nthFloor > 0 && uniqueCount(nthClusters) < nthFloor;
+    if (!mthShort && !nthShort) return;
+
+    autoHealFiredRef.current = true;
+    console.log('[CLUSTER-DEBUG] Auto-heal: under-filled bucket detected, re-expanding', {
+      mthFloor, nthFloor,
+      mthUnique: uniqueCount(mthClusters), nthUnique: uniqueCount(nthClusters),
+      mthShort, nthShort,
+    });
+    toast.info('Expanding skills to match the question budget…');
+    void handleGenerateClusters({ forceExpand: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, generating, config, id, isFixed, nthEnabled,
+      mthClusters, nthClusters, mthSkills.length, nthSkills.length]);
+
   /* ── Save & Navigate ── */
   /** Build updated rounds_config with topics/topic_weights from clusters */
   const buildUpdatedRoundsConfig = () => {
