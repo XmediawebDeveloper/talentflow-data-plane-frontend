@@ -1268,6 +1268,24 @@ export default function AssessmentDetailsView({
               const totalPages = Math.max(1, Math.ceil(recentActivity.length / ACTIVITY_PAGE_SIZE));
               const startIdx = (activityPage - 1) * ACTIVITY_PAGE_SIZE;
               const pageItems = recentActivity.slice(startIdx, startIdx + ACTIVITY_PAGE_SIZE);
+              // Open a completed candidate's result details. Stores the ordered
+              // list of completed candidates (with a resolvable attempt_id) so
+              // the details view offers Prev/Next between them — mirrors the
+              // Results page + Track-Invites flow.
+              const openCompletedResult = (activity: any) => {
+                if (!activity.attempt_id) return;
+                try {
+                  const navList = recentActivity
+                    .filter((e: any) => e._eventType === 'completed' && e.attempt_id)
+                    .map((e: any) => ({ id: e.attempt_id, cid: e.candidate_display_id || '' }));
+                  sessionStorage.setItem('assessmentResultNavList', JSON.stringify(navList));
+                } catch { /* ignore quota errors */ }
+                router.push(
+                  `/recruitment/assessments/${assessment.id}/results/details`
+                  + `?candidate_id=${activity.attempt_id}`
+                  + `${activity.candidate_display_id ? `&cid=${encodeURIComponent(activity.candidate_display_id)}` : ''}`
+                );
+              };
               return (
                 <>
                   <div className="divide-y divide-gray-100">
@@ -1299,9 +1317,18 @@ export default function AssessmentDetailsView({
                       const ActivityIcon = info.icon;
                       const formattedDate = activity._eventAt ? formatIST(activity._eventAt) : 'N/A';
                       const showScores = activity._eventType === 'completed';
+                      // Only completed rows with a resolvable attempt open the
+                      // candidate's result details; other lifecycle events stay
+                      // as a read-only log.
+                      const isClickable = showScores && !!activity.attempt_id;
 
                       return (
-                        <div key={`${activity.id}-${activity._eventType}-${idx}`} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-brand-blue/5 transition-colors">
+                        <div
+                          key={`${activity.id}-${activity._eventType}-${idx}`}
+                          onClick={isClickable ? () => openCompletedResult(activity) : undefined}
+                          title={isClickable ? 'View candidate results' : undefined}
+                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-4 transition-colors ${isClickable ? 'cursor-pointer hover:bg-brand-blue/5' : ''}`}
+                        >
                           <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
                             <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${info.color}`}>
                               <ActivityIcon className="w-4 h-4 sm:w-5 sm:h-5" />
