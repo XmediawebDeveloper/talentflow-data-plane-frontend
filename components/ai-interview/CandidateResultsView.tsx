@@ -35,6 +35,8 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ListPagination from '@/components/ListPagination';
 import RecordPager from '@/components/RecordPager';
+import IntegrityCheckTab from './IntegrityCheckTab';
+import { summarizeViolations } from './violationTaxonomy';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -283,6 +285,7 @@ function VideoWithDuration({ blobUrl, onError, onDuration, seekTo, seekKey }: { 
       <video
         ref={videoRef}
         controls
+        preload="metadata"
         className="w-full max-h-[500px] rounded-xl bg-slate-900 ring-1 ring-black/[0.04]"
         src={blobUrl}
         onLoadedMetadata={handleLoadedMetadata}
@@ -619,19 +622,32 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     if (activeTab !== 'recording' || !liveSession.recording_file_path || videoBlobUrl) return;
     let cancelled = false;
     setVideoLoading(true);
-    api.get(`/ai-interview/${liveSession.id}/recording`, { responseType: 'blob' })
-      .then((res) => {
+    // STREAM-FIRST: ask for a presigned URL and hand it straight to <video src>
+    // so the browser streams with HTTP Range (instant start + seek). Only fall
+    // back to the old full-file blob download (slow — 2-3 min on long clips) for
+    // local-filesystem storage, where no presigned URL exists.
+    (async () => {
+      try {
+        const meta = await api.get(`/ai-interview/${liveSession.id}/recording-url`);
+        const streamUrl = meta?.data?.url;
         if (cancelled) return;
-        const url = URL.createObjectURL(res.data);
-        setVideoBlobUrl(url);
+        if (streamUrl) {
+          setVideoBlobUrl(streamUrl);   // presigned URL — <video> streams it directly
+          setVideoLoading(false);
+          return;
+        }
+      } catch { /* fall through to blob download */ }
+      try {
+        const res = await api.get(`/ai-interview/${liveSession.id}/recording`, { responseType: 'blob' });
+        if (cancelled) return;
+        setVideoBlobUrl(URL.createObjectURL(res.data));
         setVideoBlobSize(res.data?.size ?? null);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setVideoError(true);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setVideoLoading(false);
-      });
+      }
+    })();
     return () => { cancelled = true; };
   }, [activeTab, liveSession.recording_file_path, liveSession.id, videoBlobUrl]);
 
@@ -640,14 +656,30 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     if (activeTab !== 'recording' || !liveSession.screen_recording_file_path || screenBlobUrl || screenError) return;
     let cancelled = false;
     setScreenLoading(true);
-    api.get(`/ai-interview/${liveSession.id}/screen-recording`, { responseType: 'blob' })
-      .then((res) => {
+    // STREAM-FIRST (see candidate-recording effect above): presigned URL → direct
+    // <video> streaming; blob download only as the local-storage fallback.
+    (async () => {
+      try {
+        const meta = await api.get(`/ai-interview/${liveSession.id}/screen-recording-url`);
+        const streamUrl = meta?.data?.url;
+        if (cancelled) return;
+        if (streamUrl) {
+          setScreenBlobUrl(streamUrl);
+          setScreenLoading(false);
+          return;
+        }
+      } catch { /* fall through to blob download */ }
+      try {
+        const res = await api.get(`/ai-interview/${liveSession.id}/screen-recording`, { responseType: 'blob' });
         if (cancelled) return;
         setScreenBlobUrl(URL.createObjectURL(res.data));
         setScreenBlobSize(res.data?.size ?? null);
-      })
-      .catch(() => { if (!cancelled) setScreenError(true); })
-      .finally(() => { if (!cancelled) setScreenLoading(false); });
+      } catch {
+        if (!cancelled) setScreenError(true);
+      } finally {
+        if (!cancelled) setScreenLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [activeTab, liveSession.screen_recording_file_path, liveSession.id, screenBlobUrl, screenError]);
 
@@ -1108,6 +1140,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     [liveSession],
   );
   const totalViolations = violations.length;
+  // Recruiter-facing summary (serious/moderate/minor, advisory excluded) — see violationTaxonomy.
+  const violationSummary = useMemo(() => summarizeViolations(violations), [violations]);
+  // Legacy inline violations UI retained (disabled) for quick rollback; superseded by IntegrityCheckTab.
+  const showLegacyViolations = false;
 
   // Severity-based weighted score and breakdown
   const severityStats = useMemo(() => {
@@ -1162,7 +1198,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const safeViolationPage = Math.min(violationPage, totalPages);
   const pagedViolations = groupedViolations.slice((safeViolationPage - 1) * ROWS_PER_PAGE, safeViolationPage * ROWS_PER_PAGE);
 
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; badgeTone?: 'critical' | 'neutral'; live?: boolean }[] = [
     // 'Overview' tab hidden 2026-05-30 — merged into the combined Evaluation Report (Eval) tab.
     // { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
@@ -1186,7 +1222,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
-    { key: 'violations',       label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
+    { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1543,10 +1579,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   )}
                   {tab.badge !== undefined && (
                     <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                      tab.badge > 0
-                        ? activeTab === 'violations'
-                          ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                          : 'bg-red-100 text-red-600 ring-1 ring-red-200'
+                      tab.badge > 0 && tab.badgeTone === 'critical'
+                        ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
                         : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
                     }`}>
                       {tab.badge}
@@ -3656,8 +3690,23 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               );
             })()}
 
-            {/* Violations Tab */}
+            {/* Integrity Check (violations) tab — recruiter-friendly redesign */}
             {!evaluationPending && activeTab === 'violations' && (
+              <IntegrityCheckTab
+                violations={violations}
+                startTs={videoAnchor}
+                completedAt={liveSession.completed_at}
+                hasRecording={!!(liveSession.recording_file_path || liveSession.screen_recording_file_path)}
+                onJumpToRecording={(seconds) => {
+                  seekNonceRef.current += 1;
+                  setRecordingSeek({ seconds, key: seekNonceRef.current });
+                  setActiveTab('recording');
+                }}
+              />
+            )}
+            {/* Legacy inline violations UI — superseded by IntegrityCheckTab above.
+                Guarded off (never rendered); kept for quick rollback, delete in a follow-up. */}
+            {showLegacyViolations && (
               <div className="space-y-6">
 
                 {/* Total Violations Banner */}
