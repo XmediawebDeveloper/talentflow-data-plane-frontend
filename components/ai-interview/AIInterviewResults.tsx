@@ -23,10 +23,11 @@ interface AIInterviewResultsProps {
    *  results view is embedded as a tab inside the interview details page. */
   embedded?: boolean;
   /** When provided (embedded case), clicking a candidate opens their details
-   *  inline via this callback (passing the session id) instead of navigating
-   *  to the standalone results-details route. Keeps the breadcrumb anchored to
-   *  the interview details page the user came from. */
-  onViewCandidate?: (sessionId: string) => void;
+   *  inline via this callback (passing the session id and the ordered list of
+   *  currently-visible session ids for Prev/Next) instead of navigating to the
+   *  standalone results-details route. Keeps the breadcrumb anchored to the
+   *  interview details page the user came from. */
+  onViewCandidate?: (sessionId: string, navIds: string[]) => void;
 }
 
 const STATUS_OPTIONS = [
@@ -212,7 +213,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     // candidate inline so the breadcrumb stays anchored to that page instead
     // of jumping to the standalone results-details route.
     if (onViewCandidate) {
-      onViewCandidate(session.id);
+      onViewCandidate(session.id, paginatedSessions.map((s) => s.id));
       return;
     }
     // Persist the currently-visible session order so the details view can offer

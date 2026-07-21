@@ -142,6 +142,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // Candidate detail
   const [candidateDetail, setCandidateDetail] = useState<AIInterviewResponse | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  // Ordered candidate ids of the list the detail was opened from (Invites /
+  // Results tab), so the inline Candidate Results view can offer Prev/Next
+  // between candidates without returning to the list.
+  const [candidateNavIds, setCandidateNavIds] = useState<string[]>([]);
 
   // Invites tab filters (mirrors the Candidate Invitations modal on the list page)
   const [inviteSearch, setInviteSearch] = useState('');
@@ -433,7 +437,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   };
 
-  const handleCandidateClick = useCallback(async (activityId: string) => {
+  const handleCandidateClick = useCallback(async (activityId: string, navIds?: string[]) => {
+    if (navIds) setCandidateNavIds(navIds);
     setCandidateLoading(true);
     try {
       const detail = await aiInterviewService.get(activityId);
@@ -457,6 +462,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Show candidate detail view
   if (candidateDetail) {
+    // Prev/Next between candidates in the list this detail was opened from.
+    const navIdx = candidateNavIds.indexOf(candidateDetail.id);
+    const prevId = navIdx > 0 ? candidateNavIds[navIdx - 1] : null;
+    const nextId = navIdx >= 0 && navIdx < candidateNavIds.length - 1 ? candidateNavIds[navIdx + 1] : null;
     return (
       <CandidateResultsView
         interview={candidateDetail}
@@ -465,6 +474,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           label: config.jd_title || config.position || 'Interview Details',
           onClick: () => setCandidateDetail(null),
         }]}
+        currentIndex={navIdx >= 0 ? navIdx : undefined}
+        totalCount={candidateNavIds.length || undefined}
+        onPrev={prevId ? () => handleCandidateClick(prevId) : undefined}
+        onNext={nextId ? () => handleCandidateClick(nextId) : undefined}
       />
     );
   }
@@ -1926,7 +1939,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       return (
                         <div
                           key={a.id}
-                          onClick={() => handleCandidateClick(a.id)}
+                          onClick={() => handleCandidateClick(a.id, filtered.map(f => f.id))}
                           className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
                         >
                           {/* Candidate info */}
@@ -1976,7 +1989,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
                             {(a.status === 'completed' || a.status === 'in_progress' || a.status === 'terminated') && (
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleCandidateClick(a.id); }}
+                                onClick={(e) => { e.stopPropagation(); handleCandidateClick(a.id, filtered.map(f => f.id)); }}
                                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                               >
                                 <Eye className="w-3 h-3" />
