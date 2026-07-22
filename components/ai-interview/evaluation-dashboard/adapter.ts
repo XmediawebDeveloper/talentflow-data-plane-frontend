@@ -1422,6 +1422,11 @@ function buildPerQuestionDetailsFromHistory(
       displayOnlyQuestionScore: partialDisplayScore ?? undefined,
       followUps: followUps && followUps.length > 0 ? followUps : undefined,
       bundledFollowUp,
+      // Per-question "why this score" rationale (backend-composed). The history
+      // builder is the PREFERRED source when question_history is complete, so
+      // without this the amber "Why this score" block never rendered for most
+      // completed interviews — only ones that fell through to the groups builder.
+      scoreRationale: String((q as any)?.score_rationale || ''),
     };
   });
 }
@@ -1496,6 +1501,10 @@ function buildPerQuestionDetailsFromConversation(
   const historyByText = indexHistoryByText(questionHistory);
   const bundledForQuestion = (qText: string): PerQuestionDetail['bundledFollowUp'] =>
     bundledFollowUpFromRow(historyByText.get(qText.trim().toLowerCase()));
+  // Per-question "why this score" rationale — recovered from the matched
+  // history row (this convo builder has no eval rows of its own).
+  const rationaleForQuestion = (qText: string): string =>
+    String(historyByText.get(qText.trim().toLowerCase())?.score_rationale || '');
   const sectionFromRT = (rt: string): PerQuestionDetail['section'] => {
     const r = (rt || '').toLowerCase();
     if (r === 'nice_to_have_skills') return 'nth';
@@ -1754,6 +1763,7 @@ function buildPerQuestionDetailsFromConversation(
           skills,
           questionScore: score,
           bundledFollowUp: bundledForQuestion(pending.question),
+          scoreRationale: rationaleForQuestion(pending.question),
         });
       }
       pending = { question: String(m.content) };
@@ -1767,6 +1777,7 @@ function buildPerQuestionDetailsFromConversation(
         skills,
         questionScore: score,
         bundledFollowUp: bundledForQuestion(pending.question),
+        scoreRationale: rationaleForQuestion(pending.question),
       });
       pending = null;
     }
@@ -1783,6 +1794,7 @@ function buildPerQuestionDetailsFromConversation(
       skills,
       questionScore: score,
       bundledFollowUp: bundledForQuestion(pending.question),
+      scoreRationale: rationaleForQuestion(pending.question),
     });
   }
 

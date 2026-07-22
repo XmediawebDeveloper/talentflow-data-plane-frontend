@@ -706,14 +706,24 @@ export function EvalReportCombined({
                   ? 'bg-indigo-50 text-indigo-600'
                   : q.section === 'nth' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-600';
                 const middleText = isHR ? q.question : (q.skills.map(s => s.name).join(', ') || q.question);
+                const hasRationale = !isHR && !!q.scoreRationale && q.scoreRationale.trim().length > 0;
                 return (
-                  <div key={i} className={`grid grid-cols-[15%_20%_minmax(0,1fr)_15%] items-center px-5 py-3 gap-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                    <div className="text-sm font-bold text-indigo-600">Q{q.qNum}</div>
-                    <div><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sectionClass}`}>{sectionLabel}</span></div>
-                    <div className="text-xs text-gray-500 truncate">{middleText}</div>
-                    {isHR
-                      ? <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
-                      : <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>}
+                  <div key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} style={{ pageBreakInside: 'avoid' }}>
+                    <div className="grid grid-cols-[15%_20%_minmax(0,1fr)_15%] items-center px-5 py-3 gap-3">
+                      <div className="text-sm font-bold text-indigo-600">Q{q.qNum}</div>
+                      <div><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sectionClass}`}>{sectionLabel}</span></div>
+                      <div className="text-xs text-gray-500 truncate">{middleText}</div>
+                      {isHR
+                        ? <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
+                        : <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>}
+                    </div>
+                    {hasRationale && (
+                      <div className="px-5 pb-3 -mt-1">
+                        <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                          <span className="font-semibold">Why this score: </span>{q.scoreRationale}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
