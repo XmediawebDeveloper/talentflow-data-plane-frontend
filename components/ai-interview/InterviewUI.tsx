@@ -1408,9 +1408,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // throws NotSupportedError. Since we reuse the context across recording sessions we skip
   // addModule() on subsequent calls and go straight to new AudioWorkletNode().
   const pcmWorkletRegisteredRef = useRef(false);
-  // RNNoise WASM bytes, fetched ONCE on the main thread and handed to the
-  // AudioWorklet via processorOptions — the worklet scope has no fetch().
-  const rnnoiseWasmBinaryRef = useRef<ArrayBuffer | null>(null);
   const voiceVerifBufferRef = useRef<Float32Array[]>([]);
   const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
   const isPlayingRef = useRef(false);
@@ -5921,50 +5918,31 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // ScriptProcessor is deprecated but kept as fallback for older browsers.
       let audioNodeConnected = false;
 
-      // false = pass-through off-thread (no WASM denoising); true = full RNNoise.
-      // ENABLED (2026-07-18): RNNoise gates background noise and normalizes the
-      // signal, which helps quiet built-in mics stand out above the VAD floor
-      // (paired with the raised built-in gain above) — reducing the "cut off
-      // while speaking" auto-skips on low-level mics. The worklet still falls
-      // back to pass-through automatically if the WASM can't instantiate.
-      const RNNOISE_ENABLED = true;
+      // RNNoise is DISABLED (2026-07-22, per user request — remove it
+      // completely). The worklet runs as a pure off-thread pass-through PCM
+      // chunker: it just forwards mic audio in 4096-sample chunks, NO WASM
+      // denoising, NO wasm fetch, NO wasm init. This is the known-good
+      // pre-RNNoise behavior. (RNNoise is not related to the connection-loss
+      // issue — that's a client-side network drop — so removing it is purely
+      // per request; quiet-mic help now comes from the mic GAIN boost above.)
 
       if (ctx.audioWorklet) {
         try {
-          // Register rnnoise-processor only once per AudioContext.
-          // AudioWorklet processors can only be registered once — calling addModule
-          // again on the same context throws NotSupportedError.
+          // Register rnnoise-processor once per AudioContext (addModule again on
+          // the same context throws NotSupportedError). In bypass mode it does
+          // no WASM work — pure pass-through.
           if (!pcmWorkletRegisteredRef.current) {
-            // rnnoise-processor.js denoises audio via RNNoise before posting
-            // 4096-sample chunks. Falls back to pass-through if WASM is absent.
             await ctx.audioWorklet.addModule('/workers/rnnoise-processor.js');
             pcmWorkletRegisteredRef.current = true;
-          }
-
-          // Fetch the WASM bytes HERE (main thread) and hand them to the worklet.
-          // The AudioWorklet global scope has no fetch(), so the worklet used to
-          // throw "ReferenceError: fetch is not defined" and silently degrade to
-          // pass-through. Fetch once, then reuse the cached buffer.
-          if (RNNOISE_ENABLED && !rnnoiseWasmBinaryRef.current) {
-            try {
-              const _resp = await fetch('/workers/rnnoise.wasm');
-              if (_resp.ok) rnnoiseWasmBinaryRef.current = await _resp.arrayBuffer();
-              else console.warn('[InterviewUI] rnnoise.wasm fetch failed:', _resp.status);
-            } catch (e) {
-              console.warn('[InterviewUI] rnnoise.wasm fetch error — RNNoise will pass through:', e);
-            }
           }
 
           const workletNode = new AudioWorkletNode(ctx, 'rnnoise-processor', {
             channelCount: 1,
             channelCountMode: 'explicit',
             channelInterpretation: 'discrete',
-            processorOptions: {
-              // bypass if disabled OR the WASM couldn't be fetched (graceful
-              // pass-through instead of a worklet error).
-              bypass: !RNNOISE_ENABLED || !rnnoiseWasmBinaryRef.current,
-              wasmBinary: rnnoiseWasmBinaryRef.current,
-            },
+            // bypass:true → the worklet skips WASM entirely and runs as a plain
+            // pass-through chunker. No wasm fetch/instantiate happens.
+            processorOptions: { bypass: true },
           });
           workletNode.port.onmessage = (e: MessageEvent) => {
             if (e.data instanceof Float32Array) {
