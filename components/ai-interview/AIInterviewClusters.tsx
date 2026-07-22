@@ -935,13 +935,49 @@ export default function AIInterviewClusters() {
           return survivors;
         };
         const initialExpandIds: string[] = [];
+        // Fold the SAVED distribution's skills back into the restored clusters so
+        // the cluster card shows every skill the interview actually asks. The
+        // saved skill_distribution can carry JD-pool skills that were never
+        // written into nth_clusters/mth_clusters, so without this the card showed
+        // e.g. 2 NHS skills while the Question Distribution popover (which reads
+        // the distribution) correctly showed 8. Matched by cluster_id → name →
+        // first cluster; case-insensitive dedupe; never drops an existing skill.
+        const _distRows = (si.skill_distribution && typeof si.skill_distribution === 'object')
+          ? si.skill_distribution as { mth_questions?: any[]; nth_questions?: any[] }
+          : {};
+        const foldDistOnLoad = (clustersArr: any[], rows?: any[]): any[] => {
+          if (!Array.isArray(clustersArr) || clustersArr.length === 0) return clustersArr;
+          if (!Array.isArray(rows) || rows.length === 0) return clustersArr;
+          const next = clustersArr.map(c => ({ ...c, skills: [...(c.skills || [])] }));
+          const byId = new Map(next.map(c => [String(c.id), c]));
+          const byName = new Map(next.map(c => [String(c.name).toLowerCase().trim(), c]));
+          const seen = new Map<string, Set<string>>(
+            next.map(c => [String(c.id), new Set((c.skills as string[]).map(s => s.toLowerCase().trim()))]),
+          );
+          for (const r of rows) {
+            const target = byId.get(String(r?.cluster_id))
+              ?? byName.get(String(r?.cluster_name || '').toLowerCase().trim())
+              ?? next[0];
+            if (!target) continue;
+            const s = seen.get(String(target.id))!;
+            const names = [
+              String(r?.primary_skill || r?.primary || '').trim(),
+              ...((r?.secondary_skills || r?.secondaries || []) as any[]).map((x: any) => String(x || '').trim()),
+            ].filter(Boolean);
+            for (const nm of names) {
+              const k = nm.toLowerCase().trim();
+              if (k && !s.has(k)) { (target.skills as string[]).push(nm); s.add(k); }
+            }
+          }
+          return next;
+        };
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
           const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
-          const mthRestored = mthTrimmed.map((c: any) => ({
-            ...c,
-            priority: normalizePriority(c.priority),
-          }));
+          const mthRestored = foldDistOnLoad(
+            mthTrimmed.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })),
+            _distRows.mth_questions,
+          );
           setMthClusters(mthRestored);
           // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
@@ -951,10 +987,10 @@ export default function AIInterviewClusters() {
           const nthTrimmed = !nthEnabledForTimed
             ? []
             : trimAndRedistribute(si.nth_clusters as any[], nthMax);
-          const nthRestored = nthTrimmed.map((c: any) => ({
-            ...c,
-            priority: normalizePriority(c.priority),
-          }));
+          const nthRestored = foldDistOnLoad(
+            nthTrimmed.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })),
+            _distRows.nth_questions,
+          );
           setNthClusters(nthRestored);
           // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
@@ -1775,6 +1811,64 @@ export default function AIInterviewClusters() {
                   nth_questions: dist.nth_questions || [],
                   generated_at: new Date().toISOString(),
                 };
+
+                // ── Sync clusters ⇐ distribution ──────────────────────────
+                // The distribution can introduce JD-pool skills (e.g. Canva,
+                // WordPress) that were NOT in the clusters the recruiter typed.
+                // Those skills are what the interview actually asks, but the
+                // cluster CARD renders `cluster.skills` — so without this sync it
+                // showed only the 2 original skills while the Question
+                // Distribution popover correctly showed all 8. Fold every
+                // distribution skill back into its own cluster (matched by
+                // cluster_id, else cluster_name, else the first cluster) so the
+                // card and the popover agree. Case-insensitive dedupe; never
+                // drops an existing skill.
+                const foldDistIntoClusters = (
+                  clustersArr: Cluster[],
+                  rows: any[],
+                ): Cluster[] => {
+                  if (!clustersArr.length || !Array.isArray(rows) || rows.length === 0) {
+                    return clustersArr;
+                  }
+                  // Work on fresh cluster objects (new skills arrays) so React
+                  // re-renders when we setState with the result.
+                  const next: Cluster[] = clustersArr.map(c => ({ ...c, skills: [...c.skills] }));
+                  const byId = new Map(next.map(c => [String(c.id), c]));
+                  const byName = new Map(next.map(c => [String(c.name).toLowerCase().trim(), c]));
+                  const seenPerCluster = new Map<string, Set<string>>(
+                    next.map(c => [String(c.id), new Set(c.skills.map(s => s.toLowerCase().trim()))]),
+                  );
+                  for (const r of rows) {
+                    const target =
+                      byId.get(String(r?.cluster_id)) ??
+                      byName.get(String(r?.cluster_name || '').toLowerCase().trim()) ??
+                      next[0];
+                    if (!target) continue;
+                    const seen = seenPerCluster.get(String(target.id))!;
+                    const skillNames: string[] = [
+                      String(r?.primary_skill || r?.primary || '').trim(),
+                      ...((r?.secondary_skills || r?.secondaries || []) as any[])
+                        .map((s: any) => String(s || '').trim()),
+                    ].filter(Boolean);
+                    for (const nm of skillNames) {
+                      const k = nm.toLowerCase().trim();
+                      if (k && !seen.has(k)) {
+                        target.skills.push(nm);
+                        seen.add(k);
+                      }
+                    }
+                  }
+                  return next;
+                };
+                newMthClusters = foldDistIntoClusters(newMthClusters, dist.mth_questions || []);
+                if (nthEnabled) {
+                  newNthClusters = foldDistIntoClusters(newNthClusters, dist.nth_questions || []);
+                }
+                // Re-sync state + SI so the cluster CARD shows the full set.
+                setMthClusters(newMthClusters);
+                if (nthEnabled) setNthClusters(newNthClusters);
+                si.mth_clusters = newMthClusters;
+                si.nth_clusters = nthEnabled ? newNthClusters : [];
               }
             } catch (distErr) {
               // Non-fatal — clusters still persist; finalize will compute the
@@ -1783,16 +1877,57 @@ export default function AIInterviewClusters() {
             }
           }
 
-          await aiInterviewService.update(id, {
+          const _updated = await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
           });
-          // Reflect the persisted si (incl. skill_distribution) into local
-          // config state so the distribution preview re-renders from the SAVED
-          // AI distribution immediately — no page reload, and it now matches
-          // exactly what the post-publish view will show.
+          // Adopt the BACKEND-CORRECTED special_instructions from the update
+          // response. The server-side over-allocation backstop expands a bucket
+          // whose unique skills < question count (e.g. recruiter left just 1 MHS
+          // + 1 NHS skill) with JD-grounded skills and RECOMPUTES the
+          // distribution with a unique skill per question. If we instead kept the
+          // LOCAL `si` (as before), the preview showed the frontend's
+          // pre-backstop distribution — the single seed skill CYCLED/duplicated
+          // across all questions — even though the DB now holds the correct,
+          // deduped, expanded plan. Re-deriving the cluster cards from the
+          // returned SI makes the preview match what actually got stored.
+          const _serverSi = (_updated && typeof (_updated as any).special_instructions === 'string')
+            ? (_updated as any).special_instructions as string
+            : JSON.stringify(si);
+          let _serverParsed: any = null;
+          try { _serverParsed = JSON.parse(_serverSi); } catch { _serverParsed = null; }
+          if (_serverParsed && typeof _serverParsed === 'object') {
+            // Re-derive cluster cards from the backend clusters (already expanded
+            // by the backstop), folding the backend distribution so the card and
+            // the Question Distribution popover agree.
+            const _foldServer = (clArr: any[], rws?: any[]): any[] => {
+              if (!Array.isArray(clArr) || clArr.length === 0) return clArr || [];
+              if (!Array.isArray(rws) || rws.length === 0) return clArr;
+              const nx = clArr.map(c => ({ ...c, skills: [...(c.skills || [])] }));
+              const byId = new Map(nx.map(c => [String(c.id), c]));
+              const byName = new Map(nx.map(c => [String(c.name).toLowerCase().trim(), c]));
+              const sn = new Map<string, Set<string>>(nx.map(c => [String(c.id), new Set((c.skills as string[]).map(s => s.toLowerCase().trim()))]));
+              for (const r of rws) {
+                const t = byId.get(String(r?.cluster_id)) ?? byName.get(String(r?.cluster_name || '').toLowerCase().trim()) ?? nx[0];
+                if (!t) continue;
+                const s = sn.get(String(t.id))!;
+                const names = [String(r?.primary_skill || r?.primary || '').trim(), ...((r?.secondary_skills || r?.secondaries || []) as any[]).map((x: any) => String(x || '').trim())].filter(Boolean);
+                for (const nm of names) { const k = nm.toLowerCase().trim(); if (k && !s.has(k)) { (t.skills as string[]).push(nm); s.add(k); } }
+              }
+              return nx;
+            };
+            const _sd = (_serverParsed.skill_distribution && typeof _serverParsed.skill_distribution === 'object') ? _serverParsed.skill_distribution : {};
+            if (Array.isArray(_serverParsed.mth_clusters)) {
+              const mthC = _foldServer(_serverParsed.mth_clusters.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })), _sd.mth_questions);
+              setMthClusters(mthC);
+            }
+            if (nthEnabled && Array.isArray(_serverParsed.nth_clusters)) {
+              const nthC = _foldServer(_serverParsed.nth_clusters.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })), _sd.nth_questions);
+              setNthClusters(nthC);
+            }
+          }
           setConfig(prev => prev
-            ? ({ ...prev, special_instructions: JSON.stringify(si), rounds_config: rounds } as AIInterviewResponse)
+            ? ({ ...prev, special_instructions: _serverSi, rounds_config: (_updated as any)?.rounds_config ?? rounds } as AIInterviewResponse)
             : prev);
         } catch {
           // Non-fatal — clusters are visible in UI; user can still save manually
