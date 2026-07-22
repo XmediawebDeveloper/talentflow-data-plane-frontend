@@ -2211,14 +2211,50 @@ export function buildDashboardData(params: {
         planByQnum.set(key, pr);
       });
       return rows.map((row, idx) => {
-        // Compute section-local slot number: subtract the cumulative count of
-        // questions asked in earlier sections. Falls back to bucket index when
-        // qNum is absent (legacy rows predating origQ storage).
-        const globalQ = Number(row.qNum);
-        const slotNum = (Number.isFinite(globalQ) && globalQ > 0)
-          ? (globalQ - sectionOffset)
-          : (idx + 1);
-        const planRow = planByQnum.get(slotNum) ?? planRows[idx];
+        // Pair each row with its plan slot by SKILL IDENTITY — NOT by positional
+        // arithmetic. `row.qNum` is the backend GLOBAL ask-order question_number,
+        // while the plan's `question_number` is the round-robin (P1/P2/P3)
+        // renumbered order from _apply_cross_priority_mix. Those two axes diverge
+        // whenever a global slot is consumed before/among the skill questions (an
+        // opening HR/greeting slot, a skip, or a follow-up) or a slot is asked out
+        // of renumbered order — so the old `globalQ - sectionOffset` →
+        // planByQnum.get(slotNum) join returned a DIFFERENT slot's skill (e.g. the
+        // STLC question showing Q3's "communication" skill). The backend already
+        // bound the CORRECT plan skills to this row (assigned_skills /
+        // question_skill_map on the SAME ask-order axis as the text), so recover
+        // the slot by best skill-set overlap, which is order-independent and
+        // deterministic because plan slots carry disjoint skills.
+        const rowSkillSet = new Set(
+          row.skills.map(s => String(s?.name || '').toLowerCase().trim()).filter(Boolean),
+        );
+        let planRow: any = null;
+        if (rowSkillSet.size > 0) {
+          let bestScore = 0;
+          for (const pr of planRows) {
+            const prPrimary = String(pr?.primary_skill || '').toLowerCase().trim();
+            const prSecs = (Array.isArray(pr?.secondary_skills) ? pr.secondary_skills : [])
+              .map((s: any) => String(s || '').toLowerCase().trim())
+              .filter(Boolean);
+            let overlap = 0;
+            for (const n of [prPrimary, ...prSecs]) {
+              if (n && rowSkillSet.has(n)) overlap++;
+            }
+            // Weight a primary-skill match higher so the owning slot wins ties.
+            const scoreVal = overlap * 2 + (prPrimary && rowSkillSet.has(prPrimary) ? 1 : 0);
+            if (scoreVal > bestScore) {
+              bestScore = scoreVal;
+              planRow = pr;
+            }
+          }
+        }
+        // Fallback (legacy rows with no derived skills): positional slot mapping.
+        if (!planRow) {
+          const globalQ = Number(row.qNum);
+          const slotNum = (Number.isFinite(globalQ) && globalQ > 0)
+            ? (globalQ - sectionOffset)
+            : (idx + 1);
+          planRow = planByQnum.get(slotNum) ?? planRows[idx];
+        }
         if (!planRow) return row;
         const planSkills = buildSkillsFromPlanRow(planRow);
         if (planSkills.length === 0) return row;

@@ -1407,10 +1407,17 @@ export default function AIInterviewConfig() {
               enabled: nthRound.enabled !== false,
             });
           } else {
+            // No NHS round in rounds_config — it was DISABLED at save time (the
+            // round is only pushed when enabled). Still restore the recruiter's
+            // typed skills from the persisted nth_main_skills so a manually-added
+            // (non-JD) NHS skill survives disable → navigate → re-enable. Fall
+            // back to JD nice-to-have skills only when no saved list exists.
             setNth(prev => ({
               ...prev,
               enabled: false,
-              skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+              skills: (nthMainSkills && nthMainSkills.length > 0)
+                ? toSkillEntries(nthMainSkills)
+                : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
             }));
           }
 
@@ -2008,11 +2015,17 @@ export default function AIInterviewConfig() {
     // Reading from loadedSiRef.current here would drop newly added skills when
     // the user navigates back from the Clusters page.
     mth_main_skills: mth.skills.map(s => s.name),
-    ...(nth.enabled ? { nth_main_skills: nth.skills.map(s => s.name) } : (
-      loadedSiRef.current.nth_main_skills !== undefined
-        ? { nth_main_skills: loadedSiRef.current.nth_main_skills }
-        : {}
-    )),
+    // ALWAYS persist the CURRENT nth.skills — even when NHS is DISABLED. The
+    // toggle only hides/flags the round; it does NOT clear nth.skills, so a
+    // manually-added (non-JD) NHS skill still lives in state. Previously, saving
+    // while NHS was disabled discarded the current list and re-wrote the stale
+    // loaded value — so disabling NHS, navigating to Clusters, coming back, and
+    // re-enabling NHS silently DROPPED any hand-typed NHS skill (it isn't in the
+    // JD, so the fallback couldn't recover it). Persisting the live list here
+    // (mirroring mth_main_skills) preserves manual skills across disable →
+    // navigate → re-enable. Harmless while disabled: nth_clusters is still []
+    // (line above) and distribution ignores a disabled round.
+    nth_main_skills: nth.skills.map(s => s.name),
     skill_comments: {
       mth: Object.fromEntries(mth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
       nth: Object.fromEntries(nth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
@@ -2238,7 +2251,11 @@ export default function AIInterviewConfig() {
     // the expanded list under earlier code.
     if (existingDraftIdRef.current) {
       loadedSiRef.current.mth_main_skills = mth.skills.map(s => s.name);
-      loadedSiRef.current.nth_main_skills = nth.enabled ? nth.skills.map(s => s.name) : [];
+      // Capture the CURRENT nth.skills unconditionally (not [] when disabled) so
+      // the baseline matches what buildSpecialInstructions now persists — a
+      // manually-added NHS skill survives disable → navigate → re-enable, and
+      // change-detection doesn't falsely trip on a stale empty baseline.
+      loadedSiRef.current.nth_main_skills = nth.skills.map(s => s.name);
       const siWithMain = JSON.parse(buildClusterJson());
       // Fire-and-forget; Clusters page will read on load.
       aiInterviewService.update(existingDraftIdRef.current, {
