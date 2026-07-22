@@ -57,6 +57,13 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
     this._bypassBuf = new Float32Array(POST_SIZE);
     this._bypassPos = 0;
 
+    // WASM bytes are fetched on the MAIN thread and handed in via
+    // processorOptions.wasmBinary. AudioWorkletGlobalScope has NO fetch / XHR,
+    // so calling fetch() in here throws "ReferenceError: fetch is not defined"
+    // and RNNoise silently degraded to pass-through (production logs:
+    // "RNNoise WASM unavailable — using pass-through: ReferenceError").
+    this._wasmBinary = (options && options.processorOptions && options.processorOptions.wasmBinary) || null;
+
     // bypass:true → skip WASM entirely, run as pure pass-through off-thread
     if (options?.processorOptions?.bypass === true) {
       this._passthrough = true;
@@ -80,9 +87,12 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
 
   async _initWasm() {
     try {
-      const resp = await fetch('/workers/rnnoise.wasm');
-      if (!resp.ok) throw new Error(`fetch /workers/rnnoise.wasm → HTTP ${resp.status}`);
-      const buf  = await resp.arrayBuffer();
+      // Use the WASM bytes passed from the main thread (fetch() is unavailable
+      // in AudioWorkletGlobalScope — see constructor note).
+      const buf = this._wasmBinary;
+      if (!buf || buf.byteLength === 0) {
+        throw new Error('rnnoise.wasm binary not provided (main thread must pass processorOptions.wasmBinary)');
+      }
 
       // Build a generous env import object covering both legacy Emscripten ABI
       // (needs env.__memory_base / memory / table) and modern standalone builds.
