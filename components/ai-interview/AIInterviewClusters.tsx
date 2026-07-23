@@ -951,22 +951,28 @@ export default function AIInterviewClusters() {
           const next = clustersArr.map(c => ({ ...c, skills: [...(c.skills || [])] }));
           const byId = new Map(next.map(c => [String(c.id), c]));
           const byName = new Map(next.map(c => [String(c.name).toLowerCase().trim(), c]));
-          const seen = new Map<string, Set<string>>(
-            next.map(c => [String(c.id), new Set((c.skills as string[]).map(s => s.toLowerCase().trim()))]),
+          // BUCKET-WIDE dedup (not per-cluster): clusters partition skills 1:1, but
+          // the slot distribution is many-to-many — the same skill is often a
+          // secondary across multiple clusters' question rows. A per-cluster set
+          // let such a skill be folded into TWO clusters (e.g. "Test case design"
+          // in both "Testing Tools" and "Defect Tracking"). Scope dedup to the
+          // whole bucket so a skill already present in ANY cluster is never added
+          // to another. First cluster to own it wins.
+          const seenBucket = new Set<string>(
+            next.flatMap(c => (c.skills as string[]).map(s => s.toLowerCase().trim())),
           );
           for (const r of rows) {
             const target = byId.get(String(r?.cluster_id))
               ?? byName.get(String(r?.cluster_name || '').toLowerCase().trim())
               ?? next[0];
             if (!target) continue;
-            const s = seen.get(String(target.id))!;
             const names = [
               String(r?.primary_skill || r?.primary || '').trim(),
               ...((r?.secondary_skills || r?.secondaries || []) as any[]).map((x: any) => String(x || '').trim()),
             ].filter(Boolean);
             for (const nm of names) {
               const k = nm.toLowerCase().trim();
-              if (k && !s.has(k)) { (target.skills as string[]).push(nm); s.add(k); }
+              if (k && !seenBucket.has(k)) { (target.skills as string[]).push(nm); seenBucket.add(k); }
             }
           }
           return next;
@@ -1835,8 +1841,12 @@ export default function AIInterviewClusters() {
                   const next: Cluster[] = clustersArr.map(c => ({ ...c, skills: [...c.skills] }));
                   const byId = new Map(next.map(c => [String(c.id), c]));
                   const byName = new Map(next.map(c => [String(c.name).toLowerCase().trim(), c]));
-                  const seenPerCluster = new Map<string, Set<string>>(
-                    next.map(c => [String(c.id), new Set(c.skills.map(s => s.toLowerCase().trim()))]),
+                  // BUCKET-WIDE dedup (not per-cluster): a skill already present in
+                  // ANY cluster of this bucket must not be folded into another —
+                  // the many-to-many slot rows otherwise duplicate a cross-cluster
+                  // secondary into a second cluster card.
+                  const seenBucket = new Set<string>(
+                    next.flatMap(c => c.skills.map(s => s.toLowerCase().trim())),
                   );
                   for (const r of rows) {
                     const target =
@@ -1844,7 +1854,6 @@ export default function AIInterviewClusters() {
                       byName.get(String(r?.cluster_name || '').toLowerCase().trim()) ??
                       next[0];
                     if (!target) continue;
-                    const seen = seenPerCluster.get(String(target.id))!;
                     const skillNames: string[] = [
                       String(r?.primary_skill || r?.primary || '').trim(),
                       ...((r?.secondary_skills || r?.secondaries || []) as any[])
@@ -1852,9 +1861,9 @@ export default function AIInterviewClusters() {
                     ].filter(Boolean);
                     for (const nm of skillNames) {
                       const k = nm.toLowerCase().trim();
-                      if (k && !seen.has(k)) {
+                      if (k && !seenBucket.has(k)) {
                         target.skills.push(nm);
-                        seen.add(k);
+                        seenBucket.add(k);
                       }
                     }
                   }
@@ -1906,13 +1915,16 @@ export default function AIInterviewClusters() {
               const nx = clArr.map(c => ({ ...c, skills: [...(c.skills || [])] }));
               const byId = new Map(nx.map(c => [String(c.id), c]));
               const byName = new Map(nx.map(c => [String(c.name).toLowerCase().trim(), c]));
-              const sn = new Map<string, Set<string>>(nx.map(c => [String(c.id), new Set((c.skills as string[]).map(s => s.toLowerCase().trim()))]));
+              // BUCKET-WIDE dedup (see foldDistOnLoad): a skill already present in
+              // ANY cluster of this bucket must not be folded into another — the
+              // many-to-many slot rows otherwise duplicate a cross-cluster
+              // secondary into a second cluster card.
+              const snBucket = new Set<string>(nx.flatMap(c => (c.skills as string[]).map(s => s.toLowerCase().trim())));
               for (const r of rws) {
                 const t = byId.get(String(r?.cluster_id)) ?? byName.get(String(r?.cluster_name || '').toLowerCase().trim()) ?? nx[0];
                 if (!t) continue;
-                const s = sn.get(String(t.id))!;
                 const names = [String(r?.primary_skill || r?.primary || '').trim(), ...((r?.secondary_skills || r?.secondaries || []) as any[]).map((x: any) => String(x || '').trim())].filter(Boolean);
-                for (const nm of names) { const k = nm.toLowerCase().trim(); if (k && !s.has(k)) { (t.skills as string[]).push(nm); s.add(k); } }
+                for (const nm of names) { const k = nm.toLowerCase().trim(); if (k && !snBucket.has(k)) { (t.skills as string[]).push(nm); snBucket.add(k); } }
               }
               return nx;
             };
