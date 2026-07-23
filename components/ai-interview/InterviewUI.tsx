@@ -4126,50 +4126,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         isClosingRef.current = true;
         setStatus("Interview time reached — ending now...");
         break;
-      case "repeat_pending": {
-        // ── VOICE repeat/clarification freeze ─────────────────────────────
-        // The candidate asked Bina to repeat/clarify BY VOICE (the backend
-        // detected the request in their answer). Make it behave EXACTLY like
-        // the "Repeat Question" button: snapshot the answer clock at its
-        // pre-answer value and RESUME from that value only when the mic
-        // reopens ("Your turn") — so the countdown neither resets to a fresh
-        // 2:00 nor ticks down while Bina is re-speaking.
-        //
-        // We reuse the button's freeze-resume path: arming repeatFreezeRef +
-        // repeatFrozenRemainingRef here makes the incoming clarification
-        // question_timer_started route through the freeze-resume block (which
-        // parks the display and starts the countdown again on candidate_turn_open).
-        //
-        // frozenResponseTimeRef holds the per-question remaining captured the
-        // moment the candidate finished their (repeat-request) turn in
-        // stopRecording() — that is the value we must resume from. By the time
-        // this message arrives the answer submit has already nulled
-        // questionTimerSecondsRef, so the frozen ref is the reliable source.
-        const _voiceRepeatFrozen =
-          (frozenResponseTimeRef.current != null && frozenResponseTimeRef.current > 0)
-            ? frozenResponseTimeRef.current
-            : (questionTimerSecondsRef.current != null && questionTimerSecondsRef.current > 0)
-              ? questionTimerSecondsRef.current
-              : null;
-        if (_voiceRepeatFrozen != null) {
-          repeatFrozenRemainingRef.current = _voiceRepeatFrozen;
-          repeatFreezeRef.current = true;
-          // Park the display at the frozen value; kill any stray interval so it
-          // can't tick while Bina re-speaks.
-          if (questionTimerIntervalRef.current) {
-            clearInterval(questionTimerIntervalRef.current);
-            questionTimerIntervalRef.current = null;
-          }
-          setQuestionTimerSeconds(_voiceRepeatFrozen);
-          questionTimerSecondsRef.current = _voiceRepeatFrozen;
-          setQuestionTimerExpired(false);
-          questionTimerExpiredRef.current = false;
-          console.log(`[Timer ${timestamp}] Voice repeat detected — answer clock FROZEN at ${_voiceRepeatFrozen}s; resumes when the mic reopens (matches Repeat button)`);
-        } else {
-          console.log(`[Timer ${timestamp}] Voice repeat detected but no frozen remaining available — falling back to backend seconds`);
-        }
-        break;
-      }
       case "question_timer_started": {
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
@@ -4199,6 +4155,37 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
         // the backend's auto-skip is calibrated to, so they must match.
         let dur = data.seconds ?? data.total_seconds ?? data.duration_seconds ?? 120;
+        // ── VOICE REPEAT (clarification) → behave like the Repeat button ────
+        // A clarification event is Bina RE-SPEAKING the current question because
+        // the candidate asked her to repeat/clarify BY VOICE. Updated UX (was:
+        // "don't pause on repeat"): the answer clock must NOT reset to a fresh
+        // 2:00 and must NOT tick down while Bina re-speaks — it freezes at the
+        // value the candidate had when they asked and resumes only when the mic
+        // reopens ("Your turn"), exactly like the Repeat Question button.
+        //
+        // We route it through the SAME freeze-resume path the button uses (just
+        // below) by arming repeatFreezeRef here. The resume value is the per-
+        // question remaining captured the moment the candidate finished their
+        // repeat-request turn (frozenResponseTimeRef) — questionTimerSecondsRef
+        // was already nulled by the answer submit, so the frozen ref is the
+        // reliable source. This replaces the old branch that kept the countdown
+        // running through the re-speak.
+        if (data.is_clarification === true && !repeatFreezeRef.current) {
+          const _clarifResume =
+            (frozenResponseTimeRef.current != null && frozenResponseTimeRef.current > 0)
+              ? frozenResponseTimeRef.current
+              : (questionTimerSecondsRef.current != null && questionTimerSecondsRef.current > 0)
+                ? questionTimerSecondsRef.current
+                : null;
+          if (_clarifResume != null) {
+            repeatFreezeRef.current = true;
+            repeatFrozenRemainingRef.current = _clarifResume;
+            // One repeat per turn — mirror the button so the resume doesn't
+            // re-arm the repeat window (backend auto-advances on the 2nd ask).
+            repeatUsedThisTurnRef.current = true;
+            console.log(`[Timer ${timestamp}] Clarification (voice repeat) — FREEZING answer clock at ${_clarifResume}s; resumes on "Your turn" (matches Repeat button, no tick during re-speak)`);
+          }
+        }
         // ── REPEAT-QUESTION FREEZE RESUME ──────────────────────────────────
         // This timer event is the re-speak completing (on_speaking_done →
         // _start_question_timer), and it can arrive while Bina's audio is still
