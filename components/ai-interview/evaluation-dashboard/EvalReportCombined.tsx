@@ -719,8 +719,23 @@ export function EvalReportCombined({
                     </div>
                     {hasRationale && (
                       <div className="px-5 pb-3 -mt-1">
-                        <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
-                          <span className="font-semibold">Why this score: </span>{q.scoreRationale}
+                        <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2" style={{ pageBreakInside: 'avoid' }}>
+                          <div className="font-semibold mb-0.5">Why this score</div>
+                          <div className="space-y-0.5">
+                            {q.scoreRationale!.split('\n').map((line, li) => {
+                              const t = line.trim();
+                              if (!t) return null;
+                              const ci = t.indexOf(':');
+                              const labeled = ci > 0 && ci <= 120;
+                              return (
+                                <div key={li}>
+                                  {labeled
+                                    ? <><span className="font-semibold">{t.slice(0, ci)}</span>{t.slice(ci)}</>
+                                    : t}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     )}

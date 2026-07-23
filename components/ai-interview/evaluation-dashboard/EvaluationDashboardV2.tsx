@@ -588,9 +588,23 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             <div className="text-xs font-medium text-gray-500 mb-1">
               Score Rationale
             </div>
-            <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 whitespace-pre-wrap break-words leading-relaxed">
+            <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 break-words leading-relaxed">
               <Brain className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-              <span>{q.scoreRationale}</span>
+              <div className="space-y-1 flex-1">
+                {q.scoreRationale.split('\n').map((line, li) => {
+                  const t = line.trim();
+                  if (!t) return null;
+                  const ci = t.indexOf(':');
+                  const labeled = ci > 0 && ci <= 120;
+                  return (
+                    <div key={li}>
+                      {labeled
+                        ? <><span className="font-semibold text-gray-900">{t.slice(0, ci)}</span>{t.slice(ci)}</>
+                        : t}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
