@@ -2573,22 +2573,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 the transcript even when the recruiter opened the view mid-interview */}
             {!evaluationPending && activeTab === 'transcript' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
-                // Silence prompts ("Are you there?…") and closing thank-yous are
-                // meta-messages from Bina, not real questions. They must not
-                // count toward Q#/F# numbering or the message total — match
-                // the backend's _is_silence_or_closing_prompt filter.
+                // Closing thank-yous are meta-messages from Bina that we keep out
+                // of the transcript list. The silence "Are you there?" nudge is
+                // NOT filtered here anymore: it is a real utterance the candidate
+                // heard and belongs in the transcript. It still won't inflate Q#/F#
+                // numbering — the labeling loop below classifies it as an
+                // 'interstitial' (via interstitial:true / kind="silence_*" / text
+                // match in isInterstitialMsg) and renders it with NO question label,
+                // exactly like the "I didn't get any response…" move-on line (which
+                // was already shown). This fixes the reported inconsistency where the
+                // move-on appeared in the Transcript tab but the "Are you there?"
+                // nudge did not.
                 const _isMetaAssistant = (msg: any) => {
                   if (msg.role !== 'assistant') return false;
                   const c = (msg.content || '').toLowerCase().trim();
-                  return c.startsWith('are you there')
-                    || c.startsWith('thank you for taking the time')
+                  return c.startsWith('thank you for taking the time')
                     || c.startsWith('thanks for taking the time')
                     || c.startsWith('thank you for speaking')
                     || c.startsWith('it was great chatting');
                 };
                 const rawMessages = (liveSession.conversation_transcript || interview.conversation_transcript || []);
                 const messages = rawMessages
-                  .filter((msg: any) => msg.role !== 'system' && msg.content?.trim() && !_isMetaAssistant(msg));
+                  .filter((msg: any) => msg.role !== 'system' && !_isMetaAssistant(msg) && (
+                    (msg.content && msg.content.trim())
+                    // Non-English discard: no English content, but the candidate DID
+                    // respond — keep it so the verbatim Original ASR shows in the tab.
+                    || (msg.role === 'user' && msg.discarded_non_english && (msg.original_asr || msg.raw_content))
+                  ));
 
                 if (messages.length === 0) return renderPlaceholder('No transcript available');
 
@@ -2805,7 +2816,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           // back to the salvaged raw, then content, for older records.
                           const rawContent: string | undefined = !isAssistant ? (msg.original_asr || msg.raw_content) : undefined;
                           const language: string | undefined = !isAssistant ? msg.language : undefined;
-                          const hasCorrection = !isAssistant && rawContent && rawContent !== content;
+                          // Non-English discard: candidate responded but there was no
+                          // scorable English → Original ASR shows verbatim, Corrected empty.
+                          const noScorableEnglish = !isAssistant && !!msg.discarded_non_english && !(content || '').trim() && !!(rawContent || '').trim();
+                          const hasCorrection = !isAssistant && !noScorableEnglish && rawContent && rawContent !== content;
                           const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
                           // For a Bina question that was skipped, show WHY. A
                           // question is "answered" when the NEXT chat message is a
@@ -2818,7 +2832,12 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           let _niIdx = idx + 1;
                           while (_niIdx < labeled.length && labeled[_niIdx]?.qtype === 'interstitial') _niIdx++;
                           const _nextMsg = labeled[_niIdx]?.msg;
-                          const _answered = !!_nextMsg && _nextMsg.role === 'user' && !!(_nextMsg.content || '').trim();
+                          // A non-English discard turn IS a response (just not scorable),
+                          // so the question shows the Original ASR below it, not "No response".
+                          const _answered = !!_nextMsg && _nextMsg.role === 'user' && (
+                            !!(_nextMsg.content || '').trim()
+                            || (_nextMsg.discarded_non_english && !!(_nextMsg.original_asr || _nextMsg.raw_content || '').trim())
+                          );
                           const skipNote = isAssistant && qtype !== 'closing' && qtype !== 'interstitial' && !isClarificationMsg(msg)
                             ? _skipReason(content, _answered)
                             : null;
@@ -2882,12 +2901,16 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                         : <span>{rawContent || content}</span>}
                                     </div>
                                     {/* Corrected — ALWAYS shown below. When identical to the
-                                        raw ASR it simply repeats the same text (no correction). */}
+                                        raw ASR it simply repeats the same text (no correction).
+                                        For a non-English discard there is no scorable English,
+                                        so it shows a muted "not scored" marker instead of text. */}
                                     <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                       <div className="text-[10px] font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
-                                      {hasCorrection && diff && diff.mode === 'word'
-                                        ? <DiffText parts={diff.corrected} tone="corrected" />
-                                        : <span>{content}</span>}
+                                      {noScorableEnglish
+                                        ? <span className="italic text-white/50">— no scorable English (not scored)</span>
+                                        : hasCorrection && diff && diff.mode === 'word'
+                                          ? <DiffText parts={diff.corrected} tone="corrected" />
+                                          : <span>{content}</span>}
                                     </div>
                                     {hasCorrection && diff && diff.mode === 'sentence' && (
                                       <div className="text-[10px] text-brand-orange-deep mt-1 pr-1 text-right italic">full-sentence rewrite</div>
