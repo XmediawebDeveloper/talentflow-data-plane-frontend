@@ -4126,6 +4126,52 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         isClosingRef.current = true;
         setStatus("Interview time reached — ending now...");
         break;
+      case "repeat_pending": {
+        // ── VOICE repeat/clarification — PROACTIVE freeze (mirrors the button) ──
+        // The backend detected that the candidate asked (by voice) to repeat/
+        // clarify the question, and sends this BEFORE it re-speaks. We arm the
+        // exact same freeze the Repeat BUTTON arms at click time — proactively,
+        // ahead of the re-speak's question_timer_started — so the answer clock
+        // freezes at the value the candidate had when they asked and RESUMES
+        // there on "Your turn".
+        //
+        // Why not rely on question_timer_started.is_clarification alone: that
+        // flag comes from the ws.py clarification gate, which can fall through
+        // to the follow-up/main path and send is_clarification=false — in which
+        // case a reactive frontend check never fires and the timer resets/ticks
+        // (the bug that persisted). This signal is emitted straight from the
+        // clarification DETECTION, so it does not depend on that flag.
+        //
+        // frozenResponseTimeRef holds the per-question remaining captured in
+        // stopRecording() the moment the candidate finished their repeat-request
+        // turn (questionTimerSecondsRef was nulled by the answer submit).
+        if (!repeatFreezeRef.current) {
+          const _rpResume =
+            (frozenResponseTimeRef.current != null && frozenResponseTimeRef.current > 0)
+              ? frozenResponseTimeRef.current
+              : (questionTimerSecondsRef.current != null && questionTimerSecondsRef.current > 0)
+                ? questionTimerSecondsRef.current
+                : null;
+          if (_rpResume != null) {
+            repeatFreezeRef.current = true;
+            repeatFrozenRemainingRef.current = _rpResume;
+            // One repeat per turn — mirror the button so the resume doesn't
+            // re-arm the repeat window (backend auto-advances on the 2nd ask).
+            repeatUsedThisTurnRef.current = true;
+            // Park the display at the frozen value now (during processing / the
+            // re-speak) so it doesn't show a stale/blank or a fresh 2:00.
+            if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+            setQuestionTimerSeconds(_rpResume);
+            questionTimerSecondsRef.current = _rpResume;
+            setQuestionTimerExpired(false);
+            questionTimerExpiredRef.current = false;
+            console.log(`[Timer ${timestamp}] repeat_pending — PROACTIVELY froze answer clock at ${_rpResume}s (voice repeat, mirrors Repeat button); resumes on "Your turn"`);
+          } else {
+            console.log(`[Timer ${timestamp}] repeat_pending received but no frozen remaining available — will fall back to is_clarification handling`);
+          }
+        }
+        break;
+      }
       case "question_timer_started": {
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
