@@ -2800,7 +2800,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           const isAssistant = msg.role === 'assistant';
                           const ts = formatTs(msg.timestamp);
                           const content = msg.content as string;
-                          const rawContent: string | undefined = !isAssistant ? msg.raw_content : undefined;
+                          // Prefer the VERBATIM Original ASR (untouched STT output —
+                          // keeps fillers + any non-English the engine produced). Fall
+                          // back to the salvaged raw, then content, for older records.
+                          const rawContent: string | undefined = !isAssistant ? (msg.original_asr || msg.raw_content) : undefined;
                           const language: string | undefined = !isAssistant ? msg.language : undefined;
                           const hasCorrection = !isAssistant && rawContent && rawContent !== content;
                           const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
@@ -3069,7 +3072,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             _tblClCtr = 0;
                           }
                         } else if (m.role === 'user' && current) {
-                          const raw = (m.raw_content || m.content || '') as string;
+                          const raw = (m.original_asr || m.raw_content || m.content || '') as string;
                           const corrected = (m.content || '') as string;
                           if (pendingAI && pendingAI.isSub) {
                             current.followUps.push({

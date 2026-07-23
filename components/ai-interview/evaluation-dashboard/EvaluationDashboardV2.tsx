@@ -491,7 +491,9 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200"
                 title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
               >
-                Follow-up
+                {q.bundledFollowUp.source_qnum
+                  ? `Follow-up from Q${q.bundledFollowUp.source_qnum}`
+                  : 'Follow-up'}
               </span>
             )}
           </div>
@@ -734,7 +736,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
         {q.followUps && q.followUps.length > 0 && (
           <div className="border-l-2 border-amber-300 pl-3 mt-1">
             <div className="text-xs font-semibold text-amber-700 mb-1.5">
-              Follow-up{q.followUps.length === 1 ? '' : 's'} ({q.followUps.length})
+              Follow-up{q.followUps.length === 1 ? '' : 's'} to Q{q.qNum} ({q.followUps.length})
             </div>
             <div className="space-y-2">
               {q.followUps.map((fu, fi) => {
@@ -766,10 +768,21 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 const reasonNote = explainReason();
                 return (
                   <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
                         FU{fi + 1}
                       </span>
+                      {/* Which question this is a follow-up to (parent), and —
+                          when the trigger skill was volunteered earlier — which
+                          question it came from (source). */}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                        Follow-up to Q{q.qNum}
+                      </span>
+                      {typeof fu.source_qnum === 'number' && fu.source_qnum > 0 && fu.source_qnum !== q.qNum && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                          from Q{fu.source_qnum}
+                        </span>
+                      )}
                       {fu.topic && (
                         <span className="text-[10px] text-amber-700 italic">on {fu.topic}</span>
                       )}
