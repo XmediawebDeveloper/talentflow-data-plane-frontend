@@ -486,12 +486,12 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 Score: {q.questionScore.toFixed(1)}/10
               </span>
             )}
-            {q.bundledFollowUp && (
+            {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200"
                 title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
               >
-                {q.bundledFollowUp.source_qnum
+                {q.bundledFollowUp.source_qnum && q.bundledFollowUp.source_qnum > 0
                   ? `Follow-up from Q${q.bundledFollowUp.source_qnum}`
                   : 'Follow-up'}
               </span>
@@ -500,10 +500,11 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           <div className="text-sm font-semibold text-gray-900 leading-relaxed">
             {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
           </div>
-          {q.bundledFollowUp && (() => {
+          {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (() => {
             const focus = q.bundledFollowUp.focus_skill || 'this skill';
             const srcQ = q.bundledFollowUp.source_qnum;
-            const srcRef = srcQ ? `Q${srcQ}'s answer` : 'an earlier answer';
+            // Only reference a source question when it's a DIFFERENT, valid one.
+            const srcRef = (srcQ && srcQ > 0 && srcQ !== q.qNum) ? `Q${srcQ}'s answer` : 'an earlier answer';
             const prior = q.bundledFollowUp.prior_level;
             const excerpt = q.bundledFollowUp.source_excerpt;
             // Phrase the coverage band in plain English so reviewers don't
