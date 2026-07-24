@@ -138,6 +138,7 @@ export function EvalReportCombined({
       const line: RGB = [229, 231, 235], bgc: RGB = [249, 250, 251], white: RGB = [255, 255, 255];
       const indigo: RGB = [79, 70, 229], indigoDk: RGB = [67, 56, 202];
       const green: RGB = [16, 185, 129], teal: RGB = [16, 160, 120], red: RGB = [239, 68, 68], amber: RGB = [245, 158, 11];
+      const amberBg: RGB = [255, 251, 235], amberBd: RGB = [253, 230, 138], amberDk: RGB = [146, 64, 14];
       const pass = isPassed;
       const verdict: RGB = isPartialEvaluation ? amber : (pass ? green : red);
       const scoreRGB = (s: number): RGB => (s >= 8 ? green : s >= 5 ? teal : s >= 3 ? amber : red);
@@ -223,7 +224,13 @@ export function EvalReportCombined({
 
           const qText = doc.splitTextToSize(q.question || `Question ${q.qNum}`, CW - 28);
           const qSkills = key === 'hr' ? [] : q.skills;
-          const blockH = 6 + qText.length * 4 + qSkills.length * 4.6 + 5;
+          // "Why this score" rationale (skill-wise, newline-separated). HR: none.
+          const rationale = key !== 'hr' ? String(q.scoreRationale || '').trim() : '';
+          const ratRaw = rationale ? rationale.split('\n').map(l => l.trim()).filter(Boolean) : [];
+          let ratRows = 0;
+          if (ratRaw.length) { doc.setFontSize(7.5); for (const rl of ratRaw) ratRows += doc.splitTextToSize(rl, CW - 8).length; }
+          const ratBoxH = ratRaw.length ? (ratRows * 3.4 + 9) : 0;
+          const blockH = 6 + qText.length * 4 + qSkills.length * 4.6 + ratBoxH + 5;
           ensure(blockH);
 
           doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(indigo);
@@ -236,10 +243,16 @@ export function EvalReportCombined({
           doc.text(qText, M, y + 2.5); y += qText.length * 4 + 1;
 
           qSkills.forEach((s) => {
+            // Priority tag P1/P2/P3 (High/Medium/Low → weights 10/7/4) — was missing.
+            const pLabel = s.priority === 'High' ? 'P1' : s.priority === 'Medium' ? 'P2' : 'P3';
+            const pColor: RGB = s.priority === 'High' ? indigo : s.priority === 'Medium' ? amber : faint;
             doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
-            doc.text(`•  ${doc.splitTextToSize(s.name, CW - 52)[0]}`, M + 2, y + 2.5);
+            doc.text(`•  ${doc.splitTextToSize(s.name, CW - 58)[0]}`, M + 2, y + 2.5);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); txt(pColor);
+            doc.text(pLabel, pageW - M - 41, y + 2.5, { align: 'right' });
             if (s.is_unscored) {
-              doc.setFontSize(7.5); txt(faint); doc.text('Not evaluated', pageW - M, y + 2.5, { align: 'right' });
+              doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(faint);
+              doc.text('Not evaluated', pageW - M, y + 2.5, { align: 'right' });
             } else {
               bar(pageW - M - 38, y + 0.8, 22, s.score, scoreRGB(s.score));
               doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt(scoreRGB(s.score));
@@ -247,6 +260,30 @@ export function EvalReportCombined({
             }
             y += 4.6;
           });
+
+          // "Why this score" — skill-wise rationale in an amber callout (was
+          // omitted from the PDF; recruiters need the per-skill reasoning here).
+          if (ratRaw.length) {
+            fill(amberBg); stroke(amberBd); doc.roundedRect(M, y + 0.5, CW, ratBoxH, 1.2, 1.2, 'FD');
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); txt(amberDk);
+            doc.text('Why this score', M + 3, y + 4.7);
+            let cy = y + 8.4;
+            doc.setFontSize(7.5);
+            for (const rl of ratRaw) {
+              const wrapped = doc.splitTextToSize(rl, CW - 8);
+              doc.setFont('helvetica', 'normal'); txt(ink);
+              doc.text(wrapped, M + 3, cy);
+              const ci = rl.indexOf(':');
+              if (ci > 0 && ci <= 120) {
+                doc.setFont('helvetica', 'bold'); txt(amberDk);
+                doc.text(rl.slice(0, ci), M + 3, cy); // overprint skill label bold
+                txt(ink);
+              }
+              cy += wrapped.length * 3.4 + 0.6;
+            }
+            y += ratBoxH + 1;
+          }
+
           y += 2.5;
           stroke(line); doc.setLineWidth(0.1); doc.line(M, y - 1, pageW - M, y - 1); doc.setLineWidth(0.2);
         });
@@ -257,8 +294,8 @@ export function EvalReportCombined({
       drawSection('nth', 'NICE-TO-HAVE SECTION', scores.niceToHave, true, 'Informational only', indigo);
       drawSection('hr', 'HR SECTION', 0, false, '', faint);
 
-      // AI Analysis — pass/fail overview
-      ensure(16);
+      // AI Analysis — header bar
+      ensure(20);
       fill(indigo); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
       doc.text(
@@ -267,12 +304,22 @@ export function EvalReportCombined({
           : `AI ANALYSIS — Why this candidate ${pass ? 'Passed' : 'Failed'}`,
         M + 3,
         y + 6,
-      ); y += 12;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
+      ); y += 13;
+
+      // Verdict callout — tinted by result with a colored left accent bar so the
+      // headline decision reads at a glance (was flat, unstyled paragraph text).
       const verdictLine = isPartialEvaluation
         ? `${candidate.name}'s interview ended before completion. The Must-Have score of ${scores.mustHave.toFixed(2)}/10 and the Nice-to-Have score of ${scores.niceToHave.toFixed(2)}/10 summarize only the attended questions. HR is not scored, and no final pass/fail or match score is generated for this report.`
         : `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${scores.mustHave.toFixed(2)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${Math.abs(scores.mustHave - MHS_THRESHOLD).toFixed(2)}). This drives the ${finalResultLabel} decision; Nice-to-Have (${scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.`;
-      const vl = doc.splitTextToSize(verdictLine, CW); ensure(vl.length * 4.4 + 2); doc.text(vl, M, y + 3); y += vl.length * 4.4 + 3;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+      const vl = doc.splitTextToSize(verdictLine, CW - 12);
+      const vBoxH = vl.length * 4.4 + 6;
+      ensure(vBoxH + 3);
+      const vTint: RGB = isPartialEvaluation ? [255, 251, 235] : (pass ? [236, 253, 245] : [254, 242, 242]);
+      fill(vTint); stroke(verdict); doc.setLineWidth(0.35); doc.roundedRect(M, y, CW, vBoxH, 1.5, 1.5, 'FD'); doc.setLineWidth(0.2);
+      fill(verdict); doc.roundedRect(M, y, 1.6, vBoxH, 0.8, 0.8, 'F'); // left accent bar
+      txt(ink); doc.text(vl, M + 6, y + 5); y += vBoxH + 4;
+
       if (aiSummary) {
         const al = doc.splitTextToSize(aiSummary, CW); ensure(al.length * 4.4 + 2);
         txt(sub); doc.text(al, M, y + 3); y += al.length * 4.4 + 3; txt(ink);
