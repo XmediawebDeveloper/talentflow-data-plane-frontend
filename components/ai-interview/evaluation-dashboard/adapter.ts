@@ -2205,24 +2205,20 @@ export function buildDashboardData(params: {
       section: 'mth' | 'nth',
       planRows: any[],
       rows: PerQuestionDetail[],
-      // Number of planned questions in all sections that come BEFORE this one
-      // (0 for MHS, sectionCap.mth for NHS). Converts the global origQ stored
-      // in row.qNum into the section-local slot number that matches the plan's
-      // `question_number` field. Without this offset, NHS rows (global qNums
-      // 9-12) never hit the planByQnum map (keys 1-4) and always fall through
-      // to the fragile array-index fallback.
-      sectionOffset: number = 0,
+      // Retained for call-site compatibility; the join no longer uses a
+      // positional offset (the index join it fed was the wrong-slot source).
+      _sectionOffset: number = 0,
     ): PerQuestionDetail[] => {
       if (planRows.length === 0) return rows;
-      // Index plan rows by their section-local question_number.
-      // Build a 1-based fallback for legacy snapshots missing question_number.
-      const planByQnum = new Map<number, any>();
-      planRows.forEach((pr, i) => {
-        const qn = Number(pr?.question_number);
-        const key = Number.isFinite(qn) && qn > 0 ? qn : i + 1;
-        planByQnum.set(key, pr);
-      });
-      return rows.map((row, idx) => {
+      // ONE plan slot ↔ ONE question row. `usedSlots` tracks slots already
+      // claimed so a slot's skills can NEVER be painted onto more than one
+      // question — that reuse was the "same skill repeats across many questions"
+      // bug. Slots bind by skill-identity first (order-independent), else by the
+      // NEXT-UNUSED slot in plan order — both mirror the Question Distribution
+      // popover (which the recruiter confirms is correct) and cannot duplicate
+      // or cross-pull a slot.
+      const usedSlots = new Set<any>();
+      return rows.map((row) => {
         // Pair each row with its plan slot by SKILL IDENTITY — NOT by positional
         // arithmetic. `row.qNum` is the backend GLOBAL ask-order question_number,
         // while the plan's `question_number` is the round-robin (P1/P2/P3)
@@ -2243,6 +2239,7 @@ export function buildDashboardData(params: {
         if (rowSkillSet.size > 0) {
           let bestScore = 0;
           for (const pr of planRows) {
+            if (usedSlots.has(pr)) continue; // a slot binds to only one question
             const prPrimary = String(pr?.primary_skill || '').toLowerCase().trim();
             const prSecs = (Array.isArray(pr?.secondary_skills) ? pr.secondary_skills : [])
               .map((s: any) => String(s || '').toLowerCase().trim())
@@ -2259,15 +2256,16 @@ export function buildDashboardData(params: {
             }
           }
         }
-        // Fallback (legacy rows with no derived skills): positional slot mapping.
+        // Fallback (row skills didn't overlap any UNUSED slot — zero-overlap /
+        // legacy rows): take the NEXT UNUSED plan slot in plan order.
+        // Deterministic, unique, and matches the Distribution popover. The old
+        // `globalQ - sectionOffset` / planRows[idx] join pulled an arbitrary,
+        // possibly-already-shown slot — the wrong/duplicate-mapping source.
         if (!planRow) {
-          const globalQ = Number(row.qNum);
-          const slotNum = (Number.isFinite(globalQ) && globalQ > 0)
-            ? (globalQ - sectionOffset)
-            : (idx + 1);
-          planRow = planByQnum.get(slotNum) ?? planRows[idx];
+          planRow = planRows.find(pr => !usedSlots.has(pr)) ?? null;
         }
         if (!planRow) return row;
+        usedSlots.add(planRow); // consume: never reuse this slot for another row
         const planSkills = buildSkillsFromPlanRow(planRow);
         if (planSkills.length === 0) return row;
         // Index existing per-skill scores from the original row.
