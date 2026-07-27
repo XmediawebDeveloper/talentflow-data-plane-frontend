@@ -37,10 +37,17 @@ export default function AIInterviewJDSelection() {
     loadJDs();
   }, [loadJDs]);
 
-  const filteredJds = jds.filter(jd =>
+  // Only surface JDs that DON'T already have a published AI interview config —
+  // a JD can't be configured twice, so configured ones are hidden entirely
+  // (previously they showed disabled with an "AI Config Created" badge).
+  const selectableJds = jds.filter(jd => jd.has_published_config !== true);
+  const filteredJds = selectableJds.filter(jd =>
     jd.title.toLowerCase().includes(jdSearch.toLowerCase()) ||
     (jd.department || '').toLowerCase().includes(jdSearch.toLowerCase())
   );
+  // True when JDs exist but every one is already configured — lets the empty
+  // state say something accurate instead of "create a JD first".
+  const allConfigured = jds.length > 0 && selectableJds.length === 0;
 
   const handleSelectJd = (jd: PublishedJD) => {
     router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${jd.id}`);
@@ -112,8 +119,14 @@ export default function AIInterviewJDSelection() {
             <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">
               <Briefcase className="w-10 h-10 text-brand-blue" />
             </div>
-            <p className="text-gray-700 mb-2 text-sm font-medium">No published job descriptions found</p>
-            <p className="text-xs sm:text-sm text-gray-500 mb-4">Create and publish a JD first to configure an AI interview</p>
+            <p className="text-gray-700 mb-2 text-sm font-medium">
+              {allConfigured ? 'All published JDs already have an AI interview' : 'No published job descriptions found'}
+            </p>
+            <p className="text-xs sm:text-sm text-gray-500 mb-4">
+              {allConfigured
+                ? 'Every published job description is already configured. Publish a new JD to create another AI interview.'
+                : 'Create and publish a JD first to configure an AI interview'}
+            </p>
             {canCreateJD && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
