@@ -1953,7 +1953,14 @@ export default function AIInterviewClusters() {
       );
     } catch (err) {
       console.error('[CLUSTER-DEBUG] handleGenerateClusters FAILED:', err);
-      toast.error('Failed to generate clusters');
+      // Surface the REAL backend reason (e.g. the OpenAI 429 / quota message from
+      // /expand-skills) instead of a generic "failed" — so the recruiter knows to
+      // top up the OpenAI account or add skills manually, rather than silently
+      // getting fabricated "<skill> – Concept N" placeholder clones.
+      const _reason = (err instanceof Error && err.message && err.message.trim())
+        ? err.message.trim()
+        : 'Failed to generate clusters. Please try again, or add skills manually.';
+      toast.error(_reason, { duration: 9000 });
     } finally {
       setGenerating(false);
     }

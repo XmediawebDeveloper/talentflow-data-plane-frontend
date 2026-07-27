@@ -168,6 +168,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Mirror of screenShareStopped so the terminate listener can ignore the blur
   // caused by the re-share screen picker (that's not the candidate leaving).
   const screenShareStoppedRef = useRef(false);
+  // Set once the interview reaches its NATURAL end (server `interview_ended`).
+  // From that point the candidate has finished every question and the
+  // evaluation runs in the background, so a fullscreen exit at the completion
+  // popup must NOT terminate the interview (it would block the evaluation).
+  const interviewClosingRef = useRef(false);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
   // Device tier + feature flags — detected once during the system check so the
   // interview runs the heavy/accurate path only on capable machines and a
@@ -1186,6 +1191,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
     const terminateNow = (reason: string) => {
       if (done || !armed || screenShareStoppedRef.current) return;
+      // Natural-end guard: once the interview has ended (all questions done,
+      // completion popup showing, evaluation running in the background), a
+      // fullscreen exit / Esc / F11 must NOT terminate — the candidate already
+      // finished. Terminating here would flip the row to TERMINATED and block
+      // the evaluation. Ignore (the interview is effectively complete).
+      if (interviewClosingRef.current) {
+        console.log('[Proctor] Ignoring', reason, '— interview already reached its natural end (completion popup); not terminating.');
+        return;
+      }
       done = true;
       const message = terminationMessage(reason);
       setInterviewTerminatedReason(reason);
@@ -1902,6 +1916,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             if (isFullscreen()) exitFullscreen().catch(() => {});
             setStep('completed');
           }}
+          onInterviewClosing={() => { interviewClosingRef.current = true; }}
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}

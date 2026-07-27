@@ -52,6 +52,12 @@ interface InterviewUIProps {
   token: string;
   interviewInfo: CandidateInterviewInfo;
   onInterviewComplete?: () => void;
+  // Fired the moment the server signals the interview reached its NATURAL end
+  // (`interview_ended`), i.e. all questions done + farewell. The portal uses
+  // this to DISARM fullscreen-exit termination while the completion popup is
+  // up — otherwise exiting fullscreen at the "Done" popup would terminate an
+  // already-finished interview and block its evaluation.
+  onInterviewClosing?: () => void;
   faceVerification?: FaceVerificationHandle;
   voiceVerification?: VoiceVerificationHandle;
   copyPasteBlocking?: boolean;
@@ -447,7 +453,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -4674,6 +4680,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setStatus("Bina is saying goodbye...");
         shouldDisconnectAfterAudioRef.current = true;
         setIsClosing(true); isClosingRef.current = true;
+        // Interview reached its natural end — tell the portal to DISARM
+        // fullscreen-exit termination so the completion popup can't trigger a
+        // false termination while the background evaluation runs.
+        onInterviewClosing?.();
         setCompletionMessage(prev =>
           prev || (
             data.reason === "candidate_ended"
