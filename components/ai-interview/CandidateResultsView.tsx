@@ -1004,6 +1004,36 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
       .catch(() => { /* poll fallback keeps trying; stub remains re-evaluable */ });
   }, [isCompleted, evalIncomplete, wasTerminated, liveSession.id]);
 
+  // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
+  // For an interview whose candidate reached the END of the interview but whose
+  // result is stuck partial / disconnected (candidate closed the tab during the
+  // background finalize, etc.). Eligible ONLY when the candidate crossed the end
+  // — i.e. question_history has no 'not_asked' padding (a genuinely cut-short
+  // interview is NOT eligible, so the button stays hidden). The backend enforces
+  // one-time + not-in-flight; on success the row becomes COMPLETED with a full
+  // evaluation, so `isPartial` flips false → banner + button disappear for good.
+  const reevalCrossedEnd = useMemo(() => {
+    const qh = Array.isArray((eval_ as any)?.question_history) ? (eval_ as any).question_history : [];
+    if (qh.length === 0) return false;
+    return !qh.some((q: any) => String(q?.response_type || '').toLowerCase() === 'not_asked');
+  }, [eval_]);
+  const [reEvaluating, setReEvaluating] = useState(false);
+  const handleReEvaluate = async () => {
+    if (reEvaluating) return;
+    setReEvaluating(true);
+    try {
+      await aiInterviewService.reEvaluatePartial(liveSession.id);
+      const updated = await aiInterviewService.get(liveSession.id);
+      setLiveSession(updated); // now COMPLETED + full eval → button hides
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Re-evaluation could not be completed. Please try again.';
+      // eslint-disable-next-line no-alert
+      window.alert(msg);
+    } finally {
+      setReEvaluating(false);
+    }
+  };
+
   // Live elapsed counter for the evaluation wait. The post-interview
   // multi-agent eval genuinely runs ~1-3 min (sequential gpt-4o-mini agents);
   // a static "15-30 seconds" spinner made a working eval look frozen. Showing
@@ -1474,9 +1504,27 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
 
         {/* Partial warning banner — only when truly partial (not auto-completed) */}
         {isPartial && !isCompleted && (
-          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            Interview disconnected — showing partial results
+          <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              Interview disconnected — showing partial results
+            </div>
+            {/* Re-Evaluate — ONLY when the candidate reached the END of the
+                interview (answered every question) but the result is stuck
+                partial. Runs the full evaluation once and finalizes the row.
+                Hidden for genuinely cut-short interviews; disabled while running;
+                disappears permanently once the interview is fully evaluated. */}
+            {reevalCrossedEnd && (
+              <button
+                type="button"
+                onClick={handleReEvaluate}
+                disabled={reEvaluating}
+                title="The candidate answered all questions — re-run the full evaluation. This can be done only once."
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-orange-deep hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition"
+              >
+                {reEvaluating ? 'Re-Evaluating…' : 'Re-Evaluate'}
+              </button>
+            )}
           </div>
         )}
 

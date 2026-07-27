@@ -6005,46 +6005,37 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // ScriptProcessor is deprecated but kept as fallback for older browsers.
       let audioNodeConnected = false;
 
-      // RNNoise is DISABLED (2026-07-22, per user request — remove it
-      // completely). The worklet runs as a pure off-thread pass-through PCM
-      // chunker: it just forwards mic audio in 4096-sample chunks, NO WASM
-      // denoising, NO wasm fetch, NO wasm init. This is the known-good
-      // pre-RNNoise behavior. (RNNoise is not related to the connection-loss
-      // issue — that's a client-side network drop — so removing it is purely
-      // per request; quiet-mic help now comes from the mic GAIN boost above.)
+      // RNNoise was REMOVED (per user request). We keep an off-main-thread
+      // PCM chunker worklet: it just forwards mic audio in 4096-sample chunks,
+      // NO noise suppression, NO WASM. Off-thread avoids UI jank during
+      // recording (the ScriptProcessor fallback below runs on the main thread).
+      // Noise handling comes from the browser's built-in noiseSuppression +
+      // the mic GAIN boost above — not from a worklet.
 
       if (ctx.audioWorklet) {
         try {
-          // Register rnnoise-processor once per AudioContext (addModule again on
-          // the same context throws NotSupportedError). In bypass mode it does
-          // no WASM work — pure pass-through.
+          // Register the chunker once per AudioContext (addModule again on the
+          // same context throws NotSupportedError).
           if (!pcmWorkletRegisteredRef.current) {
-            await ctx.audioWorklet.addModule('/workers/rnnoise-processor.js');
+            await ctx.audioWorklet.addModule('/workers/pcm-chunker-processor.js');
             pcmWorkletRegisteredRef.current = true;
           }
 
-          const workletNode = new AudioWorkletNode(ctx, 'rnnoise-processor', {
+          const workletNode = new AudioWorkletNode(ctx, 'pcm-chunker', {
             channelCount: 1,
             channelCountMode: 'explicit',
             channelInterpretation: 'discrete',
-            // bypass:true → the worklet skips WASM entirely and runs as a plain
-            // pass-through chunker. No wasm fetch/instantiate happens.
-            processorOptions: { bypass: true },
           });
           workletNode.port.onmessage = (e: MessageEvent) => {
             if (e.data instanceof Float32Array) {
               processAudioChunk(e.data);
-            } else if (e.data?.type === 'rnnoise-ready') {
-              console.log('[InterviewUI] RNNoise WASM ready — noise suppression active');
-            } else if (e.data?.type === 'rnnoise-fallback') {
-              console.warn('[InterviewUI] RNNoise WASM unavailable — using pass-through:', e.data.reason);
             }
           };
           source.connect(workletNode);
           workletNode.connect(ctx.destination);
           processorRef.current = workletNode;
           audioNodeConnected = true;
-          console.log('[InterviewUI] AudioWorklet active (rnnoise-processor)');
+          console.log('[InterviewUI] AudioWorklet active (pcm-chunker)');
         } catch (err) {
           console.warn('[InterviewUI] AudioWorklet unavailable, falling back to ScriptProcessor:', err);
         }

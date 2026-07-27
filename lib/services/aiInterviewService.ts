@@ -1064,4 +1064,15 @@ export const aiInterviewService = {
     const response = await api.post(`/ai-interviews/${sessionId}/evaluate`, {});
     return response.data;
   },
+
+  /**
+   * SAFE, ONE-TIME recruiter re-evaluation for an interview whose candidate
+   * reached the END of the interview but whose result is stuck partial /
+   * disconnected. Backend enforces eligibility (crossed-end), one-time, and
+   * not-in-flight; on success the row becomes COMPLETED with a full evaluation.
+   */
+  async reEvaluatePartial(sessionId: string): Promise<any> {
+    const response = await api.post(`/ai-interviews/${sessionId}/re-evaluate`, {});
+    return response.data;
+  },
 };
