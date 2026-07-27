@@ -30,6 +30,7 @@ import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -1021,14 +1022,20 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const handleReEvaluate = async () => {
     if (reEvaluating) return;
     setReEvaluating(true);
+    const _t = toast.loading('Re-evaluating the interview — this can take a minute…');
     try {
       await aiInterviewService.reEvaluatePartial(liveSession.id);
       const updated = await aiInterviewService.get(liveSession.id);
       setLiveSession(updated); // now COMPLETED + full eval → button hides
+      toast.success('Interview re-evaluated. The full results are now available.', { id: _t });
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || 'Re-evaluation could not be completed. Please try again.';
-      // eslint-disable-next-line no-alert
-      window.alert(msg);
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      const msg =
+        status === 409 ? (detail || 'This interview has already been re-evaluated.')
+        : status === 400 ? (detail || 'Re-evaluation is only available once the candidate reached the end of the interview.')
+        : (detail || 'Re-evaluation could not be completed. Please try again.');
+      toast.error(msg, { id: _t });
     } finally {
       setReEvaluating(false);
     }

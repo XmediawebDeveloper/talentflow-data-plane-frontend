@@ -88,8 +88,9 @@ export default function AIInterview() {
   // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
   // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  // Extra filter applied on top of the active tab — used by the "Candidates Invited"
-  // stats card to scope the list to only configs that have actually been invited out.
+  // Extra filter applied on top of the active tab — used by the "Invite Shared
+  // Configs" stats card to scope the list to only configs that have actually
+  // had invitations shared.
   const [invitedOnly, setInvitedOnly] = useState(false);
   const openListView = (tab: TabKey, opts?: { invitedOnly?: boolean }) => {
     setActiveTab(tab);
@@ -450,7 +451,8 @@ export default function AIInterview() {
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage },
     (s) => {
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
-      if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as TabKey);
+      // 'consent' tab was removed — never restore onto it.
+      if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
       if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
       if (typeof s.modeFilter === 'string') setModeFilter(s.modeFilter as typeof modeFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
@@ -486,7 +488,8 @@ export default function AIInterview() {
       loadSettings();
       if (settingsSubTab === 'proctoring') loadProctoringSettings();
     }
-    if (activeTab === 'archived') loadArchivedConfigs();
+    // 'all' now includes archived configs too, so load them for that tab as well.
+    if (activeTab === 'archived' || activeTab === 'all') loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
@@ -718,13 +721,21 @@ export default function AIInterview() {
 
   // Filter configs by tab + mode + creator + date + search
   const filteredConfigs = (() => {
-    const base = activeTab === 'archived' ? archivedConfigs : configs.filter((config) => {
-      if (activeTab === 'all') return true;
-      if (activeTab === 'published') return normalizeConfigStatus(config.status) === 'published';
-      if (activeTab === 'draft') return config.status === 'draft';
-      if (activeTab === 'completed') return config.status === 'completed' || config.status === 'cancelled';
-      return true;
-    });
+    const base = activeTab === 'archived'
+      ? archivedConfigs
+      : activeTab === 'all'
+        // "All" means all — non-archived + archived, deduped by id so a config
+        // can't appear twice if the two lists ever overlap.
+        ? (() => {
+            const seen = new Set(configs.map((c) => c.id));
+            return [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
+          })()
+        : configs.filter((config) => {
+            if (activeTab === 'published') return normalizeConfigStatus(config.status) === 'published';
+            if (activeTab === 'draft') return config.status === 'draft';
+            if (activeTab === 'completed') return config.status === 'completed' || config.status === 'cancelled';
+            return true;
+          });
     const byInvited = invitedOnly
       ? base.filter((config) => (config.invitations_count ?? 0) > 0)
       : base;
@@ -1031,11 +1042,24 @@ export default function AIInterview() {
               tab: 'published' as TabKey,
             },
             {
-              label: 'Candidates Invited',
-              value: stats?.candidates_invited ?? 0,
-              icon: Users,
+              label: 'Invite Shared Configs',
+              // Count CONFIGS that have at least one invitation shared (not the
+              // number of candidates). Spans active + archived, deduped by id,
+              // so it matches the list shown when this card is clicked
+              // (tab 'all' + invitedOnly filter).
+              value: (() => {
+                const seen = new Set<string>();
+                let n = 0;
+                for (const c of [...configs, ...archivedConfigs]) {
+                  if (seen.has(c.id)) continue;
+                  seen.add(c.id);
+                  if ((c.invitations_count ?? 0) > 0) n++;
+                }
+                return n;
+              })(),
+              icon: Send,
               tone: 'blue',
-              hint: 'Across all interviews',
+              hint: 'Configs with invites shared',
               trend: 'up' as const,
               tab: 'all' as TabKey,
               invitedOnly: true,
@@ -1120,14 +1144,13 @@ export default function AIInterview() {
           <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 bg-gradient-to-b from-white to-slate-50/40">
             <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide -mb-px">
               {[
-                { key: 'all', label: 'All AI Interviews', count: configs.length },
+                { key: 'all', label: 'All AI Interviews', count: configs.length + archivedConfigs.length },
                 { key: 'published', label: 'Active', count: configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length },
                 { key: 'draft', label: 'Draft', count: configs.filter((c) => c.status === 'draft').length },
                 // { key: 'completed', label: 'Completed' },
                 { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? archivedConfigs.length },
                 // { key: 'processing', label: 'Processing' },
                 { key: 'audit', label: 'Activity Logs' },
-                { key: 'consent', label: 'Consent Logs' },
                 { key: 'settings', label: 'Settings' },
               ].map(tab => {
                 const isActive = activeTab === tab.key;

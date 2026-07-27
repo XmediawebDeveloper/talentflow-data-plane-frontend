@@ -1053,7 +1053,8 @@ export const aiInterviewService = {
    * Get the full skill coverage map for a session (AIU52)
    */
   async getCoverageMap(sessionId: string): Promise<any> {
-    const response = await api.get(`/ai-interviews/${sessionId}/coverage-map`);
+    // Router is mounted at singular /api/v1/ai-interview (see backend main.py).
+    const response = await api.get(`/ai-interview/${sessionId}/coverage-map`);
     return response.data;
   },
 
@@ -1061,7 +1062,7 @@ export const aiInterviewService = {
    * Trigger AI evaluation for a completed session (AIU53)
    */
   async triggerEvaluation(sessionId: string): Promise<any> {
-    const response = await api.post(`/ai-interviews/${sessionId}/evaluate`, {});
+    const response = await api.post(`/ai-interview/${sessionId}/evaluate`, {});
     return response.data;
   },
 
@@ -1072,7 +1073,7 @@ export const aiInterviewService = {
    * not-in-flight; on success the row becomes COMPLETED with a full evaluation.
    */
   async reEvaluatePartial(sessionId: string): Promise<any> {
-    const response = await api.post(`/ai-interviews/${sessionId}/re-evaluate`, {});
+    const response = await api.post(`/ai-interview/${sessionId}/re-evaluate`, {});
     return response.data;
   },
 };

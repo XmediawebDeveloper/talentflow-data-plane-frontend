@@ -551,7 +551,15 @@ export default function StepIdentity({
                       inputMode="numeric"
                       maxLength={6}
                       value={otpCode}
-                      onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setOtpCode(digits);
+                        setOtpError(null);
+                        // Auto-verify once the full 6-digit code is entered by
+                        // manual typing — mirrors the paste behavior so the
+                        // candidate never has to click "Verify" or press Enter.
+                        if (digits.length === 6) handleVerifyOtp(digits);
+                      }}
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
