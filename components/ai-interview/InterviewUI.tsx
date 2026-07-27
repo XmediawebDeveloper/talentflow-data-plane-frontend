@@ -9,8 +9,11 @@ import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
 import {
   useInterviewFaceDetection,
+  useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
+  type DetectedObjectEvent,
+  type ObjectEventType,
 } from './proctoring';
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
@@ -1254,6 +1257,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     emitEvent('gaze_away', { direction });
   }, [emitEvent]);
 
+  // Prohibited object on camera (phone / second screen / book).
+  // The whole payload is forwarded verbatim so `object_class` — the model's own
+  // class string — lands in the stored violation. The recruiter's Integrity
+  // Check tab reads it back to name the exact item; never a generic "object".
+  const handleObjectDetected = useCallback(
+    (eventType: ObjectEventType, det: DetectedObjectEvent) => {
+      emitEvent(eventType, {
+        object_class: det.object_class,
+        object_label: det.object_label,
+        confidence: Number(det.confidence.toFixed(3)),
+        box: det.box.map(n => Number(n.toFixed(4))),
+        consecutive_frames: det.consecutive_frames,
+        detector: det.detector,
+      });
+    },
+    [emitEvent],
+  );
+
+  // Detection is best-effort: it needs WebGPU, which Safari/Firefox may not
+  // provide. Log the reason so an interview reviewed later can be read
+  // correctly — "no phone flags" must not be confused with "detector never ran".
+  const handleObjectDetectionUnavailable = useCallback((reason: string) => {
+    console.warn('[INTERVIEW-DEBUG] Object detection disabled for this session:', reason);
+  }, []);
+
+  const objectDetection = useInterviewObjectDetection({
+    enabled: isConnected && webcamReady,
+    lowTier: effectiveDeviceCapability?.tier === 'low',
+    onObjectDetected: handleObjectDetected,
+    onUnavailable: handleObjectDetectionUnavailable,
+  });
+
   // Face verification event handlers (identity check, not just presence)
   useEffect(() => {
     if (!faceVerification || !isConnected) return;
@@ -1282,6 +1317,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const handleVideoReady = useCallback((video: HTMLVideoElement) => {
     handDetection.setVideoElement(video);
     faceDetection.setVideoElement(video);
+    objectDetection.setVideoElement(video);
     setWebcamReady(true);
 
     // Start video recording from webcam stream.
@@ -1384,7 +1420,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       faceVerification.startVerification(video, lowTier ? 30000 : undefined);
       console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${lowTier ? '30s low-tier' : '10s'} cadence)`);
     }
-  }, [handDetection, faceDetection, faceVerification, effectiveDeviceCapability]);
+  }, [handDetection, faceDetection, objectDetection, faceVerification, effectiveDeviceCapability]);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);

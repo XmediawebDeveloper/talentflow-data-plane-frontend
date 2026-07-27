@@ -1,5 +1,9 @@
 export { useInterviewProctoringMonitor } from './InterviewProctoringMonitor';
 export { useInterviewFaceDetection } from './InterviewFaceDetection';
+export { useInterviewObjectDetection } from './InterviewObjectDetection';
+export type { DetectedObjectEvent } from './InterviewObjectDetection';
+export { DETECTABLE_OBJECTS, objectDisplayLabel } from './detectableObjects';
+export type { ObjectEventType } from './detectableObjects';
 export { useInterviewFaceVerification } from './InterviewFaceVerification';
 export { useInterviewVoiceVerification } from './InterviewVoiceVerification';
 export { InterviewProctoringWarnings } from './InterviewProctoringWarnings';

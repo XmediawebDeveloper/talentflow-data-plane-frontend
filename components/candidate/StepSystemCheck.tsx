@@ -27,6 +27,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
+import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -344,6 +345,11 @@ export default function StepSystemCheck({
   // ────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'browser_check') return;
+
+    // Warm the proctoring object-detection weights (tens of MB) while the
+    // candidate works through the camera/mic checks, so the interview itself
+    // never waits on that download. Fire-and-forget; failure is harmless.
+    prefetchObjectDetectionModel();
 
     const timer = setTimeout(() => {
       if (!mountedRef.current) return;

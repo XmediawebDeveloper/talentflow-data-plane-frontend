@@ -453,6 +453,18 @@ export default function ResumeScoringPage({
     }
   };
 
+  // Load the global candidates list whenever the "View All Candidates" view is
+  // active but its data isn't loaded yet. This covers the case where the view
+  // was restored from persistence (returning to this page) — previously only
+  // the click handler fetched, so a restored global view showed empty. Guarded
+  // by isLoadingGlobal so the click path (which fetches itself) doesn't double-fetch.
+  useEffect(() => {
+    if (isGlobalView && globalScoredResumes.length === 0 && !isLoadingGlobal) {
+      fetchGlobalScoredResumes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGlobalView]);
+
   // Handle initial JD ID from URL - auto-open scored resumes view or start new scoring
   useEffect(() => {
     // Only handle initialJdId once

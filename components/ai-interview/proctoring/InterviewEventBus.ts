@@ -30,7 +30,13 @@ export type ProctoringEventType =
   | 'voice_mismatch'
   | 'voice_identity_changed'
   | 'screen_share_stopped'
-  | 'background_noise';
+  | 'background_noise'
+  // Live object detection (see InterviewObjectDetection). Split into two types
+  // rather than one "object_detected" so severity is carried by the type, the
+  // same way every other event here works. The specific class ("cell phone",
+  // "laptop", …) travels in details.object_class / details.object_label.
+  | 'phone_detected'
+  | 'unauthorized_object';
 
 export interface ProctoringEvent {
   id: string;
@@ -67,6 +73,8 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
   screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout this session.',
   background_noise: 'Excessive background noise detected. Please move to a quieter environment for a better experience.',
+  phone_detected: 'A mobile phone was detected. Please put it away — phones are not allowed during this session.',
+  unauthorized_object: 'An unauthorised item was detected in view. Please remove it from your workspace.',
 };
 
 // Severity mapping — Minor / Moderate / Severe
@@ -94,6 +102,12 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   face_identity_changed:    'severe',
   voice_identity_changed:   'severe',
   screen_share_stopped:     'severe',
+  // A phone in view is a direct, unambiguous integrity breach — the candidate
+  // can read or be fed answers from it. Ranked alongside the identity signals.
+  phone_detected:           'severe',
+  // Other prohibited items (second screen, book, ambiguous handheld) are
+  // suspicious but have innocent explanations, so they stay moderate.
+  unauthorized_object:      'moderate',
   // Advisory — not a proctoring violation, just a UX nudge (AIU-67)
   background_noise:         'minor',
 };
