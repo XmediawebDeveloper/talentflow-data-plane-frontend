@@ -17,7 +17,7 @@ interface Props {
   aiConfidence?: number | null;
 }
 
-const MHS_THRESHOLD = 7.0;
+const MHS_THRESHOLD = 6.0;
 
 export function OverviewSectionV2({
   data,
@@ -28,15 +28,15 @@ export function OverviewSectionV2({
 }: Props) {
   const {
     candidate, interview, scores, finalResult,
-    mustHaveClusters, niceToHaveClusters, interviewResponses, sectionsPresent,
+    mustHaveClusters, niceToHaveClusters, interviewResponses, sectionsPresent, isPartialEvaluation,
   } = data;
 
   const allClusters = [...mustHaveClusters, ...niceToHaveClusters];
   const allSkills = allClusters.flatMap(c => c.skills);
 
-  // Doc-spec gate: Pass when MHS section avg ≥ 7.0
+  // Doc-spec gate: Pass when MHS section avg ≥ 6.0
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
-  const finalResultLabel = finalResult ?? (isPassed ? 'Pass' : 'Fail');
+  const finalResultLabel = isPartialEvaluation ? 'Partial Evaluation' : (finalResult ?? (isPassed ? 'Pass' : 'Fail'));
 
   const confidence = aiConfidence ?? Math.round(scores.final);
 
@@ -70,11 +70,11 @@ export function OverviewSectionV2({
   const topSkills = [...scoredSkills]
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
-  // Heading honesty: when no skill scored above the spec's strong-band
-  // threshold (≥7.0), the panel header should say "Highest Scoring"
+  // Heading honesty: when no skill scored above the section gate
+  // threshold (≥6.0), the panel header should say "Highest Scoring"
   // rather than "Top Performing" so a recruiter doesn't read a fail as
   // a positive signal.
-  const hasStrongSkill = topSkills.some(s => s.score >= 7.0);
+  const hasStrongSkill = topSkills.some(s => s.score >= MHS_THRESHOLD);
   const topPanelHeading = hasStrongSkill ? 'Top Performing Skills' : 'Highest Scoring Skills';
 
   // ── Radar chart data (top 6 by score; pads with 0-score skills only
@@ -98,9 +98,11 @@ export function OverviewSectionV2({
       score: scores.mustHave,
       questions: mhQCount,
       threshold: MHS_THRESHOLD,
-      status: scores.mustHave >= MHS_THRESHOLD ? 'PASS' : 'FAIL',
+      status: isPartialEvaluation ? 'PARTIAL' : (scores.mustHave >= MHS_THRESHOLD ? 'PASS' : 'FAIL'),
       color: '#4F46E5',
-      description: 'Average of Must-Have question scores — determines Pass/Fail',
+      description: isPartialEvaluation
+        ? 'Average of attended Must-Have question scores — reference only for partial interviews'
+        : 'Average of Must-Have question scores — determines Pass/Fail',
       present: sectionsPresent.mustHave,
     },
     {
@@ -140,35 +142,51 @@ export function OverviewSectionV2({
       {/* ── Final Result Card ────────────────────────────────────────── */}
       <div
         className={`rounded-2xl p-8 text-white shadow-lg ${
-          isPassed
-            ? 'bg-gradient-to-br from-emerald-500 to-emerald-400'
-            : 'bg-gradient-to-br from-red-500 to-red-400'
+          isPartialEvaluation
+            ? 'bg-gradient-to-br from-amber-500 to-amber-400'
+            : isPassed
+              ? 'bg-gradient-to-br from-emerald-500 to-emerald-400'
+              : 'bg-gradient-to-br from-red-500 to-red-400'
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div className="flex items-center gap-6">
-            {isPassed
-              ? <CheckCircle className="w-20 h-20 text-white shrink-0" strokeWidth={1.5} />
-              : <XCircle className="w-20 h-20 text-white shrink-0" strokeWidth={1.5} />}
+            {isPartialEvaluation ? (
+              <div className="w-20 h-20 rounded-2xl bg-white/20 shrink-0 flex items-center justify-center text-2xl font-bold">
+                AI
+              </div>
+            ) : isPassed ? (
+              <CheckCircle className="w-20 h-20 text-white shrink-0" strokeWidth={1.5} />
+            ) : (
+              <XCircle className="w-20 h-20 text-white shrink-0" strokeWidth={1.5} />
+            )}
             <div>
               <div className="text-4xl font-bold mb-1">{finalResultLabel}</div>
               <div className="text-xl text-white/95 mb-1">
-                {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}
+                {isPartialEvaluation
+                  ? 'Attended questions evaluated only'
+                  : isPassed
+                    ? 'Recommended to Hire'
+                    : 'Does Not Meet Requirements'}
               </div>
               <div className="text-sm text-white/90">
-                {isPassed
-                  ? `Must-Have Score: ${scores.mustHave.toFixed(2)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Exceeds by +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
-                  : `Must-Have Score: ${scores.mustHave.toFixed(2)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Below threshold by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
+                {isPartialEvaluation
+                  ? `This interview ended before completion. Section scores below summarize only the questions the candidate attended.`
+                  : isPassed
+                    ? `Must-Have Score: ${scores.mustHave.toFixed(2)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Exceeds by +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
+                    : `Must-Have Score: ${scores.mustHave.toFixed(2)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Below threshold by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
               </div>
             </div>
           </div>
-          <div className="px-8 py-5 rounded-2xl bg-white/20 backdrop-blur text-center">
-            <div className="text-4xl font-bold leading-none mb-1">{confidence}%</div>
-            {/* "Match Score" — derived from MHS×10 (normalized 0-100). Was
-                previously labeled "AI Confidence" which implied a separate
-                signal; it is not — it's just the normalized score. */}
-            <div className="text-sm font-semibold text-white/95">Match Score</div>
-          </div>
+          {!isPartialEvaluation && (
+            <div className="px-8 py-5 rounded-2xl bg-white/20 backdrop-blur text-center">
+              <div className="text-4xl font-bold leading-none mb-1">{confidence}%</div>
+              {/* "Match Score" — derived from MHS×10 (normalized 0-100). Was
+                  previously labeled "AI Confidence" which implied a separate
+                  signal; it is not — it's just the normalized score. */}
+              <div className="text-sm font-semibold text-white/95">Match Score</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -203,11 +221,13 @@ export function OverviewSectionV2({
                 <div className="text-xs text-gray-400">Score</div>
               </div>
             )}
-            <div className="px-6 text-center min-w-[120px]">
-              <div className="text-4xl font-bold text-indigo-700 mb-1">{(scores.final / 10).toFixed(2)}</div>
-              <div className="text-sm font-semibold text-gray-500">Overall</div>
-              <div className="text-xs text-gray-400">Score</div>
-            </div>
+            {!isPartialEvaluation && (
+              <div className="px-6 text-center min-w-[120px]">
+                <div className="text-4xl font-bold text-indigo-700 mb-1">{(scores.final / 10).toFixed(2)}</div>
+                <div className="text-sm font-semibold text-gray-500">Overall</div>
+                <div className="text-xs text-gray-400">Score</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -361,14 +381,14 @@ export function OverviewSectionV2({
                     : 'bg-rose-50 border-rose-200 text-rose-800'
               }`}
             >
-              {/* Frame this as a QUESTION coverage metric (was Linda asked
+              {/* Frame this as a QUESTION coverage metric (was Bina asked
                   enough?) — NOT a performance signal (did the candidate
                   answer well?). A failing candidate can still have 100%
                   coverage; an excellent candidate with under-coverage is
                   the recruiter's planner-side bug, not the candidate's. */}
               <strong>Question Coverage:</strong>{' '}
               {mhCov.pct >= 80 ? 'Excellent' : mhCov.pct >= 60 ? 'Good' : 'Needs Improvement'}
-              {' '}— Linda asked about {mhCov.pct}% of the Must-Have skills
+              {' '}— Bina asked about {mhCov.pct}% of the Must-Have skills
               {sectionsPresent.niceToHave && ` and ${nhCov.pct}% of the Nice-to-Have skills`}.
               {' '}This reflects what the interview probed; candidate performance is shown in the Section Score Breakdown below.
             </div>
@@ -411,7 +431,7 @@ export function OverviewSectionV2({
                   <div>
                     <div className="text-base font-semibold text-gray-900 mb-1">{item.label}</div>
                     <div className="text-xs text-gray-500 leading-relaxed">{item.description}</div>
-                    {item.threshold !== null && (
+                    {item.threshold !== null && !isPartialEvaluation && (
                       <div className="text-xs text-gray-600 font-semibold mt-1">
                         Pass Threshold: {item.threshold.toFixed(1)}
                       </div>
@@ -423,7 +443,9 @@ export function OverviewSectionV2({
                     </div>
                     <span
                       className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                        item.status === 'PASS'
+                        item.status === 'PARTIAL'
+                          ? 'bg-amber-100 text-amber-700'
+                          : item.status === 'PASS'
                           ? 'bg-emerald-100 text-emerald-700'
                           : item.status === 'FAIL'
                             ? 'bg-red-100 text-red-700'
@@ -451,7 +473,13 @@ export function OverviewSectionV2({
             <div className="text-xs text-gray-600 leading-relaxed space-y-1">
               <div>• <strong>Must-Have Section Score</strong> = Average of all Must-Have question scores</div>
               <div>• <strong>Nice-to-Have Section Score</strong> = Average of all Nice-to-Have question scores</div>
-              <div>• <strong>Final Decision</strong> = Based on Must-Have Section Score ≥ {MHS_THRESHOLD.toFixed(1)}</div>
+              <div>
+                • <strong>{isPartialEvaluation ? 'Partial Interview Rule' : 'Final Decision'}</strong>
+                {' '}
+                = {isPartialEvaluation
+                  ? 'Terminated interviews show attended-question analysis only; no final hiring outcome is generated'
+                  : `Based on Must-Have Section Score ≥ ${MHS_THRESHOLD.toFixed(1)}`}
+              </div>
             </div>
           </div>
         </div>

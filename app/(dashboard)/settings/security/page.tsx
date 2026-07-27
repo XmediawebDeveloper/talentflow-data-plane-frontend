@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 // Password strength validation
 const getPasswordStrength = (password: string) => {
@@ -34,6 +35,8 @@ export default function SecurityPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission('canManageSecuritySettings');
   const [isLoading, setIsLoading] = useState(true);
+  // Scroll-only: forms + sessions list + transient dialogs; no filters/tabs/pagination.
+  const rootRef = useScrollRestoration<HTMLElement>('settings-security', !isLoading);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settings, setSettings] = useState<Partial<UserSettings>>({
     two_factor_enabled: false,
@@ -277,7 +280,7 @@ export default function SecurityPage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Security Settings' }]} />

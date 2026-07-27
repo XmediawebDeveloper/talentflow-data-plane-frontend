@@ -87,7 +87,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
         </div>
       </div>
 
-      {/* Timed-mode Pass/Fail Gate — MHS section avg ≥ 7.0 = Pass (doc spec). */}
+      {/* Timed-mode Pass/Fail Gate — MHS section avg ≥ mhsThreshold = Pass (doc spec). */}
       {showPassFailGate && (
         <div
           className={`rounded-2xl p-8 border-2 shadow-md ${

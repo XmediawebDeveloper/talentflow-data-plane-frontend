@@ -13,6 +13,7 @@ import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey } from '@/lib/types/planFeatures';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import api from '@/lib/services/api';
+import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 // Addon interface
 interface Addon {
@@ -550,6 +551,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Combined loading state - show loading if quota data hasn't arrived yet
   const loading = !contextQuotaData && !quotaError;
 
+  // Scroll-only persistence: dashboard has no list filters/pagination to restore.
+  const rootRef = useScrollRestoration<HTMLElement>('sub-usage-quotas', !loading);
+
   // Calculate statistics - use API data
   const getQuotaValue = (type: string, field: 'used' | 'limit' | 'remaining') => {
     if (quotaData?.quotas) {
@@ -768,7 +772,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   };
 
   return (
-    <main className="flex-1 bg-white dark:bg-slate-950">
+    <main ref={rootRef} className="flex-1 bg-white dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />

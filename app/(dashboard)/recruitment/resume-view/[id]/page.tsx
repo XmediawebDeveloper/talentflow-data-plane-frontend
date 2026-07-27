@@ -232,15 +232,19 @@ export default function ResumeViewPage() {
   // Which list the user opened this resume from, so the breadcrumb points back
   // to the right place ("My Resumes" vs "Internal Database"). The originating
   // list stores this in sessionStorage as `resumeNavSource`.
-  const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database'>('resume-database');
+  const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   useEffect(() => {
     try {
       const s = sessionStorage.getItem('resumeNavSource');
-      if (s === 'my-resumes' || s === 'resume-database') setViewSource(s);
+      if (s === 'my-resumes' || s === 'resume-database' || s === 'ai-talent-match' || s === 'job-details') {
+        setViewSource(s);
+      }
     } catch { /* ignore */ }
   }, []);
-  const sourceCrumb = viewSource === 'my-resumes'
-    ? { label: 'My Resumes', href: '/recruitment/my-resumes' }
+  const sourceCrumb =
+    viewSource === 'my-resumes' ? { label: 'My Resumes', href: '/recruitment/my-resumes' }
+    : viewSource === 'ai-talent-match' ? { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' }
+    : viewSource === 'job-details' ? { label: 'Job Descriptions', href: '/recruitment/job-openings' }
     : { label: 'Internal Database', href: '/recruitment/resume-database' };
 
   // Apply to Job modal state

@@ -49,6 +49,12 @@ export interface CandidateInterviewInfo {
   interview_mode?: string | null;
   // Proctoring
   copy_paste_blocking?: boolean | null;
+  // True once the interview was terminated for a proctoring violation
+  // (candidate left the interview screen). Sticky — routes to the terminated page.
+  proctoring_terminated?: boolean | null;
+  // When true, block starting the interview if the camera/mic is already held by
+  // another app (candidate already in a Teams/Zoom/Meet call).
+  block_active_meeting?: boolean | null;
   // Expiry timestamp for client-side expiry checks
   expires_at?: string | null;
 }
@@ -135,6 +141,57 @@ export const candidateAIInterviewService = {
 
   async recordPracticeComplete(token: string): Promise<void> {
     await candidateApi.post(`/candidate/ai-interview/${token}/practice-complete`).catch(() => {});
+  },
+
+  // Records a candidate consent ACKNOWLEDGEMENT to the backend Audit Log.
+  // Distinct from recordConsent() above (which posts the video/audio/biometric
+  // consent form to /consent). This posts to /consent-ack and is best-effort —
+  // never blocks the interview flow. Called for both pre-interview gates:
+  // 'rules_acknowledged' (checkbox on the fullscreen prompt) and 'final_accept'
+  // (the in-fullscreen "Yes, I accept" gate).
+  async recordConsentAck(
+    token: string,
+    consentType: 'rules_acknowledged' | 'final_accept',
+    details?: Record<string, any>,
+  ): Promise<void> {
+    await candidateApi.post(`/candidate/ai-interview/${token}/consent-ack`, {
+      consent_type: consentType,
+      timestamp: new Date().toISOString(),
+      details: details || {},
+    }).catch(() => {});
+  },
+
+  /**
+   * Enroll the candidate's voiceprint on the server (speaker verification).
+   * `pcmBlob` is raw 16 kHz mono Int16 PCM (see lib/utils/pcmEnroll.recordPcm16).
+   * `stage` is "system_check" (primary) or "practice" (top-up). Best-effort:
+   * returns {enabled, ok} — when the feature is off the backend replies
+   * {enabled:false} and the caller can fall back to local behavior.
+   */
+  async enrollVoice(
+    token: string,
+    pcmBlob: Blob,
+    stage: 'system_check' | 'practice' = 'system_check',
+    sampleRate = 16000,
+    noiseFloor = 0,
+    expectedText = '',
+  ): Promise<{ enabled: boolean; ok: boolean; reason?: string; speech_seconds?: number; match_ratio?: number; transcript?: string }> {
+    const formData = new FormData();
+    formData.append('file', pcmBlob, `${stage}.pcm`);
+    formData.append('stage', stage);
+    formData.append('sample_rate', String(sampleRate));
+    formData.append('noise_floor', String(noiseFloor));
+    // Only sent for the read-aloud system-check stage; the backend requires the
+    // transcript to match this before accepting (defeats silence/noise).
+    formData.append('expected_text', expectedText);
+    const url = `${API_BASE_URL}/candidate/ai-interview/${token}/enroll-voice`;
+    try {
+      const response = await fetch(url, { method: 'POST', body: formData });
+      if (!response.ok) return { enabled: true, ok: false, reason: `http_${response.status}` };
+      return await response.json();
+    } catch {
+      return { enabled: false, ok: false, reason: 'network' };
+    }
   },
 
   async transcribePracticeAudio(token: string, audioBlob: Blob): Promise<string> {
@@ -266,5 +323,22 @@ export const candidateAIInterviewService = {
       },
     );
     return response.data;
+  },
+
+  // Forward a batch of browser-side diagnostic lines to the backend so they
+  // land in journald tagged by session id (grep "ai-<token8>"). Fire-and-forget.
+  async reportClientLog(token: string, lines: string[]): Promise<void> {
+    if (!lines || lines.length === 0) return;
+    try {
+      await candidateApi.post(`/candidate/ai-interview/${token}/client-log`, { lines });
+    } catch {
+      /* best-effort logging channel — never surface errors to the candidate */
+    }
+  },
+
+  // Absolute URL for navigator.sendBeacon (used on disconnect/unload, when the
+  // axios instance / page may be tearing down).
+  clientLogBeaconUrl(token: string): string {
+    return `${API_BASE_URL}/candidate/ai-interview/${token}/client-log`;
   },
 };

@@ -78,7 +78,7 @@ export interface PerQuestionSkill {
 export interface PerQuestionClarification {
   /** 1-based CL index within the parent question (CL1, CL2, ...). */
   number: number;
-  /** Linda's repeated/rephrased question text ("Let's stick to this
+  /** Bina's repeated/rephrased question text ("Let's stick to this
    *  question: …"). Mirrors what the Transcript tab labels "Clarify". */
   question: string;
   /** Candidate's response right after this clarification, if any. May be
@@ -141,15 +141,20 @@ export interface PerQuestionDetail {
    *  EXCLUDED from the section average — counting it as 0.0 would unfairly
    *  tank the section. Mirrors the backend's "never fabricate a 0.0" rule. */
   isUnscored?: boolean;
+  /** Display-only score for terminated / disconnect sessions. Derived from the
+   *  live runtime evaluator snapshot when the full post-interview evaluation
+   *  never landed. Shown on the question card, but EXCLUDED from section /
+   *  overall aggregates so the UI does not fabricate a final result. */
+  displayOnlyQuestionScore?: number;
   /** Follow-up Q&As that fired within this main question's slot. Each
    *  follow-up shares the parent's `qNum`. Empty/undefined when the
    *  candidate answered the main question well enough not to warrant
    *  one (or when timed-mode strict distribution suppresses probes).
    *  Surfaced under the main card so reviewers can verify whether
-   *  Linda actually probed deeper. */
+   *  Bina actually probed deeper. */
   followUps?: PerQuestionFollowUp[];
   /** Clarification turns ("Clarify"/CL1, CL2…) that fired within this
-   *  question's slot — when the candidate asked Linda to repeat/rephrase and
+   *  question's slot — when the candidate asked Bina to repeat/rephrase and
    *  she replied "Let's stick to this question: …". Derived (adapter) from the
    *  raw conversation_transcript so the Question Analysis tab surfaces them the
    *  same way the Transcript tab does. Empty/undefined when none occurred. */
@@ -181,11 +186,20 @@ export interface PerQuestionDetail {
    *  Rendered in the Question Analysis answer block; mirrors the Transcript
    *  tab so the two views agree. */
   skipReason?: { text: string; tone: 'amber' | 'gray' };
+  /** Deterministic per-question explanation of WHY this score was awarded —
+   *  what the candidate demonstrated, what was missing/weak, and the overall
+   *  reason for the band. Composed backend-side from the per-skill evidence
+   *  notes (no LLM). Empty for HR / review-only turns (never scored). Rendered
+   *  under the Candidate's Answer block on the Question Analysis tab. */
+  scoreRationale?: string;
 }
 
 export interface DashboardData {
   candidate: { name: string; role: string; email?: string };
   interview: { mode: 'Timed' | 'Conversational'; duration: string; date: string };
+  /** True when the interview ended early (terminated / disconnect) and the
+   *  dashboard should suppress final hiring outcome messaging. */
+  isPartialEvaluation: boolean;
   scores: {
     mustHave: number;    // 0-10
     niceToHave: number;  // 0-10

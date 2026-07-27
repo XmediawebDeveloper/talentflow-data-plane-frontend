@@ -10,13 +10,14 @@ import { InterviewUI } from '@/components/ai-interview/InterviewUI';
 import type { InterviewTimerSnapshot } from '@/components/ai-interview/InterviewUI';
 import { useInterviewFaceVerification } from '@/components/ai-interview/proctoring/InterviewFaceVerification';
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
+import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
 
 // Pre-interview step components
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
 import StepConsent from '@/components/candidate/StepConsent';
 import StepIdentity from '@/components/candidate/StepIdentity';
-import StepSystemCheck from '@/components/candidate/StepSystemCheck';
+import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
@@ -41,8 +42,10 @@ type Step =
   | 'language_select'
   | 'sample_practice'
   | 'fullscreen_prompt'
+  | 'final_consent'    // in-fullscreen "Yes, I accept" gate shown right before the interview starts
   | 'interview'
   | 'completed'
+  | 'terminated'      // proctoring termination — candidate left the interview screen
   | 'error';
 
 
@@ -54,8 +57,56 @@ interface Props {
 // S3 multipart upload requires every part except the last to be >= 5 MiB; the
 // margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
 const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+// On a proctoring termination we keep the (entire-screen) recorder running for
+// a few more seconds BEFORE stopping/uploading, so the recording captures WHAT
+// the candidate switched to (the other tab/app/window from Alt+Tab, F11, the
+// Windows key, etc.) instead of cutting off the instant the violation fires.
+const POST_VIOLATION_RECORD_MS = 4000;
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
+
+// Strict tab-switch/minimize proctoring is enforced only in PRODUCTION so that
+// developers testing on staging aren't paused/terminated. Frontend reads the
+// browser-exposed NEXT_PUBLIC_ENVIRONMENT (the plain ENVIRONMENT var is server-only).
+const IS_PRODUCTION_ENV = process.env.NEXT_PUBLIC_ENVIRONMENT === 'production';
+// Persist a proctoring termination so reopening the link keeps showing the
+// terminated page (like the completed page persists) — the candidate can't
+// restart by reloading. Keyed per interview token.
+const terminatedStorageKey = (token: string) => `tf_ai_terminated_${token}`;
+
+// Human-readable description of WHAT the candidate did to trigger an automatic
+// termination. The reason code is sent with the `interview_terminated` proctor
+// event (details.reason) and the message is stored in details.message so the
+// recruiter view can show exactly what happened. Keep the codes in sync with
+// the recruiter-side fallback map in CandidateResultsView.tsx.
+const TERMINATION_MESSAGES: Record<string, string> = {
+  key_f11: 'Pressed F11 to exit fullscreen',
+  key_escape: 'Pressed the Esc key to exit fullscreen',
+  key_alt_tab: 'Used Alt + Tab to switch away from the interview',
+  key_meta: 'Pressed the Windows / ⌘ (Meta) key',
+  left_screen_fullscreen_exit: 'Exited fullscreen mode',
+  left_screen_tab_hidden: 'Switched to another tab or minimized the window',
+  left_screen_focus_lost: 'Moved focus away from the interview window',
+  left_screen: 'Left the interview screen',
+};
+const terminationMessage = (reason: string): string =>
+  TERMINATION_MESSAGES[reason] || 'Left the interview screen';
+
+// True when a keyboard event is the Windows / Command (Meta / Super) key.
+// Checked by key name, physical code, AND the metaKey modifier so it's caught
+// across browsers/OSes — though the OS often intercepts the bare Windows key
+// before the browser sees any key event (the focus-loss fallback covers that).
+const isMetaKey = (e: KeyboardEvent): boolean =>
+  e.key === 'Meta' || e.key === 'OS' ||
+  e.code === 'MetaLeft' || e.code === 'MetaRight' ||
+  e.code === 'OSLeft' || e.code === 'OSRight' ||
+  e.metaKey === true;
+// In production the candidate must STAY on the interview page. Leaving it
+// (switching tabs, minimizing, Alt+Tab, Windows key / losing focus, or exiting
+// fullscreen with Esc) PAUSES and blocks the interview until they return — no
+// "chances", no termination (a network blip or accidental focus change just
+// pauses and auto-resumes on return). Enforced only in production; staging is
+// relaxed for dev testing.
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   return Promise.race([
@@ -83,8 +134,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [identitySubmitting, setIdentitySubmitting] = useState(false);
   const [languageSubmitting, setLanguageSubmitting] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
+  // Consent checkbox on the "Enter Fullscreen Mode" prompt — the Share button
+  // stays disabled until the candidate ticks this.
+  const [rulesConsent, setRulesConsent] = useState(false);
+  // True when the candidate dropped fullscreen (F11/Esc) WHILE on the final
+  // consent gate. Blocks accepting until they return to fullscreen so the
+  // interview can never start outside fullscreen.
+  const [finalConsentFsExited, setFinalConsentFsExited] = useState(false);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
   const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
+  // True when the pre-start check found the camera/mic already in use by another
+  // app (candidate is in a Teams/Zoom/Meet call) and block_active_meeting is on.
+  const [meetingBlockActive, setMeetingBlockActive] = useState(false);
   // true when candidate stopped screen sharing during the interview
   const [screenShareStopped, setScreenShareStopped] = useState(false);
   const [resharing, setResharing] = useState(false);
@@ -100,6 +161,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // platforms use this pattern so accidental Esc presses don't kill the
   // interview. null = not in grace period.
   const [fullscreenGraceRemaining, setFullscreenGraceRemaining] = useState<number | null>(null);
+  // Production "stay on the page" enforcement. If the candidate leaves the
+  // interview (tab hidden / window unfocused / not fullscreen) the interview is
+  // TERMINATED immediately — no grace, no resume. Non-null = the reason it ended.
+  const [interviewTerminatedReason, setInterviewTerminatedReason] = useState<string | null>(null);
+  // Mirror of screenShareStopped so the terminate listener can ignore the blur
+  // caused by the re-share screen picker (that's not the candidate leaving).
+  const screenShareStoppedRef = useRef(false);
+  // Set once the interview reaches its NATURAL end (server `interview_ended`).
+  // From that point the candidate has finished every question and the
+  // evaluation runs in the background, so a fullscreen exit at the completion
+  // popup must NOT terminate the interview (it would block the evaluation).
+  const interviewClosingRef = useRef(false);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
   // Device tier + feature flags — detected once during the system check so the
   // interview runs the heavy/accurate path only on capable machines and a
@@ -109,10 +182,21 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
   // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
   const identityPhotoRef = useRef<Blob | null>(null);
+  // Object URL of the captured identity photo, passed to InterviewUI so the
+  // candidate's "You" chat avatar can show their own face. Null when the
+  // identity step was skipped (e.g. re-opened authenticated session) → the
+  // interview falls back to the "You" text avatar. Revoked on unmount.
+  const [candidatePhotoUrl, setCandidatePhotoUrl] = useState<string | null>(null);
   // Shared promise for best-effort baseline registration from the verified
   // identity photo. Starting it before system-check avoids proceed-time races
   // where practice opens before face registration finishes.
   const faceRegistrationPromiseRef = useRef<Promise<boolean> | null>(null);
+
+  // Free the identity-photo object URL when it changes or on unmount so the
+  // captured blob isn't retained for the whole session.
+  useEffect(() => {
+    return () => { if (candidatePhotoUrl) URL.revokeObjectURL(candidatePhotoUrl); };
+  }, [candidatePhotoUrl]);
 
   // Screen recording
   const screenRecorderRef = useRef<MediaRecorder | null>(null);
@@ -195,10 +279,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
     if (stepRef.current === 'interview') return;
+    // Proctoring termination is sticky: once the candidate was terminated for
+    // leaving the screen, reopening the link must stay on the terminated page —
+    // they can't restart. Checked before anything else.
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem(terminatedStorageKey(token))) {
+        const reason = localStorage.getItem(terminatedStorageKey(token)) || 'left_screen';
+        setInterviewTerminatedReason(reason);
+        setStep('terminated');
+        return;
+      }
+    } catch { /* ignore storage errors */ }
     try {
       setStep('loading');
       const info = await candidateAIInterviewService.getInterviewInfo(token);
       setInterview(info);
+
+      // Server-side proctoring termination is sticky and unbypassable (survives
+      // clearing localStorage / a different browser): if the backend says this
+      // interview was terminated, stay on the terminated page — no resume.
+      if (info.proctoring_terminated) {
+        try { localStorage.setItem(terminatedStorageKey(token), 'left_screen'); } catch { /* ignore */ }
+        setInterviewTerminatedReason('left_screen');
+        setStep('terminated');
+        return;
+      }
 
       // Populate available languages from interview config
       if (info.available_languages?.length) {
@@ -268,13 +373,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // Require a fresh OTP before letting the candidate resume at any step.
       const sessionAuthed = sessionStorage.getItem(SESSION_AUTH_KEY) === '1';
       if (!sessionAuthed) {
-        // Determine where to send them AFTER they pass OTP
+        // Determine where to send them AFTER they pass OTP. A saved post-check
+        // step wins even if system_check_passed is stale/false (they clearly
+        // progressed past it); only fall back to the default ordering otherwise.
         let targetStep: Step = 'system_check';
-        if (info.system_check_passed) {
-          const savedStep = readInterviewStep(token) as Step | null;
-          if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
-            targetStep = savedStep;
-          } else if (info.introduction_video_url) {
+        const savedStep = readInterviewStep(token) as Step | null;
+        if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
+          targetStep = savedStep;
+        } else if (info.system_check_passed) {
+          if (info.introduction_video_url) {
             targetStep = 'intro_video';
           } else if ((info.available_languages?.length ?? 0) > 1 && !info.selected_language) {
             targetStep = 'language_select';
@@ -288,13 +395,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       }
       // ────────────────────────────────────────────────────────────────────────
 
-      if (!info.system_check_passed) {
-        setStep('system_check');
-        return;
-      }
-
-      // ── 3. Post-system-check steps — restore via aiInterviewSessionStore ──
-      // (sessionStorage first, localStorage mirror as fallback if tab closed)
+      // ── 3. Post-check step restore takes PRIORITY over the system-check gate ──
+      // A saved post-check step (intro_video / language_select / sample_practice
+      // / fullscreen_prompt) only exists because the candidate ALREADY progressed
+      // past system check in this browser. So honor it even when the backend's
+      // system_check_passed flag is stale/false (e.g. the check soft-passed with
+      // warnings) — otherwise a refresh on the fullscreen-prompt / final-consent
+      // pages wrongly drops the candidate back to step 3 (system check). OTP
+      // re-auth above still runs on a fresh browser, so this doesn't weaken
+      // security. (sessionStorage first, localStorage mirror as tab-close fallback.)
       const savedStep = readInterviewStep(token) as Step | null;
       if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
         // Skip language_select if language already confirmed
@@ -303,6 +412,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           return;
         }
         setStep(savedStep);
+        return;
+      }
+
+      // No saved post-check step → enforce system check before the defaults.
+      if (!info.system_check_passed) {
+        setStep('system_check');
         return;
       }
 
@@ -338,7 +453,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => {
     if (POST_CHECK_STEPS.includes(step as Step)) {
       writeInterviewStep(token, step);
-    } else if (step === 'interview' || step === 'completed' || step === 'error') {
+    } else if (step === 'final_consent') {
+      // The final consent gate runs in fullscreen with screen sharing active,
+      // both of which are lost on reload and must be re-granted. So a refresh
+      // here must return to the fullscreen prompt (not stay on final_consent,
+      // and not drop to an earlier step). Persist it as 'fullscreen_prompt'.
+      writeInterviewStep(token, 'fullscreen_prompt');
+    } else if (step === 'interview' || step === 'completed' || step === 'terminated' || step === 'error') {
       clearInterviewStep(token);
     }
   }, [step, token]);
@@ -419,10 +540,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== RECORDING AUDIO HELPERS ==========
 
   /**
-   * Mix Linda's voice (TalkingHead AudioContext tap) + candidate mic + optional tab audio
+   * Mix Bina's voice (TalkingHead AudioContext tap) + candidate mic + optional tab audio
    * into one audio track for the MediaRecorder.
    *
-   * Linda's voice is captured by routing TalkingHead's audioReverbNode (and fallback
+   * Bina's voice is captured by routing TalkingHead's audioReverbNode (and fallback
    * BufferSources) to window.__interviewRecordingDest — a MediaStreamDestination created
    * on the same AudioContext. TalkingHeadAvatar checks for this global when it builds
    * its audio graph so no polling or retries are needed.
@@ -431,14 +552,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
    * and BEFORE setStep('interview') so the dest is in place before TalkingHead mounts.
    */
   const buildRecordingStreamWithAudio = async (screenStream: MediaStream): Promise<MediaStream> => {
-    // Tear down mix context from a previous recording or re-share (keeps Linda's dest alive)
+    // Tear down mix context from a previous recording or re-share (keeps Bina's dest alive)
     recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
     recordingMicStreamRef.current = null;
     recordingAudioCtxRef.current?.close().catch(() => {});
     recordingAudioCtxRef.current = null;
 
     try {
-      // ── 1. Linda's voice: tap the TalkingHead AudioContext at source ──
+      // ── 1. Bina's voice: tap the TalkingHead AudioContext at source ──
       // Reuse across re-shares — TalkingHead's audioReverbNode stays connected to it.
       if (!(window as any).__interviewRecordingDest) {
         const ttsCtx = (window as any).__interviewAudioContext as AudioContext | null;
@@ -449,21 +570,21 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       const lindaDest: MediaStreamAudioDestinationNode | null =
         (window as any).__interviewRecordingDest ?? null;
 
-      // ── 2. Mix: Linda + mic + tab audio → one track for MediaRecorder ──
+      // ── 2. Mix: Bina + mic + tab audio → one track for MediaRecorder ──
       const mixCtx = new AudioContext({ sampleRate: 48000 });
       recordingAudioCtxRef.current = mixCtx;
       const mixDest = mixCtx.createMediaStreamDestination();
 
-      // Linda's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
+      // Bina's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
       let lindaCaptured = false;
       if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
         mixCtx.createMediaStreamSource(lindaDest.stream).connect(mixDest);
         lindaCaptured = true;
       }
 
-      // Tab audio is Linda's voice as it plays through the shared tab — so it is
-      // ONLY a FALLBACK. If we already tapped Linda directly above, mixing the tab
-      // audio too records her voice TWICE (the doubled/echoey Linda heard in the
+      // Tab audio is Bina's voice as it plays through the shared tab — so it is
+      // ONLY a FALLBACK. If we already tapped Bina directly above, mixing the tab
+      // audio too records her voice TWICE (the doubled/echoey Bina heard in the
       // saved recording). Only add it when the direct tap was unavailable.
       if (!lindaCaptured && screenStream.getAudioTracks().length > 0) {
         mixCtx.createMediaStreamSource(
@@ -479,7 +600,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         recordingMicStreamRef.current = micStream;
         mixCtx.createMediaStreamSource(micStream).connect(mixDest);
       } catch {
-        // Mic unavailable — record Linda's voice only
+        // Mic unavailable — record Bina's voice only
       }
 
       return new MediaStream([
@@ -568,6 +689,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // face-api.js polling corrupts the shared TF.js WebGL backend.
       if (data.photo) {
         identityPhotoRef.current = data.photo;
+        // Expose the photo to InterviewUI as an object URL for the "You" avatar.
+        setCandidatePhotoUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(data.photo as Blob);
+        });
         void ensureFaceBaselineFromIdentityPhoto();
       }
 
@@ -655,6 +781,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const handleFullscreenReady = useCallback(async () => {
     if (startSubmitting) return;
     setStartSubmitting(true);
+    // Clear any prior "in a meeting" banner so a retry re-evaluates cleanly.
+    setMeetingBlockActive(false);
 
     // Pre-flight permission check — refuse to start the interview if the
     // browser / OS has camera or microphone permission set to "denied".
@@ -716,11 +844,54 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       console.warn('[Portal] Permission pre-check failed:', permErr);
     }
 
+    // ── "Already in a meeting" pre-flight (backend-gated) ─────────────────────
+    // If the candidate is already in a Teams/Zoom/Meet call, that app holds the
+    // camera/mic, so the browser cannot start its OWN capture — getUserMedia
+    // throws NotReadableError / TrackStartError / AbortError ("device in use").
+    // When AI_INTERVIEW_BLOCK_ACTIVE_MEETING is true (surfaced as
+    // block_active_meeting), refuse to start and show a clear prompt. A browser
+    // tab cannot see other apps/tabs directly, so device-contention is the
+    // reliable signal; a camera-off screen-share-only call cannot be detected
+    // here (the live multi-voice / multi-face proctoring catches that after start).
+    if (interview?.block_active_meeting) {
+      let deviceBusy = false;
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        probe.getTracks().forEach(t => t.stop());
+      } catch (busyErr: any) {
+        const name = busyErr?.name || '';
+        // NotReadableError (Chrome/Edge), TrackStartError (Firefox), AbortError:
+        // the OS/another app has an exclusive lock on the device → in a meeting.
+        // NotAllowedError is a PERMISSION denial (handled above) — not a meeting.
+        if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+          deviceBusy = true;
+        }
+      }
+      if (deviceBusy) {
+        setMeetingBlockActive(true);
+        toast.error(
+          'You appear to be in a video meeting (Teams / Zoom / Meet). ' +
+          'You are not allowed to be connected to any meeting during the interview. ' +
+          'Please leave the meeting and close all other video-call apps, then try again.',
+          { duration: 10000 }
+        );
+        try {
+          await candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'multiple_voices',
+            severity: 'high',
+            details: { reason: 'device_in_use_active_meeting', phase: 'pre_interview' },
+          });
+        } catch { /* best-effort */ }
+        setStartSubmitting(false);
+        return; // stay on the fullscreen_prompt step; do NOT enter the interview
+      }
+    }
+
     // CRITICAL: Create AudioContext in user gesture context AND resume it NOW.
     // Chrome's autoplay policy starts a new AudioContext 'suspended' even inside
     // a gesture — it only reliably flips to 'running' if .resume() is called
     // within the SAME gesture. Without this resume, the context stays suspended,
-    // Linda's TTS audio never plays, and the interview looks stuck ("speaks only
+    // Bina's TTS audio never plays, and the interview looks stuck ("speaks only
     // after a refresh"). resume() here, in the click handler, unlocks it.
     try {
       const ctx = new AudioContext({ sampleRate: 24000 });
@@ -868,23 +1039,62 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // Step 2: Now enter fullscreen — screen-share picker is already done so no exit/re-entry cycle.
     try { await requestFullscreen(); } catch { /* proceed anyway */ }
 
+    // Screen is shared and we're in fullscreen. Show the final in-fullscreen
+    // consent gate ("Not allowed during the interview" + "Yes, I accept")
+    // BEFORE actually starting (and consuming a unit for) the interview.
+    // The interview is started from handleFinalConsentAccept.
+    setIsFullscreenActive(isFullscreen());
+    setStep('final_consent');
+    setStartSubmitting(false);
+  }, [startSubmitting, token, requestEntireScreenShare]);
+
+  // Final in-fullscreen consent gate → actually start the interview. Runs the
+  // backend start (unit consumption) only after the candidate explicitly
+  // accepts the "not allowed" rules one more time in fullscreen.
+  const handleFinalConsentAccept = useCallback(async () => {
+    if (startSubmitting) return;
+
+    // HARD REQUIREMENT: the interview must start IN fullscreen. If it was
+    // dropped on this screen (e.g. F11 / Esc), re-enter it NOW — this click is
+    // the user gesture fullscreen requires — issued BEFORE any await so the
+    // gesture isn't consumed. Then VERIFY it actually engaged; if not, abort
+    // and keep the candidate on the consent gate (the overlay guides them back)
+    // rather than starting the interview windowed. This is the fix for
+    // "F11 → accept → interview started without fullscreen".
+    if (!isFullscreen()) {
+      try { await requestFullscreen(); } catch { /* verified below */ }
+    }
+    if (!isFullscreen()) {
+      setFinalConsentFsExited(true);
+      toast.error(
+        'You must be in fullscreen to start. Click "Return to Fullscreen", then accept again.',
+        { duration: 6000 },
+      );
+      return;
+    }
+    setFinalConsentFsExited(false);
+    setStartSubmitting(true);
+
+    // Log the SECOND consent to the audit trail (best-effort, non-blocking).
+    candidateAIInterviewService.recordConsentAck(token, 'final_accept', {
+      phase: 'pre_interview_fullscreen',
+    }).catch(() => {});
+
+    // Resume the audio context so Bina's TTS is unlocked (Chrome autoplay
+    // policy requires a resume inside a user gesture).
+    try {
+      const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
+      ctx.resume?.().catch(() => { /* ignore */ });
+      (window as any).__interviewAudioContext = ctx;
+    } catch (e) {
+      console.warn('[Portal] AudioContext resume on final consent failed:', e);
+    }
+
     try {
       await candidateAIInterviewService.recordPracticeComplete(token);
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
       setIsFullscreenActive(isFullscreen());
-      // Pre-create 24kHz AudioContext if the fullscreen button path didn't already do it.
-      // Guards against browsers that skip the fullscreen prompt (e.g. already fullscreen).
-      if (!(window as any).__interviewAudioContext) {
-        try {
-          const ctx = new AudioContext({ sampleRate: 24000 });
-          // Resume in-gesture so Chrome doesn't leave it suspended (Linda silent).
-          ctx.resume().catch(() => { /* ignore */ });
-          (window as any).__interviewAudioContext = ctx;
-        } catch (e) {
-          console.warn('[Portal] Failed to pre-create AudioContext on start:', e);
-        }
-      }
       setStep('interview');
     } catch (err: any) {
       const detail = err?.response?.data?.detail || 'Failed to start interview';
@@ -896,14 +1106,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     } finally {
       setStartSubmitting(false);
     }
-  }, [startSubmitting, token, requestEntireScreenShare]);
+  }, [startSubmitting, token]);
 
-  // Fullscreen enforcement during interview — with 10s grace period so
-  // accidental Esc presses don't immediately slap the hard-pause overlay
-  // on the candidate. If they return within 10s, we silently restore
-  // without ever showing the blocking UI.
+  // Fullscreen enforcement (STAGING only) — 10s grace so accidental Esc presses
+  // don't immediately show the pause overlay. In PRODUCTION the unified
+  // "stay on the page" pause below owns fullscreen-exit (immediate, no grace).
   useEffect(() => {
-    if (step !== 'interview') return;
+    if (step !== 'interview' || IS_PRODUCTION_ENV) return;
     const eventName = getFullscreenChangeEvent();
     const GRACE_MS = 10000;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -954,6 +1163,219 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       document.removeEventListener(eventName, handleFsChange);
       clearGrace();
       if (isFullscreen()) exitFullscreen().catch(() => {});
+    };
+  }, [step]);
+
+  // ── "Stay on the page" — TERMINATE on leaving (PRODUCTION ONLY) ────────────
+  // The candidate must remain ON the interview. Leaving it in ANY way —
+  // switching tabs, minimizing, Alt+Tab, the Windows key / losing window focus,
+  // or exiting fullscreen (Esc) — TERMINATES the interview immediately, with NO
+  // grace period and no resume. Fires only on real events (not the initial
+  // mount state) and ignores the blur from the screen-share re-share picker.
+  // Staging is exempt so developers can test freely.
+  useEffect(() => {
+    if (step !== 'interview' || !IS_PRODUCTION_ENV) return;
+    const fsEvent = getFullscreenChangeEvent();
+    let done = false;
+
+    // Entry-transition guard. Entering the interview involves the screen-share
+    // picker closing and requestFullscreen() — both emit a transient window
+    // `blur` and a brief `fullscreenchange` where isFullscreen() momentarily
+    // reads false. If we armed the terminate listeners immediately, that churn
+    // (worse on the wrong-tab → re-select path) would fire a FALSE termination
+    // the instant the interview started. So we arm only after the browser has
+    // settled, and we only treat a fullscreen change as an EXIT once fullscreen
+    // was actually confirmed active at least once.
+    let armed = false;
+    let sawFullscreen = false;
+
+    const terminateNow = (reason: string) => {
+      if (done || !armed || screenShareStoppedRef.current) return;
+      // Natural-end guard: once the interview has ended (all questions done,
+      // completion popup showing, evaluation running in the background), a
+      // fullscreen exit / Esc / F11 must NOT terminate — the candidate already
+      // finished. Terminating here would flip the row to TERMINATED and block
+      // the evaluation. Ignore (the interview is effectively complete).
+      if (interviewClosingRef.current) {
+        console.log('[Proctor] Ignoring', reason, '— interview already reached its natural end (completion popup); not terminating.');
+        return;
+      }
+      done = true;
+      const message = terminationMessage(reason);
+      setInterviewTerminatedReason(reason);
+      // Persist so reopening the link stays on the terminated page (can't restart).
+      try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
+      // Report the termination so the recruiter side flips out of "In Progress".
+      // `message` carries the clear human description of what the candidate did
+      // (Alt+Tab, Esc, F11, Windows key, tab switch, …) so the recruiter view and
+      // the audit log can show exactly what happened. The component stays mounted
+      // (setStep only swaps the rendered screen — no navigation), so this request
+      // completes normally after fullscreen exit.
+      try {
+        void candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'interview_terminated',
+          severity: 'high',
+          details: { reason, message, action: 'interview_terminated' },
+        });
+      } catch { /* non-blocking */ }
+      // Keep the entire-screen recorder RUNNING for a few more seconds so the
+      // footage captures what the candidate switched to (the violating action
+      // just happened; the recorder is still capturing their screen). Screen
+      // capture is independent of fullscreen, so exiting fullscreen / showing
+      // the terminated page below does NOT stop it. Then stop + upload the
+      // final segment (which now includes those extra seconds).
+      window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
+      if (isFullscreen()) exitFullscreen().catch(() => {});
+      // Navigate to the full terminated page (mirrors the completed-page flow).
+      setStep('terminated');
+    };
+    // Keydown-based malpractice detection. These fire BEFORE the resulting
+    // blur/fullscreenchange, so they attribute the exact key the candidate
+    // pressed (more specific than the generic "left screen" fallbacks).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        // Best-effort: block the default fullscreen toggle (still terminate).
+        try { e.preventDefault(); } catch { /* ignore */ }
+        terminateNow('key_f11');
+      } else if (e.key === 'Escape') {
+        terminateNow('key_escape');
+      } else if (e.key === 'Tab' && e.altKey) {
+        terminateNow('key_alt_tab');
+      } else if (isMetaKey(e)) {
+        // Windows / Command key (Meta). Caught here when the browser actually
+        // receives the keydown; when the OS swallows it (common for the bare
+        // Windows key), the focus-loss fallback in onBlur catches it instead.
+        terminateNow('key_meta');
+      }
+    };
+    // Some environments deliver only the keyup for the Windows/⌘ key (the
+    // keydown is consumed by the OS). Catch it here too.
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (isMetaKey(e)) terminateNow('key_meta');
+    };
+    const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
+
+    // A window `blur` is NOT proof the candidate left the interview. While
+    // sharing Entire Screen, Chrome's "<site> is sharing your screen" bar is
+    // browser chrome that can hold focus, and OS notifications / transient focus
+    // steals also blur the page — all WITHOUT the candidate leaving. Those also
+    // throttle the tab, which is why Bina's audio stutters right before a false
+    // termination. So we do NOT terminate on raw focus loss (the old
+    // `!document.hasFocus()` check fired `left_screen_focus_lost` here). Instead,
+    // a blur just DEFERS and re-checks the two signals that actually mean "left
+    // the screen": the tab became hidden (switch / minimize) or fullscreen was
+    // dropped (Esc). If the page is still visible AND still fullscreen, the
+    // candidate is still here — ignore it. (visibilitychange + fullscreenchange
+    // have their own listeners; this is a backstop.)
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+    // Second, longer confirmation timer for the "focus lost but still
+    // visible & fullscreen" case — this is what catches the Windows / ⌘ key
+    // (which opens the OS Start menu and steals focus without ever delivering
+    // a keydown to the browser). A transient blur that regains focus quickly
+    // (screen-share bar, OS notification) clears this before it fires.
+    let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearBlurTimer = () => {
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+      if (focusLossTimer) { clearTimeout(focusLossTimer); focusLossTimer = null; }
+    };
+    const onBlur = () => {
+      clearBlurTimer();
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        if (document.hidden) {
+          terminateNow('left_screen_tab_hidden');
+        } else if (sawFullscreen && !isFullscreen()) {
+          terminateNow('left_screen_fullscreen_exit');
+        } else if (!screenShareStoppedRef.current) {
+          // Still visible & still fullscreen, only focus was lost. This is NO
+          // LONGER a termination: it is INDISTINGUISHABLE from a legitimate
+          // interaction with Chrome's "<site> is sharing your screen" bar —
+          // clicking or DRAGGING that bar moves focus to browser chrome and
+          // `document.hasFocus()` can stay false even after the drag ends (until
+          // the candidate clicks back into the page). That was terminating real
+          // candidates in production (reason=left_screen_focus_lost). A genuine
+          // "left the screen" always trips one of the hard signals instead: the
+          // tab becomes hidden (handled above + visibilitychange) or fullscreen
+          // is dropped (fullscreenchange), and Alt+Tab / Esc / F11 / Meta are
+          // caught by the keydown handler. So here we only LOG a non-terminating
+          // violation for the recruiter timeline and let the interview continue.
+          focusLossTimer = setTimeout(() => {
+            focusLossTimer = null;
+            if (!done && !document.hasFocus() && !document.hidden && !screenShareStoppedRef.current) {
+              try {
+                void candidateAIInterviewService.reportProctorEvent(token, {
+                  event_type: 'window_blur',
+                  severity: 'minor',
+                  details: { reason: 'focus_lost_no_leave', note: 'focus left the page but it stayed visible & fullscreen (e.g. screen-share bar / OS notification) — not terminated' },
+                });
+              } catch { /* non-blocking */ }
+            }
+          }, 1200);
+        }
+      }, 500);
+    };
+    const onFocus = () => clearBlurTimer();
+    const onFsChange = () => {
+      if (isFullscreen()) { sawFullscreen = true; return; }
+      // Ignore a not-fullscreen reading until we've confirmed the candidate was
+      // actually in fullscreen — protects against the entry transition where the
+      // event can fire before fullscreen finishes activating.
+      if (sawFullscreen) terminateNow('left_screen_fullscreen_exit');
+    };
+
+    // Track fullscreen state during the settle window too, so `sawFullscreen`
+    // is already true by the time listeners arm.
+    document.addEventListener(fsEvent, onFsChange);
+
+    // Arm after the entry transition settles (~1.2s). Only then do the
+    // blur/visibility listeners start counting as violations.
+    const armTimer = window.setTimeout(() => {
+      armed = true;
+      if (isFullscreen()) sawFullscreen = true;
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
+      // Capture phase so we see the key before the browser acts on it.
+      window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('keyup', onKeyUp, true);
+      // If the candidate already left during the settle window, catch it now.
+      if (document.hidden) terminateNow('left_screen_tab_hidden');
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(armTimer);
+      clearBlurTimer();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      document.removeEventListener(fsEvent, onFsChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Keep the ref mirror of screenShareStopped current for the terminate guard.
+  useEffect(() => { screenShareStoppedRef.current = screenShareStopped; }, [screenShareStopped]);
+
+  // Enforce fullscreen on the FINAL CONSENT gate. If the candidate drops
+  // fullscreen here (e.g. presses F11 or Esc) before accepting, flag it so the
+  // "Return to fullscreen" overlay blocks the accept button — the interview
+  // must never start outside fullscreen. A best-effort keydown also blocks the
+  // F11 default (browsers may ignore it; the overlay is the real guarantee).
+  useEffect(() => {
+    if (step !== 'final_consent') return;
+    const ev = getFullscreenChangeEvent();
+    const sync = () => setFinalConsentFsExited(!isFullscreen());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F11') { try { e.preventDefault(); } catch { /* ignore */ } }
+    };
+    sync();
+    document.addEventListener(ev, sync);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener(ev, sync);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [step]);
 
@@ -1209,7 +1631,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   if (step === 'fullscreen_prompt') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 md:p-10">
+        <div className={`bg-white rounded-2xl shadow-2xl w-full p-8 md:p-10 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-5xl'}`}>
 
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
@@ -1257,31 +1679,171 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                 Enter Fullscreen Mode
               </h1>
               <p className="text-gray-600 mb-6 text-center text-sm">
-                The AI interview requires fullscreen mode and Entire Screen sharing to ensure a focused and fair environment.
+                The AI interview runs in fullscreen with Entire Screen sharing and is actively proctored, to ensure a focused and fair environment. Please read the rules below before you begin.
               </p>
-              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
-                <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
-                <ul className="space-y-2 text-sm text-indigo-800">
-                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Select Entire Screen only. Window and Current Tab are not allowed</span></li>
-                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Screen sharing is required to prevent malpractice</span></li>
-                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden (fullscreen mode)</span></li>
-                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Exiting fullscreen will be flagged as a violation</span></li>
-                </ul>
+              {/* Two-column rules: blue "Interview Rules" (left) + orange
+                  "Not allowed during the interview" (right). */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5 text-left">
+                {/* LEFT — blue: what to do */}
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
+                  <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
+                  <ul className="space-y-2 text-sm text-indigo-800">
+                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Select Entire Screen only. Window and Current Tab are not allowed</span></li>
+                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Screen sharing is required to prevent malpractice</span></li>
+                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden (fullscreen mode)</span></li>
+                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Stay in fullscreen and keep this window in focus for the whole interview</span></li>
+                  </ul>
+                </div>
+                {/* RIGHT — orange: what is monitored / not allowed */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    Not allowed during the interview
+                  </p>
+                  <ul className="space-y-2 text-sm text-amber-800">
+                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
+                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
+                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
+                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
+                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching your internet connection or network. Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview</span></li>
+                    {interview?.block_active_meeting && (
+                      <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Being connected to any video meeting (Teams / Zoom / Meet). Leave and close all meeting apps before you begin — the interview will not start while another app is using your camera or microphone</span></li>
+                    )}
+                  </ul>
+                  <p className="text-xs text-amber-700 mt-3 leading-relaxed">
+                    These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
+                  </p>
+                </div>
               </div>
+
+              {/* Active-meeting block banner — shown after a start attempt found
+                  the camera/mic already in use by another app (Teams/Zoom/Meet). */}
+              {meetingBlockActive && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-5 text-left">
+                  <p className="font-semibold text-red-800 mb-1 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    You cannot be in a meeting during the interview
+                  </p>
+                  <p className="text-sm text-red-700 leading-relaxed">
+                    Your camera or microphone is already in use by another app — it looks like
+                    you're in a Teams / Zoom / Meet call. Please <b>leave the meeting and close all
+                    other video-call apps</b>, then click the button again to start.
+                  </p>
+                </div>
+              )}
+
+              {/* Consent checkbox — the Share button stays disabled until ticked. */}
+              <label className="flex items-start gap-3 mb-5 cursor-pointer select-none text-left">
+                <input
+                  type="checkbox"
+                  checked={rulesConsent}
+                  onChange={(e) => setRulesConsent(e.target.checked)}
+                  className="mt-0.5 w-5 h-5 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700 leading-relaxed">
+                  I have read and understood the interview rules and the actions that are not allowed. I consent to Entire Screen sharing and active proctoring for the duration of this interview.
+                </span>
+              </label>
+
               <button
-                onClick={() => { handleFullscreenReady(); }}
-                disabled={startSubmitting}
+                onClick={() => {
+                  // Log the FIRST consent (checkbox acknowledged) to the audit
+                  // trail, then proceed to screen-share + fullscreen.
+                  candidateAIInterviewService.recordConsentAck(token, 'rules_acknowledged', { phase: 'fullscreen_prompt' }).catch(() => {});
+                  handleFullscreenReady();
+                }}
+                disabled={startSubmitting || !rulesConsent}
+                title={!rulesConsent ? 'Please accept the consent above to continue' : undefined}
                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
               >
                 {startSubmitting ? (
                   <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
                 ) : (
-                  <><Maximize2 className="w-5 h-5" />Share Entire Screen &amp; Start Interview</>
+                  <><Maximize2 className="w-5 h-5" />Share Entire Screen &amp; Continue</>
                 )}
               </button>
             </>
           )}
         </div>
+      </div>
+    );
+  }
+
+  // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
+  if (step === 'final_consent') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
+          {/* Prominent do-not-refresh warning — reloading here drops fullscreen
+              + screen sharing and sends the candidate back to re-share. */}
+          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            Do not refresh this page
+          </div>
+          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-10 h-10 text-amber-600" />
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+            Before we begin
+          </h1>
+          <p className="text-gray-600 mb-6 text-center text-sm">
+            You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview begins as soon as you accept.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-left">
+            <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              Not allowed during the interview
+            </p>
+            <ul className="space-y-2 text-sm text-amber-800">
+              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
+              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
+              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
+              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
+              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching your internet connection or network. Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview</span></li>
+            </ul>
+            <p className="text-xs text-amber-700 mt-3 leading-relaxed">
+              These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
+            </p>
+          </div>
+          <button
+            onClick={() => { handleFinalConsentAccept(); }}
+            disabled={startSubmitting || finalConsentFsExited}
+            title={finalConsentFsExited ? 'Return to fullscreen to continue' : undefined}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+          >
+            {startSubmitting ? (
+              <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+            ) : (
+              <><CheckCircle className="w-5 h-5" />Yes, I accept — Start Interview</>
+            )}
+          </button>
+        </div>
+
+        {/* Fullscreen dropped on this gate (F11 / Esc) — block accepting and
+            force the candidate back into fullscreen. Re-entering needs a user
+            gesture, so it happens on this button's click. */}
+        {finalConsentFsExited && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <Maximize2 className="w-8 h-8 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
+              <p className="text-gray-600 mb-6 text-sm">
+                You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.
+              </p>
+              <button
+                onClick={async () => {
+                  try { await requestFullscreen(); } catch { /* ignore */ }
+                  setFinalConsentFsExited(!isFullscreen());
+                }}
+                className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-xl transition-all"
+              >
+                <Maximize2 className="w-4 h-4" />Return to Fullscreen
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1354,11 +1916,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             if (isFullscreen()) exitFullscreen().catch(() => {});
             setStep('completed');
           }}
+          onInterviewClosing={() => { interviewClosingRef.current = true; }}
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
-          copyPasteBlocking={interview?.copy_paste_blocking ?? true}
+          copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}
           onTimerChange={setTimerSnapshot}
           deviceCapability={deviceCapability}
+          candidatePhotoUrl={candidatePhotoUrl}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
@@ -1393,7 +1957,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         )}
         {/* Grace-period countdown — shown while candidate has 10s to return
             before the hard-pause overlay kicks in. Silent otherwise. */}
-        {!screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
+        {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-amber-500 mx-auto mb-4" />
@@ -1420,8 +1984,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
         )}
-        {/* Hard-pause overlay — shown only after grace period expires */}
-        {!screenShareStopped && !isFullscreenActive && (
+        {/* Hard-pause overlay (STAGING) — shown after the fullscreen grace expires.
+            Production uses the unified "return to the interview" pause below. */}
+        {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
@@ -1456,6 +2021,43 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           </div>
         )}
       </>
+    );
+  }
+
+  // ========== TERMINATED (proctoring — candidate left the interview screen) ==========
+  // Prominent RED terminal page. Sticky across reloads (see loadInterview) so
+  // reopening the link keeps showing this — the candidate cannot restart.
+  if (step === 'terminated') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-red-50 px-4" style={{ colorScheme: 'light' }}>
+        <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-300 max-w-md w-full p-8 text-center">
+          <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-10 h-10 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-red-700 mb-3">Interview Terminated</h1>
+          <p className="text-gray-700 mb-3">
+            Your interview has been <span className="font-semibold text-red-600">ended</span> because you left
+            the interview screen (switching tabs, minimizing, pressing a shortcut key,
+            or exiting fullscreen is not allowed).
+          </p>
+          {interviewTerminatedReason && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 mb-3">
+              <p className="text-sm text-red-700">
+                Detected action: <span className="font-semibold">{terminationMessage(interviewTerminatedReason)}</span>
+              </p>
+            </div>
+          )}
+          <p className="text-sm text-gray-600 mb-4">
+            As required by the proctoring policy, you must remain on the interview page in
+            fullscreen for the entire session. This session has been recorded and flagged for review.
+          </p>
+          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+            <p className="text-sm font-semibold text-red-700">
+              The interview cannot be resumed or restarted.
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1567,11 +2169,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
           onEnrollVoice={async (stream) => {
-            // Record 10 s of the candidate's voice from the live mic stream
-            // already open for the noise check. Without this baseline,
-            // InterviewVoiceVerification.verifyVoice() silently no-ops during
-            // the interview — so a friend speaking on the mic instead of the
-            // candidate would never trigger a voice_identity_changed event.
+            // Primary enrollment: capture ~12 s of the candidate reading the
+            // prompt and send raw 16 kHz PCM to the server, which computes an
+            // ECAPA-TDNN voiceprint (accurate speaker verification). This is the
+            // baseline every interview turn is later checked against server-side.
+            //
+            // If server voice-ID is disabled (feature flag off), fall back to
+            // the local MFCC baseline so behavior is unchanged in that case.
+            try {
+              const cap = await recordPcm16(stream, 12000);
+              if (!cap) return false; // nothing recorded at all
+              // Send to the server. When server voice-ID is ENABLED, the server
+              // enrolls the voiceprint and gates ONLY on whether the candidate
+              // spoke (Silero VAD) — there is NO sentence/word matching. So `ok`
+              // is true whenever real speech was captured. We still pass
+              // ENROLL_PASSAGE (backward-compat), but the server ignores it.
+              const res = await candidateAIInterviewService.enrollVoice(
+                token, cap.blob, 'system_check', cap.sampleRate, cap.noiseFloor,
+                ENROLL_PASSAGE,
+              );
+              if (res.enabled) return res.ok; // server verdict is final (speech present?)
+
+              // Server DISABLED → no content check available, so fall back to the
+              // client energy guard + local MFCC baseline (old behavior).
+              if (!cap.speechDetected) return false;
+            } catch { /* fall through to local baseline */ }
             if (voiceVerification.hasBaseline()) return true;
             return voiceVerification.enrollVoice(stream, 10000);
           }}

@@ -48,6 +48,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import DashboardQuickAccess from '@/components/dashboard/DashboardQuickAccess';
+import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
   dashboardService,
@@ -374,6 +375,10 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [interviewStats, setInterviewStats] = useState<AIInterviewStatsResponse | null>(null);
 
+  // Restore scroll position when returning to the dashboard (scroll-only — the
+  // page has no persisted view state; tabs/toggles here are all commented out).
+  const rootRef = useScrollRestoration('dashboard', !loading);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -616,7 +621,7 @@ export default function DashboardPage() {
     // NOTE: no `overflow-hidden` here — on a `flex-1` item it zeroes the
     // automatic `min-height`, which clips content below the fold and breaks
     // vertical scrolling (the layout's scroll container can never see overflow).
-    <div className="relative flex-1">
+    <div ref={rootRef} className="relative flex-1">
       {/* parent layout bg removed — inner card provides the surface */}
 
       <div className="mx-auto w-full max-w-[1400px]">
@@ -631,7 +636,7 @@ export default function DashboardPage() {
         <div className="space-y-4 md:space-y-6">
         {/* ── PROFILE BANNER ── useAuth only ──────────────────────────── */}
         <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.18)] md:px-8 md:py-6">
-          {/* Identity row: avatar + name+text (left) · CTAs (center) · illustration (right) */}
+          {/* Identity row: avatar + name+text (left) · CTAs (right) */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-4">
               {/* Avatar — solid rounded square */}
@@ -666,7 +671,7 @@ export default function DashboardPage() {
             </div>
 
             {/* CTAs */}
-            <div className="flex flex-wrap items-center gap-2 md:mr-32 lg:mr-40">
+            <div className="flex flex-wrap items-center gap-2">
               {featuredActions.map((item) => {
                 const ItemIcon = item.icon;
                 return (
@@ -685,38 +690,6 @@ export default function DashboardPage() {
                 );
               })}
             </div>
-          </div>
-
-          {/* Decorative illustration — hidden on small screens, anchored to right edge */}
-          <div aria-hidden className="pointer-events-none absolute -right-2 top-1/2 hidden -translate-y-1/2 md:block">
-            <svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#EEF2FF" />
-                  <stop offset="100%" stopColor="#E0E7FF" />
-                </linearGradient>
-                <linearGradient id="barA" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#A5B4FC" />
-                  <stop offset="100%" stopColor="#6366F1" />
-                </linearGradient>
-                <linearGradient id="barB" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#C7D2FE" />
-                  <stop offset="100%" stopColor="#818CF8" />
-                </linearGradient>
-              </defs>
-              <rect x="20" y="20" width="140" height="100" rx="14" fill="url(#cardGrad)" stroke="#C7D2FE" strokeWidth="1"/>
-              <circle cx="32" cy="32" r="2" fill="#FCA5A5" />
-              <circle cx="40" cy="32" r="2" fill="#FCD34D" />
-              <circle cx="48" cy="32" r="2" fill="#86EFAC" />
-              <rect x="32" y="80" width="14" height="28" rx="3" fill="url(#barB)" />
-              <rect x="52" y="68" width="14" height="40" rx="3" fill="url(#barA)" />
-              <rect x="72" y="56" width="14" height="52" rx="3" fill="url(#barB)" />
-              <rect x="92" y="44" width="14" height="64" rx="3" fill="url(#barA)" />
-              <circle cx="128" cy="56" r="9" fill="#FB7185" opacity="0.85"/>
-              <circle cx="140" cy="70" r="6" fill="#FCD34D" opacity="0.9"/>
-              <circle cx="148" cy="108" r="14" fill="#34D399" stroke="#fff" strokeWidth="2"/>
-              <path d="M142 108 L146 112 L154 104" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            </svg>
           </div>
         </section>
 

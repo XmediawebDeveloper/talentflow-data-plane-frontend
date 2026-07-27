@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -56,6 +57,11 @@ export default function PermissionsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Scroll-only: this page has no filters/search/tabs/pagination. The only
+  // "view" state (selectedRole) is a fetched object + transient edit buffer,
+  // not worth persisting.
+  const rootRef = useScrollRestoration<HTMLElement>('settings-permissions', !loading);
 
   // Fetch roles and permissions on mount
   useEffect(() => {
@@ -237,7 +243,7 @@ export default function PermissionsPage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Permissions & Roles' }]} />

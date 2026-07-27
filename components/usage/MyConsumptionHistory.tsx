@@ -30,6 +30,7 @@ import {
   ConsumptionLogEntry,
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
+import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const UNIT_TYPE_ICONS: Record<UnitType, React.ElementType> = {
   RS: Target,
@@ -61,6 +62,21 @@ export default function MyConsumptionHistory() {
     setSelectedType(type);
     setPageView('list');
   };
+
+  // Persist the view state (scroll is handled by the parent Usage page, which is
+  // the actual scroll container). Second key under the page's 'org-usage'.
+  useListStatePersistence(
+    'org-usage-consumption',
+    { pageView, selectedType, selectedStatus, dateRange },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.selectedType === 'all' || s.selectedType === 'RS' || s.selectedType === 'AS' || s.selectedType === 'AIU') {
+        setSelectedType(s.selectedType as UnitType | 'all');
+      }
+      if (typeof s.selectedStatus === 'string') setSelectedStatus(s.selectedStatus);
+      if (typeof s.dateRange === 'number') setDateRange(s.dateRange);
+    },
+  );
 
   useEffect(() => {
     loadHistory();

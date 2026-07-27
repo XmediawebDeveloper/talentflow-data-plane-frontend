@@ -1032,6 +1032,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                         <button
                           onClick={() => {
+                            // Prefer the inline callback (keeps the origin
+                            // breadcrumb, e.g. Job Descriptions) when provided;
+                            // fall back to the standalone results route.
+                            if (onViewResultDetail) { onViewResultDetail(result, jobTitle); return; }
                             if (result.assessmentId) {
                               router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                             }
@@ -1248,6 +1252,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
+                        // Prefer the inline callback (keeps the origin
+                        // breadcrumb) when provided; else standalone route.
+                        if (onViewResultDetail) { onViewResultDetail(result, jobTitle); return; }
                         if (result.assessmentId) {
                           router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                         }

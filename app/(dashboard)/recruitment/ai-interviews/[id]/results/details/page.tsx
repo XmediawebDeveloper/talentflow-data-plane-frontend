@@ -103,6 +103,7 @@ function DetailsContent() {
       <CandidateResultsView
         interview={session}
         onBack={handleBack}
+        breadcrumbTrail={[{ label: 'Results', href: `/recruitment/ai-interviews/${configId}/results` }]}
         currentIndex={navIndex >= 0 ? navIndex : undefined}
         totalCount={navList.length || undefined}
         onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}

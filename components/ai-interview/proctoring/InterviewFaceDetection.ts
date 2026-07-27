@@ -56,7 +56,12 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
   const FRAMES_FACE_MISSING = 2;
   const FRAMES_FACE_RESTORED = 1;  // Unblock immediately on first face detection (blocking is still 2 frames)
-  const FRAMES_MULTIPLE_FACES = 1; // trigger on first detection (was 2 = 6 s worst-case)
+  // Require 2 consecutive frames (~3 s) of ≥2 faces before alarming, so a brief
+  // hand-raise / someone walking past the background doesn't false-trigger.
+  const FRAMES_MULTIPLE_FACES = 2;
+  // Minimum bounding-box area (fraction of frame) for a detection to count as a
+  // real face — filters small spurious boxes.
+  const MIN_FACE_BOX_AREA = 0.025;
   const FRAMES_GAZE_AWAY = 3;
   const FRAMES_GAZE_RESTORED = 2;
 
@@ -98,12 +103,25 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
         faceDetection.setOptions({
           model: "short",
-          minDetectionConfidence: 0.4, // lower threshold catches more faces
+          // Raised from 0.4 → 0.6: a low threshold made non-face objects (a
+          // raised palm/hand) score as "faces" and trip the multiple-people
+          // alarm. 0.6 still finds the real face reliably in normal lighting.
+          minDetectionConfidence: 0.6,
         });
 
         faceDetection.onResults((results: any) => {
           if (!mounted) return;
-          const numFaces = (results.detections || []).length;
+          // Only count detections that are plausibly a real face: a bounding
+          // box of meaningful size (≥ ~2.5% of the frame). Filters out small
+          // spurious boxes. Combined with the higher confidence + the 2-frame
+          // debounce below, this stops a hand-raise being read as a 2nd person.
+          const detections = (results.detections || []).filter((d: any) => {
+            const bb = d?.boundingBox;
+            if (!bb) return true; // if the SDK doesn't expose a box, keep it
+            const area = (bb.width || 0) * (bb.height || 0); // normalized 0–1
+            return area >= MIN_FACE_BOX_AREA;
+          });
+          const numFaces = detections.length;
 
           if (numFaces === 0) {
             faceMissingCountRef.current++;

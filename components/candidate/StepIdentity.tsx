@@ -3,11 +3,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Shield, Camera, Lock, AlertCircle, Mail, User,
-  CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
+  CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
-import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback } from '@/lib/proctoring/faceDetection';
+import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback, assessCandidateFaceVisibility, type FaceRegion } from '@/lib/proctoring/faceDetection';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 
@@ -20,12 +20,8 @@ interface StepIdentityProps {
   submitting?: boolean;
 }
 
-const LIVENESS_STEPS = [
-  { action: 'Smile', icon: Smile, description: 'Show a natural smile for the camera', color: 'text-yellow-500' },
-  { action: 'Blink slowly', icon: Eye, description: 'Slowly blink both eyes once', color: 'text-blue-500' },
-  { action: 'Turn slightly', icon: ArrowRight, description: 'Gently turn your head left, then back', color: 'text-purple-500' },
-];
-const STEP_DURATION_MS = 2200;
+// Seconds counted down before the identity photo is auto-captured.
+const CAPTURE_COUNTDOWN_SECONDS = 3;
 
 export default function StepIdentity({
   token,
@@ -35,16 +31,19 @@ export default function StepIdentity({
   onVerify,
   submitting = false,
 }: StepIdentityProps) {
-  const [phase, setPhase] = useState<'form' | 'photo_ready' | 'liveness' | 'countdown' | 'captured'>('form');
+  const [phase, setPhase] = useState<'form' | 'photo_ready' | 'countdown' | 'captured'>('form');
   const [name, setName] = useState(candidateName);
   const [email, setEmail] = useState(candidateEmail);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(3);
-  const [livenessStepIdx, setLivenessStepIdx] = useState(0);
-  const [livenessProgress, setLivenessProgress] = useState(0);
+  const [countdown, setCountdown] = useState(CAPTURE_COUNTDOWN_SECONDS);
   const [cameraError, setCameraError] = useState(false);
   const [faceError, setFaceError] = useState<string | null>(null);
+  // Live face status while framing (photo_ready) — gates the Capture button so
+  // it's only clickable with exactly ONE face correctly placed in the oval.
+  // 'unavailable' = no detector → HARD-BLOCK (can't verify → can't capture).
+  const [liveFaceStatus, setLiveFaceStatus] = useState<'checking' | 'ok' | 'none' | 'multiple' | 'off_oval' | 'unavailable'>('checking');
+  const liveDetectBusyRef = useRef(false);
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
@@ -60,9 +59,8 @@ export default function StepIdentity({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const livenessFaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Loaded face-api.js module + options for face detection fallback
+  // Loaded face-api.js module + options — used only for the photo-capture face
+  // COUNT check (0 / 1 / >1).
   const faceApiRef = useRef<{ module: any; options: any } | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<typeof faceApiRef.current> | null>(null);
 
@@ -123,8 +121,6 @@ export default function StepIdentity({
       streamRef.current = null;
     }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
-    if (livenessFaceIntervalRef.current) { clearInterval(livenessFaceIntervalRef.current); livenessFaceIntervalRef.current = null; }
   }, []);
 
   useEffect(() => {
@@ -160,16 +156,64 @@ export default function StepIdentity({
     return loaded ?? faceApiRef.current;
   }, []);
 
-  // Only preload the face-api fallback on browsers that lack native FaceDetector.
+  // Warm the face-api detector up front so the capture face-count check is ready.
   useEffect(() => {
-    const hasNativeFaceDetector = typeof window !== 'undefined' && 'FaceDetector' in window;
-    if (!hasNativeFaceDetector) {
-      void ensureFaceApiFallback();
-    }
+    void ensureFaceApiFallback();
   }, [ensureFaceApiFallback]);
 
-  // Helper: detect number of faces from canvas snapshot (works cross-browser)
-  const detectFaceCount = useCallback(async (): Promise<number | null> => {
+  // Core detector: run face detection on an ALREADY-DRAWN canvas and return the
+  // face count + the largest face's bounding box (canvas pixels). Returns null
+  // when no detector is available (→ callers HARD-BLOCK). Works on any canvas so
+  // we can verify BOTH the live preview and the exact captured still image.
+  const detectFaceInfoFromCanvas = useCallback(
+    async (canvas: HTMLCanvasElement): Promise<{ count: number; region: FaceRegion | null } | null> => {
+      const largest = (boxes: FaceRegion[]): FaceRegion | null => {
+        let best: FaceRegion | null = null;
+        let bestArea = 0;
+        for (const b of boxes) {
+          const area = (b.width || 0) * (b.height || 0);
+          if (area > bestArea) { bestArea = area; best = b; }
+        }
+        return best;
+      };
+
+      // Path A (PRIMARY): face-api.js TinyFaceDetector — self-hosted models,
+      // consistent across all browsers. Preferred over the native FaceDetector,
+      // which is flag-gated / flaky and only used as a fallback below.
+      await ensureFaceApiFallback();
+      if (faceApiRef.current) {
+        try {
+          const { module: fa, options } = faceApiRef.current;
+          const detections = await fa.detectAllFaces(canvas, options);
+          const boxes: FaceRegion[] = detections.map((d: any) => {
+            const box = d.box || d.detection?.box || {};
+            return { x: box.x ?? 0, y: box.y ?? 0, width: box.width ?? 0, height: box.height ?? 0 };
+          });
+          return { count: detections.length, region: largest(boxes) };
+        } catch { /* fall through to native */ }
+      }
+      // Path B (FALLBACK): native FaceDetector where available.
+      if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+        try {
+          const detector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 });
+          const bitmap = await createImageBitmap(canvas);
+          const faces = await detector.detect(bitmap);
+          bitmap.close();
+          const boxes: FaceRegion[] = faces.map((f: any) => ({
+            x: f.boundingBox?.x ?? 0, y: f.boundingBox?.y ?? 0,
+            width: f.boundingBox?.width ?? 0, height: f.boundingBox?.height ?? 0,
+          }));
+          return { count: faces.length, region: largest(boxes) };
+        } catch { /* fall through */ }
+      }
+      return null; // NO detector available → callers HARD-BLOCK capture
+    },
+    [ensureFaceApiFallback]
+  );
+
+  // Live detector: snapshot the current video frame to the working canvas and
+  // detect on it (used by the framing/photo_ready poll).
+  const detectFaceInfo = useCallback(async (): Promise<{ count: number; region: FaceRegion | null } | null> => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.readyState < 2) return null;
@@ -178,31 +222,8 @@ export default function StepIdentity({
     canvas.width = video.videoWidth || 320;
     canvas.height = video.videoHeight || 240;
     ctx.drawImage(video, 0, 0);
-
-    // Path A: native FaceDetector (Chrome/Edge with flag)
-    if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-      try {
-        const detector = new (window as any).FaceDetector({ fastMode: false });
-        const bitmap = await createImageBitmap(canvas);
-        const faces = await detector.detect(bitmap);
-        bitmap.close();
-        return faces.length;
-      } catch {
-        await ensureFaceApiFallback();
-      }
-    } else if (!faceApiRef.current) {
-      await ensureFaceApiFallback();
-    }
-    // Path B: face-api.js TinyFaceDetector
-    if (faceApiRef.current) {
-      try {
-        const { module: fa, options } = faceApiRef.current;
-        const detections = await fa.detectAllFaces(canvas, options);
-        return detections.length;
-      } catch { /* fall through */ }
-    }
-    return null; // model not available — skip check
-  }, [ensureFaceApiFallback]);
+    return detectFaceInfoFromCanvas(canvas);
+  }, [detectFaceInfoFromCanvas]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -217,6 +238,77 @@ export default function StepIdentity({
     if (phase === 'photo_ready') startCamera();
   }, [phase, startCamera]);
 
+  // Live face check while the candidate frames themselves (photo_ready only).
+  // Polls ~every 700ms and drives `liveFaceStatus`, which gates the Capture
+  // button: it's enabled ONLY with exactly one face correctly placed in the
+  // oval — no face, multiple faces, or an off-oval face keeps it disabled.
+  useEffect(() => {
+    if (phase !== 'photo_ready' || cameraError) return;
+    setLiveFaceStatus('checking');
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      if (cancelled) return;
+      // Don't run detection — or show any "no face" / "unavailable" warning —
+      // until the camera has actually produced frames. getUserMedia + video.play()
+      // take a moment; before that the video is black/empty and would falsely
+      // report 0 faces ('none') or, at readyState<2, be treated as 'unavailable'.
+      // Keep status 'checking' (neutral, no warning) and poll quickly until ready.
+      const _v = videoRef.current;
+      const _videoReady = !!_v && _v.readyState >= 2 && (_v.videoWidth || 0) > 0;
+      if (!_videoReady) {
+        if (!cancelled) {
+          setLiveFaceStatus('checking');
+          timer = setTimeout(tick, 250);
+        }
+        return;
+      }
+      if (!liveDetectBusyRef.current) {
+        liveDetectBusyRef.current = true;
+        try {
+          // Timeout-guard the detection so a hung/slow detector call can never
+          // wedge the poll: without this, if detectFaceInfo() never resolves,
+          // liveDetectBusyRef stays true forever and every later tick is skipped
+          // — freezing the status (e.g. stuck on "No face detected" even after
+          // the candidate removes their hand). The race releases the busy flag.
+          const info = await Promise.race([
+            detectFaceInfo(),
+            new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 1500)),
+          ]);
+          if (!cancelled && info !== 'timeout') {
+            if (info === null) {
+              setLiveFaceStatus('unavailable'); // no detector → capture stays disabled
+            } else if (info.count === 0) {
+              setLiveFaceStatus('none');
+            } else if (info.count > 1) {
+              setLiveFaceStatus('multiple');
+            } else {
+              const cvs = canvasRef.current;
+              const assess = cvs
+                ? assessCandidateFaceVisibility(info.region, cvs.width, cvs.height)
+                : { visible: true, reason: 'ok' as const };
+              setLiveFaceStatus(assess.visible ? 'ok' : 'off_oval');
+            }
+          }
+        } catch { /* transient detector error — keep prior status */ }
+        finally { liveDetectBusyRef.current = false; }
+      }
+      // Poll a bit faster (~450ms) so the framing feedback feels live — the
+      // warning clears promptly once the candidate uncovers / re-centers.
+      if (!cancelled) timer = setTimeout(tick, 450);
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [phase, cameraError, detectFaceInfo]);
+
+  // Clear the sticky capture-failure warning as soon as the live check sees a
+  // correctly-framed face again. Without this, a `faceError` set by a failed
+  // capture (e.g. the candidate covered their face) lingered until the NEXT
+  // capture click — so removing the hand didn't make the warning disappear.
+  useEffect(() => {
+    if (liveFaceStatus === 'ok') setFaceError(null);
+  }, [liveFaceStatus]);
+
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
@@ -227,17 +319,38 @@ export default function StepIdentity({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    // Face count check — uses detectFaceCount which tries native FaceDetector then face-api.js
-    const faceCount = await detectFaceCount();
-    if (faceCount !== null) {
-      // Only enforce check when detection was possible (faceCount=null means no model available)
-      if (faceCount === 0) {
-        setFaceError('No face detected. Center your face in the frame and try again.');
+    // Verify THE CAPTURED STILL itself (the exact pixels we're about to save),
+    // not a fresh live frame — the saved photo must show exactly ONE face, that
+    // is clearly visible and correctly placed inside the oval. If any check
+    // fails we do NOT save the photo; we return to photo_ready so the candidate
+    // fixes it and retries. (info=null → no detector → HARD-BLOCK.)
+    const info = await detectFaceInfoFromCanvas(canvas);
+    if (info === null) {
+      setFaceError('Face detection is unavailable — reload the page or use Chrome/Edge to continue.');
+      setPhase('photo_ready');
+      return;
+    }
+    {
+      if (info.count === 0) {
+        setFaceError('No face detected in the photo. Position your face inside the oval and try again.');
         setPhase('photo_ready');
         return;
       }
-      if (faceCount > 1) {
-        setFaceError(`${faceCount} faces detected. Ensure only you are visible and try again.`);
+      if (info.count > 1) {
+        setFaceError(`${info.count} people detected in the photo. Only you may be in frame — ask others to step away, then try again.`);
+        setPhase('photo_ready');
+        return;
+      }
+      // Exactly one face — require it to be properly sized/centered in the oval.
+      const assess = assessCandidateFaceVisibility(info.region, canvas.width, canvas.height);
+      if (!assess.visible) {
+        setFaceError(
+          assess.reason === 'face_too_small'
+            ? 'Your face is too small in the photo — move closer so it fills the oval, then try again.'
+            : assess.reason === 'face_off_center'
+            ? 'Your face is off-center in the photo — center it inside the oval, then try again.'
+            : 'Position your face clearly inside the oval and try again.'
+        );
         setPhase('photo_ready');
         return;
       }
@@ -253,77 +366,31 @@ export default function StepIdentity({
         streamRef.current = null;
       }
     }, 'image/png');
-  }, [detectFaceCount]);
+  }, [detectFaceInfoFromCanvas]);
 
   const handleFormSubmit = useCallback(() => {
     if (isFormValid) setPhase('photo_ready');
   }, [isFormValid]);
 
-  const handleStartLiveness = useCallback(() => {
+  const handleStartCapture = useCallback(() => {
     if (cameraError) return;
     setFaceError(null);
-
-    const runStep = (stepIdx: number) => {
-      if (stepIdx >= LIVENESS_STEPS.length) {
-        // All liveness steps done — start countdown
-        setPhase('countdown');
-        setCountdown(3);
-        let count = 3;
-        countdownRef.current = setInterval(async () => {
-          count -= 1;
-          if (count <= 0) {
-            clearInterval(countdownRef.current!);
-            countdownRef.current = null;
-            await capturePhoto();
-          } else {
-            setCountdown(count);
-          }
-        }, 1000);
-        return;
+    // Short countdown so the candidate can frame themselves, then auto-capture.
+    setPhase('countdown');
+    setCountdown(CAPTURE_COUNTDOWN_SECONDS);
+    let count = CAPTURE_COUNTDOWN_SECONDS;
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(async () => {
+      count -= 1;
+      if (count <= 0) {
+        clearInterval(countdownRef.current!);
+        countdownRef.current = null;
+        await capturePhoto();
+      } else {
+        setCountdown(count);
       }
-
-      setLivenessStepIdx(stepIdx);
-      setLivenessProgress(0);
-      setPhase('liveness');
-
-      // Track face presence during this step
-      let facePresentCount = 0;
-      let faceChecksRun = 0;
-
-      // Check face every 600ms while the step is running
-      if (livenessFaceIntervalRef.current) clearInterval(livenessFaceIntervalRef.current);
-      livenessFaceIntervalRef.current = setInterval(async () => {
-        const count = await detectFaceCount();
-        faceChecksRun++;
-        if (count !== null && count === 1) facePresentCount++;
-      }, 600);
-
-      const startTime = performance.now();
-      const animate = (now: number) => {
-        const progress = Math.min(((now - startTime) / STEP_DURATION_MS) * 100, 100);
-        setLivenessProgress(progress);
-        if (progress < 100) {
-          animFrameRef.current = requestAnimationFrame(animate);
-        } else {
-          animFrameRef.current = null;
-          clearInterval(livenessFaceIntervalRef.current!);
-          livenessFaceIntervalRef.current = null;
-
-          // Require at least 1 clean face detection during this step
-          // (skip enforcement only if detector wasn't available at all)
-          if (faceChecksRun > 0 && facePresentCount === 0) {
-            setFaceError(`Face not visible during "${LIVENESS_STEPS[stepIdx].action}". Position your face clearly and try again.`);
-            setPhase('photo_ready');
-            return;
-          }
-          runStep(stepIdx + 1);
-        }
-      };
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    runStep(0);
-  }, [cameraError, capturePhoto, detectFaceCount]);
+    }, 1000);
+  }, [cameraError, capturePhoto]);
 
   const handleRetake = useCallback(() => {
     stopStream();
@@ -484,7 +551,15 @@ export default function StepIdentity({
                       inputMode="numeric"
                       maxLength={6}
                       value={otpCode}
-                      onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setOtpCode(digits);
+                        setOtpError(null);
+                        // Auto-verify once the full 6-digit code is entered by
+                        // manual typing — mirrors the paste behavior so the
+                        // candidate never has to click "Verify" or press Enter.
+                        if (digits.length === 6) handleVerifyOtp(digits);
+                      }}
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -592,9 +667,6 @@ export default function StepIdentity({
   }
 
   // ── PHASES B-E: Live Photo Capture ──
-  const currentLivenessStep = LIVENESS_STEPS[livenessStepIdx];
-  const LivenessIcon = currentLivenessStep?.icon;
-
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
       {progressStepper}
@@ -633,24 +705,25 @@ export default function StepIdentity({
                 </div>
               )}
 
-              {/* Always-visible face oval guide */}
+              {/* Always-visible face oval guide — border + hint reflect the live
+                  face status so the candidate knows why capture is disabled. */}
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
-                    phase === 'liveness' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.4)]' :
                     phase === 'countdown' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
+                    phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
+                    phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
                     'border-white/50'
                   }`} />
-                  <p className="absolute bottom-12 text-xs text-white/70 font-medium">Position face inside oval</p>
-                </div>
-              )}
-
-              {/* Liveness instruction overlay */}
-              {phase === 'liveness' && currentLivenessStep && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
-                  {LivenessIcon && <LivenessIcon className={`w-4 h-4 ${currentLivenessStep.color}`} />}
-                  {currentLivenessStep.action}
-                  <span className="text-gray-400 text-xs ml-1">({livenessStepIdx + 1}/{LIVENESS_STEPS.length})</span>
+                  <p className="absolute bottom-12 text-xs text-white/90 font-medium text-center px-4">
+                    {phase === 'countdown' ? 'Hold still…'
+                      : liveFaceStatus === 'checking' ? 'Starting camera…'
+                      : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you should be visible'
+                      : liveFaceStatus === 'none' ? 'No face detected — center your face in the oval'
+                      : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval'
+                      : liveFaceStatus === 'ok' ? 'Looks good — you can capture'
+                      : 'Position face inside oval'}
+                  </p>
                 </div>
               )}
 
@@ -683,23 +756,21 @@ export default function StepIdentity({
                   <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                       <Shield className="w-4 h-4 text-gray-600" />
-                      <h4 className="text-sm font-semibold text-gray-900">Liveness Check Process</h4>
+                      <h4 className="text-sm font-semibold text-gray-900">How it works</h4>
                     </div>
                     <div className="px-4 py-3 space-y-3">
-                      {LIVENESS_STEPS.map((step, i) => (
-                        <div key={step.action} className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">{i + 1}</div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{step.action}</p>
-                            <p className="text-xs text-gray-500">{step.description}</p>
-                          </div>
-                        </div>
-                      ))}
                       <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">4</div>
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">1</div>
                         <div>
-                          <p className="text-sm font-medium text-gray-800">Photo Captured</p>
-                          <p className="text-xs text-gray-500">Auto-capture after liveness check</p>
+                          <p className="text-sm font-medium text-gray-800">Position your face</p>
+                          <p className="text-xs text-gray-500">Center your face inside the oval, with only you in frame.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">2</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">Capture</p>
+                          <p className="text-xs text-gray-500">A short countdown, then your photo is taken automatically.</p>
                         </div>
                       </div>
                     </div>
@@ -712,58 +783,41 @@ export default function StepIdentity({
                     </div>
                   )}
 
-                  <button
-                    type="button" onClick={handleStartLiveness} disabled={cameraError}
-                    className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
-                  >
-                    {faceError ? 'Retry Liveness Check' : 'Start Liveness Check →'}
-                  </button>
+                  {/* Capture is enabled ONLY when exactly one face is correctly in
+                      the oval. If no detector is available we HARD-BLOCK (can't
+                      verify → can't capture). */}
+                  {(() => {
+                    const captureReady = liveFaceStatus === 'ok';
+                    // 'checking' = camera still initializing → show NO warning (a
+                    // clean start). The face/unavailable warnings only appear once
+                    // the camera is live and detection has actually run.
+                    const blockedMsg =
+                      liveFaceStatus === 'none' ? 'No face detected — center your face in the oval.'
+                      : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you may be in frame.'
+                      : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval.'
+                      : liveFaceStatus === 'unavailable' ? 'Face detection unavailable — reload the page or use Chrome/Edge to continue.'
+                      : '';
+                    return (
+                      <>
+                        {!captureReady && blockedMsg && (
+                          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-700">{blockedMsg}</p>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleStartCapture}
+                          disabled={cameraError || !captureReady}
+                          title={!captureReady ? blockedMsg : undefined}
+                          className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                        >
+                          {faceError ? 'Retake Photo' : 'Capture Photo →'}
+                        </button>
+                      </>
+                    );
+                  })()}
                 </>
-              )}
-
-              {phase === 'liveness' && currentLivenessStep && (
-                <div className="space-y-4">
-                  {/* Step tracker */}
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="text-sm font-semibold text-gray-900">Liveness Detection</h4>
-                    <span className="text-xs text-gray-500">{livenessStepIdx + 1} / {LIVENESS_STEPS.length}</span>
-                  </div>
-
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                    <div className="flex justify-center mb-2">
-                      <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                        {LivenessIcon && <LivenessIcon className={`w-6 h-6 ${currentLivenessStep.color}`} />}
-                      </div>
-                    </div>
-                    <p className="text-xl font-bold text-green-900">{currentLivenessStep.action}</p>
-                    <p className="text-xs text-green-700 mt-1">{currentLivenessStep.description}</p>
-                  </div>
-
-                  {/* Animated progress bar */}
-                  <div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 rounded-full transition-none"
-                        style={{ width: `${livenessProgress}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 mt-1.5 text-green-600 text-xs font-medium">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Detecting…
-                    </div>
-                  </div>
-
-                  {/* Step dots */}
-                  <div className="flex items-center justify-center gap-2">
-                    {LIVENESS_STEPS.map((s, i) => (
-                      <div key={s.action} className={`h-2 rounded-full transition-all ${
-                        i < livenessStepIdx ? 'w-6 bg-green-500' :
-                        i === livenessStepIdx ? 'w-6 bg-green-400 animate-pulse' :
-                        'w-2 bg-gray-200'
-                      }`} />
-                    ))}
-                  </div>
-                </div>
               )}
 
               {phase === 'countdown' && (
@@ -771,10 +825,6 @@ export default function StepIdentity({
                   <Camera className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
                   <h4 className="text-sm font-semibold text-yellow-900">Capturing Photo…</h4>
                   <p className="text-xs text-yellow-800 mt-1">Hold still and look at the camera</p>
-                  <div className="flex items-center justify-center gap-1 mt-3">
-                    <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-xs text-green-700 font-medium">All liveness checks passed!</span>
-                  </div>
                 </div>
               )}
 
@@ -783,8 +833,8 @@ export default function StepIdentity({
                   <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-sm font-semibold text-green-900">Photo Captured!</h4>
-                      <p className="text-xs text-green-700 mt-1">Review your photo on the left. If it looks good, click Continue.</p>
+                      <h4 className="text-sm font-semibold text-green-900">Photo Verified</h4>
+                      <p className="text-xs text-green-700 mt-1">One face detected and clearly visible — no other people in frame. Review your photo on the left, then click Continue.</p>
                     </div>
                   </div>
                   <button

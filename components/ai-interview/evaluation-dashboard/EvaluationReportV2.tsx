@@ -11,7 +11,7 @@ interface Props {
   evaluationId?: string | null;
 }
 
-const MHS_THRESHOLD = 7.0;
+const MHS_THRESHOLD = 6.0;
 
 function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3'; weight: number } {
   if (p === 'High')   return { tag: 'P1', weight: 10 };
@@ -21,16 +21,18 @@ function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3';
 
 function scoreColor(score: number) {
   if (score >= 8.0) return { text: 'text-emerald-500', bar: 'bg-emerald-500' };
-  if (score >= 7.0) return { text: 'text-amber-500',   bar: 'bg-amber-500'   };
+  if (score >= MHS_THRESHOLD) return { text: 'text-amber-500',   bar: 'bg-amber-500'   };
   return                   { text: 'text-red-500',     bar: 'bg-red-500'     };
 }
 
 export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) {
   const { candidate, interview, scores, finalResult, sectionsPresent,
-          mustHaveClusters, niceToHaveClusters, perQuestionDetails } = data;
+          mustHaveClusters, niceToHaveClusters, perQuestionDetails, isPartialEvaluation } = data;
 
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
-  const finalResultLabel = (finalResult ?? (isPassed ? 'Pass' : 'Fail')).toUpperCase();
+  const finalResultLabel = !isPartialEvaluation
+    ? (finalResult ?? (isPassed ? 'Pass' : 'Fail')).toUpperCase()
+    : 'PARTIAL';
   const confidence = aiConfidence ?? Math.round(scores.final);
 
   const reportGenerated = new Date().toLocaleString('en-US', {
@@ -104,19 +106,43 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
 
         <div
           className={`p-5 rounded-xl border-2 ${
-            isPassed ? 'bg-emerald-50 border-emerald-500' : 'bg-red-50 border-red-500'
+            isPartialEvaluation
+              ? 'bg-amber-50 border-amber-300'
+              : isPassed
+                ? 'bg-emerald-50 border-emerald-500'
+                : 'bg-red-50 border-red-500'
           }`}
         >
           <div className="flex items-center gap-4">
-            {isPassed
-              ? <CheckCircle className="w-12 h-12 text-emerald-500 shrink-0" strokeWidth={1.5} />
-              : <XCircle    className="w-12 h-12 text-red-500     shrink-0" strokeWidth={1.5} />}
-            <div className="flex-1">
-              <div className={`text-2xl font-bold mb-0.5 ${isPassed ? 'text-emerald-800' : 'text-red-800'}`}>
-                Final Decision: {finalResultLabel}
+            {isPartialEvaluation ? (
+              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 shrink-0 flex items-center justify-center text-lg font-bold">
+                AI
               </div>
-              <div className={`text-sm ${isPassed ? 'text-emerald-800' : 'text-red-800'}`}>
-                {isPassed ? 'Recommended for Hire' : 'Not Recommended for Hire'} • Match Score: {confidence}%
+            ) : isPassed ? (
+              <CheckCircle className="w-12 h-12 text-emerald-500 shrink-0" strokeWidth={1.5} />
+            ) : (
+              <XCircle className="w-12 h-12 text-red-500 shrink-0" strokeWidth={1.5} />
+            )}
+            <div className="flex-1">
+              <div className={`text-2xl font-bold mb-0.5 ${
+                isPartialEvaluation
+                  ? 'text-amber-800'
+                  : isPassed
+                    ? 'text-emerald-800'
+                    : 'text-red-800'
+              }`}>
+                {isPartialEvaluation ? 'Partial Evaluation' : `Final Decision: ${finalResultLabel}`}
+              </div>
+              <div className={`text-sm ${
+                isPartialEvaluation
+                  ? 'text-amber-800'
+                  : isPassed
+                    ? 'text-emerald-800'
+                    : 'text-red-800'
+              }`}>
+                {isPartialEvaluation
+                  ? 'This interview ended before completion. The AI evaluated only the questions the candidate attended, so no final pass/fail or match score is generated.'
+                  : `${isPassed ? 'Recommended for Hire' : 'Not Recommended for Hire'} • Match Score: ${confidence}%`}
               </div>
             </div>
           </div>
@@ -130,17 +156,19 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
         </div>
         <div className="p-6 space-y-4 text-sm leading-relaxed text-gray-900">
           <p>
-            {candidate.name} completed a comprehensive AI-powered technical interview for the{' '}
+            {candidate.name} {isPartialEvaluation ? 'attended' : 'completed'} an AI-powered technical interview for the{' '}
             {candidate.role} position on {interview.date || 'the scheduled date'}.{' '}
-            The evaluation consisted of <strong>{totalQuestions} technical question{totalQuestions !== 1 ? 's' : ''}</strong>{' '}
+            The report includes <strong>{totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</strong>{' '}
             covering <strong>{totalSkills} skill{totalSkills !== 1 ? 's' : ''}</strong> across multiple priority levels.
           </p>
           {sectionsPresent.mustHave && (
             <p>
               The candidate achieved a <strong>Must-Have Section Score of {scores.mustHave.toFixed(2)}/10</strong>,{' '}
-              which {isPassed
-                ? `exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points`
-                : `falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points`}.
+              {isPartialEvaluation
+                ? 'calculated from the attended questions only.'
+                : isPassed
+                  ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points.`
+                  : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points.`}
               {sectionsPresent.niceToHave && (
                 <>
                   {' '}The Nice-to-Have Section Score was <strong>{scores.niceToHave.toFixed(2)}/10</strong>,{' '}
@@ -150,9 +178,18 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
             </p>
           )}
           <p>
-            Based on the automated evaluation, this assessment recommends{' '}
-            <strong>{isPassed ? 'proceeding with the hiring process' : 'not proceeding with the current application'}</strong>{' '}
-            with an AI confidence level of <strong>{confidence}%</strong>.
+            {isPartialEvaluation ? (
+              <>
+                Because the interview was terminated early, this report provides question-by-question and skill-by-skill analysis only.{' '}
+                <strong>No final hiring recommendation or overall match score is generated.</strong>
+              </>
+            ) : (
+              <>
+                Based on the automated evaluation, this assessment recommends{' '}
+                <strong>{isPassed ? 'proceeding with the hiring process' : 'not proceeding with the current application'}</strong>{' '}
+                with an AI confidence level of <strong>{confidence}%</strong>.
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -173,14 +210,20 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 </div>
               </div>
               <div>
-                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
-                  isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {isPassed
-                    ? <CheckCircle className="w-3.5 h-3.5" />
-                    : <XCircle className="w-3.5 h-3.5" />}
-                  {isPassed ? 'PASS' : 'FAIL'}
-                </span>
+                {isPartialEvaluation ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                    Partial
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                    isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                  }`}>
+                    {isPassed
+                      ? <CheckCircle className="w-3.5 h-3.5" />
+                      : <XCircle className="w-3.5 h-3.5" />}
+                    {isPassed ? 'PASS' : 'FAIL'}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -200,16 +243,18 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
               </div>
             </div>
           )}
-          <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
-            <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
-            <div className="text-2xl font-bold text-indigo-700">{(scores.final / 10).toFixed(2)}</div>
-            <div className="pr-3">
-              <div className="h-3.5 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-700 rounded-full" style={{ width: `${scores.final}%` }} />
+          {!isPartialEvaluation && (
+            <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
+              <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
+              <div className="text-2xl font-bold text-indigo-700">{(scores.final / 10).toFixed(2)}</div>
+              <div className="pr-3">
+                <div className="h-3.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-700 rounded-full" style={{ width: `${scores.final}%` }} />
+                </div>
               </div>
+              <div className="text-xs italic text-gray-500">Reference only</div>
             </div>
-            <div className="text-xs italic text-gray-500">Reference only</div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -346,7 +391,16 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           <div className="text-base font-bold text-gray-900">Recommendations & Next Steps</div>
         </div>
         <div className="p-6">
-          {isPassed ? (
+          {isPartialEvaluation ? (
+            <>
+              <div className="text-sm font-bold text-amber-800 mb-3">Partial Interview Guidance:</div>
+              <ul className="space-y-2 text-sm leading-relaxed text-gray-900">
+                <li><strong>Review attended answers only:</strong> These scores reflect only the questions the candidate reached before termination</li>
+                <li><strong>Avoid final hiring decisions from this report:</strong> There is no complete must-have coverage or valid overall match score</li>
+                <li><strong>Re-run the interview if needed:</strong> Schedule a fresh interview when a full hiring signal is required</li>
+              </ul>
+            </>
+          ) : isPassed ? (
             <>
               <div className="text-sm font-bold text-emerald-800 mb-3">✓ Recommended Actions:</div>
               <ul className="space-y-2 text-sm leading-relaxed text-gray-900">
@@ -377,6 +431,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           Must-Have Section Score = Average of Must-Have question scores (Pass threshold ≥ {MHS_THRESHOLD.toFixed(1)}).
           Nice-to-Have Section Score = Average of Nice-to-Have question scores (informational only).
           Question Score = Σ(Skill Score × Priority Weight) / ΣWeights where P1=10, P2=7, P3=4.
+          {isPartialEvaluation && ' For terminated interviews, this report evaluates only the attended questions and does not generate a final decision.'}
         </p>
         <hr className="border-indigo-200 my-3" />
         <p className="text-xs text-indigo-600 leading-relaxed">

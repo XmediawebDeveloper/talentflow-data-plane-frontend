@@ -12,7 +12,7 @@ interface Props {
  *    2. Weighted Contribution = Skill Score × Priority Weight (H=10 / M=7 / L=4).
  *    3. Question Score = Σ(Skill × Weight) / Σ(Weights).
  *    4. Section Score = mean of Question Scores within MHS / NHS.
- *    5. Final Result: PASS if MHS Section Score ≥ 7.0, else FAIL.
+ *    5. Final Result: PASS if MHS Section Score ≥ 6.0, else FAIL.
  *
  *  The numbers shown here are pulled from ai_evaluation:
  *    - perQuestionDetails (built in adapter.ts from skill_question_map +

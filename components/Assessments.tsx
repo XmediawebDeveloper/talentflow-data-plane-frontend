@@ -28,6 +28,8 @@ import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
@@ -74,7 +76,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setActiveTab(tab);
     setPageView('list');
   };
-  const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
+  // Proctoring settings are a staging-only testing menu — in production it's
+  // hidden, so land on Topics instead.
+  const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>(IS_PRODUCTION_ENV ? 'topics' : 'proctoring');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
@@ -225,6 +229,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     units_consumed: 0,
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Persist scroll position + view state so returning from a detail/results
+  // page lands the user exactly where they left off. Re-detect the scroll
+  // container when the two-step view flips (cards overview vs. full list —
+  // its height changes drastically).
+  const rootRef = useScrollRestoration('assessments', !isLoading, [pageView]);
+  useListStatePersistence(
+    'assessments',
+    { pageView, activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
+      if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
+      if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
+      if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
+      if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
+    },
+  );
 
   const getAssessmentStatusFilter = (tab: typeof activeTab) => {
     if (tab === 'active') return 'published';
@@ -1242,7 +1264,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     : `Showing ${trackingStartIndex} to ${trackingEndIndex} of ${trackingTotalItems} invites`;
 
   return (
-    <div className="flex-1 overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
@@ -1787,6 +1809,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="space-y-4 sm:space-y-6">
                 {/* Settings Sub-tabs */}
                 <div className="flex gap-2 sm:gap-4 border-b border-gray-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
+                  {/* Proctoring & Security — staging-only testing menu; hidden in production. */}
+                  {!IS_PRODUCTION_ENV && (
                   <button
                     onClick={() => setSettingsSubTab('proctoring')}
                     className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
@@ -1799,6 +1823,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <span className="hidden sm:inline">Proctoring & Security</span>
                     <span className="sm:hidden">Proctoring</span>
                   </button>
+                  )}
                   <button
                     onClick={() => setSettingsSubTab('topics')}
                     className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
@@ -1812,8 +1837,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </button>
                 </div>
 
-                {/* Assessment Topics Settings Content */}
-                {settingsSubTab === 'topics' ? (
+                {/* Content: Topics is shown normally; the Proctoring & Security
+                    content is gated to non-production (staging-only testing menu). */}
+                {settingsSubTab === 'topics' || IS_PRODUCTION_ENV ? (
                   <div className="space-y-4 sm:space-y-6">
                     {/* Header */}
                     <div>
@@ -2412,10 +2438,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 setShowShareModal(true);
                               }}
                               disabled={isShareBlocked}
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
+                              className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-all text-xs whitespace-nowrap ${
                                 isShareBlocked
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                  ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                               }`}
                               title={shareBlockedReason || 'Share via email'}
                             >
@@ -2427,7 +2453,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {assessment.candidates > 0 && (
                           <button
                             onClick={() => handleTrackInvites(assessment)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
                             aria-label="Track invitation status" title="Track invitation status"
                           >
                             <Mail className="w-3.5 h-3.5" />
@@ -2442,10 +2468,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           }}
                           disabled={assessment.status === 'Draft'}
                           title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-colors text-xs whitespace-nowrap ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
                             assessment.status === 'Draft'
-                              ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                           }`}
                         >
                           <BarChart className="w-3.5 h-3.5" />
@@ -2565,10 +2591,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               setShowShareModal(true);
                             }}
                             disabled={isShareBlocked}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg transition-all text-xs ${
                               isShareBlocked
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                             }`}
                             title={shareBlockedReason || 'Share via email'}
                           >
@@ -2587,10 +2613,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         }}
                         disabled={assessment.status === 'Draft'}
                         title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg transition-colors text-xs ${
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
                           assessment.status === 'Draft'
-                            ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                            : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                         }`}
                       >
                         <BarChart className="w-3.5 h-3.5" />
@@ -2829,10 +2855,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   setShowShareModal(true);
                                 }}
                                 disabled={isShareBlocked}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
+                                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg transition-all text-xs whitespace-nowrap ${
                                   isShareBlocked
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                    ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                    : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                                 }`}
                                 title={shareBlockedReason || 'Share via email'}
                               >
@@ -2846,7 +2872,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {assessment.candidates > 0 && (
                             <button
                               onClick={() => handleTrackInvites(assessment)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
                               aria-label="Track invitation status" title="Track invitation status"
                             >
                               <Mail className="w-3.5 h-3.5" />
@@ -2864,10 +2890,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             }}
                             disabled={assessment.status === 'Draft'}
                             title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg transition-colors text-xs whitespace-nowrap ${
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
                               assessment.status === 'Draft'
-                                ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                             }`}
                           >
                             <BarChart className="w-3.5 h-3.5" />

@@ -37,6 +37,7 @@ import {
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface SearchFilters {
   skills?: string[];
@@ -94,6 +95,22 @@ export default function ResumeDatabasePage() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [selectedResumeForVersion, setSelectedResumeForVersion] = useState<Resume | null>(null);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+
+  // Restore/persist the list's view state + scroll position so returning from a
+  // resume detail page (route push to /recruitment/resume-view/:id) lands the
+  // user exactly where they left off instead of on a reset list at the top.
+  const rootRef = useScrollRestoration<HTMLElement>('resume-database', !loading);
+  useListStatePersistence(
+    'resume-database',
+    { searchQuery, appliedSearchQuery, filters, sortBy, currentPage },
+    (s) => {
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.appliedSearchQuery === 'string') setAppliedSearchQuery(s.appliedSearchQuery);
+      if (s.filters && typeof s.filters === 'object') setFilters(s.filters as SearchFilters);
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+    },
+  );
 
   // Build search params from filters
   const buildSearchParams = useCallback((): ResumeSearchParams => {
@@ -834,7 +851,7 @@ export default function ResumeDatabasePage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Internal Database' }]} />

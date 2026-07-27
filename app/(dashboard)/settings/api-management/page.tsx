@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 export default function ApiManagementPage() {
   const { hasPermission } = useAuth();
@@ -22,6 +23,8 @@ export default function ApiManagementPage() {
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const rootRef = useScrollRestoration<HTMLElement>('settings-api-management', !isLoading);
 
   useEffect(() => {
     loadApiKeys();
@@ -136,7 +139,7 @@ export default function ApiManagementPage() {
 
   return (
     <FeatureGate feature="api_access">
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />

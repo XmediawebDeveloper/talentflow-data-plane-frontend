@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
+  Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  X, BarChart3,
+  X, BarChart3, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -18,6 +18,16 @@ interface AIInterviewResultsProps {
   configTitle?: string;
   jdTitle?: string;
   onBack: () => void;
+  /** When true, render only the results content (stats + filters + table),
+   *  without the page <main>/breadcrumb/back-button chrome. Used when the
+   *  results view is embedded as a tab inside the interview details page. */
+  embedded?: boolean;
+  /** When provided (embedded case), clicking a candidate opens their details
+   *  inline via this callback (passing the session id and the ordered list of
+   *  currently-visible session ids for Prev/Next) instead of navigating to the
+   *  standalone results-details route. Keeps the breadcrumb anchored to the
+   *  interview details page the user came from. */
+  onViewCandidate?: (sessionId: string, navIds: string[]) => void;
 }
 
 const STATUS_OPTIONS = [
@@ -25,6 +35,7 @@ const STATUS_OPTIONS = [
   { value: 'invited', label: 'Invited' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'terminated', label: 'Terminated' },
   { value: 'expired', label: 'Expired' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
@@ -35,6 +46,7 @@ function getStatusBadge(status: string) {
     case 'in_progress': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
     case 'invited': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
     case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+    case 'terminated': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
     case 'cancelled': return 'bg-red-100 text-red-600 ring-1 ring-red-200';
     default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
   }
@@ -46,6 +58,7 @@ function getStatusLabel(status: string) {
     case 'in_progress': return 'In Progress';
     case 'invited': return 'Invited';
     case 'expired': return 'Expired';
+    case 'terminated': return 'Terminated';
     case 'cancelled': return 'Cancelled';
     default: return status;
   }
@@ -56,6 +69,7 @@ function getStatusIcon(status: string) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
     case 'in_progress': return <Clock className="w-4 h-4 text-brand-orange-deep" />;
     case 'invited': return <Mail className="w-4 h-4 text-brand-blue" />;
+    case 'terminated': return <Ban className="w-4 h-4 text-red-600" />;
     case 'cancelled': return <XCircle className="w-4 h-4 text-red-500" />;
     case 'expired': return <XCircle className="w-4 h-4 text-gray-400" />;
     default: return <Mail className="w-4 h-4 text-gray-400" />;
@@ -96,7 +110,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, onBack }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -195,6 +209,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
   };
 
   const handleViewDetails = (session: AIInterviewResponse) => {
+    // Embedded (Results tab inside the interview details page): open the
+    // candidate inline so the breadcrumb stays anchored to that page instead
+    // of jumping to the standalone results-details route.
+    if (onViewCandidate) {
+      onViewCandidate(session.id, paginatedSessions.map((s) => s.id));
+      return;
+    }
     // Persist the currently-visible session order so the details view can offer
     // Previous/Next navigation between candidates (mirrors AssessmentResults).
     try {
@@ -204,34 +225,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
     router.push(`/recruitment/ai-interviews/${configId}/results/details?session_id=${session.id}`);
   };
 
-  return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb
-            className="mb-4 md:mb-6"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Results' },
-            ]}
-          />
-      {/* Header */}
-      <div className="mb-6">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue px-3 py-1.5 rounded-lg transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to AI Interviews
-        </button>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
-            {jdTitle && <p className="text-sm text-gray-500 mt-1">{jdTitle}</p>}
+  const body = (
+    <>
+      {/* Header — hidden when embedded as a tab (the details page already
+          shows the interview title + breadcrumb + back navigation).
+          The standalone page relies on the breadcrumb's "AI Interviews" link
+          for back navigation, so no separate Back button is rendered. */}
+      {!embedded && (
+        <div className="mb-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
+              {jdTitle && <p className="text-sm text-gray-500 mt-1">{jdTitle}</p>}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -412,7 +421,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                   {paginatedSessions.map((session) => {
                     const risk = getProctoringRisk(session);
                     return (
-                      <tr key={session.id} className="hover:bg-brand-blue/5 transition-colors">
+                      <tr
+                        key={session.id}
+                        onClick={() => handleViewDetails(session)}
+                        className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
+                      >
                         <td className="px-4 py-3 whitespace-nowrap">
                           {session.candidate_cid ? (
                             <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
@@ -513,7 +526,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <button
-                            onClick={() => handleViewDetails(session)}
+                            onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -557,6 +570,24 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
           </>
         )}
         </div>
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: 'Results' },
+            ]}
+          />
+          {body}
         </div>
       </div>
     </main>

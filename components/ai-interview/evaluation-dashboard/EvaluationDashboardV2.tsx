@@ -8,12 +8,13 @@ import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
+import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 interface Props {
   data: DashboardData;
 }
 
-const MHS_THRESHOLD = 7.0;
+const MHS_THRESHOLD = 6.0;
 
 type SubView = 'skills' | 'questions' | 'formula';
 
@@ -70,7 +71,7 @@ function trendIcon(score: number) {
 
 function scoreColor(score: number) {
   if (score >= 8.0) return '#10B981';
-  if (score >= 7.0) return '#F59E0B';
+  if (score >= MHS_THRESHOLD) return '#F59E0B';
   return '#EF4444';
 }
 
@@ -109,12 +110,13 @@ export function EvaluationDashboardV2({ data }: Props) {
 
 /* ─── Skills sub-view (from Vite SkillBreakdown.tsx) ────────────────────
  * Per the spec doc — Must-Have and Nice-to-Have are EVALUATED SEPARATELY:
- * MHS drives Pass/Fail (≥7.0), NHS is informational only. Skills must be
+ * MHS drives Pass/Fail (≥6.0), NHS is informational only. Skills must be
  * rendered in their own sections so the recruiter doesn't have to mentally
  * separate which 19 skills were the gate-blocking ones.
  */
 export function SkillsView({ data }: { data: DashboardData }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const isPartialEvaluation = data.isPartialEvaluation;
 
   // Flatten each section's clusters into skill rows tagged with their
   // section so we can render two independent sections + summary blocks.
@@ -242,6 +244,11 @@ export function SkillsView({ data }: { data: DashboardData }) {
           Detailed breakdown of candidate performance across all evaluated skills with AI-powered insights and per-skill scoring.
         </div>
       </div>
+      {isPartialEvaluation && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          This interview ended early. The AI evaluated only the questions the candidate attended, so no final pass/fail or overall match score is shown here.
+        </div>
+      )}
 
       {allSkills.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
@@ -249,14 +256,14 @@ export function SkillsView({ data }: { data: DashboardData }) {
         </div>
       ) : (
         <>
-          {/* Must-Have Section — gate-blocking skills, MHS ≥ 7.0 = Pass */}
+          {/* Must-Have Section — gate-blocking skills, MHS ≥ 6.0 = Pass */}
           {mhSkills.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3 pt-1">
                 <div className="flex items-center gap-2">
                   <div className="text-base font-bold text-gray-900">Must-Have Skills</div>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                    Scored for Pass/Fail
+                    {isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail'}
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
@@ -349,13 +356,14 @@ export function SkillsView({ data }: { data: DashboardData }) {
  * Per the spec doc (timed-mode evaluation):
  *   • Each card: question + answer + skills (with per-skill score + weight)
  *   • Question Score = Σ(skill_score × weight) / Σ(weight), shown beside Q#
- *   • Section Score = avg(question scores), MHS ≥ 7.0 → Pass
+ *   • Section Score = avg(question scores), MHS ≥ 6.0 → Pass
  *   • Per-skill weights: P1=10, P2=7, P3=4
  *   • HR is not scored
  * Source: data.perQuestionDetails — built by adapter.ts:buildPerQuestionDetails.
  */
 export function QuestionsView({ data }: { data: DashboardData }) {
   const delivered = data.perQuestionDetails;
+  const isPartialEvaluation = data.isPartialEvaluation;
 
   // Collapsible "Skills assessed" dropdown per question (keyed by card index).
   // Multi-skill questions list 2-3 skills; collapsing keeps the timeline tidy
@@ -371,7 +379,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
     );
   }
 
-  // Linda's TTS-bound question text occasionally lands in question_history /
+  // Bina's TTS-bound question text occasionally lands in question_history /
   // conversation_transcript without a trailing question mark — usually
   // because the LLM's stop token cut the sentence mid-punctuation, or the
   // backend stripped trailing whitespace too aggressively. Append "?" when
@@ -386,10 +394,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
     return trimmed + '?';
   };
 
-  // Score color: spec uses ≥7.0 as the Pass threshold for MHS — mirror that
+  // Score color: spec uses ≥6.0 as the Pass threshold for MHS — mirror that
   // in the per-Q badge so the recruiter sees instantly which Qs were strong.
   const scoreColorClass = (s: number): string => {
-    if (s >= 7.0) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+    if (s >= MHS_THRESHOLD) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
     if (s >= 4.0) return 'text-amber-600 bg-amber-50 border-amber-200';
     return 'text-rose-600 bg-rose-50 border-rose-200';
   };
@@ -405,7 +413,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
 
   // Section grouping — render Qs grouped by section so the recruiter sees
   // MHS / NHS / HR in distinct sections (matches the spec doc's framing).
-  // HR rounds are not scored per spec but the questions Linda asked are
+  // HR rounds are not scored per spec but the questions Bina asked are
   // shown so the recruiter can review the conversation.
   const mhQs = delivered.filter(q => q.section === 'mth');
   const nhQs = delivered.filter(q => q.section === 'nth');
@@ -422,12 +430,15 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   const nhScore = nhScored.length > 0
     ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhScored.length) * 10) / 10
     : 0;
-  const mhPass = mhScore >= 7.0;
+  const mhPass = mhScore >= MHS_THRESHOLD;
 
   // Per-Q card renderer (extracted so the grouped-by-section rendering
   // below stays readable).
   const renderQCard = (q: typeof delivered[number], idx: number) => {
     const answer = (q.answer && q.answer.trim()) || '';
+    const displayOnlyScore = typeof q.displayOnlyQuestionScore === 'number'
+      ? q.displayOnlyQuestionScore
+      : null;
     // Footer arithmetic must use the SAME scored skills the question score was
     // derived from (unscored skills are excluded), so "Σ ÷ Σ = score" is
     // always internally consistent.
@@ -453,6 +464,13 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
                 HR · Not Scored
               </span>
+            ) : q.isUnscored && displayOnlyScore !== null ? (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(displayOnlyScore)}`}
+                title="Display-only score from the runtime evaluator snapshot for this attended question. Excluded from terminated-session overall scoring until a full evaluation lands."
+              >
+                Score: {displayOnlyScore.toFixed(1)}/10
+              </span>
             ) : q.isUnscored ? (
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
@@ -468,22 +486,25 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 Score: {q.questionScore.toFixed(1)}/10
               </span>
             )}
-            {q.bundledFollowUp && (
+            {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200"
                 title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
               >
-                Follow-up
+                {q.bundledFollowUp.source_qnum && q.bundledFollowUp.source_qnum > 0
+                  ? `Follow-up from Q${q.bundledFollowUp.source_qnum}`
+                  : 'Follow-up'}
               </span>
             )}
           </div>
           <div className="text-sm font-semibold text-gray-900 leading-relaxed">
             {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
           </div>
-          {q.bundledFollowUp && (() => {
+          {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (() => {
             const focus = q.bundledFollowUp.focus_skill || 'this skill';
             const srcQ = q.bundledFollowUp.source_qnum;
-            const srcRef = srcQ ? `Q${srcQ}'s answer` : 'an earlier answer';
+            // Only reference a source question when it's a DIFFERENT, valid one.
+            const srcRef = (srcQ && srcQ > 0 && srcQ !== q.qNum) ? `Q${srcQ}'s answer` : 'an earlier answer';
             const prior = q.bundledFollowUp.prior_level;
             const excerpt = q.bundledFollowUp.source_excerpt;
             // Phrase the coverage band in plain English so reviewers don't
@@ -502,7 +523,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                   Reframed as a follow-up — the candidate volunteered{' '}
                   <span className="font-semibold">{focus}</span>{' '}
                   {priorPhrase && <>{priorPhrase} </>}
-                  in {srcRef}, so Linda probed it at this planned slot instead
+                  in {srcRef}, so Bina probed it at this planned slot instead
                   of asking it fresh.
                 </div>
                 {excerpt && (
@@ -559,11 +580,43 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
         </div>
 
+        {/* 2b. Why this score — deterministic per-question rationale (what the
+            candidate demonstrated, what was missing, and the overall reason).
+            Shown in ALL environments, INCLUDING production where the per-skill
+            dropdown below is hidden — this is the reviewer's one explanation of
+            the score. HR turns carry no rationale (never scored), so this hides
+            for them automatically. */}
+        {q.scoreRationale && q.scoreRationale.trim() && (
+          <div className="border-l-2 border-amber-200 pl-3">
+            <div className="text-xs font-medium text-gray-500 mb-1">
+              Score Rationale
+            </div>
+            <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 break-words leading-relaxed">
+              <Brain className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+              <div className="space-y-1 flex-1">
+                {q.scoreRationale.split('\n').map((line, li) => {
+                  const t = line.trim();
+                  if (!t) return null;
+                  const ci = t.indexOf(':');
+                  const labeled = ci > 0 && ci <= 120;
+                  return (
+                    <div key={li}>
+                      {labeled
+                        ? <><span className="font-semibold text-gray-900">{t.slice(0, ci)}</span>{t.slice(ci)}</>
+                        : t}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 3. Per-skill rows — collapsible dropdown. For HR, skipped entirely
             (HR isn't scored). Multi-skill questions list 2-3 skills, so the
             block collapses by default; expanding shows each skill's score AND
             the AI's per-skill rationale (one_line_note). */}
-        {!isHr && (
+        {!isHr && !IS_PRODUCTION_ENV && (
           <div>
             {q.skills.length === 0 ? (
               <>
@@ -659,6 +712,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                         <div className="text-[11px] font-mono text-gray-500 pl-1 pt-1">
                           Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
                         </div>
+                      ) : q.isUnscored && displayOnlyScore !== null ? (
+                        <div className="text-[11px] text-amber-700 italic pl-1 pt-1">
+                          Partial runtime score shown for this attended question. Excluded from the terminated-session section average.
+                        </div>
                       ) : q.isUnscored ? (
                         <div className="text-[11px] text-gray-400 italic pl-1 pt-1">
                           Not evaluated — excluded from the section average.
@@ -673,14 +730,14 @@ export function QuestionsView({ data }: { data: DashboardData }) {
         )}
 
         {/* 4. Follow-ups (when any fired for this slot) — surfaced so
-            the recruiter knows whether Linda probed deeper and how the
+            the recruiter knows whether Bina probed deeper and how the
             candidate responded. Nothing rendered when followUps is
             empty/undefined (the common case in timed mode after
             strict-distribution turned probe-mode off). */}
         {q.followUps && q.followUps.length > 0 && (
           <div className="border-l-2 border-amber-300 pl-3 mt-1">
             <div className="text-xs font-semibold text-amber-700 mb-1.5">
-              Follow-up{q.followUps.length === 1 ? '' : 's'} ({q.followUps.length})
+              Follow-up{q.followUps.length === 1 ? '' : 's'} to Q{q.qNum} ({q.followUps.length})
             </div>
             <div className="space-y-2">
               {q.followUps.map((fu, fi) => {
@@ -696,15 +753,15 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                     : 'an earlier answer';
                   switch (fu.reason) {
                     case 'validate_volunteered_primary':
-                      return `Follow-up asked because the candidate mentioned ${focus} in ${srcRef} (volunteered earlier). Linda validated the claim at this slot.`;
+                      return `Follow-up asked because the candidate mentioned ${focus} in ${srcRef} (volunteered earlier). Bina validated the claim at this slot.`;
                     case 'probe_touched_secondary':
-                      return `Follow-up asked because ${focus} was already volunteered in ${srcRef}. Linda probed depth at this slot instead of asking it fresh.`;
+                      return `Follow-up asked because ${focus} was already volunteered in ${srcRef}. Bina probed depth at this slot instead of asking it fresh.`;
                     case 'volunteered_skill':
-                      return `Follow-up asked because the candidate volunteered ${focus} while answering this question — Linda validated the claim.`;
+                      return `Follow-up asked because the candidate volunteered ${focus} while answering this question — Bina validated the claim.`;
                     case 'weak_answer':
                       return `Follow-up asked because the main answer scored low — giving the candidate a second chance.`;
                     case 'incomplete':
-                      return `Follow-up asked because the main answer was incomplete — Linda probed for more detail.`;
+                      return `Follow-up asked because the main answer was incomplete — Bina probed for more detail.`;
                     default:
                       return null;
                   }
@@ -712,10 +769,21 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 const reasonNote = explainReason();
                 return (
                   <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
                         FU{fi + 1}
                       </span>
+                      {/* Which question this is a follow-up to (parent), and —
+                          when the trigger skill was volunteered earlier — which
+                          question it came from (source). */}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                        Follow-up to Q{q.qNum}
+                      </span>
+                      {typeof fu.source_qnum === 'number' && fu.source_qnum > 0 && fu.source_qnum !== q.qNum && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                          from Q{fu.source_qnum}
+                        </span>
+                      )}
                       {fu.topic && (
                         <span className="text-[10px] text-amber-700 italic">on {fu.topic}</span>
                       )}
@@ -745,10 +813,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
           </div>
         )}
 
-        {/* 5. Clarifications (when the candidate asked Linda to repeat /
+        {/* 5. Clarifications (when the candidate asked Bina to repeat /
             rephrase). Surfaced here so the Question Analysis tab agrees with
             the Transcript tab, which labels these "Clarify"/CL1, CL2…. Each
-            shows Linda's repeated question and the candidate's reply after it.
+            shows Bina's repeated question and the candidate's reply after it.
             Nothing rendered when no clarification fired for this slot. */}
         {q.clarifications && q.clarifications.length > 0 && (
           <div className="border-l-2 border-brand-orange/40 pl-3 mt-1">
@@ -794,9 +862,19 @@ export function QuestionsView({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-3">
+      {isPartialEvaluation && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
+        </div>
+      )}
       {mhQs.length > 0 && (
         <>
-          {sectionHeader('Must-Have Section', 'Scored for Pass/Fail', mhQs.length, 'bg-indigo-50 text-indigo-700')}
+          {sectionHeader(
+            'Must-Have Section',
+            isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail',
+            mhQs.length,
+            'bg-indigo-50 text-indigo-700',
+          )}
           {mhQs.map((q, i) => renderQCard(q, i))}
         </>
       )}
@@ -816,74 +894,76 @@ export function QuestionsView({ data }: { data: DashboardData }) {
       {/* Section Score summary — spec §4 Step 4 + Step 5. HR appears as
           a "Not Scored" info card so the recruiter knows the HR Qs were
           asked but didn't affect the Pass/Fail decision. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-        {mhQs.length > 0 && (
-          <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
-            <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
-              Must-Have Section
-            </div>
-            <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-              <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
-                Section Score = avg of {mhQs.length} question scores
+      {!isPartialEvaluation && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+          {mhQs.length > 0 && (
+            <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
+              <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+                Must-Have Section
               </div>
-              <div className="flex items-baseline justify-between gap-3 mb-2">
-                <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {mhScore.toFixed(2)}
-                </span>
-                <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  / 10
-                </span>
-              </div>
-              <div
-                className={`text-sm font-bold text-center p-2 rounded border-2 ${
-                  mhPass
-                    ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
-                    : 'bg-rose-100 border-rose-500 text-rose-800'
-                }`}
-              >
-                {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} 7.0 → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
-              </div>
-            </div>
-          </div>
-        )}
-        {nhQs.length > 0 && (
-          <div className="rounded-2xl border-2 border-amber-500 overflow-hidden">
-            <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
-              Nice-to-Have Section
-            </div>
-            <div className="p-4 bg-amber-50">
-              <div className="text-xs text-amber-800 mb-1">
-                Section Score = avg of {nhQs.length} question scores
-              </div>
-              <div className="flex items-baseline justify-between gap-3 mb-2">
-                <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
-                <span className="text-sm font-semibold text-amber-700">/ 10</span>
-              </div>
-              <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
-                Informational only — does not affect Pass/Fail
+              <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
+                  Section Score = avg of {mhQs.length} question scores
+                </div>
+                <div className="flex items-baseline justify-between gap-3 mb-2">
+                  <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {mhScore.toFixed(2)}
+                  </span>
+                  <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    / 10
+                  </span>
+                </div>
+                <div
+                  className={`text-sm font-bold text-center p-2 rounded border-2 ${
+                    mhPass
+                      ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
+                      : 'bg-rose-100 border-rose-500 text-rose-800'
+                  }`}
+                >
+                  {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} 7.0 → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {hrQs.length > 0 && (
-          <div className="rounded-2xl border-2 border-violet-500 overflow-hidden">
-            <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
-              HR Round
+          )}
+          {nhQs.length > 0 && (
+            <div className="rounded-2xl border-2 border-amber-500 overflow-hidden">
+              <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+                Nice-to-Have Section
+              </div>
+              <div className="p-4 bg-amber-50">
+                <div className="text-xs text-amber-800 mb-1">
+                  Section Score = avg of {nhQs.length} question scores
+                </div>
+                <div className="flex items-baseline justify-between gap-3 mb-2">
+                  <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
+                  <span className="text-sm font-semibold text-amber-700">/ 10</span>
+                </div>
+                <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
+                  Informational only — does not affect Pass/Fail
+                </div>
+              </div>
             </div>
-            <div className="p-4 bg-violet-50">
-              <div className="text-xs text-violet-800 mb-1">
-                {hrQs.length} HR question{hrQs.length === 1 ? '' : 's'} asked
+          )}
+          {hrQs.length > 0 && (
+            <div className="rounded-2xl border-2 border-violet-500 overflow-hidden">
+              <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+                HR Round
               </div>
-              <div className="text-sm font-semibold text-violet-900 mb-3">
-                Behavioral / cultural fit conversation
-              </div>
-              <div className="text-sm font-bold text-center p-2 rounded bg-violet-100 border-2 border-violet-500 text-violet-800">
-                Not scored — per evaluation spec
+              <div className="p-4 bg-violet-50">
+                <div className="text-xs text-violet-800 mb-1">
+                  {hrQs.length} HR question{hrQs.length === 1 ? '' : 's'} asked
+                </div>
+                <div className="text-sm font-semibold text-violet-900 mb-3">
+                  Behavioral / cultural fit conversation
+                </div>
+                <div className="text-sm font-bold text-center p-2 rounded bg-violet-100 border-2 border-violet-500 text-violet-800">
+                  Not scored — per evaluation spec
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

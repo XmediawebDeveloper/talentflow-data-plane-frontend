@@ -129,6 +129,11 @@ export interface JDGenerateResponse {
   extracted_params?: JDExtractedParams;
 }
 
+export interface JDTitleValidationResponse {
+  is_valid: boolean;
+  error?: string | null;
+}
+
 export interface JDGenerateInput {
   jobTitle: string;
   aiPrompt: string;
@@ -344,6 +349,20 @@ export interface JDAccessCheckResponse {
 }
 
 export const jdService = {
+  /**
+   * Validate a job title against the backend's authoritative JD rules
+   */
+  async validateTitle(jobTitle: string): Promise<JDTitleValidationResponse> {
+    try {
+      const response = await api.post<JDTitleValidationResponse>('/jd/validate-title', {
+        job_title: jobTitle,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   /**
    * JD01 & JD03: Pre-flight access check for JD module
    * Validates all pre-conditions before allowing JD access/creation

@@ -8,6 +8,7 @@ import type { DocumentType } from '@/lib/services/termsService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import type { TermsAcceptanceRecord, TermsAndConditions } from '@/lib/types/terms';
 import ListPagination from '@/components/ListPagination';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const TITLE_TO_DOCUMENT_TYPE: Record<string, DocumentType> = {
   'Terms & Conditions': 'TERMS_AND_CONDITIONS',
@@ -35,6 +36,16 @@ export default function LegalCompliancePage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const rootRef = useScrollRestoration<HTMLElement>('settings-legal', !loading);
+  useListStatePersistence(
+    'settings-legal',
+    { currentPage, itemsPerPage },
+    (s) => {
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
 
   const paginatedHistory = history.slice(
     (currentPage - 1) * itemsPerPage,
@@ -86,7 +97,7 @@ export default function LegalCompliancePage() {
   const DocIcon = viewingDocType ? DOCUMENT_TYPE_ICON[viewingDocType] : FileText;
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Legal & Compliance' }]} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList, Mic } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList, Mic, Ban } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -20,6 +20,8 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import ListPagination from '@/components/ListPagination';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -57,6 +59,7 @@ const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
   { value: 'system_check', label: 'System Check' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'terminated', label: 'Terminated' },
   { value: 'expired', label: 'Expired' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'scheduled', label: 'Scheduled' },
@@ -85,8 +88,9 @@ export default function AIInterview() {
   // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
   // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  // Extra filter applied on top of the active tab — used by the "Candidates Invited"
-  // stats card to scope the list to only configs that have actually been invited out.
+  // Extra filter applied on top of the active tab — used by the "Invite Shared
+  // Configs" stats card to scope the list to only configs that have actually
+  // had invitations shared.
   const [invitedOnly, setInvitedOnly] = useState(false);
   const openListView = (tab: TabKey, opts?: { invitedOnly?: boolean }) => {
     setActiveTab(tab);
@@ -111,6 +115,14 @@ export default function AIInterview() {
 
   // Share modal
   const [shareConfig, setShareConfig] = useState<AIInterviewResponse | null>(null);
+  // "Send Invite" picker — lists published/active configs to pick one, then
+  // opens the existing Share (invite) modal for the chosen config.
+  const [showInvitePicker, setShowInvitePicker] = useState(false);
+  const [invitePickerSearch, setInvitePickerSearch] = useState('');
+  // When the Share modal is opened from the Candidate Invitations modal
+  // ("Invite More"), remember the config so closing Share returns to that
+  // invitations popup instead of dropping the user back on the list.
+  const [shareReturnToInvites, setShareReturnToInvites] = useState<AIInterviewResponse | null>(null);
 
   // View invitations
   const [viewInvitationsConfig, setViewInvitationsConfig] = useState<AIInterviewResponse | null>(null);
@@ -126,6 +138,8 @@ export default function AIInterview() {
     total: 0,
     completed: 0,
     inProgress: 0,
+    terminated: 0,
+    cancelled: 0,
   });
   const [configListPage, setConfigListPage] = useState(1);
   const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
@@ -139,6 +153,10 @@ export default function AIInterview() {
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Whether the action menu should open UPWARD (flip) — set when there isn't
+  // enough room below the trigger (last cards / near the viewport bottom) so the
+  // menu isn't clipped off-screen.
+  const [menuDropUp, setMenuDropUp] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Quota
@@ -350,6 +368,8 @@ export default function AIInterview() {
         total: result.total || 0,
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
+        terminated: result.terminated || 0,
+        cancelled: result.cancelled || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation overview:', error);
@@ -357,6 +377,8 @@ export default function AIInterview() {
         total: 0,
         completed: 0,
         inProgress: 0,
+        terminated: 0,
+        cancelled: 0,
       });
     }
   }, []);
@@ -417,6 +439,35 @@ export default function AIInterview() {
     loadData();
   }, [loadData]);
 
+  // Restore/persist the list's view state + scroll position so returning from
+  // an Interview Details page lands the user exactly where they left off.
+  // Re-detect the scroll container when the two-step view flips (its height
+  // changes drastically between the cards overview and the list).
+  const rootRef = useScrollRestoration('ai-interviews', !loading, [pageView]);
+  useListStatePersistence(
+    'ai-interviews',
+    { pageView, activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
+      creatorFilter, dateFilter, customDateFrom, customDateTo,
+      configListPage, configListItemsPerPage, processingPage, processingItemsPerPage },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      // 'consent' tab was removed — never restore onto it.
+      if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
+      if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
+      if (typeof s.modeFilter === 'string') setModeFilter(s.modeFilter as typeof modeFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy as typeof sortBy);
+      if (typeof s.creatorFilter === 'string') setCreatorFilter(s.creatorFilter);
+      if (typeof s.dateFilter === 'string') setDateFilter(s.dateFilter as DateFilterKey);
+      if (typeof s.customDateFrom === 'string') setCustomDateFrom(s.customDateFrom);
+      if (typeof s.customDateTo === 'string') setCustomDateTo(s.customDateTo);
+      if (typeof s.configListPage === 'number') setConfigListPage(s.configListPage);
+      if (typeof s.configListItemsPerPage === 'number') setConfigListItemsPerPage(s.configListItemsPerPage);
+      if (typeof s.processingPage === 'number') setProcessingPage(s.processingPage);
+      if (typeof s.processingItemsPerPage === 'number') setProcessingItemsPerPage(s.processingItemsPerPage);
+    },
+  );
+
   useEffect(() => {
     const wasPublished = searchParams.get('published') === '1';
     if (!wasPublished) return;
@@ -437,7 +488,8 @@ export default function AIInterview() {
       loadSettings();
       if (settingsSubTab === 'proctoring') loadProctoringSettings();
     }
-    if (activeTab === 'archived') loadArchivedConfigs();
+    // 'all' now includes archived configs too, so load them for that tab as well.
+    if (activeTab === 'archived' || activeTab === 'all') loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
@@ -531,7 +583,7 @@ export default function AIInterview() {
         try {
           await aiInterviewService.archive(config.id);
           toast.success('Configuration archived');
-          loadData();
+          await Promise.all([loadData(), loadArchivedConfigs()]);
         } catch (error: any) {
           toast.error(error.message || 'Failed to archive');
         }
@@ -543,8 +595,12 @@ export default function AIInterview() {
 
   const handleUnarchiveConfig = async (config: AIInterviewResponse) => {
     try {
-      await aiInterviewService.unarchive(config.id);
-      toast.success('Configuration restored to draft');
+      const restored = await aiInterviewService.unarchive(config.id);
+      toast.success(
+        restored.status === 'draft'
+          ? 'Configuration restored to Draft'
+          : 'Configuration restored to Active'
+      );
       loadData();
       loadArchivedConfigs();
     } catch (error: any) {
@@ -665,13 +721,21 @@ export default function AIInterview() {
 
   // Filter configs by tab + mode + creator + date + search
   const filteredConfigs = (() => {
-    const base = activeTab === 'archived' ? archivedConfigs : configs.filter((config) => {
-      if (activeTab === 'all') return true;
-      if (activeTab === 'published') return normalizeConfigStatus(config.status) === 'published';
-      if (activeTab === 'draft') return config.status === 'draft';
-      if (activeTab === 'completed') return config.status === 'completed' || config.status === 'cancelled';
-      return true;
-    });
+    const base = activeTab === 'archived'
+      ? archivedConfigs
+      : activeTab === 'all'
+        // "All" means all — non-archived + archived, deduped by id so a config
+        // can't appear twice if the two lists ever overlap.
+        ? (() => {
+            const seen = new Set(configs.map((c) => c.id));
+            return [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
+          })()
+        : configs.filter((config) => {
+            if (activeTab === 'published') return normalizeConfigStatus(config.status) === 'published';
+            if (activeTab === 'draft') return config.status === 'draft';
+            if (activeTab === 'completed') return config.status === 'completed' || config.status === 'cancelled';
+            return true;
+          });
     const byInvited = invitedOnly
       ? base.filter((config) => (config.invitations_count ?? 0) > 0)
       : base;
@@ -818,7 +882,7 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <div className="flex-1 overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />
@@ -907,6 +971,15 @@ export default function AIInterview() {
                 <span>HR Question Bank</span>
               </button>
             )}
+            {canShareAIInterviews && (
+              <button
+                onClick={() => { setInvitePickerSearch(''); setShowInvitePicker(true); }}
+                className="inline-flex items-center gap-1.5 border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue px-3.5 py-2 rounded-lg hover:bg-brand-blue/5 transition-all duration-200 text-xs font-medium shadow-sm"
+              >
+                <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Send Invite</span>
+              </button>
+            )}
             {canCreateAIInterviews && (
               <button
                 onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
@@ -953,7 +1026,15 @@ export default function AIInterview() {
             },
             {
               label: 'Active',
-              value: stats?.published_configs ?? 0,
+              // Count Active the SAME way the Active tab does — candidate-flow
+              // statuses (in_progress/scheduled/…) are still published & live
+              // configs (see normalizeConfigStatus), so the stat card and the
+              // tab never disagree and Total = Active + Draft + Archived
+              // reconciles. Fall back to the backend stat only before the
+              // config list has loaded.
+              value: configs.length
+                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
+                : (stats?.published_configs ?? 0),
               icon: Globe,
               tone: 'emerald',
               hint: 'Published & live',
@@ -961,11 +1042,24 @@ export default function AIInterview() {
               tab: 'published' as TabKey,
             },
             {
-              label: 'Candidates Invited',
-              value: stats?.candidates_invited ?? 0,
-              icon: Users,
+              label: 'Invite Shared Configs',
+              // Count CONFIGS that have at least one invitation shared (not the
+              // number of candidates). Spans active + archived, deduped by id,
+              // so it matches the list shown when this card is clicked
+              // (tab 'all' + invitedOnly filter).
+              value: (() => {
+                const seen = new Set<string>();
+                let n = 0;
+                for (const c of [...configs, ...archivedConfigs]) {
+                  if (seen.has(c.id)) continue;
+                  seen.add(c.id);
+                  if ((c.invitations_count ?? 0) > 0) n++;
+                }
+                return n;
+              })(),
+              icon: Send,
               tone: 'blue',
-              hint: 'Across all interviews',
+              hint: 'Configs with invites shared',
               trend: 'up' as const,
               tab: 'all' as TabKey,
               invitedOnly: true,
@@ -1050,14 +1144,13 @@ export default function AIInterview() {
           <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 bg-gradient-to-b from-white to-slate-50/40">
             <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide -mb-px">
               {[
-                { key: 'all', label: 'All AI Interviews', count: configs.length },
+                { key: 'all', label: 'All AI Interviews', count: configs.length + archivedConfigs.length },
                 { key: 'published', label: 'Active', count: configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length },
                 { key: 'draft', label: 'Draft', count: configs.filter((c) => c.status === 'draft').length },
                 // { key: 'completed', label: 'Completed' },
-                { key: 'archived', label: 'Archived', count: archivedConfigs.length },
+                { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? archivedConfigs.length },
                 // { key: 'processing', label: 'Processing' },
                 { key: 'audit', label: 'Activity Logs' },
-                { key: 'consent', label: 'Consent Logs' },
                 { key: 'settings', label: 'Settings' },
               ].map(tab => {
                 const isActive = activeTab === tab.key;
@@ -1410,15 +1503,14 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Results — primary for published */}
-                          {normalizedStatus === 'published' && (
+                          {/* Share — secondary, hidden on smallest screens (available via 3-dot menu) */}
+                          {normalizedStatus === 'published' && canShareAIInterviews && (
                             <button
-                              onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
-                              aria-label="View interview results" title="View interview results"
+                              onClick={() => setShareConfig(config)}
+                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
                             >
-                              <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
-                              Results
+                              <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                              Share
                             </button>
                           )}
 
@@ -1434,28 +1526,44 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Share — secondary, hidden on smallest screens (available via 3-dot menu) */}
-                          {normalizedStatus === 'published' && canShareAIInterviews && (
+                          {/* Results — primary for published */}
+                          {normalizedStatus === 'published' && (
                             <button
-                              onClick={() => setShareConfig(config)}
-                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
+                              onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              aria-label="View interview results" title="View interview results"
                             >
-                              <Send className="w-3.5 h-3.5 flex-shrink-0" />
-                              Share
+                              <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
+                              Results
                             </button>
                           )}
 
                           {/* 3-dot menu */}
                           <div className="relative flex-shrink-0 z-50" ref={openMenuId === config.id ? menuRef : undefined}>
                             <button
-                              onClick={() => setOpenMenuId(openMenuId === config.id ? null : config.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const willOpen = openMenuId !== config.id;
+                                if (willOpen) {
+                                  // Flip the menu upward when there isn't enough room
+                                  // below the trigger (last cards near the viewport
+                                  // bottom) so it isn't clipped off-screen.
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                  setMenuDropUp(window.innerHeight - rect.bottom < 280);
+                                }
+                                setOpenMenuId(willOpen ? config.id : null);
+                              }}
                               className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors"
                               aria-label="More actions"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
                             {openMenuId === config.id && (
-                              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70vh] overflow-y-auto p-1">
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70vh] overflow-y-auto p-1 ${
+                                menuDropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                              }`}>
                                 <button
                                   onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
                                   className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
@@ -1611,7 +1719,9 @@ export default function AIInterview() {
               <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100 dark:border-slate-700/60">
                 {[
                   { key: 'general', label: 'General' },
-                  { key: 'proctoring', label: 'Proctoring' },
+                  // Proctoring settings are a staging-only testing menu — hidden in
+                  // production, where proctoring runs on enforced defaults.
+                  ...(IS_PRODUCTION_ENV ? [] : [{ key: 'proctoring', label: 'Proctoring' }]),
                 ].map(sub => (
                   <button
                     key={sub.key}
@@ -1717,8 +1827,8 @@ export default function AIInterview() {
                 </div>
               )}
 
-              {/* Proctoring Settings */}
-              {settingsSubTab === 'proctoring' && (
+              {/* Proctoring Settings — staging-only testing menu; hidden in production. */}
+              {settingsSubTab === 'proctoring' && !IS_PRODUCTION_ENV && (
                 <div className="max-w-3xl space-y-6">
                   {proctoringLoading ? (
                     <div className="flex items-center justify-center py-12">
@@ -1882,11 +1992,120 @@ export default function AIInterview() {
       </div>
       </div>
 
+      {/* Send Invite — config picker. Lists published/active configs; picking
+          one opens the existing Share (invite) modal for that config. */}
+      {showInvitePicker && (() => {
+        const publishedConfigs = configs.filter((c) => normalizeConfigStatus(c.status) === 'published');
+        const q = invitePickerSearch.trim().toLowerCase();
+        const pickerList = q
+          ? publishedConfigs.filter((c) =>
+              (c.jd_title || c.position || '').toLowerCase().includes(q) ||
+              (c.display_id || '').toLowerCase().includes(q) ||
+              (c.jd_short_id || '').toLowerCase().includes(q))
+          : publishedConfigs;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowInvitePicker(false); }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg h-[calc(100dvh-1.5rem)] sm:h-auto sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">Send Invite</h2>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">Choose an active AI interview to invite candidates</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowInvitePicker(false)}
+                  className="p-1.5 sm:p-2 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={invitePickerSearch}
+                    onChange={(e) => setInvitePickerSearch(e.target.value)}
+                    placeholder="Search by title or ID…"
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  />
+                </div>
+              </div>
+
+              {/* Config list */}
+              <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 min-h-0">
+                {pickerList.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
+                      <Video className="w-8 h-8 text-brand-blue" />
+                    </div>
+                    <p className="text-gray-700 dark:text-slate-300 font-medium text-sm">
+                      {publishedConfigs.length === 0 ? 'No active interviews' : 'No interviews match your search'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                      {publishedConfigs.length === 0 ? 'Publish an AI interview first to send invites' : 'Try a different search term'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pickerList.map((config) => (
+                      <button
+                        key={config.id}
+                        onClick={() => { setShareConfig(config); setShowInvitePicker(false); }}
+                        className="w-full text-left flex items-center gap-3 p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <Video className="w-4 h-4 text-brand-blue" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {config.display_id && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-brand-blue text-white rounded ring-1 ring-white/10">{config.display_id}</span>
+                            )}
+                            <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{config.jd_title || config.position || 'Untitled'}</span>
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-slate-500 truncate mt-0.5">
+                            {config.jd_short_id ? `${config.jd_short_id} · ` : ''}{config.invitations_count ? `${config.invitations_count} invited` : 'No invites yet'}
+                          </div>
+                        </div>
+                        <Send className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Share Modal */}
       {shareConfig && (
         <ShareAIInterviewModal
           isOpen={!!shareConfig}
-          onClose={() => setShareConfig(null)}
+          onClose={() => {
+            setShareConfig(null);
+            // Return to the Candidate Invitations popup if we opened Share
+            // from there (via "Invite More").
+            if (shareReturnToInvites) {
+              setViewInvitationsConfig(shareReturnToInvites);
+              setShareReturnToInvites(null);
+            }
+          }}
           config={shareConfig}
           onInviteSent={() => {
             loadData();
@@ -1917,16 +2136,20 @@ export default function AIInterview() {
         // Once a unit has been consumed (candidate actually started the interview),
         // expiry no longer applies.
         const isInvExpired = (inv: any): boolean => {
-          if (['completed', 'cancelled', 'expired'].includes(inv.status)) return false;
+          if (['completed', 'cancelled', 'terminated', 'expired'].includes(inv.status)) return false;
           if (inv.unit_consumed) return false;
           return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
         };
 
         const invTotal = invitationOverview.total;
-        const invInvited = Math.max(0, invitationOverview.total - invitationOverview.completed - invitationOverview.inProgress);
         const invInProgress = invitationOverview.inProgress;
         const invCompleted = invitationOverview.completed;
-        const invCancelled = Math.max(0, invTotal - invInvited - invInProgress - invCompleted);
+        const invTerminated = invitationOverview.terminated;
+        const invCancelled = invitationOverview.cancelled;
+        // Everything not in a completed/in-progress/terminated/cancelled state is
+        // still awaiting the candidate → "Invited". Subtract the explicit terminal
+        // counts so terminated/cancelled sessions don't inflate the Invited card.
+        const invInvited = Math.max(0, invTotal - invCompleted - invInProgress - invTerminated - invCancelled);
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
         const paginatedInvitations = invitations;
         const hasActiveInviteFilters =
@@ -1961,6 +2184,7 @@ export default function AIInterview() {
             case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
             case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
             case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
+            case 'terminated': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1" title="Auto-ended by the proctoring policy — candidate left the interview screen"><Ban className="w-3 h-3" /> Terminated</span>;
             case 'expired': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
             default: return <span className="px-2 py-0.5 bg-slate-100 text-gray-700 ring-1 ring-gray-200 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
           }
@@ -1987,7 +2211,7 @@ export default function AIInterview() {
 
               {/* Stats Cards */}
               <div className="px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-                <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
+                <div className="grid grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-4">
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500 text-[10px] sm:text-xs mb-1">
                       <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
@@ -2015,6 +2239,13 @@ export default function AIInterview() {
                       <span className="truncate">Completed</span>
                     </div>
                     <p className="text-lg sm:text-2xl font-bold text-green-600 tracking-tight">{invCompleted}</p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">
+                      <Ban className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                      <span className="truncate">Terminated</span>
+                    </div>
+                    <p className="text-lg sm:text-2xl font-bold text-red-600 tracking-tight">{invTerminated}</p>
                   </div>
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
                     <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">
@@ -2122,7 +2353,7 @@ export default function AIInterview() {
                           </div>
 
                           {/* Copy Link — available while session is still active */}
-                          {inv.interview_token && !['completed', 'cancelled', 'expired'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
+                          {inv.interview_token && !['completed', 'cancelled', 'terminated', 'expired'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -2157,8 +2388,10 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* View Details button */}
-                          {(inv.status === 'completed' || inv.status === 'in_progress') && (
+                          {/* View Details button — also for terminated sessions so
+                              the recruiter can review whatever the candidate answered
+                              before the proctoring policy ended the interview. */}
+                          {(inv.status === 'completed' || inv.status === 'in_progress' || inv.status === 'terminated') && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleViewCandidateDetail(inv.id); }}
                               className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
@@ -2208,6 +2441,8 @@ export default function AIInterview() {
                 <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     onClick={() => {
+                      // Remember where we came from so closing Share returns here.
+                      setShareReturnToInvites(viewInvitationsConfig);
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}

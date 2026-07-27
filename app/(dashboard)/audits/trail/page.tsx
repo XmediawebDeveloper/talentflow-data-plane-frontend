@@ -45,6 +45,7 @@ import {
 import { formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -289,6 +290,26 @@ export default function AuditTrailPage() {
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
   const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter });
+
+  // Persist the cards<->list view, filters and pagination + scroll position so
+  // returning to this page restores exactly where the user left off. The
+  // cards-first overview and the list differ a lot in height, so re-detect the
+  // scroll container when pageView flips.
+  const rootRef = useScrollRestoration<HTMLElement>('audits-trail', !loading, [pageView]);
+  useListStatePersistence(
+    'audits-trail',
+    { pageView, searchQuery, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter, page },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.actionFilter === 'string') setActionFilter(s.actionFilter);
+      if (typeof s.entityFilter === 'string') setEntityFilter(s.entityFilter);
+      if (typeof s.dateRange === 'string') setDateRange(s.dateRange);
+      if (typeof s.errorOriginFilter === 'string') setErrorOriginFilter(s.errorOriginFilter as '' | ErrorOrigin);
+      if (typeof s.userFilter === 'string') setUserFilter(s.userFilter);
+      if (typeof s.page === 'number') setPage(s.page);
+    },
+  );
 
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
@@ -766,7 +787,7 @@ export default function AuditTrailPage() {
   });
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Trail' }]} />
@@ -1258,7 +1279,11 @@ export default function AuditTrailPage() {
                     const actionStatus = getActionStatus(log.action, log.error_origin);
                     const impact = getImpactText(log);
                     return (
-                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                      <tr
+                        key={log.id}
+                        onClick={() => setSelectedLog(log)}
+                        className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      >
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
                             <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -1353,7 +1378,7 @@ export default function AuditTrailPage() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <button
-                            onClick={() => setSelectedLog(log)}
+                            onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
                           >
                             <Eye className="w-4 h-4" />

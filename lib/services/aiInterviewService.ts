@@ -4,6 +4,15 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+export type AIInterviewHRQuestionStage = 'opening' | 'closing';
+
+export interface AIInterviewHRQuestion {
+  id: string;
+  question_text: string;
+  answer_type: string;
+  stage?: AIInterviewHRQuestionStage;
+}
+
 export interface AIInterviewRoundConfig {
   type: string;
   percentage: number;
@@ -22,7 +31,7 @@ export interface AIInterviewRoundConfig {
   must_have_percentage?: number;
   nice_to_have_percentage?: number;
   // HR round: specific questions selected from the question bank
-  hr_questions?: { id: string; question_text: string; answer_type: string }[];
+  hr_questions?: AIInterviewHRQuestion[];
   // Timed mode: planned question count for this round (set at config time)
   planned_questions?: number;
 }
@@ -221,6 +230,8 @@ export interface AIInterviewListResponse {
 export interface AIInterviewInvitationListResponse extends AIInterviewListResponse {
   completed: number;
   in_progress: number;
+  terminated: number;
+  cancelled: number;
   average_score: number | null;
 }
 
@@ -1042,7 +1053,8 @@ export const aiInterviewService = {
    * Get the full skill coverage map for a session (AIU52)
    */
   async getCoverageMap(sessionId: string): Promise<any> {
-    const response = await api.get(`/ai-interviews/${sessionId}/coverage-map`);
+    // Router is mounted at singular /api/v1/ai-interview (see backend main.py).
+    const response = await api.get(`/ai-interview/${sessionId}/coverage-map`);
     return response.data;
   },
 
@@ -1050,7 +1062,18 @@ export const aiInterviewService = {
    * Trigger AI evaluation for a completed session (AIU53)
    */
   async triggerEvaluation(sessionId: string): Promise<any> {
-    const response = await api.post(`/ai-interviews/${sessionId}/evaluate`, {});
+    const response = await api.post(`/ai-interview/${sessionId}/evaluate`, {});
+    return response.data;
+  },
+
+  /**
+   * SAFE, ONE-TIME recruiter re-evaluation for an interview whose candidate
+   * reached the END of the interview but whose result is stuck partial /
+   * disconnected. Backend enforces eligibility (crossed-end), one-time, and
+   * not-in-flight; on success the row becomes COMPLETED with a full evaluation.
+   */
+  async reEvaluatePartial(sessionId: string): Promise<any> {
+    const response = await api.post(`/ai-interview/${sessionId}/re-evaluate`, {});
     return response.data;
   },
 };

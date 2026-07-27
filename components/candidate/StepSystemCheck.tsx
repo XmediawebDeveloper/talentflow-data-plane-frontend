@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
+import { filterMultipleFaceCandidates, type FaceRegion } from '@/lib/proctoring/faceDetection';
 import {
   Monitor,
   Globe,
@@ -24,8 +25,6 @@ import {
   CircleDot,
   Play,
   RefreshCw,
-  RotateCcw,
-  Scan,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 
@@ -51,7 +50,7 @@ interface StepSystemCheckProps {
   onEnrollVoice?: (stream: MediaStream) => Promise<boolean>;
 }
 
-type Phase = 'browser_check' | 'browser_results' | 'system_checks' | 'env_scan';
+type Phase = 'browser_check' | 'browser_results' | 'system_checks';
 type CheckStatus = 'pending' | 'checking' | 'pass' | 'fail';
 
 const MOBILE_UA_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
@@ -85,10 +84,6 @@ function isMobileDevice(): boolean {
 
   return false;
 }
-
-// Environment scan constants
-const TOTAL_SCAN_FRAMES = 6;
-const SCAN_INTERVAL_MS = 2500; // capture frame every 2.5s
 
 interface BrowserInfo {
   name: string;
@@ -170,8 +165,14 @@ function detectDevice(): DeviceInfo {
   const mobile = isMobileDevice();
   const browser = detectBrowser(ua);
   const os = detectOS();
-  const screenWidth = typeof window !== 'undefined' ? window.screen.width : 0;
-  const screenHeight = typeof window !== 'undefined' ? window.screen.height : 0;
+  // window.screen.width/height are CSS pixels — i.e. PHYSICAL ÷ display scale.
+  // On Windows at 150% scaling a 1920×1080 panel reports 1280×720, which reads
+  // as "wrong". Multiply by devicePixelRatio to recover the true hardware
+  // resolution (dpr = OS scale × browser zoom; at 100% zoom this is exactly the
+  // scale factor, so 1280 × 1.5 → 1920). Round to undo tiny float drift.
+  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+  const screenWidth = typeof window !== 'undefined' ? Math.round(window.screen.width * dpr) : 0;
+  const screenHeight = typeof window !== 'undefined' ? Math.round(window.screen.height * dpr) : 0;
 
   return {
     isMobile: mobile,
@@ -221,12 +222,11 @@ const SYSTEM_REQUIREMENTS = [
 // ────────────────────────────────────────
 // Progress Stepper Component
 // ────────────────────────────────────────
-const STEPPER_STEPS = ['Browser Check', 'System Checks', 'Environment Scan'];
+const STEPPER_STEPS = ['Browser Check', 'System Checks'];
 
 function getStepIndex(phase: Phase): number {
   if (phase === 'browser_check' || phase === 'browser_results') return 0;
   if (phase === 'system_checks') return 1;
-  if (phase === 'env_scan') return 2;
   return 0;
 }
 
@@ -283,6 +283,14 @@ function ProgressStepper({ phase }: { phase: Phase }) {
   );
 }
 
+// Fixed passage the candidate reads aloud during the mic check. A known,
+// ~5-second sentence guarantees enough clean voiced speech for an accurate
+// enrollment voiceprint (short spontaneous "hello" samples are too brief).
+export const ENROLL_PASSAGE =
+  'I am ready for my interview today, and I will answer each question to the best of my ability. ' +
+  'I understand the instructions, and I am comfortable with my camera and microphone setup. ' +
+  'Thank you for this opportunity — I am looking forward to getting started.';
+
 export default function StepSystemCheck({
   token,
   position = 'this position',
@@ -300,24 +308,16 @@ export default function StepSystemCheck({
   const [checksRunning, setChecksRunning] = useState(false);
   const [checksCompleted, setChecksCompleted] = useState(false);
   const [isProceedLoading, setIsProceedLoading] = useState(false);
+  // Visible voice-enrollment state (the read-aloud panel inside the card).
+  const [voiceEnrollStatus, setVoiceEnrollStatus] =
+    useState<'idle' | 'recording' | 'success' | 'failed'>('idle');
+  const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
 
   // Measured metric values to include when submitting to backend
   const networkLatencyMsRef = useRef<number | null>(null);
   const networkSpeedMbpsRef = useRef<number | null>(null);
   const videoBrightnessRef = useRef<number | null>(null);
   const aiEngineLatencyMsRef = useRef<number | null>(null);
-
-  // Environment scan state
-  const [envScanPhase, setEnvScanPhase] = useState<'idle' | 'scanning' | 'complete'>('idle');
-  const [envScanProgress, setEnvScanProgress] = useState(0); // 0-100
-  const [envScanFrameCount, setEnvScanFrameCount] = useState(0); // 0 to TOTAL_FRAMES
-  const [envScanResults, setEnvScanResults] = useState<{
-    lighting: boolean;
-    singlePerson: boolean;
-    clear: boolean;
-    lightingDetail?: string;
-    singlePersonDetail?: string;
-  } | null>(null);
 
   // Refs for cleanup
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -329,10 +329,12 @@ export default function StepSystemCheck({
   const noiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const micIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Voice enrollment is captured WHILE the candidate speaks during the mic
+  // check (reading the prompt below), not at proceed-time when they're silent —
+  // that yields clean, sufficient speech for an accurate voiceprint.
+  const voiceEnrollPromiseRef = useRef<Promise<boolean> | null>(null);
   const mountedRef = useRef(true);
   const checksCancelledRef = useRef(false);
-  const envScanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const envScanRAFRef = useRef<number | null>(null);
   // Guards concurrent face-api.js / TF.js WebGL calls — only one may run at a time.
   // handleProceed waits for this to clear before calling onRegisterFace.
   const faceApiBusyRef = useRef(false);
@@ -364,6 +366,43 @@ export default function StepSystemCheck({
     },
     [],
   );
+
+  // Kick off voice enrollment once, updating the visible panel state as it runs.
+  // Called from the mic check the moment the candidate's voice is detected.
+  const startVoiceEnroll = useCallback(() => {
+    if (voiceEnrollPromiseRef.current || !onEnrollVoice || !streamRef.current) return;
+    setVoiceEnrollStatus('recording');
+    setVoiceEnrollProgress(0);
+    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
+      .then((ok) => {
+        if (mountedRef.current) setVoiceEnrollStatus(ok ? 'success' : 'failed');
+        return ok;
+      })
+      .catch(() => {
+        if (mountedRef.current) setVoiceEnrollStatus('failed');
+        return false;
+      });
+  }, [onEnrollVoice]);
+
+  // Re-run voice enrollment (from the panel's Retry button).
+  const retryVoiceEnroll = useCallback(() => {
+    voiceEnrollPromiseRef.current = null;
+    setVoiceEnrollStatus('idle');
+    setVoiceEnrollProgress(0);
+    startVoiceEnroll();
+  }, [startVoiceEnroll]);
+
+  // Drive the recording progress bar (~12 s capture) for visible feedback.
+  useEffect(() => {
+    if (voiceEnrollStatus !== 'recording') return;
+    const started = performance.now();
+    const CAPTURE_MS = 12000;
+    const iv = setInterval(() => {
+      const pct = Math.min(100, ((performance.now() - started) / CAPTURE_MS) * 100);
+      setVoiceEnrollProgress(pct);
+    }, 200);
+    return () => clearInterval(iv);
+  }, [voiceEnrollStatus]);
 
   const stopActiveChecks = useCallback(() => {
     checksCancelledRef.current = true;
@@ -397,722 +436,464 @@ export default function StepSystemCheck({
     setSystemChecks(INITIAL_CHECKS);
   }, [phase]);
 
-  // Reset environment scan state every time the phase is entered
-  // Without this, a previously completed scan persists and shows "Scan Complete" immediately
-  useEffect(() => {
-    if (phase !== 'env_scan') return;
-    setEnvScanPhase('idle');
-    setEnvScanProgress(0);
-    setEnvScanFrameCount(0);
-    setEnvScanResults(null);
-  }, [phase]);
+  // ── Shared media helpers ───────────────────────────────────────────────
+  // Reuse the already-open webcam/mic when present (full run) so a single-check
+  // retry doesn't fight for the device; acquire fresh only when missing.
+  const ensureVideoStream = useCallback(async (): Promise<boolean> => {
+    const existing = streamRef.current;
+    const liveVideo = existing?.getVideoTracks().some((t) => t.readyState === 'live');
+    if (liveVideo) {
+      if (videoRef.current && videoRef.current.srcObject !== existing) videoRef.current.srcObject = existing;
+      return true;
+    }
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef.current = s;
+      if (videoRef.current) videoRef.current.srcObject = s;
+      await new Promise((r) => setTimeout(r, 1200)); // let metadata / first frames arrive
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
+  const ensureAudioAnalyser = useCallback(async (): Promise<AnalyserNode | null> => {
+    if (analyserRef.current && audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      return analyserRef.current;
+    }
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const Ctx: typeof AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new Ctx();
+      try { await audioContext.resume(); } catch { /* ignore */ }
+      let resumeWait = 0;
+      while (audioContext.state !== 'running' && resumeWait < 2000) {
+        await new Promise((r) => setTimeout(r, 100));
+        resumeWait += 100;
+      }
+      const source = audioContext.createMediaStreamSource(audioStream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      if (audioContextRef.current && audioContextRef.current !== audioContext) {
+        try { await audioContextRef.current.close(); } catch { /* ignore */ }
+      }
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      if (streamRef.current) audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
+      return analyser;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // ── Individual checks — each self-contained so it can run standalone (retry) ──
+  const runDevice = useCallback(async () => {
+    updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
+    await new Promise((r) => setTimeout(r, 400));
+    const info = deviceInfo || detectDevice();
+    updateSystemCheck('device', info.isMobile
+      ? { status: 'fail', detail: 'Mobile device detected — use a desktop or laptop' }
+      : { status: 'pass', detail: 'Desktop/Laptop detected' });
+  }, [deviceInfo, updateSystemCheck]);
+
+  const runWebcam = useCallback(async () => {
+    updateSystemCheck('webcam', { status: 'checking', detail: 'Requesting webcam access...' });
+    try {
+      streamRef.current?.getVideoTracks().forEach((t) => t.stop()); // release stale track on retry
+      const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef.current = videoStream;
+      if (videoRef.current) videoRef.current.srcObject = videoStream;
+      updateSystemCheck('webcam', { status: 'checking', detail: 'Verifying video signal...' });
+      await new Promise((r) => setTimeout(r, 1200));
+      let videoOk = false;
+      const vid = videoRef.current;
+      const cvs = canvasRef.current;
+      if (vid && cvs && vid.readyState >= 2 && vid.videoWidth > 0) {
+        const ctx = cvs.getContext('2d', { willReadFrequently: true });
+        if (ctx) {
+          cvs.width = vid.videoWidth;
+          cvs.height = vid.videoHeight;
+          ctx.drawImage(vid, 0, 0);
+          const d = ctx.getImageData(0, 0, cvs.width, cvs.height).data;
+          let maxPixel = 0;
+          for (let i = 0; i < d.length; i += 4) maxPixel = Math.max(maxPixel, d[i], d[i + 1], d[i + 2]);
+          videoOk = maxPixel > 5;
+        }
+      } else if (vid && vid.readyState >= 1) {
+        videoOk = true;
+      }
+      updateSystemCheck('webcam', videoOk
+        ? { status: 'pass', detail: 'Webcam producing video' }
+        : { status: 'fail', detail: 'Camera connected but no video signal — check if lens is covered' });
+    } catch {
+      updateSystemCheck('webcam', { status: 'fail', detail: 'Webcam access denied' });
+    }
+  }, [updateSystemCheck]);
+
+  const runMicrophone = useCallback(async () => {
+    if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
+    updateSystemCheck('microphone', { status: 'checking', detail: 'Requesting microphone access...' });
+    const analyser = await ensureAudioAnalyser();
+    if (!analyser) {
+      updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
+      return;
+    }
+    // Voice-activity detection was intentionally REMOVED from this check. The
+    // candidate proves their voice in the dedicated, manual Voice Verification
+    // sub-step below (which does server-side speech/silence detection and gates
+    // Continue). Here we only confirm the microphone is accessible.
+    updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
+  }, [ensureAudioAnalyser, updateSystemCheck]);
+
+  const runInternet = useCallback(async () => {
+    updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
+    const healthUrl = `${API_BASE_URL.replace('/api/v1', '')}/health`;
+    const latencies: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      try {
+        const start = performance.now();
+        await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
+        latencies.push(performance.now() - start);
+      } catch { /* individual ping failed */ }
+    }
+    const avgLatency = latencies.length
+      ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+      : null;
+
+    const measureDownloadMbps = async (): Promise<number | null> => {
+      const MAX_MS = 4000;
+      const MAX_BYTES = 25_000_000;
+      const MIN_BYTES = 250_000;
+      const sources = [`https://speed.cloudflare.com/__down?bytes=${MAX_BYTES}`];
+      for (const base of sources) {
+        try {
+          const controller = new AbortController();
+          const hardStop = setTimeout(() => controller.abort(), MAX_MS + 1500);
+          const url = `${base}${base.includes('?') ? '&' : '?'}_=${Date.now()}`;
+          const start = performance.now();
+          const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+          if (!res.ok || !res.body) { clearTimeout(hardStop); continue; }
+          const reader = res.body.getReader();
+          let bytes = 0;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) bytes += value.length;
+            if (performance.now() - start >= MAX_MS || bytes >= MAX_BYTES) {
+              try { await reader.cancel(); } catch { /* ignore */ }
+              controller.abort();
+              break;
+            }
+          }
+          clearTimeout(hardStop);
+          const elapsedSec = (performance.now() - start) / 1000;
+          if (bytes >= MIN_BYTES && elapsedSec > 0.15) {
+            return (bytes * 8) / (elapsedSec * 1_000_000);
+          }
+        } catch { /* aborted/blocked */ }
+      }
+      return null;
+    };
+
+    let realMbps: number | null = null;
+    try { realMbps = await measureDownloadMbps(); } catch { realMbps = null; }
+    if (avgLatency !== null) networkLatencyMsRef.current = avgLatency;
+
+    if (realMbps !== null) {
+      networkSpeedMbpsRef.current = realMbps;
+      const passes = realMbps >= MIN_INTERNET_MBPS;
+      updateSystemCheck('internet', passes
+        ? { status: 'pass', detail: `Speed: ${realMbps.toFixed(1)} Mbps (≥ ${MIN_INTERNET_MBPS} Mbps required)` }
+        : { status: 'fail', detail: `Speed: ${realMbps.toFixed(1)} Mbps (below ${MIN_INTERNET_MBPS} Mbps minimum)` });
+    } else if (avgLatency !== null) {
+      const passes = avgLatency < 500;
+      updateSystemCheck('internet', passes
+        ? { status: 'pass', detail: `Connection: Good (${avgLatency}ms latency — speed test unavailable on this network)` }
+        : { status: 'fail', detail: `Connection: Slow (${avgLatency}ms latency — check your internet, ${MIN_INTERNET_MBPS} Mbps required)` });
+    } else {
+      updateSystemCheck('internet', { status: 'fail', detail: 'Unable to reach server — check your connection' });
+    }
+  }, [updateSystemCheck]);
+
+  const runAiEngine = useCallback(async () => {
+    updateSystemCheck('ai_engine', { status: 'checking', detail: 'Checking AI engine availability...' });
+    try {
+      const aiHealth = await candidateAIInterviewService.checkAIHealth(token);
+      aiEngineLatencyMsRef.current = aiHealth.latency_ms;
+      updateSystemCheck('ai_engine', aiHealth.status === 'ready'
+        ? { status: 'pass', detail: `AI engine ready (${aiHealth.latency_ms}ms)` }
+        : { status: 'fail', detail: 'AI engine unavailable — please try again shortly' });
+    } catch {
+      updateSystemCheck('ai_engine', { status: 'fail', detail: 'AI engine unreachable — check your connection' });
+    }
+  }, [token, updateSystemCheck]);
+
+  const runWebsocket = useCallback(async () => {
+    updateSystemCheck('websocket', { status: 'checking', detail: 'Testing WebSocket connectivity...' });
+    if (typeof WebSocket === 'undefined') {
+      updateSystemCheck('websocket', { status: 'fail', detail: 'WebSocket not supported by this browser' });
+      return;
+    }
+    const wsUrl = API_BASE_URL
+      .replace(/^https:\/\//i, 'wss://')
+      .replace(/^http:\/\//i, 'ws://')
+      .replace(/\/api\/v1\/?$/, '') + `/api/v1/ws/ai-interview/${token}`;
+    await new Promise<void>((resolve) => {
+      const TIMEOUT_MS = 7000;
+      let settled = false;
+      let ws: WebSocket | null = null;
+      const settle = (status: CheckStatus, detail: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try { ws?.close(); } catch { /* ignore */ }
+        updateSystemCheck('websocket', { status, detail });
+        resolve();
+      };
+      const timer = setTimeout(() => settle('fail', 'WebSocket connection timed out — check network/firewall settings'), TIMEOUT_MS);
+      try { ws = new WebSocket(wsUrl); } catch { settle('fail', 'WebSocket connection could not be established'); return; }
+      ws.onopen = () => settle('pass', 'WebSocket connected successfully');
+      ws.onclose = () => settle('pass', 'WebSocket connection established');
+    });
+  }, [token, updateSystemCheck]);
+
+  const runLighting = useCallback(async () => {
+    if (lightingIntervalRef.current) { clearInterval(lightingIntervalRef.current); lightingIntervalRef.current = null; }
+    updateSystemCheck('lighting', { status: 'checking', detail: 'Analyzing lighting...' });
+    const hasVideo = await ensureVideoStream();
+    await new Promise((r) => setTimeout(r, hasVideo ? 800 : 0));
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (video && canvas && video.readyState >= 2) {
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let totalBrightness = 0;
+        for (let i = 0; i < data.length; i += 4) totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const avgBrightness = data.length > 0 ? totalBrightness / (data.length / 4) : 0;
+        videoBrightnessRef.current = Math.round(avgBrightness);
+        updateSystemCheck('lighting', avgBrightness >= 40
+          ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
+          : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' });
+      } else {
+        updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
+      }
+      lightingIntervalRef.current = setInterval(() => {
+        if (!video || !canvas || video.readyState < 2) return;
+        const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx2) return;
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx2.drawImage(video, 0, 0);
+        const data = ctx2.getImageData(0, 0, canvas.width, canvas.height).data;
+        let tb = 0;
+        for (let i = 0; i < data.length; i += 4) tb += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const avg = data.length > 0 ? tb / (data.length / 4) : 0;
+        updateSystemCheck('lighting', avg >= 40
+          ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
+          : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' });
+      }, 3000);
+    } else {
+      updateSystemCheck('lighting', { status: 'fail', detail: 'Camera not available for lighting check' });
+    }
+  }, [ensureVideoStream, updateSystemCheck]);
+
+  const runNoise = useCallback(async () => {
+    if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
+    updateSystemCheck('noise', { status: 'checking', detail: 'Analyzing background noise...' });
+    const analyser = await ensureAudioAnalyser();
+    await new Promise((r) => setTimeout(r, 1000));
+    if (analyser) {
+      const readAvg = () => {
+        const da = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(da);
+        return da.length > 0 ? da.reduce((a, b) => a + b, 0) / da.length : 0;
+      };
+      updateSystemCheck('noise', readAvg() < 80
+        ? { status: 'pass', detail: 'Background noise: Low (Good)' }
+        : { status: 'fail', detail: 'Background noise: High - find a quieter space' });
+      noiseIntervalRef.current = setInterval(() => {
+        const a = analyserRef.current;
+        if (!a) return;
+        const da = new Uint8Array(a.frequencyBinCount);
+        a.getByteFrequencyData(da);
+        const avg = da.length > 0 ? da.reduce((x, y) => x + y, 0) / da.length : 0;
+        updateSystemCheck('noise', avg < 80
+          ? { status: 'pass', detail: 'Background noise: Low (Good)' }
+          : { status: 'fail', detail: 'Background noise: High - find a quieter space' });
+      }, 3000);
+    } else {
+      updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
+    }
+  }, [ensureAudioAnalyser, updateSystemCheck]);
+
+  const runFaceMultiple = useCallback(async () => {
+    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    updateSystemCheck('face', { status: 'checking', detail: 'Detecting face...' });
+    updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
+    await ensureVideoStream();
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) {
+      updateSystemCheck('face', { status: 'fail', detail: 'Camera not available for face check' });
+      updateSystemCheck('multiple', { status: 'fail', detail: 'Camera not available' });
+      return;
+    }
+
+    const FACE_API_MODEL_URL = '/models/';
+
+    // Count only SIGNIFICANT (real, close-up) faces — tiny background artifacts,
+    // shadows, posters, and reflections that the raw detector weakly flags as
+    // "faces" are filtered out by size. Without this, an EMPTY frame (no one in
+    // front of the camera) intermittently reported 2+ faces, so "Multiple People
+    // Check" falsely failed with "2 people detected" while "Face Detection"
+    // failed with "No face" — the two checks contradicting each other. Filtering
+    // decouples them: an empty frame yields 0 → only the no-face result.
+    const countSignificantFaces = (
+      dets: any[],
+      getRegion: (d: any) => FaceRegion | null,
+    ): number => {
+      const w = video.videoWidth || 0;
+      const h = video.videoHeight || 0;
+      if (w <= 0 || h <= 0) return 0;
+      return filterMultipleFaceCandidates(dets, getRegion, w, h).length;
+    };
+    const nativeRegion = (d: any): FaceRegion | null => {
+      const b = d?.boundingBox;
+      return b ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+    };
+    const faceApiRegion = (d: any): FaceRegion | null => {
+      const b = d?.box;
+      return b ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+    };
+
+    // The two checks are FULLY INDEPENDENT, each answering its own question:
+    //   • Face Detection    → is the candidate's OWN face present?  (needs >=1)
+    //   • Multiple People    → are there EXTRA people?  (only 2+ is a violation)
+    // So they never move as a pair: 0 faces → Face fails, Multiple passes (no
+    // extra people); 1 face → both pass; 2+ faces → Face passes, Multiple fails.
+    // Face Detection alone gates "you must be visible" (allSystemPassed needs it),
+    // so passing Multiple at 0 faces can't let anyone through without a face.
+    const applyFaceCount = (count: number) => {
+      // Face Detection: purely about the candidate's face being present.
+      if (count >= 1) {
+        updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
+      } else {
+        updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
+      }
+      // Multiple People Check: purely about EXTRA people — independent of whether
+      // the face is currently visible. Passes for 0 or 1 person; fails only at 2+.
+      if (count >= 2) {
+        updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
+      } else if (count === 1) {
+        updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
+      } else {
+        updateSystemCheck('multiple', { status: 'pass', detail: 'No other people detected' });
+      }
+    };
+
+    const hasNative = typeof window !== 'undefined' && 'FaceDetector' in window;
+    let useFaceApi = !hasNative;
+    if (hasNative) {
+      try {
+        const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
+        applyFaceCount(countSignificantFaces(Array.from(await detector.detect(video)), nativeRegion));
+        setHasFaceDetector(true);
+        faceIntervalRef.current = setInterval(async () => {
+          if (faceApiBusyRef.current || !video || video.readyState < 2) return;
+          faceApiBusyRef.current = true;
+          try { applyFaceCount(countSignificantFaces(Array.from(await detector.detect(video)), nativeRegion)); } catch { /* skip frame */ }
+          finally { faceApiBusyRef.current = false; }
+        }, 2500);
+      } catch {
+        useFaceApi = true;
+      }
+    }
+    if (useFaceApi) {
+      try {
+        const faceapi = await loadFaceApiWithCpuBackend();
+        if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+          await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+        }
+        const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+        applyFaceCount(countSignificantFaces(await faceapi.detectAllFaces(video, opts), faceApiRegion));
+        setHasFaceDetector(true);
+        faceIntervalRef.current = setInterval(async () => {
+          if (faceApiBusyRef.current || !video || video.readyState < 2) return;
+          faceApiBusyRef.current = true;
+          try { applyFaceCount(countSignificantFaces(await faceapi.detectAllFaces(video, opts), faceApiRegion)); } catch { /* skip frame */ }
+          finally { faceApiBusyRef.current = false; }
+        }, 2500);
+      } catch {
+        setHasFaceDetector(false);
+        updateSystemCheck('face', { status: 'pass', detail: 'Camera working (face check unavailable on this browser)' });
+        updateSystemCheck('multiple', { status: 'pass', detail: 'Single-face check unavailable on this browser' });
+      }
+    }
+
+    if (onVerifyFace) {
+      try {
+        await new Promise((r) => setTimeout(r, 800));
+        const verifyResult = await onVerifyFace(video);
+        if (verifyResult !== null && !verifyResult.matched) {
+          updateSystemCheck('face', { status: 'fail', detail: 'Identity mismatch — please ensure you are the registered candidate' });
+        }
+      } catch { /* non-critical */ }
+    }
+  }, [ensureVideoStream, onVerifyFace, updateSystemCheck]);
+
+  // Full run — orchestrates every check in order (initial "Run Check").
   const handleRunChecks = useCallback(async () => {
-    // Stop any in-progress checks and reset
     stopActiveChecks();
     checksCancelledRef.current = false;
     setChecksRunning(true);
     setChecksCompleted(false);
     setSystemChecks(INITIAL_CHECKS);
-
-    // Give browser (especially Brave) time to fully release mic hardware from the previous run
-    // before getUserMedia is called again — 100ms is too short and causes stale/silent streams
+    // Give the browser (esp. Brave) time to release mic hardware from a prior run.
     await new Promise((r) => setTimeout(r, 600));
-
     const cancelled = () => checksCancelledRef.current;
-
-    {
-      // 1. Device Type (instant)
-      if (cancelled()) return;
-      updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
-      await new Promise((r) => setTimeout(r, 500));
-      if (cancelled()) return;
-      const info = deviceInfo || detectDevice();
-      if (!info.isMobile) {
-        updateSystemCheck('device', { status: 'pass', detail: 'Desktop/Laptop detected' });
-      } else {
-        updateSystemCheck('device', { status: 'fail', detail: 'Mobile device detected — use a desktop or laptop' });
-      }
-
-      // 2. Webcam — verify access AND that actual video frames are being produced
-      if (cancelled()) return;
-      updateSystemCheck('webcam', { status: 'checking', detail: 'Requesting webcam access...' });
-      try {
-        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        if (cancelled()) { videoStream.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = videoStream;
-        if (videoRef.current) videoRef.current.srcObject = videoStream;
-
-        // Wait for video metadata to load, then verify actual frames are non-black
-        updateSystemCheck('webcam', { status: 'checking', detail: 'Verifying video signal...' });
-        await new Promise((r) => setTimeout(r, 1200));
-        if (cancelled()) return;
-
-        let videoOk = false;
-        const vid = videoRef.current;
-        const cvs = canvasRef.current;
-        if (vid && cvs && vid.readyState >= 2 && vid.videoWidth > 0) {
-          const ctx = cvs.getContext('2d', { willReadFrequently: true });
-          if (ctx) {
-            cvs.width = vid.videoWidth;
-            cvs.height = vid.videoHeight;
-            ctx.drawImage(vid, 0, 0);
-            const d = ctx.getImageData(0, 0, cvs.width, cvs.height).data;
-            // A completely black/blank frame has all pixels near 0 — a real camera has some variation
-            let maxPixel = 0;
-            for (let i = 0; i < d.length; i += 4) maxPixel = Math.max(maxPixel, d[i], d[i + 1], d[i + 2]);
-            videoOk = maxPixel > 5; // any non-black pixel means real signal
-          }
-        } else if (vid && vid.readyState >= 1) {
-          // readyState >= 1 means stream connected even if frame not yet decoded
-          videoOk = true;
-        }
-
-        if (videoOk) {
-          updateSystemCheck('webcam', { status: 'pass', detail: 'Webcam producing video' });
-        } else {
-          updateSystemCheck('webcam', { status: 'fail', detail: 'Camera connected but no video signal — check if lens is covered' });
-        }
-      } catch {
-        if (cancelled()) return;
-        updateSystemCheck('webcam', { status: 'fail', detail: 'Webcam access denied' });
-      }
-
-      // 3. Microphone — verify actual audio capture, not just driver access
-      if (cancelled()) return;
-      updateSystemCheck('microphone', { status: 'checking', detail: 'Requesting microphone access...' });
-      try {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (cancelled()) { audioStream.getTracks().forEach((t) => t.stop()); return; }
-        const AudioContextImpl: typeof AudioContext =
-          window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContextImpl();
-
-        // Ensure AudioContext is actually running before measuring.
-        // Brave (and Firefox) often create it in 'suspended' state when constructed
-        // after async awaits. resume() alone isn't enough — Brave may acknowledge
-        // the call but keep the context suspended until the audio pipeline is ready.
-        // Poll up to 2s for 'running' state.
-        try { await audioContext.resume(); } catch { /* ignore */ }
-        let resumeWait = 0;
-        while (audioContext.state !== 'running' && resumeWait < 2000) {
-          await new Promise((r) => setTimeout(r, 100));
-          resumeWait += 100;
-        }
-
-        const source = audioContext.createMediaStreamSource(audioStream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        audioContextRef.current = audioContext;
-        analyserRef.current = analyser;
-        if (streamRef.current) audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
-
-        // --- Active mic test ---
-        // Step 1: measure ambient baseline (1.5s — gives Brave extra time after context starts)
-        updateSystemCheck('microphone', { status: 'checking', detail: 'Measuring ambient levels...' });
-        await new Promise((r) => setTimeout(r, 1500));
-        if (cancelled()) return;
-
-        const getRMS = (a: AnalyserNode): number => {
-          const buf = new Uint8Array(a.frequencyBinCount);
-          a.getByteFrequencyData(buf);
-          const sum = buf.reduce((acc, v) => acc + v * v, 0);
-          return Math.sqrt(sum / buf.length); // RMS level 0–255
-        };
-
-        let ambientLevel = getRMS(analyser);
-        // Brave's fingerprinting protection can return all-zeros immediately after AudioContext
-        // creation/resume — give one extra chance with a short pause before giving up
-        if (ambientLevel < 1) {
-          await new Promise((r) => setTimeout(r, 600));
-          if (cancelled()) return;
-          ambientLevel = getRMS(analyser);
-        }
-
-        // --- LIVE microphone test (continuous, like the live face check) ---
-        // Previously this used a fixed 3-second "say something now" window that
-        // FAILED if the candidate happened to stay quiet during those 3 seconds.
-        // Instead we now monitor the mic CONTINUOUSLY and flip to PASS the moment
-        // any voice is detected — at any time. The check simply keeps listening
-        // ("say something") and never times out, exactly like face detection
-        // waits until a face appears. Once voice is heard it stays passed and
-        // doesn't flicker back during the natural pauses between words.
-        const VOICE_FACTOR = 1.8;          // voice = ≥ 1.8× the ambient baseline
-        const VOICE_FLOOR = 8;             // …and above an absolute RMS floor
-        const voiceBaseline = Math.max(ambientLevel, 0);
-        const voiceThreshold = Math.max(voiceBaseline * VOICE_FACTOR, VOICE_FLOOR);
-        let voiceEverDetected = false;
-
-        updateSystemCheck('microphone', { status: 'checking', detail: 'Say something — your microphone will be detected automatically...' });
-
-        micIntervalRef.current = setInterval(() => {
-          const a = analyserRef.current;
-          if (!a) return;
-          const lvl = getRMS(a);
-          if (lvl >= voiceThreshold) {
-            // Voice heard → pass, and keep it (don't drop on later silence).
-            voiceEverDetected = true;
-            updateSystemCheck('microphone', { status: 'pass', detail: 'Voice detected — microphone working correctly' });
-          } else if (!voiceEverDetected) {
-            // Still waiting for the candidate to speak — keep listening, never fail.
-            updateSystemCheck('microphone', lvl >= 1
-              ? { status: 'checking', detail: 'Listening — say something to confirm your microphone...' }
-              : { status: 'checking', detail: 'No audio yet — say something, or check that your mic is unmuted...' },
-            );
-          }
-          // Detected already, or a silent gap between words → leave result as-is.
-        }, 150);
-      } catch {
-        if (cancelled()) return;
-        updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
-      }
-
-      // 4. Internet Connection — measure REAL download throughput.
-      //    NOTE: we deliberately do NOT use navigator.connection.downlink — Chrome
-      //    privacy-caps that value at ~10 Mbps, so a 250 Mbps line always reported
-      //    "10 Mbps". Instead we stream a sizeable payload and measure actual
-      //    bytes/elapsed-time, which reflects the candidate's true speed.
-      if (cancelled()) return;
-      updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
-      const healthUrl = `${API_BASE_URL.replace('/api/v1', '')}/health`;
-
-      // --- Latency: a few quick pings against /health (used for display + fallback) ---
-      const latencies: number[] = [];
-      for (let i = 0; i < 3; i++) {
-        try {
-          const start = performance.now();
-          await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
-          latencies.push(performance.now() - start);
-        } catch { /* individual ping failed */ }
-      }
-      if (cancelled()) return;
-      const avgLatency = latencies.length
-        ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
-        : null;
-
-      // --- Real download throughput (streamed, time- and byte-bounded) ---
-      // Reads from a CORS-enabled sizeable source for up to ~4s (or until ~25 MB),
-      // then computes Mbps = bytes×8 / seconds. Adapts to the link: fast links
-      // finish the payload quickly, slow links measure whatever transferred in 4s.
-      const measureDownloadMbps = async (): Promise<number | null> => {
-        const MAX_MS = 4000;          // cap the test at ~4 seconds
-        const MAX_BYTES = 25_000_000; // …or ~25 MB, whichever comes first
-        const MIN_BYTES = 250_000;    // need ≥ ~0.25 MB for a meaningful reading
-        const sources = [
-          `https://speed.cloudflare.com/__down?bytes=${MAX_BYTES}`,
-        ];
-        for (const base of sources) {
-          try {
-            const controller = new AbortController();
-            const hardStop = setTimeout(() => controller.abort(), MAX_MS + 1500);
-            const url = `${base}${base.includes('?') ? '&' : '?'}_=${Date.now()}`;
-            const start = performance.now();
-            const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-            if (!res.ok || !res.body) { clearTimeout(hardStop); continue; }
-            const reader = res.body.getReader();
-            let bytes = 0;
-            // eslint-disable-next-line no-constant-condition
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              if (value) bytes += value.length;
-              if (performance.now() - start >= MAX_MS || bytes >= MAX_BYTES) {
-                try { await reader.cancel(); } catch { /* ignore */ }
-                controller.abort();
-                break;
-              }
-            }
-            clearTimeout(hardStop);
-            const elapsedSec = (performance.now() - start) / 1000;
-            if (bytes >= MIN_BYTES && elapsedSec > 0.15) {
-              return (bytes * 8) / (elapsedSec * 1_000_000); // Mbps
-            }
-          } catch { /* aborted/blocked — try next source or fall back below */ }
-        }
-        return null;
-      };
-
-      let realMbps: number | null = null;
-      try { realMbps = await measureDownloadMbps(); } catch { realMbps = null; }
-      if (cancelled()) return;
-      if (avgLatency !== null) networkLatencyMsRef.current = avgLatency;
-
-      if (realMbps !== null) {
-        // True measured throughput — the accurate path.
-        networkSpeedMbpsRef.current = realMbps;
-        const passes = realMbps >= MIN_INTERNET_MBPS;
-        updateSystemCheck('internet', passes
-          ? { status: 'pass', detail: `Speed: ${realMbps.toFixed(1)} Mbps (≥ ${MIN_INTERNET_MBPS} Mbps required)` }
-          : { status: 'fail', detail: `Speed: ${realMbps.toFixed(1)} Mbps (below ${MIN_INTERNET_MBPS} Mbps minimum)` },
-        );
-      } else if (avgLatency !== null) {
-        // Throughput test blocked (e.g. corporate firewall) — fall back to latency.
-        const passes = avgLatency < 500;
-        updateSystemCheck('internet', passes
-          ? { status: 'pass', detail: `Connection: Good (${avgLatency}ms latency — speed test unavailable on this network)` }
-          : { status: 'fail', detail: `Connection: Slow (${avgLatency}ms latency — check your internet, ${MIN_INTERNET_MBPS} Mbps required)` },
-        );
-      } else {
-        updateSystemCheck('internet', { status: 'fail', detail: 'Unable to reach server — check your connection' });
-      }
-
-      // 4b. AI Engine — ping the AI health endpoint
-      if (cancelled()) return;
-      updateSystemCheck('ai_engine', { status: 'checking', detail: 'Checking AI engine availability...' });
-      try {
-        const aiHealth = await candidateAIInterviewService.checkAIHealth(token);
-        if (cancelled()) return;
-        aiEngineLatencyMsRef.current = aiHealth.latency_ms;
-        updateSystemCheck('ai_engine', aiHealth.status === 'ready'
-          ? { status: 'pass', detail: `AI engine ready (${aiHealth.latency_ms}ms)` }
-          : { status: 'fail', detail: 'AI engine unavailable — please try again shortly' },
-        );
-      } catch {
-        if (cancelled()) return;
-        updateSystemCheck('ai_engine', { status: 'fail', detail: 'AI engine unreachable — check your connection' });
-      }
-
-      // 4c. WebSocket connectivity — verify real-time connection support
-      if (cancelled()) return;
-      updateSystemCheck('websocket', { status: 'checking', detail: 'Testing WebSocket connectivity...' });
-      await (async () => {
-        if (typeof WebSocket === 'undefined') {
-          updateSystemCheck('websocket', { status: 'fail', detail: 'WebSocket not supported by this browser' });
-          return;
-        }
-        // Use the same WS endpoint the interview itself uses.
-        // The server will accept or reject (auth/state) — either way it proves
-        // WebSocket traffic reaches the backend (non-1006 close = success).
-        const wsUrl = API_BASE_URL
-          .replace(/^https:\/\//i, 'wss://')
-          .replace(/^http:\/\//i, 'ws://')
-          .replace(/\/api\/v1\/?$/, '') + `/api/v1/ws/ai-interview/${token}`;
-
-        await new Promise<void>((resolve) => {
-          const TIMEOUT_MS = 7000;
-          let settled = false;
-          let ws: WebSocket | null = null;
-
-          const settle = (status: CheckStatus, detail: string) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            try { ws?.close(); } catch { /* ignore */ }
-            updateSystemCheck('websocket', { status, detail });
-            resolve();
-          };
-
-          const timer = setTimeout(() => {
-            settle('fail', 'WebSocket connection timed out — check network/firewall settings');
-          }, TIMEOUT_MS);
-
-          try {
-            ws = new WebSocket(wsUrl);
-          } catch {
-            settle('fail', 'WebSocket connection could not be established');
-            return;
-          }
-
-          ws.onopen = () => {
-            settle('pass', 'WebSocket connected successfully');
-          };
-
-          ws.onerror = () => {
-            // onerror fires before onclose — the close code gives us more info
-          };
-
-          ws.onclose = () => {
-            // Any close event (including 1006) means the browser received a response
-            // from the server — WebSocket traffic is reaching the backend.
-            // True network blocks manifest as a timeout (no response at all), not a close event.
-            settle('pass', 'WebSocket connection established');
-          };
-        });
-      })();
-
-      // 5. Lighting
-      if (cancelled()) return;
-      updateSystemCheck('lighting', { status: 'checking', detail: 'Analyzing lighting...' });
-      await new Promise((r) => setTimeout(r, 1500));
-      if (cancelled()) return;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (video && canvas && video.readyState >= 2) {
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (ctx) {
-          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-          let totalBrightness = 0;
-          for (let i = 0; i < data.length; i += 4) totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
-          const avgBrightness = data.length > 0 ? totalBrightness / (data.length / 4) : 0;
-          videoBrightnessRef.current = Math.round(avgBrightness);
-          updateSystemCheck('lighting', avgBrightness >= 40
-            ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
-            : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' },
-          );
-        } else {
-          updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
-        }
-      } else {
-        updateSystemCheck('lighting', { status: 'fail', detail: 'Camera not available for lighting check' });
-      }
-
-      if (video && canvas) {
-        lightingIntervalRef.current = setInterval(() => {
-          if (!video || !canvas || video.readyState < 2) return;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (!ctx) return;
-          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-          let tb = 0;
-          for (let i = 0; i < data.length; i += 4) tb += (data[i] + data[i + 1] + data[i + 2]) / 3;
-          const avg = data.length > 0 ? tb / (data.length / 4) : 0;
-          updateSystemCheck('lighting', avg >= 40
-            ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
-            : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' },
-          );
-        }, 3000);
-      }
-
-      // 6. Background Noise
-      if (cancelled()) return;
-      updateSystemCheck('noise', { status: 'checking', detail: 'Analyzing background noise...' });
-      await new Promise((r) => setTimeout(r, 1000));
-      if (cancelled()) return;
-      const analyser = analyserRef.current;
-      if (analyser) {
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        analyser.getByteFrequencyData(dataArray);
-        const avgNoise = bufferLength > 0 ? dataArray.reduce((a, b) => a + b, 0) / bufferLength : 0;
-        updateSystemCheck('noise', avgNoise < 80
-          ? { status: 'pass', detail: 'Background noise: Low (Good)' }
-          : { status: 'fail', detail: 'Background noise: High - find a quieter space' },
-        );
-        noiseIntervalRef.current = setInterval(() => {
-          const a = analyserRef.current;
-          if (!a) return;
-          const da = new Uint8Array(a.frequencyBinCount);
-          a.getByteFrequencyData(da);
-          const avg = da.length > 0 ? da.reduce((x, y) => x + y, 0) / da.length : 0;
-          updateSystemCheck('noise', avg < 80
-            ? { status: 'pass', detail: 'Background noise: Low (Good)' }
-            : { status: 'fail', detail: 'Background noise: High - find a quieter space' },
-          );
-        }, 3000);
-      } else {
-        updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
-      }
-
-      // 7. Face Detection — Path A: native FaceDetector, Path B: face-api.js
-      if (cancelled()) return;
-      updateSystemCheck('face', { status: 'checking', detail: 'Detecting face...' });
-      updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
-
-      const FACE_API_MODEL_URL = '/models/';
-
-      const applyFaceCount = (count: number) => {
-        if (count === 1) {
-          updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
-          updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
-        } else if (count === 0) {
-          updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
-          updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected' });
-        } else {
-          updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
-          updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
-        }
-      };
-
-      const runNativeDetector = async (vid: HTMLVideoElement) => {
-        const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
-        const faces = await detector.detect(vid);
-        applyFaceCount(faces.length);
-        return detector; // return so polling can reuse it
-      };
-
-      const runFaceApi = async (vid: HTMLVideoElement) => {
-        const faceapi = await loadFaceApiWithCpuBackend();
-        if (!faceapi.nets.tinyFaceDetector.isLoaded) {
-          await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
-        }
-        const options = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-        const detections = await faceapi.detectAllFaces(vid, options);
-        applyFaceCount(detections.length);
-        return faceapi; // return so polling can reuse it
-      };
-
-      if (video && video.readyState >= 2) {
-        const hasNative = typeof window !== 'undefined' && 'FaceDetector' in window;
-        let useFaceApi = !hasNative;
-
-        if (hasNative) {
-          try {
-            const detector = await runNativeDetector(video);
-            if (cancelled()) return;
-            setHasFaceDetector(true);
-            // Polling with native detector
-            faceIntervalRef.current = setInterval(async () => {
-              if (faceApiBusyRef.current || !video || video.readyState < 2) return;
-              faceApiBusyRef.current = true;
-              try { applyFaceCount((await detector.detect(video)).length); } catch { /* skip frame */ }
-              finally { faceApiBusyRef.current = false; }
-            }, 2500);
-          } catch {
-            useFaceApi = true; // native threw — fall through to face-api.js
-          }
-        }
-
-        if (useFaceApi) {
-          if (cancelled()) return;
-          try {
-            const faceapi = await runFaceApi(video);
-            if (cancelled()) return;
-            setHasFaceDetector(true);
-            const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-            // Polling with face-api.js
-            faceIntervalRef.current = setInterval(async () => {
-              if (faceApiBusyRef.current || !video || video.readyState < 2) return;
-              faceApiBusyRef.current = true;
-              try { applyFaceCount((await faceapi.detectAllFaces(video, opts)).length); } catch { /* skip frame */ }
-              finally { faceApiBusyRef.current = false; }
-            }, 2500);
-          } catch {
-            // Model load failed — can't verify face; treat as soft warning only
-            setHasFaceDetector(false);
-            updateSystemCheck('face', { status: 'pass', detail: 'Camera working (face check unavailable on this browser)' });
-            updateSystemCheck('multiple', { status: 'pass', detail: 'Single-face check unavailable on this browser' });
-          }
-        }
-
-        // One-time identity match check — verify the current face against the identity photo baseline.
-        // Runs after initial detection; does not affect the polling interval.
-        if (onVerifyFace && !cancelled()) {
-          try {
-            await new Promise(r => setTimeout(r, 800)); // let models stabilize
-            if (!cancelled()) {
-              const verifyResult = await onVerifyFace(video);
-              if (verifyResult !== null && !verifyResult.matched) {
-                updateSystemCheck('face', {
-                  status: 'fail',
-                  detail: 'Identity mismatch — please ensure you are the registered candidate',
-                });
-              }
-            }
-          } catch { /* non-critical — ignore */ }
-        }
-      }
-    }
-
+    if (cancelled()) return;
+    await runDevice(); if (cancelled()) return;
+    await runWebcam(); if (cancelled()) return;
+    await runMicrophone(); if (cancelled()) return;
+    await runInternet(); if (cancelled()) return;
+    await runAiEngine(); if (cancelled()) return;
+    await runWebsocket(); if (cancelled()) return;
+    await runLighting(); if (cancelled()) return;
+    await runNoise(); if (cancelled()) return;
+    await runFaceMultiple(); if (cancelled()) return;
     if (!checksCancelledRef.current) {
       setChecksRunning(false);
       setChecksCompleted(true);
     }
-  }, [token, deviceInfo, stopActiveChecks, updateSystemCheck, onVerifyFace]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopActiveChecks, runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
-  // ────────────────────────────────────────
-  // Phase 3: Environment Scan
-  // ────────────────────────────────────────
-  const handleEnvScan = useCallback(() => {
-    // Cancel any existing scan timer
-    if (envScanTimerRef.current) {
-      clearInterval(envScanTimerRef.current);
-      envScanTimerRef.current = null;
+  // Retry a SINGLE check — reruns only that row (face/multiple share one detector).
+  const retryCheck = useCallback(async (id: string) => {
+    checksCancelledRef.current = false;
+    switch (id) {
+      case 'device': await runDevice(); break;
+      case 'webcam': await runWebcam(); break;
+      case 'microphone': await runMicrophone(); break;
+      case 'internet': await runInternet(); break;
+      case 'ai_engine': await runAiEngine(); break;
+      case 'websocket': await runWebsocket(); break;
+      case 'lighting': await runLighting(); break;
+      case 'noise': await runNoise(); break;
+      case 'face':
+      case 'multiple': await runFaceMultiple(); break;
     }
-    if (envScanRAFRef.current !== null) {
-      cancelAnimationFrame(envScanRAFRef.current);
-      envScanRAFRef.current = null;
-    }
+  }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
-    // Reset state
-    setEnvScanProgress(0);
-    setEnvScanFrameCount(0);
-    setEnvScanResults(null);
-    setEnvScanPhase('scanning');
 
-    // Accumulated frame analysis data
-    const frameBrightnessValues: number[] = [];
-    const frameMultiPersonFlags: boolean[] = []; // true = multiple people in this frame
-    let framesCapured = 0;
-
-    const FACE_API_MODEL_URL = '/models/';
-
-    // Face detector setup — Path A: native FaceDetector (Chrome/Edge), Path B: face-api.js (Firefox/Safari)
-    let nativeFaceDetector: any = null;
-    let faceApiModule: any = null;
-    let faceApiOptions: any = null;
-    // fastMode:false gives much better accuracy for partial/side faces at the cost of slight speed
-    const useNative = typeof window !== 'undefined' && 'FaceDetector' in window;
-
-    if (useNative) {
-      try { nativeFaceDetector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 }); } catch { /* not available */ }
-    }
-
-    // Load face-api.js BEFORE starting the scan so the model is ready for frame 1.
-    // If we start async and model arrives late, all early frames return null → false "pass".
-    let faceApiReady = false;
-    const faceApiLoadPromise = !useNative
-      ? loadFaceApiWithCpuBackend().then(async (fa) => {
-          if (!fa.nets.tinyFaceDetector.isLoaded) {
-            await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
-          }
-          faceApiModule = fa;
-          // Lower threshold (0.3) catches partial/side faces; 0.5 was missing them
-          faceApiOptions = new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.3 });
-          faceApiReady = true;
-        }).catch(() => { /* model load failed — detection will be skipped */ })
-      : Promise.resolve();
-
-    // Helper: detect number of faces from a canvas snapshot (more reliable than live video element)
-    const detectFaceCount = async (canvas: HTMLCanvasElement): Promise<number | null> => {
-      if (nativeFaceDetector) {
-        try {
-          // FaceDetector works on ImageBitmap snapshots for consistent results
-          const bitmap = await createImageBitmap(canvas);
-          const faces = await nativeFaceDetector.detect(bitmap);
-          bitmap.close();
-          return faces.length;
-        } catch { return null; }
-      }
-      if (faceApiModule && faceApiOptions) {
-        try {
-          const detections = await faceApiModule.detectAllFaces(canvas, faceApiOptions);
-          return detections.length;
-        } catch { return null; }
-      }
-      return null; // model not yet loaded
-    };
-
-    // Smooth progress animation over total duration
-    const totalDuration = TOTAL_SCAN_FRAMES * SCAN_INTERVAL_MS;
-    const startTime = performance.now();
-
-    const animateProgress = (now: number) => {
-      const elapsed = now - startTime;
-      const pct = Math.min(100, (elapsed / totalDuration) * 100);
-      setEnvScanProgress(pct);
-      if (pct < 100) {
-        envScanRAFRef.current = requestAnimationFrame(animateProgress);
-      }
-    };
-    // Start progress animation immediately so the UI doesn't freeze during model load
-    envScanRAFRef.current = requestAnimationFrame(animateProgress);
-
-    // Frame capture interval — starts after face model is guaranteed to be loaded
-    const startFrameCapture = () => {
-    envScanTimerRef.current = setInterval(async () => {
-      // Top-level guard: extension-injected promise rejections (e.g. Brave "message channel
-      // closed" from CDN intercept) must not surface as uncaught — they would halt the scan.
-      try {
-      framesCapured += 1;
-      setEnvScanFrameCount(framesCapured);
-
-      // Analyze brightness and multi-person from the current video frame
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (video && canvas && video.readyState >= 2) {
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (ctx) {
-          canvas.width = video.videoWidth || 320;
-          canvas.height = video.videoHeight || 240;
-          ctx.drawImage(video, 0, 0);
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-          let totalB = 0;
-          for (let i = 0; i < imgData.length; i += 4) {
-            totalB += (imgData[i] + imgData[i + 1] + imgData[i + 2]) / 3;
-          }
-          const avgB = imgData.length > 0 ? totalB / (imgData.length / 4) : 0;
-          frameBrightnessValues.push(avgB);
-
-          // Multi-person check — skip frame if a face-api.js call is already in-flight
-          if (!faceApiBusyRef.current) {
-            faceApiBusyRef.current = true;
-            try {
-              const faceCount = await detectFaceCount(canvas);
-              if (faceCount !== null) {
-                frameMultiPersonFlags.push(faceCount > 1);
-              }
-            } finally {
-              faceApiBusyRef.current = false;
-            }
-          }
-        }
-      }
-
-      if (framesCapured >= TOTAL_SCAN_FRAMES) {
-        // Done — clear interval and compute results
-        if (envScanTimerRef.current) {
-          clearInterval(envScanTimerRef.current);
-          envScanTimerRef.current = null;
-        }
-        if (envScanRAFRef.current !== null) {
-          cancelAnimationFrame(envScanRAFRef.current);
-          envScanRAFRef.current = null;
-        }
-        setEnvScanProgress(100);
-
-        // Compute lighting result
-        const someFramesCaptured = frameBrightnessValues.length >= Math.floor(TOTAL_SCAN_FRAMES / 2);
-        const darkFrames = frameBrightnessValues.filter((b) => b < 40).length;
-        const lightingOk = someFramesCaptured && darkFrames === 0;
-        const lightingDetail = !lightingOk
-          ? darkFrames > 0
-            ? `Insufficient lighting detected in ${darkFrames} of ${frameBrightnessValues.length} frames — move to a brighter area`
-            : 'Unable to analyze lighting — check camera access'
-          : undefined;
-
-        // Compute single-person result
-        const multiPersonFrames = frameMultiPersonFlags.filter(Boolean).length;
-        // Require at least half the frames to have returned a detection result before trusting the check.
-        // If all frames returned null (model unavailable), we treat it as unchecked (soft pass).
-        const detectedFrameCount = frameMultiPersonFlags.length;
-        const singlePersonChecked = detectedFrameCount >= Math.floor(TOTAL_SCAN_FRAMES / 2);
-        const singlePersonOk = !singlePersonChecked || multiPersonFrames === 0;
-        const singlePersonDetail = !singlePersonOk
-          ? `Multiple people detected in ${multiPersonFrames} of ${detectedFrameCount} frames — ensure you are alone in the room`
-          : undefined;
-
-        const clearOk = lightingOk && singlePersonOk;
-
-        setEnvScanResults({
-          lighting: lightingOk,
-          singlePerson: singlePersonOk,
-          clear: clearOk,
-          lightingDetail,
-          singlePersonDetail,
-        });
-        setEnvScanPhase('complete');
-      }
-      } catch { /* swallow any per-frame error — scan continues on next tick */ }
-    }, SCAN_INTERVAL_MS);
-    }; // end startFrameCapture
-
-    // Wait for the face detection model to be ready before capturing frames.
-    // This ensures frame 1 already has face detection available — no false passes from null returns.
-    // Wrap both branches in try/catch — Brave's extension layer can reject the CDN fetch with
-    // "message channel closed" which would otherwise surface as an uncaught promise rejection.
-    faceApiLoadPromise
-      .then(() => { try { startFrameCapture(); } catch { /* ignore */ } })
-      .catch(() => { try { startFrameCapture(); } catch { /* ignore */ } });
-  }, []);
-
-  // Cleanup all resources on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       stopActiveChecks();
-      if (envScanTimerRef.current) {
-        clearInterval(envScanTimerRef.current);
-        envScanTimerRef.current = null;
-      }
-      if (envScanRAFRef.current !== null) {
-        cancelAnimationFrame(envScanRAFRef.current);
-        envScanRAFRef.current = null;
-      }
     };
   }, [stopActiveChecks]);
 
@@ -1120,6 +901,11 @@ export default function StepSystemCheck({
   const allSystemPassed = systemChecks.length > 0 && systemChecks.every((c) => c.status === 'pass');
   const allSystemDone = systemChecks.length > 0 && systemChecks.every((c) => c.status === 'pass' || c.status === 'fail');
   const isAnyChecking = systemChecks.some((c) => c.status === 'checking' || c.status === 'pending');
+  // The mic must be accessible before the candidate can record their voice.
+  const micReadyForVoice = systemChecks.some((c) => c.id === 'microphone' && c.status === 'pass');
+  // Voice Verification is a REQUIRED sub-step (when enabled): Continue is blocked
+  // until a valid, non-silent voice sample has been captured.
+  const voiceGateOk = !onEnrollVoice || voiceEnrollStatus === 'success';
 
   const handleProceed = useCallback(async () => {
     if (isProceedLoading) return;
@@ -1131,8 +917,6 @@ export default function StepSystemCheck({
     // Stop face detection intervals before face registration — concurrent face-api.js /
     // TF.js calls corrupt the WebGL backend (tensor.backend becomes undefined).
     if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
-    if (envScanTimerRef.current) { clearInterval(envScanTimerRef.current); envScanTimerRef.current = null; }
-    if (envScanRAFRef.current !== null) { cancelAnimationFrame(envScanRAFRef.current); envScanRAFRef.current = null; }
 
     // Wait for any in-flight face-api.js / TF.js WebGL call to finish before
     // calling onRegisterFace. clearInterval does NOT cancel an already-executing
@@ -1141,6 +925,45 @@ export default function StepSystemCheck({
     const deadline = Date.now() + 3000; // max 3s wait
     while (faceApiBusyRef.current && Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 50));
+    }
+
+    // ── FINAL multi-face gate ──────────────────────────────────────────────
+    // The live face poll runs every ~2.5 s and was cleared just above, so an
+    // extra person who steps back into frame in that gap (right before clicking
+    // Continue) could otherwise slip through on a stale "passed" status. Do ONE
+    // fresh, synchronous detection NOW and block the proceed if >1 face is
+    // present. Fail-open on a detector error (the live checks already validated).
+    try {
+      const _vid = videoRef.current;
+      if (_vid && _vid.readyState >= 2 && _vid.videoWidth > 0) {
+        faceApiBusyRef.current = true;
+        let _faces = -1;
+        if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+          try {
+            const _det = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
+            _faces = (await _det.detect(_vid)).length;
+          } catch { _faces = -1; }
+        }
+        if (_faces < 0) {
+          try {
+            const faceapi = await loadFaceApiWithCpuBackend();
+            if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+              await faceapi.nets.tinyFaceDetector.loadFromUri('/models/');
+            }
+            const _opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+            _faces = (await faceapi.detectAllFaces(_vid, _opts)).length;
+          } catch { _faces = -1; }
+        }
+        faceApiBusyRef.current = false;
+        if (_faces > 1) {
+          updateSystemCheck('multiple', { status: 'fail', detail: `${_faces} people detected — ensure you are alone before continuing` });
+          setIsProceedLoading(false);
+          runFaceMultiple();  // restart the live poll so they can fix it and retry
+          return;
+        }
+      }
+    } catch {
+      faceApiBusyRef.current = false;
     }
 
     try {
@@ -1172,19 +995,10 @@ export default function StepSystemCheck({
             ])
           : Promise.resolve(true),
 
-        // 3. Enroll voice baseline for proctoring (best-effort — 10 s sample
-        //    of the candidate's mic during the system-check noise sweep so
-        //    the voice pattern is stored ALONGSIDE the face pattern.
-        //    Without this, verifyVoice() during the interview has no baseline
-        //    to compare against and silently no-ops → friend-speaking-on-mic
-        //    goes undetected. Timed-out at 12 s (slightly more than the
-        //    10 s enrollment window) so a hang can't block the proceed button.
-        onEnrollVoice && streamRef.current
-          ? Promise.race([
-              onEnrollVoice(streamRef.current).catch(() => false),
-              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 12000)),
-            ])
-          : Promise.resolve(true),
+        // 3. Voice enrollment already completed as a REQUIRED sub-step before
+        //    Continue was enabled (see the Voice Verification panel + voiceGateOk
+        //    gate). Just await the resolved capture; never start a fresh one here.
+        (voiceEnrollPromiseRef.current ?? Promise.resolve(true)),
       ]);
 
       // Stop remaining streams and intervals
@@ -1204,7 +1018,7 @@ export default function StepSystemCheck({
     } finally {
       if (mountedRef.current) setIsProceedLoading(false);
     }
-  }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace, onEnrollVoice]);
+  }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace, onEnrollVoice, runFaceMultiple, updateSystemCheck]);
 
   // ────────────────────────────────────────
   // Render helpers
@@ -1534,27 +1348,29 @@ export default function StepSystemCheck({
                   : 'Click "Run Check" to begin verifying your environment'}
               </p>
             </div>
-            {/* Top-right action button — Run Check before first run, Retry after failures.
-                Hidden while checks are in progress (action is implicit) and after a fully
-                successful run (the bottom Continue button takes over). */}
-            {!checksRunning && !(checksCompleted && allSystemPassed) && (
-              <button
-                type="button"
-                onClick={handleRunChecks}
-                className="flex-shrink-0 inline-flex items-center gap-2 bg-white text-gray-900 font-semibold py-2 px-4 rounded-lg text-sm hover:bg-gray-100 transition-all shadow-sm"
-              >
-                {checksCompleted ? (
-                  <>
-                    <RefreshCw className="w-4 h-4" />
-                    Retry
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4" />
-                    Run Check
-                  </>
-                )}
-              </button>
+            {/* Top-right action — only the initial "Run Check". After the run,
+                any FAILED check is retried individually from its own row (below),
+                and a fully-passed run shows the bottom Continue button. */}
+            {!checksRunning && !checksCompleted && (
+              <>
+                {/* Attention-grabbing keyframes: a gentle scale "breathe" plus an
+                    expanding ring ripple so the candidate can't miss the button. */}
+                <style>{`
+                  @keyframes tfRunCheckPulse {
+                    0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(251,191,36,0.75); }
+                    50%      { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(251,191,36,0); }
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  onClick={handleRunChecks}
+                  style={{ animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
+                  className="flex-shrink-0 inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold py-2.5 px-5 rounded-lg text-sm ring-2 ring-white/80 shadow-lg transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                  Run Check
+                </button>
+              </>
             )}
           </div>
 
@@ -1622,14 +1438,24 @@ export default function StepSystemCheck({
                       )}
                     </div>
 
-                    {/* Right: status icon — spinner only while a check is running,
-                        not in the idle pending state */}
-                    <div className="flex-shrink-0">
+                    {/* Right: status icon + per-check retry (only that row re-runs) */}
+                    <div className="flex-shrink-0 flex items-center gap-2">
                       {check.status === 'pass' && (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       )}
                       {check.status === 'fail' && (
-                        <XCircle className="w-5 h-5 text-red-500" />
+                        <>
+                          <XCircle className="w-5 h-5 text-red-500" />
+                          <button
+                            type="button"
+                            onClick={() => retryCheck(check.id)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-md px-2 py-1 transition-colors"
+                            title={`Retry ${check.label}`}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Retry
+                          </button>
+                        </>
                       )}
                       {check.status === 'checking' && (
                         <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
@@ -1640,10 +1466,9 @@ export default function StepSystemCheck({
               </div>
             </div>
 
-            {/* Hidden canvas for frame analysis */}
-            <canvas ref={canvasRef} className="hidden" />
-
-            {/* Status banners */}
+            {/* Status banners — shown ABOVE the Voice Verification panel so the
+                overall system-check result reads first, then the (separate)
+                voice enrollment step. */}
             {checksCompleted && allSystemPassed && (
               <div className="mt-5 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
@@ -1660,12 +1485,126 @@ export default function StepSystemCheck({
                   <p className="font-semibold text-amber-800">Some checks failed</p>
                   <p className="text-sm text-amber-700 mt-0.5">
                     {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
-                      ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry.'
-                      : 'Fix the issues above and click Retry to continue.'}
+                      ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
+                      : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
                   </p>
                 </div>
               </div>
             )}
+
+            {/* Voice Verification — visible read-aloud enrollment panel.
+                Shown whenever voice enrollment is available (onEnrollVoice set). */}
+            {onEnrollVoice && (
+              <div className="mt-5 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <Mic className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                        voiceEnrollStatus === 'success'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {voiceEnrollStatus === 'success' ? 'Done' : 'Required'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Click record and speak for a few seconds — this captures your voice so we can confirm it&apos;s you throughout the interview.
+                    </p>
+                  </div>
+                </div>
+
+                {/* A suggested line — NOT required. The candidate can say anything;
+                    we only need to hear their voice (no word-matching). */}
+                <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500 mb-1">
+                    Just speak naturally — say anything, or read this
+                  </p>
+                  <p className="text-base font-medium text-gray-900 leading-snug">
+                    &ldquo;{ENROLL_PASSAGE}&rdquo;
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1.5">
+                    You don&apos;t have to read this exactly — we only check that you spoke.
+                  </p>
+                </div>
+
+                {/* Status area + manual record control */}
+                <div className="mt-3">
+                  {/* IDLE — must click to record */}
+                  {voiceEnrollStatus === 'idle' && (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-gray-500">
+                        {micReadyForVoice
+                          ? 'Click record, then speak for a few seconds.'
+                          : 'Complete the microphone check first, then record your voice.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={startVoiceEnroll}
+                        disabled={!micReadyForVoice}
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors ${
+                          micReadyForVoice
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                        Start recording
+                      </button>
+                    </div>
+                  )}
+
+                  {/* RECORDING — live progress */}
+                  {voiceEnrollStatus === 'recording' && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        Recording — keep speaking…
+                      </p>
+                      <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-500 transition-all duration-200 ease-linear"
+                          style={{ width: `${voiceEnrollProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUCCESS */}
+                  {voiceEnrollStatus === 'success' && (
+                    <p className="text-xs font-medium text-green-700 flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      Voice sample captured — you&apos;re all set.
+                    </p>
+                  )}
+
+                  {/* FAILED — now only the "no speech" case: the server/VAD
+                      rejects a silent or noise-only clip. No word-matching. */}
+                  {voiceEnrollStatus === 'failed' && (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
+                        <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                        We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={retryVoiceEnroll}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-2 transition-colors flex-shrink-0"
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                        Record again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Hidden canvas for frame analysis */}
+            <canvas ref={canvasRef} className="hidden" />
 
             {/* Action buttons — Run Check / Retry now live in the header's
                 top-right corner (see the gradient header above). The bottom
@@ -1681,366 +1620,29 @@ export default function StepSystemCheck({
                 </div>
               )}
 
-              {/* Continue to Environment Scan — enabled only when all passed */}
+              {/* Proceed — enabled only when all checks passed. Environment scan removed. */}
               {checksCompleted && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (allSystemPassed) setPhase('env_scan');
-                  }}
-                  disabled={!allSystemPassed}
+                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading) handleProceed(); }}
+                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading}
+                  title={!voiceGateOk ? 'Record your voice sample first' : undefined}
                   className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
-                    allSystemPassed
+                    allSystemPassed && voiceGateOk && !isProceedLoading
                       ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
-                  Continue to Environment Scan
-                  <ArrowRight className="w-4 h-4" />
+                  {isProceedLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
+                  ) : !voiceGateOk ? (
+                    <>Record your voice to continue</>
+                  ) : (
+                    <>Continue <ArrowRight className="w-4 h-4" /></>
+                  )}
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ────────────────────────────────────────
-  // Phase 3: env_scan
-  // ────────────────────────────────────────
-  if (phase === 'env_scan') {
-    const allEnvPassed = envScanResults
-      ? envScanResults.lighting && envScanResults.singlePerson && envScanResults.clear
-      : false;
-
-    // SVG ring parameters
-    const ringSize = 130;
-    const strokeWidth = 8;
-    const radius = (ringSize - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (envScanProgress / 100) * circumference;
-
-    return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
-        <ProgressStepper phase={phase} />
-
-        {/* Pill badge */}
-        <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Scan className="w-3.5 h-3.5" />
-            Environment Scan
-          </span>
-        </div>
-
-        {/* Gradient header */}
-        <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-900 px-6 py-5 rounded-t-xl">
-            <div className="flex items-center gap-2 text-white mb-1">
-              {envScanPhase === 'scanning' ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : envScanPhase === 'complete' ? (
-                <CheckCircle className="w-5 h-5 text-green-400" />
-              ) : (
-                <Scan className="w-5 h-5" />
-              )}
-              <h2 className="text-lg font-semibold">
-                {envScanPhase === 'scanning'
-                  ? 'Scanning Environment…'
-                  : envScanPhase === 'complete'
-                  ? 'Scan Complete'
-                  : '360° Environment Scan'}
-              </h2>
-            </div>
-            <p className="text-green-100 text-sm">
-              {envScanPhase === 'scanning'
-                ? 'Please rotate your camera slowly to cover all angles'
-                : envScanPhase === 'complete'
-                ? 'Environment analysis finished'
-                : 'Scan your surroundings to ensure a fair interview environment'}
-            </p>
-          </div>
-
-          {/* Card body: 2-column layout */}
-          <div className="bg-white rounded-b-xl p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              {/* Left column: Camera + scan ring overlay */}
-              <div className="rounded-xl overflow-hidden border border-gray-200">
-                <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
-                  <CircleDot className="w-4 h-4 text-white" />
-                  <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
-                </div>
-                <div className="relative bg-gray-900 aspect-video flex items-center justify-center">
-                  {/* Video element — reuses the same stream from system checks */}
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-
-                  {/* SVG circular progress ring overlay — only during scanning */}
-                  {envScanPhase === 'scanning' && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <svg
-                        width={ringSize}
-                        height={ringSize}
-                        className="drop-shadow-lg"
-                        style={{ transform: 'rotate(-90deg)' }}
-                      >
-                        {/* Background circle */}
-                        <circle
-                          cx={ringSize / 2}
-                          cy={ringSize / 2}
-                          r={radius}
-                          fill="none"
-                          stroke="rgba(255,255,255,0.25)"
-                          strokeWidth={strokeWidth}
-                        />
-                        {/* Animated fill */}
-                        <circle
-                          cx={ringSize / 2}
-                          cy={ringSize / 2}
-                          r={radius}
-                          fill="none"
-                          stroke="#22c55e"
-                          strokeWidth={strokeWidth}
-                          strokeLinecap="round"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={strokeDashoffset}
-                          style={{ transition: 'stroke-dashoffset 0.3s ease' }}
-                        />
-                      </svg>
-                      {/* Center text (counter-rotate so text is upright) */}
-                      <div
-                        className="absolute inset-0 flex items-center justify-center"
-                      >
-                        <div className="flex flex-col items-center">
-                          <span className="text-white text-lg font-bold leading-none drop-shadow">
-                            {Math.round(envScanProgress)}%
-                          </span>
-                          <span className="text-white/70 text-xs mt-0.5 drop-shadow">
-                            {envScanFrameCount}/{TOTAL_SCAN_FRAMES}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Camera Active badge */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                    <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
-                    Camera Active
-                  </div>
-                </div>
-              </div>
-
-              {/* Right column: instructions / progress / results */}
-              <div className="flex flex-col justify-between gap-4">
-
-                {/* IDLE state */}
-                {envScanPhase === 'idle' && (
-                  <>
-                    <div className="space-y-3">
-                      <h3 className="text-xl font-bold text-gray-900">360° Environment Scan</h3>
-                      <p className="text-sm text-gray-600">
-                        We'll scan your surroundings to ensure a fair interview environment.
-                        Slowly rotate your camera to show all sides of the room.
-                      </p>
-
-                      {/* Direction guide */}
-                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                          Rotation Guide
-                        </p>
-                        <div className="flex items-center justify-between gap-1">
-                          {['Front', 'Right', 'Back', 'Left'].map((dir, idx) => (
-                            <React.Fragment key={dir}>
-                              <div className="flex flex-col items-center gap-1">
-                                <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center">
-                                  <span className="text-xs font-bold text-gray-700">{dir[0]}</span>
-                                </div>
-                                <span className="text-xs text-gray-500">{dir}</span>
-                              </div>
-                              {idx < 3 && (
-                                <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleEnvScan}
-                      className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg text-sm hover:bg-gray-800 transition-all"
-                    >
-                      <Play className="w-4 h-4" />
-                      Start Scan
-                    </button>
-                  </>
-                )}
-
-                {/* SCANNING state */}
-                {envScanPhase === 'scanning' && (
-                  <>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <RotateCcw className="w-5 h-5 text-green-600 animate-spin" />
-                        <h3 className="text-xl font-bold text-gray-900">Scanning in progress</h3>
-                      </div>
-
-                      {/* Frame counter */}
-                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 font-medium">
-                            Frame {envScanFrameCount} / {TOTAL_SCAN_FRAMES} captured
-                          </span>
-                          <span className="text-gray-800 font-semibold">
-                            {Math.round(envScanProgress)}%
-                          </span>
-                        </div>
-
-                        {/* Linear progress bar */}
-                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                          <div
-                            className="bg-green-500 h-2 rounded-full transition-[width] duration-300 ease-out"
-                            style={{ width: `${envScanProgress}%` }}
-                          />
-                        </div>
-
-                        <p className="text-xs text-gray-500">
-                          Tip: Keep rotating slowly to cover all angles
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Disabled start button during scan */}
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-400 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed"
-                    >
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Scanning…
-                    </button>
-                  </>
-                )}
-
-                {/* COMPLETE state */}
-                {envScanPhase === 'complete' && envScanResults && (
-                  <>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <h3 className="text-xl font-bold text-gray-900">Scan Complete</h3>
-                      </div>
-
-                      {/* Results list */}
-                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                        {[
-                          {
-                            label: 'Lighting consistency',
-                            passed: envScanResults.lighting,
-                            detail: envScanResults.lightingDetail,
-                          },
-                          {
-                            label: 'Single person throughout',
-                            passed: envScanResults.singlePerson,
-                            detail: envScanResults.singlePersonDetail,
-                          },
-                          {
-                            label: 'Environment clear',
-                            passed: envScanResults.clear,
-                            detail: !envScanResults.clear && envScanResults.lighting && envScanResults.singlePerson
-                              ? 'Environment did not meet all requirements'
-                              : undefined,
-                          },
-                        ].map(({ label, passed, detail }) => (
-                          <div key={label} className="flex items-start gap-3">
-                            {passed ? (
-                              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm text-gray-800">{label}</span>
-                              {!passed && detail && (
-                                <p className="text-xs text-red-600 mt-0.5">{detail}</p>
-                              )}
-                            </div>
-                            <span
-                              className={`ml-auto text-xs font-semibold flex-shrink-0 ${
-                                passed ? 'text-green-600' : 'text-red-600'
-                              }`}
-                            >
-                              {passed ? 'Pass' : 'Fail'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Summary banner */}
-                      {allEnvPassed ? (
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                          <p className="text-sm font-semibold text-green-800">
-                            Environment looks great! You're ready.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
-                          <XCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-semibold text-amber-800">Issues detected — please fix and rescan</p>
-                            {!envScanResults.lighting && (
-                              <p className="text-xs text-amber-700 mt-0.5">• Improve your lighting before rescanning</p>
-                            )}
-                            {!envScanResults.singlePerson && (
-                              <p className="text-xs text-amber-700 mt-0.5">• Ensure you are the only person in the frame</p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={handleEnvScan}
-                        className="flex-1 inline-flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg text-sm hover:bg-gray-50 transition-all"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Rescan
-                      </button>
-                      <button
-                        type="button"
-                        onClick={allEnvPassed && !isProceedLoading ? handleProceed : undefined}
-                        disabled={!allEnvPassed || isProceedLoading}
-                        className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-lg text-sm transition-all ${
-                          allEnvPassed && !isProceedLoading
-                            ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }`}
-                      >
-                        {isProceedLoading ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" />Preparing...</>
-                        ) : (
-                          <>Proceed <ArrowRight className="w-4 h-4" /></>
-                        )}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Hidden canvas for env scan frame analysis */}
-            <canvas ref={canvasRef} className="hidden" />
           </div>
         </div>
       </div>

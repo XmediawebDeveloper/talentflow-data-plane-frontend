@@ -53,6 +53,7 @@ import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvi
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Types
 interface UserPermissions {
@@ -587,6 +588,25 @@ export default function UserManagement() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
+
+  // Persist scroll + view state so returning to User Management lands the user
+  // where they left off. Re-detect the scroll container when the two-step view
+  // flips (cards overview vs. list). currentPage is intentionally not persisted:
+  // the existing `setCurrentPage(1)` effect on [searchQuery] resets it on mount,
+  // so a restored page would be immediately clobbered.
+  const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
+  useListStatePersistence(
+    'org-user-management',
+    { pageView, statusFilter, searchQuery, itemsPerPage },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.statusFilter === 'all' || s.statusFilter === 'active' || s.statusFilter === 'inactive') {
+        setStatusFilter(s.statusFilter as typeof statusFilter);
+      }
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
 
   // Permission guard - check if user has access to User Management
   useEffect(() => {
@@ -1970,7 +1990,7 @@ export default function UserManagement() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />

@@ -387,7 +387,14 @@ function buildClustersFromConfig(
   // When NONE of those signals exist for ANY skill in the cluster (legacy
   // interviews with no assigned snapshot, no scores, no assessed map), fall
   // back to the full list so we don't strip an entire cluster.
-  const filterToPlanned = hasAssignedSnapshot || hasAssessedMap;
+  // For a PARTIAL / terminated interview (cut short by a proctoring
+  // termination or abandonment) the plan was only partly delivered. Collapsing
+  // the denominator to "just the probed skills" then makes a single asked slot
+  // render as 100% coverage — misleading. So for partial evals we keep the FULL
+  // configured cluster, so coverage honestly reflects how little of the plan was
+  // reached (e.g. 1 of 6 skills). Normal completed interviews are unchanged.
+  const isPartialEval = eval_?.partial === true || eval_?.evaluation_incomplete === true;
+  const filterToPlanned = (hasAssignedSnapshot || hasAssessedMap) && !isPartialEval;
   return configClusters.map((cc, idx): Cluster => {
     const weight = weights[idx];
 
@@ -552,6 +559,12 @@ function priorityLabelToLevel(raw: any): Level {
  *  picked a different builder — it's keyed off the saved row, not the builder.
  *  See [[project_question_analysis_builder_selection]]. */
 function bundledFollowUpFromRow(row: any): PerQuestionDetail['bundledFollowUp'] {
+  // HR questions are ALWAYS standalone — never a reframed follow-up probing a
+  // technical/Must-Have skill. A backend boundary-lag bug sometimes tags an HR
+  // question (e.g. the closing "Why should we hire you?") with a bundled
+  // follow-up on a Must-Have skill; suppress that here so HR questions never
+  // show as "Follow-up" with a cross-round skill note.
+  if (String(row?.round_type || '').toLowerCase() === 'hr') return undefined;
   const reason = String(row?.followup_reason || '').trim();
   if (!row?.followup_bundled || !reason) return undefined;
   const srcQ = row?.followup_source_qnum;
@@ -580,15 +593,58 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
 }
 
 /** True when an assistant transcript turn is NOT a real interview question:
- *  Linda's greeting, a silence nudge ("Are you there?"), a bare filler
+ *  Bina's greeting, a silence nudge ("Are you there?"), a bare filler
  *  transition ("Let's move on to the next question."), or a closing message.
  *  Used by the source-selection heuristic so these noise turns don't inflate
  *  the transcript Q-count and wrongly out-vote a complete question_history. */
+/** Meta / non-question assistant turns that must NEVER appear as a scored
+ *  question in Question Analysis: the opening "about the role" warm-up, a
+ *  redirect/deflection, a farewell, or a resume ack. Unlike the greeting
+ *  filters below, this has NO word-count cap — the role warm-up is a long
+ *  (~60-word) statement, so a ≤12-word cap let it slip through and show as
+ *  Must-Have Q1 ("Hi, I'm Bina, your interviewer today. In the role of …").
+ *  Matched by unique lead-ins that never open a real interview question; a real
+ *  question that merely quotes one still has a "?" and is kept. */
+function isMetaAssistantTurn(content: string): boolean {
+  const t = (content || '').toLowerCase().trim();
+  if (!t) return false;
+  // Unambiguous silence / nudge / move-on phrases — these NEVER appear in a
+  // real interview question, so match them even if the turn has a "?" (e.g.
+  // "Are you there? Take your time…").
+  const ALWAYS = [
+    'are you there', "didn't get any response", 'did not get any response',
+    "couldn't get any response", 'could not get any response',
+    'if you’re there, please start speaking', "if you're there, please start speaking",
+    'move on to the next question', "let's move on to the next", 'lets move on to the next',
+  ];
+  if (ALWAYS.some(m => t.includes(m))) return true;
+  // Statement-only meta (role warm-up, deflection, farewell, resume ack). A real
+  // question that merely quotes one of these still has a "?" and is kept.
+  if (t.includes('?')) return false;
+  const META = [
+    'your interviewer today', "here's a quick overview", 'here is a quick overview',
+    'here to conduct the interview', 'here to conduct this interview',
+    "i'm here to listen", 'im here to listen',
+    "let's focus on the interview", 'lets focus on the interview',
+    'completing the interview', 'responses have been recorded',
+    'wish you all the best', 'future endeavors', 'welcome back',
+    // Closing / sendoff turn — LLM wording varies (often prefixed by an
+    // acknowledgment: "That's a compelling case… This concludes our interview…").
+    // None of these appear in a real interview question.
+    'concludes our interview', 'concludes the interview', 'concludes this interview',
+    'pleasure speaking with you', 'best of luck with the next steps',
+    'best of luck in the next steps',
+  ];
+  return META.some(m => t.includes(m));
+}
+
 function isNoiseAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return true;
+  // Role warm-up / deflection / farewell / resume ack — length-independent.
+  if (isMetaAssistantTurn(t)) return true;
   // Greeting turn — but ONLY when it's a pure greeting with no question
-  // attached. The combined greeting+Q1 ("Hi! I'm Linda — let's start. Can
+  // attached. The combined greeting+Q1 ("Hi! I'm Bina — let's start. Can
   // you walk me through your React experience?") IS a real interview turn
   // and must NOT be filtered out, or the convoQApprox count drops below the
   // history count and the builder-selection heuristic incorrectly routes
@@ -721,6 +777,13 @@ function buildPerQuestionDetailsFromGroups(
 ): PerQuestionDetail[] {
   const groups = (eval_?.question_groups || []) as any[];
   const questionHistory = (eval_?.question_history || []) as any[];
+  const questionSkillMap = (eval_?.question_skill_map || {}) as Record<string | number, any[]>;
+
+  const scoringRowsForQ = (rawQNum: any): any[] => {
+    const num = Number(rawQNum);
+    const rows = questionSkillMap[num] ?? questionSkillMap[String(rawQNum)];
+    return Array.isArray(rows) ? rows : [];
+  };
 
   // Index history by exact question text (lowercase) for skill enrichment.
   const historyByText = new Map<string, any>();
@@ -766,27 +829,46 @@ function buildPerQuestionDetailsFromGroups(
     return r;
   };
 
-  const buildSkillRows = (names: string[]): PerQuestionSkill[] =>
+  const buildSkillRows = (names: string[], scoringRows: any[] = []): PerQuestionSkill[] =>
     names.map(name => {
       const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] || 'Medium';
+      const sl = String(name).toLowerCase().trim();
+      const matchedRow = scoringRows.find((r: any) => {
+        const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+        return topic === sl || (topic && (topic.includes(sl) || sl.includes(topic)));
+      });
       return {
         name,
         priority,
         weight: PRIORITY_WEIGHT[priority],
-        score: 0,
-        note: '',
+        score: matchedRow ? Math.round((Number(matchedRow?.score) || 0) * 10) / 10 : 0,
+        note: matchedRow ? String(matchedRow?.note || '') : '',
       };
     });
 
+  const computeQuestionScore = (skills: PerQuestionSkill[]): number => {
+    const scored = skills.filter(k => k.score > 0);
+    const sumW = scored.reduce((s, k) => s + k.weight, 0);
+    const sumWS = scored.reduce((s, k) => s + k.score * k.weight, 0);
+    return sumW > 0 ? Math.round((sumWS / sumW) * 10) / 10 : 0;
+  };
+
   for (const g of groups) {
     const mainQ = String(g?.question || '');
+    // Skip the role warm-up / deflection / farewell / resume ack — these are
+    // not interview questions (length-independent guard; the ≤12-word greeting
+    // filter misses the long role message).
+    if (isMetaAssistantTurn(mainQ)) continue;
     const mainA = String(g?.answer || '');
     const matched = historyByText.get(mainQ.trim().toLowerCase());
+    const mainScoreRows = scoringRowsForQ(matched?.question_number ?? g?.q_num);
 
     // Main Q skills: prefer persisted assigned_skills (richer multi-skill
     // set), fall back to the group's single g.skill.
     let mainSkillNames: string[] = [];
-    if (matched && Array.isArray(matched.assigned_skills) && matched.assigned_skills.length > 0) {
+    if (mainScoreRows.length > 0) {
+      mainSkillNames = mainScoreRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+    } else if (matched && Array.isArray(matched.assigned_skills) && matched.assigned_skills.length > 0) {
       mainSkillNames = matched.assigned_skills.filter(
         (s: any) => typeof s === 'string' && s.trim(),
       );
@@ -795,19 +877,24 @@ function buildPerQuestionDetailsFromGroups(
     }
     mainSkillNames = dedupeKeepCase(mainSkillNames);
     const section = sectionFromRT(matched?.round_type);
+    const mainSkills = buildSkillRows(mainSkillNames, mainScoreRows);
 
     out.push({
       qNum: nextQ++,
       section,
       question: mainQ,
       answer: mainA,
-      skills: buildSkillRows(mainSkillNames),
-      questionScore: typeof matched?.score === 'number'
-        ? Math.round(matched.score * 10) / 10
-        : 0,
+      skills: mainSkills,
+      questionScore: mainScoreRows.length > 0
+        ? computeQuestionScore(mainSkills)
+        : typeof matched?.score === 'number'
+          ? Math.round(matched.score * 10) / 10
+          : 0,
       // Recover the bundled-followup note from the matched history row so it
       // survives even when this (groups) builder is the one selected.
       bundledFollowUp: bundledFollowUpFromRow(matched),
+      // Per-question "why this score" rationale (backend-composed).
+      scoreRationale: String(g?.score_rationale || matched?.score_rationale || ''),
     });
 
     // Follow-ups inherit the parent's skill set when their own entry
@@ -819,8 +906,11 @@ function buildPerQuestionDetailsFromGroups(
       const fuQ = String(fu?.question || '');
       const fuA = String(fu?.answer || '');
       const fuMatched = historyByText.get(fuQ.trim().toLowerCase());
+      const fuScoreRows = scoringRowsForQ(fuMatched?.question_number ?? fu?.q_num);
       let fuSkillNames: string[] = [];
-      if (fuMatched && Array.isArray(fuMatched.assigned_skills) && fuMatched.assigned_skills.length > 0) {
+      if (fuScoreRows.length > 0) {
+        fuSkillNames = fuScoreRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+      } else if (fuMatched && Array.isArray(fuMatched.assigned_skills) && fuMatched.assigned_skills.length > 0) {
         fuSkillNames = fuMatched.assigned_skills.filter(
           (s: any) => typeof s === 'string' && s.trim(),
         );
@@ -831,17 +921,21 @@ function buildPerQuestionDetailsFromGroups(
         fuSkillNames = mainSkillNames.slice();
       }
       fuSkillNames = dedupeKeepCase(fuSkillNames);
+      const fuSkills = buildSkillRows(fuSkillNames, fuScoreRows);
 
       out.push({
         qNum: nextQ++,
         section,
         question: fuQ,
         answer: fuA,
-        skills: buildSkillRows(fuSkillNames),
-        questionScore: typeof fuMatched?.score === 'number'
-          ? Math.round(fuMatched.score * 10) / 10
-          : 0,
+        skills: fuSkills,
+        questionScore: fuScoreRows.length > 0
+          ? computeQuestionScore(fuSkills)
+          : typeof fuMatched?.score === 'number'
+            ? Math.round(fuMatched.score * 10) / 10
+            : 0,
         bundledFollowUp: bundledFollowUpFromRow(fuMatched),
+        scoreRationale: String(fu?.score_rationale || fuMatched?.score_rationale || ''),
       });
     }
     void _isGreeting; // greeting filter intentionally NOT applied here —
@@ -874,6 +968,7 @@ function buildPerQuestionDetailsFromHistory(
 ): PerQuestionDetail[] {
   const questionHistory = (eval_?.question_history || []) as any[];
   const evaluations = (eval_?.evaluations || []) as any[];
+  const questionSkillMap = (eval_?.question_skill_map || {}) as Record<string | number, any[]>;
 
   // Group evaluations by question_number → list of skill-rows. A single
   // delivered question can have multiple eval rows (one per assigned
@@ -884,6 +979,11 @@ function buildPerQuestionDetailsFromHistory(
     if (!qn) continue;
     (evalsByQ[qn] = evalsByQ[qn] || []).push(ev);
   }
+
+  const scoringRowsForQ = (qn: number): any[] => {
+    const rows = questionSkillMap[qn] ?? questionSkillMap[String(qn)];
+    return Array.isArray(rows) ? rows : [];
+  };
 
   // Detector for skipped / IDK responses. The evaluator often
   // mis-scores these as `topic="Behavioural", score=5.0` (observed in
@@ -937,6 +1037,7 @@ function buildPerQuestionDetailsFromHistory(
     isSkipped: boolean,
   ): { score: number; note: string; is_fallback: boolean; is_skipped: boolean; is_unscored: boolean } => {
     const sl = skill.toLowerCase().trim();
+    const scoringRows = scoringRowsForQ(qn);
     const rows = evalsByQ[qn] || [];
     const readScore = (r: any): number => {
       const raw = Number(r?.score ?? r?.evaluation?.overall ?? 0);
@@ -944,8 +1045,26 @@ function buildPerQuestionDetailsFromHistory(
     };
     const readNote = (r: any): string =>
       String(r?.one_line_note || r?.evaluation?.brief_note || '').slice(0, 250);
+    const readScoringScore = (r: any): number =>
+      Math.max(0, Math.min(10, Number(r?.score) || 0));
+    const readScoringNote = (r: any): string =>
+      String(r?.note || '').slice(0, 250);
 
-    // Exact then substring match — these are real per-skill scores
+    // Prefer the backend's whole-interview question-skill rows when present.
+    for (const r of scoringRows) {
+      const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+      if (topic === sl) {
+        return { score: readScoringScore(r), note: readScoringNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+    for (const r of scoringRows) {
+      const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+      if (topic && (topic.includes(sl) || sl.includes(topic))) {
+        return { score: readScoringScore(r), note: readScoringNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+
+    // Exact then substring match — these are real local per-skill scores
     // (even on skipped questions, if the evaluator did emit one).
     for (const r of rows) {
       const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
@@ -1003,22 +1122,22 @@ function buildPerQuestionDetailsFromHistory(
   //   then appears 2-5 times in the UI with only the first being the real
   //   ask. Collapse later skip rows that share question text + round_type
   //   with an earlier row in the same section.
-  // Greeting filter: Linda's opening turn often contains "I'm Linda" intro
-  // text. The PURE greeting ("Hi! I'm Linda, your AI interviewer. Let's
+  // Greeting filter: Bina's opening turn often contains "I'm Bina" intro
+  // text. The PURE greeting ("Hi! I'm Bina, your AI interviewer. Let's
   // begin.") has no question mark and should be dropped. But the COMBINED
-  // greeting+Q1 ("Hi! I'm Linda — let's start. Can you tell me about your
+  // greeting+Q1 ("Hi! I'm Bina — let's start. Can you tell me about your
   // React experience?") DOES carry the actual Q1 and must NOT be dropped —
   // dropping it makes Q1 disappear from Question Analysis entirely.
   //
   // 2026-05-28 fix: gate on "no question mark" AND "no substantive content
   // beyond the greeting". The original blanket drop ("i'm linda" anywhere
-  // → discard") was hiding Q1 whenever Linda's first turn combined intro
+  // → discard") was hiding Q1 whenever Bina's first turn combined intro
   // and question. Restoring Q1 requires being more discriminating about
   // what counts as a "pure greeting" turn.
   const _isGreeting = (q: any): boolean => {
     const txt = String(q?.question || '').toLowerCase();
     const hasLindaIntro =
-      /\bi['’]?\s*m\s+linda\b/.test(txt) || /\bi\s+am\s+linda\b/.test(txt);
+      /\bi['’]?\s*m\s+bina\b/.test(txt) || /\bi\s+am\s+bina\b/.test(txt);
     if (!hasLindaIntro) return false;
     // If the turn carries an actual question (question mark present), it is
     // the combined greeting+Q1 — keep it so Q1 isn't dropped.
@@ -1071,6 +1190,9 @@ function buildPerQuestionDetailsFromHistory(
   const mains = indexedHistory.filter(q => {
     if (followUpHistoryIds.has(Number(q._historyIdx))) return false;
     if (_isGreeting(q)) return false;
+    // Length-independent meta guard — catches the long role warm-up /
+    // deflection / farewell that the ≤12-word _isGreeting misses.
+    if (isMetaAssistantTurn(String(q?.question || ''))) return false;
     if (!q?.question || !String(q.question).trim()) return false;
     const rt = String(q?.response_type || '').toLowerCase();
     if (rt === 'auto_skipped_by_coverage') return false;
@@ -1164,6 +1286,7 @@ function buildPerQuestionDetailsFromHistory(
     const displayQ = Number.isFinite(historyIdx) ? historyIdx + 1 : idx + 1;
     const section = sectionFromRT(q?.round_type);
     const assigned: string[] = Array.isArray(q?.assigned_skills) ? q.assigned_skills : [];
+    const recoveredRows = scoringRowsForQ(origQ);
 
     // Source priority for the displayed skill rows — recruiter spec
     // 2026-05-20: the Question Analysis tab must mirror the Question
@@ -1187,7 +1310,9 @@ function buildPerQuestionDetailsFromHistory(
     }
 
     let baseNames: string[];
-    if (assigned.length > 0) {
+    if (recoveredRows.length > 0) {
+      baseNames = recoveredRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+    } else if (assigned.length > 0) {
       baseNames = assigned;
     } else if (fromText.length > 0) {
       baseNames = fromText;
@@ -1216,7 +1341,13 @@ function buildPerQuestionDetailsFromHistory(
     // the display layer. For SKIPPED/IDK responses, the fallback is
     // suppressed (see scoreForSkill) so the misleading evaluator score
     // (often "Behavioural"=5.0 for IDK) doesn't propagate.
-    const entryScore = typeof q?.score === 'number' ? q.score : null;
+    const partialDisplayScore = (
+      String(q?.score_source || '').toLowerCase() === 'partial_runtime'
+      && typeof q?.score === 'number'
+    ) ? Number(q.score) : null;
+    const entryScore = partialDisplayScore === null && typeof q?.score === 'number'
+      ? q.score
+      : null;
     const isSkippedRow = isSkippedOrIdk(q);
 
     const skills: PerQuestionSkill[] = skillNames.map(skillName => {
@@ -1243,19 +1374,20 @@ function buildPerQuestionDetailsFromHistory(
     // card so the displayed arithmetic is always self-consistent (this is
     // what fixes the "44.0 ÷ 11 = 2.40" mismatch: the question score must be
     // the weighted average of the rows the recruiter sees, not a separately
-    // sourced entry.score). Unscored skills (no evaluator row) are EXCLUDED
-    // from numerator and denominator — never fabricated as 0 — matching the
-    // backend rule in transcript_evaluation_service.py:3209-3214.
-    const scoredSkills = skills.filter(k => !k.is_unscored);
+    // sourced entry.score). Unscored skills (no evaluator row) are EXCLUDED,
+    // and true 0-scored skills are excluded as well to match the backend's
+    // question-score rule (`score > 0` contributes; pure no-evidence rows do not).
+    const scoredSkills = skills.filter(k => !k.is_unscored && k.score > 0);
+    const hasEvaluatedSkill = skills.some(k => !k.is_unscored);
     const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
     const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
     const weighted = sumW > 0 ? sumWS / sumW : 0;
     const questionScore = Math.round(weighted * 10) / 10;
-    // Whole question is "Not evaluated" only when it had skills but NONE were
-    // scored (e.g. evaluator produced no rows for this turn). Such a question
-    // is excluded from the section average by the dashboard rather than
-    // dragging it down as a 0.0.
-    const isUnscored = skills.length > 0 && scoredSkills.length === 0;
+    // Whole question is "Not evaluated" only when the evaluator produced NO
+    // usable score rows for any skill on the slot. A real no-answer / skip /
+    // IDK turn is still an evaluated question with score 0, so it must stay
+    // counted instead of collapsing to "Not Evaluated".
+    const isUnscored = skills.length > 0 && !hasEvaluatedSkill;
 
     // Attach explicit follow-ups for this main Q. Looked up by the raw
     // history question_number (origQ) since follow-up entries store the
@@ -1287,8 +1419,14 @@ function buildPerQuestionDetailsFromHistory(
       skills,
       questionScore,
       isUnscored,
+      displayOnlyQuestionScore: partialDisplayScore ?? undefined,
       followUps: followUps && followUps.length > 0 ? followUps : undefined,
       bundledFollowUp,
+      // Per-question "why this score" rationale (backend-composed). The history
+      // builder is the PREFERRED source when question_history is complete, so
+      // without this the amber "Why this score" block never rendered for most
+      // completed interviews — only ones that fell through to the groups builder.
+      scoreRationale: String((q as any)?.score_rationale || ''),
     };
   });
 }
@@ -1320,7 +1458,7 @@ function buildPerQuestionDetailsFromConversation(
   evaluations: any[] = [],
 ): PerQuestionDetail[] {
   // JD skill names (canonical) for the text-scan fallback. When question_
-  // history doesn't have a matching row for a turn, we scan Linda's question
+  // history doesn't have a matching row for a turn, we scan Bina's question
   // text for any JD skill name and surface those as the assessed skills.
   // Catches turns the backend never persisted (skip-flow gaps) where the
   // question clearly probed real JD skills ("Python, R, or Java...").
@@ -1363,6 +1501,10 @@ function buildPerQuestionDetailsFromConversation(
   const historyByText = indexHistoryByText(questionHistory);
   const bundledForQuestion = (qText: string): PerQuestionDetail['bundledFollowUp'] =>
     bundledFollowUpFromRow(historyByText.get(qText.trim().toLowerCase()));
+  // Per-question "why this score" rationale — recovered from the matched
+  // history row (this convo builder has no eval rows of its own).
+  const rationaleForQuestion = (qText: string): string =>
+    String(historyByText.get(qText.trim().toLowerCase())?.score_rationale || '');
   const sectionFromRT = (rt: string): PerQuestionDetail['section'] => {
     const r = (rt || '').toLowerCase();
     if (r === 'nice_to_have_skills') return 'nth';
@@ -1426,7 +1568,7 @@ function buildPerQuestionDetailsFromConversation(
       || /\bhow do you handle (?:pressure|stress|deadlines|conflict)\b/.test(t)
       // Credentials — certifications are factual recall, treated as HR-style
       // verification rather than skill-evaluative (the skill itself is
-      // scored elsewhere when Linda actually probes it).
+      // scored elsewhere when Bina actually probes it).
       || /\bdo you have (?:any|the) (?:.{0,20})?certification/.test(t)
       || /\bcertification(?:s|s? to mention)?\b/.test(t)
     );
@@ -1443,7 +1585,7 @@ function buildPerQuestionDetailsFromConversation(
   // Docker, Q14 "open to learning", Q15 "available onsite" all matched
   // qh entries by suffix but not by exact text.
   //
-  // Build a SUFFIX index keyed on the stored qh question — Linda's
+  // Build a SUFFIX index keyed on the stored qh question — Bina's
   // transition prefix is always at the START in the transcript, never
   // at the end, so suffix containment is a safe heuristic.
   const roundTypeBySuffix: Array<{ key: string; rt: string }> = [];
@@ -1475,7 +1617,7 @@ function buildPerQuestionDetailsFromConversation(
     return 'mth';
   };
 
-  // Drop noise: system messages, empty content, Linda's meta-only chatter
+  // Drop noise: system messages, empty content, Bina's meta-only chatter
   // (greeting prefixes with no follow-up question, closing thank-yous,
   // and silence-nudge prompts like "Are you there?" — those aren't real
   // interview questions, they're attention probes that shouldn't get
@@ -1485,7 +1627,13 @@ function buildPerQuestionDetailsFromConversation(
     return (
       t.includes('thank you for completing the interview') ||
       t.includes('thank you for your time today') ||
-      (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+      (t.includes('your responses have been recorded') && t.includes('wish you all the best')) ||
+      t.includes('concludes our interview') ||
+      t.includes('concludes the interview') ||
+      t.includes('concludes this interview') ||
+      t.includes('pleasure speaking with you') ||
+      t.includes('best of luck with the next steps') ||
+      t.includes('best of luck in the next steps')
     );
   };
   const _isSilenceNudge = (c: string): boolean => {
@@ -1495,7 +1643,7 @@ function buildPerQuestionDetailsFromConversation(
       t.startsWith('are you still there?') ||
       t.startsWith('are you there ') ||
       // "Take your time — share whatever comes to mind" is the standard
-      // soft prompt Linda fires after the first silence wait; not a Q.
+      // soft prompt Bina fires after the first silence wait; not a Q.
       t.includes('take your time') && t.includes('share whatever') ||
       // "Can you hear me?" mic-check prompts
       t.startsWith('can you hear me?') ||
@@ -1509,6 +1657,8 @@ function buildPerQuestionDetailsFromConversation(
     && m.content.trim()
     && !(m.role === 'assistant' && _isClosing(m.content))
     && !(m.role === 'assistant' && _isSilenceNudge(m.content))
+    // Role warm-up / deflection / farewell / resume ack — length-independent.
+    && !(m.role === 'assistant' && isMetaAssistantTurn(m.content))
   );
 
   // Per-skill score lookup from evaluations[]. Match by question text +
@@ -1567,11 +1717,11 @@ function buildPerQuestionDetailsFromConversation(
   };
 
   // Resolve skills for a question text. Priority order:
-  //   1. Text scan against JD skill names — PREFERRED because Linda's
+  //   1. Text scan against JD skill names — PREFERRED because Bina's
   //      actual question wording is the ground truth for "what was asked",
   //      and the planner-side assigned_skills frequently drift when the LLM
   //      ignores the slot rule (observed: Q2 planned for "Semantic Search /
-  //      LLMs / AI Agents" but Linda asked about "NLP pipelines / BERT /
+  //      LLMs / AI Agents" but Bina asked about "NLP pipelines / BERT /
   //      Hugging Face" — the displayed skills should match the question).
   //   2. Planner snapshot (question_history.assigned_skills) — fallback
   //      when the question text contains no recognizable JD skill names
@@ -1613,6 +1763,7 @@ function buildPerQuestionDetailsFromConversation(
           skills,
           questionScore: score,
           bundledFollowUp: bundledForQuestion(pending.question),
+          scoreRationale: rationaleForQuestion(pending.question),
         });
       }
       pending = { question: String(m.content) };
@@ -1626,6 +1777,7 @@ function buildPerQuestionDetailsFromConversation(
         skills,
         questionScore: score,
         bundledFollowUp: bundledForQuestion(pending.question),
+        scoreRationale: rationaleForQuestion(pending.question),
       });
       pending = null;
     }
@@ -1642,6 +1794,7 @@ function buildPerQuestionDetailsFromConversation(
       skills,
       questionScore: score,
       bundledFollowUp: bundledForQuestion(pending.question),
+      scoreRationale: rationaleForQuestion(pending.question),
     });
   }
 
@@ -1761,6 +1914,7 @@ export function buildDashboardData(params: {
   special_instructions?: string | null;
 }): DashboardData {
   const { ai_evaluation: eval_, cluster_config, candidate, interview, rounds_config, conversation_transcript, special_instructions } = params;
+  const isPartialEval = eval_?.partial === true || eval_?.evaluation_incomplete === true;
 
   // Planned question counts per section — feeds the Question Analysis page's
   // section-score denominator. Sum across all enabled rounds matching each
@@ -1864,11 +2018,11 @@ export function buildDashboardData(params: {
   const modeNormalized = (interview.mode || '').toLowerCase();
   const mode: 'Timed' | 'Conversational' = modeNormalized === 'fixed' ? 'Timed' : 'Conversational';
 
-  // ── Timed-mode doc-spec result (MHS section_question_avg ≥ 7.0 → Pass) ──
+  // ── Timed-mode doc-spec result (MHS section_question_avg ≥ 6.0 → Pass) ──
   // backendFinal already normalised above ('pass'/'fail'/'') — prefer it.
   // Fall back to recomputing locally so older sessions without `final_result`
   // still render a Pass/Fail when MHS data is available.
-  const MHS_THRESHOLD = 7.0;
+  const MHS_THRESHOLD = 6.0;
   let finalResult: 'Pass' | 'Fail' | null = null;
   if (backendFinal === 'pass') finalResult = 'Pass';
   else if (backendFinal === 'fail') finalResult = 'Fail';
@@ -2051,33 +2205,67 @@ export function buildDashboardData(params: {
       section: 'mth' | 'nth',
       planRows: any[],
       rows: PerQuestionDetail[],
-      // Number of planned questions in all sections that come BEFORE this one
-      // (0 for MHS, sectionCap.mth for NHS). Converts the global origQ stored
-      // in row.qNum into the section-local slot number that matches the plan's
-      // `question_number` field. Without this offset, NHS rows (global qNums
-      // 9-12) never hit the planByQnum map (keys 1-4) and always fall through
-      // to the fragile array-index fallback.
-      sectionOffset: number = 0,
+      // Retained for call-site compatibility; the join no longer uses a
+      // positional offset (the index join it fed was the wrong-slot source).
+      _sectionOffset: number = 0,
     ): PerQuestionDetail[] => {
       if (planRows.length === 0) return rows;
-      // Index plan rows by their section-local question_number.
-      // Build a 1-based fallback for legacy snapshots missing question_number.
-      const planByQnum = new Map<number, any>();
-      planRows.forEach((pr, i) => {
-        const qn = Number(pr?.question_number);
-        const key = Number.isFinite(qn) && qn > 0 ? qn : i + 1;
-        planByQnum.set(key, pr);
-      });
-      return rows.map((row, idx) => {
-        // Compute section-local slot number: subtract the cumulative count of
-        // questions asked in earlier sections. Falls back to bucket index when
-        // qNum is absent (legacy rows predating origQ storage).
-        const globalQ = Number(row.qNum);
-        const slotNum = (Number.isFinite(globalQ) && globalQ > 0)
-          ? (globalQ - sectionOffset)
-          : (idx + 1);
-        const planRow = planByQnum.get(slotNum) ?? planRows[idx];
+      // ONE plan slot ↔ ONE question row. `usedSlots` tracks slots already
+      // claimed so a slot's skills can NEVER be painted onto more than one
+      // question — that reuse was the "same skill repeats across many questions"
+      // bug. Slots bind by skill-identity first (order-independent), else by the
+      // NEXT-UNUSED slot in plan order — both mirror the Question Distribution
+      // popover (which the recruiter confirms is correct) and cannot duplicate
+      // or cross-pull a slot.
+      const usedSlots = new Set<any>();
+      return rows.map((row) => {
+        // Pair each row with its plan slot by SKILL IDENTITY — NOT by positional
+        // arithmetic. `row.qNum` is the backend GLOBAL ask-order question_number,
+        // while the plan's `question_number` is the round-robin (P1/P2/P3)
+        // renumbered order from _apply_cross_priority_mix. Those two axes diverge
+        // whenever a global slot is consumed before/among the skill questions (an
+        // opening HR/greeting slot, a skip, or a follow-up) or a slot is asked out
+        // of renumbered order — so the old `globalQ - sectionOffset` →
+        // planByQnum.get(slotNum) join returned a DIFFERENT slot's skill (e.g. the
+        // STLC question showing Q3's "communication" skill). The backend already
+        // bound the CORRECT plan skills to this row (assigned_skills /
+        // question_skill_map on the SAME ask-order axis as the text), so recover
+        // the slot by best skill-set overlap, which is order-independent and
+        // deterministic because plan slots carry disjoint skills.
+        const rowSkillSet = new Set(
+          row.skills.map(s => String(s?.name || '').toLowerCase().trim()).filter(Boolean),
+        );
+        let planRow: any = null;
+        if (rowSkillSet.size > 0) {
+          let bestScore = 0;
+          for (const pr of planRows) {
+            if (usedSlots.has(pr)) continue; // a slot binds to only one question
+            const prPrimary = String(pr?.primary_skill || '').toLowerCase().trim();
+            const prSecs = (Array.isArray(pr?.secondary_skills) ? pr.secondary_skills : [])
+              .map((s: any) => String(s || '').toLowerCase().trim())
+              .filter(Boolean);
+            let overlap = 0;
+            for (const n of [prPrimary, ...prSecs]) {
+              if (n && rowSkillSet.has(n)) overlap++;
+            }
+            // Weight a primary-skill match higher so the owning slot wins ties.
+            const scoreVal = overlap * 2 + (prPrimary && rowSkillSet.has(prPrimary) ? 1 : 0);
+            if (scoreVal > bestScore) {
+              bestScore = scoreVal;
+              planRow = pr;
+            }
+          }
+        }
+        // Fallback (row skills didn't overlap any UNUSED slot — zero-overlap /
+        // legacy rows): take the NEXT UNUSED plan slot in plan order.
+        // Deterministic, unique, and matches the Distribution popover. The old
+        // `globalQ - sectionOffset` / planRows[idx] join pulled an arbitrary,
+        // possibly-already-shown slot — the wrong/duplicate-mapping source.
+        if (!planRow) {
+          planRow = planRows.find(pr => !usedSlots.has(pr)) ?? null;
+        }
         if (!planRow) return row;
+        usedSlots.add(planRow); // consume: never reuse this slot for another row
         const planSkills = buildSkillsFromPlanRow(planRow);
         if (planSkills.length === 0) return row;
         // Index existing per-skill scores from the original row.
@@ -2267,10 +2455,12 @@ export function buildDashboardData(params: {
 
   // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
   let finalResultQA: 'Pass' | 'Fail' | null = null;
-  if (backendFinal === 'pass') finalResultQA = 'Pass';
-  else if (backendFinal === 'fail') finalResultQA = 'Fail';
-  else if (mustHaveAvgQA > 0) finalResultQA = mustHaveAvgQA >= MHS_THRESHOLD ? 'Pass' : 'Fail';
-  else finalResultQA = finalResult;
+  if (!isPartialEval) {
+    if (backendFinal === 'pass') finalResultQA = 'Pass';
+    else if (backendFinal === 'fail') finalResultQA = 'Fail';
+    else if (mustHaveAvgQA > 0) finalResultQA = mustHaveAvgQA >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+    else finalResultQA = finalResult;
+  }
 
   return {
     candidate: {
@@ -2283,6 +2473,7 @@ export function buildDashboardData(params: {
       duration: formatDurationMinutes(eval_?.duration_minutes || 0),
       date: dateStr,
     },
+    isPartialEvaluation: isPartialEval,
     scores: {
       mustHave:   Math.round(mustHaveAvgQA  * 100) / 100,
       niceToHave: Math.round(niceToHaveAvgQA * 100) / 100,

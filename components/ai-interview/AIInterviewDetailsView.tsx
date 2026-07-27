@@ -7,7 +7,8 @@ import {
   ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
-  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
+  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download, Send,
+  Search, Ban, TrendingUp, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -15,9 +16,12 @@ import { jdService } from '@/lib/services/jdService';
 import type {
   AIInterviewResponse,
   AIInterviewVersionHistoryItem,
+  AIInterviewHRQuestion,
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
-import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import AIInterviewResults from './AIInterviewResults';
+import ShareAIInterviewModal from './ShareAIInterviewModal';
+import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -69,6 +73,19 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function HRQuestionStageBadge({ stage }: { stage?: string }) {
+  const normalized = stage === 'opening' ? 'opening' : 'closing';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+      normalized === 'opening'
+        ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+        : 'bg-green-100 text-green-700 ring-1 ring-green-200'
+    }`}>
+      {normalized}
+    </span>
+  );
+}
+
 // Priority labels are imported from lib/constants/aiInterviewPriority (P1-P3 scale).
 
 function PriorityBadge({ p }: { p: number }) {
@@ -110,7 +127,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info'>('overview');
+  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info' | 'results' | 'invites' | 'share'>('overview');
   const [actionLoading, setActionLoading] = useState(false);
 
   // Activity
@@ -124,6 +142,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // Candidate detail
   const [candidateDetail, setCandidateDetail] = useState<AIInterviewResponse | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  // Ordered candidate ids of the list the detail was opened from (Invites /
+  // Results tab), so the inline Candidate Results view can offer Prev/Next
+  // between candidates without returning to the list.
+  const [candidateNavIds, setCandidateNavIds] = useState<string[]>([]);
+
+  // Invites tab filters (mirrors the Candidate Invitations modal on the list page)
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [inviteStatusFilter, setInviteStatusFilter] = useState('all');
+  const [inviteDateFrom, setInviteDateFrom] = useState('');
+  const [inviteDateTo, setInviteDateTo] = useState('');
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ type: string; title: string; message: string; onConfirm: () => void } | null>(null);
@@ -358,18 +386,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
     // ── HR Questions ──
     rows.push('HR ROUND QUESTIONS');
-    const hrQuestions = (hrRound as any)?.hr_questions ?? [];
+    const hrQuestions = hrRound?.hr_questions ?? [];
     if (hrQuestions.length > 0) {
-      rows.push(['#', 'Question', 'Answer Type'].map(esc).join(','));
-      hrQuestions.forEach((q: any, i: number) => {
+      rows.push(['#', 'Question', 'Answer Type', 'Stage'].map(esc).join(','));
+      hrQuestions.forEach((q, i) => {
         rows.push([
           String(i + 1),
           q.question_text ?? '',
           q.answer_type ?? 'text',
+          q.stage === 'opening' ? 'opening' : 'closing',
         ].map(esc).join(','));
       });
     } else {
-      rows.push(['-', 'No HR questions configured or HR round disabled', ''].map(esc).join(','));
+      rows.push(['-', 'No HR questions configured or HR round disabled', '', ''].map(esc).join(','));
     }
 
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -408,7 +437,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   };
 
-  const handleCandidateClick = useCallback(async (activityId: string) => {
+  const handleCandidateClick = useCallback(async (activityId: string, navIds?: string[]) => {
+    if (navIds) setCandidateNavIds(navIds);
     setCandidateLoading(true);
     try {
       const detail = await aiInterviewService.get(activityId);
@@ -432,7 +462,24 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Show candidate detail view
   if (candidateDetail) {
-    return <CandidateResultsView interview={candidateDetail} onBack={() => setCandidateDetail(null)} />;
+    // Prev/Next between candidates in the list this detail was opened from.
+    const navIdx = candidateNavIds.indexOf(candidateDetail.id);
+    const prevId = navIdx > 0 ? candidateNavIds[navIdx - 1] : null;
+    const nextId = navIdx >= 0 && navIdx < candidateNavIds.length - 1 ? candidateNavIds[navIdx + 1] : null;
+    return (
+      <CandidateResultsView
+        interview={candidateDetail}
+        onBack={() => setCandidateDetail(null)}
+        breadcrumbTrail={[{
+          label: config.jd_title || config.position || 'Interview Details',
+          onClick: () => setCandidateDetail(null),
+        }]}
+        currentIndex={navIdx >= 0 ? navIdx : undefined}
+        totalCount={candidateNavIds.length || undefined}
+        onPrev={prevId ? () => handleCandidateClick(prevId) : undefined}
+        onNext={nextId ? () => handleCandidateClick(nextId) : undefined}
+      />
+    );
   }
 
   return (
@@ -445,7 +492,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
                 { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                { label: 'Interview Details' },
+                { label: config.jd_title || config.position || 'Interview Details' },
               ]}
             />
             <RecordPager
@@ -586,12 +633,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       <div className="border-b border-gray-100 z-10 mb-4">
         <div>
           <div className="flex gap-1 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide -mb-px">
-            {([
-              { key: 'overview', label: 'Interview Details' },
-              { key: 'activity', label: 'Recent Activity' },
-              { key: 'versions', label: 'Version History' },
-              { key: 'info', label: 'AI Interview Info' },
-            ] as const).map((t) => {
+            {(() => {
+              const tabs: { key: typeof activeTab; label: string }[] = [
+                { key: 'overview', label: 'Interview Details' },
+                { key: 'activity', label: 'Recent Activity' },
+                { key: 'versions', label: 'Version History' },
+                { key: 'info', label: 'AI Interview Info' },
+                { key: 'results', label: 'Results' },
+                { key: 'invites', label: 'Invites' },
+              ];
+              // Share tab mirrors the list card: only for published interviews
+              // and only when the user can share.
+              if (config.status === 'published' && canShareAIInterviews) {
+                tabs.push({ key: 'share', label: 'Share' });
+              }
+              return tabs;
+            })().map((t) => {
               const isActive = activeTab === t.key;
               return (
                 <button
@@ -969,7 +1026,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                           ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
                           // 2026-05-22 fix: stealth-dot popover MUST mirror
-                          // the saved skill_distribution (what Linda actually
+                          // the saved skill_distribution (what Bina actually
                           // asks at runtime). Previously it ran a local
                           // distribute() with the old priority-block layout
                           // and drifted from the DB-stored priority-mixed
@@ -1203,16 +1260,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <InfoRow label="Time" value={`${timedAllocation.hrMinutes} min`} />
                     </div>
                   )}
-                  {(hrRound as any).hr_questions?.length > 0 && (
+                  {hrRound.hr_questions?.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-2">Selected HR Questions</p>
                       <ol className="space-y-2">
-                        {((hrRound as any).hr_questions as { id: string; question_text: string; answer_type: string }[]).map((q, idx) => (
+                        {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
                           <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
                             <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-[10px] font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-gray-800">{q.question_text}</p>
-                              <span className="text-[10px] text-gray-500 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] text-gray-500">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                                <HRQuestionStageBadge stage={q.stage} />
+                              </div>
                             </div>
                           </li>
                         ))}
@@ -1315,7 +1375,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     return (
                       <div
                         key={activity.id}
-                        onClick={() => handleCandidateClick(activity.id)}
+                        onClick={() => handleCandidateClick(activity.id, recentActivity.map(a => a.id))}
                         className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg cursor-pointer hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors"
                       >
                         <div className="flex-shrink-0">{statusIcon()}</div>
@@ -1694,6 +1754,269 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               </div>
             );
           })()}
+
+          {/* Results Tab — embedded candidate results (stats + filters + table) */}
+          {activeTab === 'results' && (
+            <AIInterviewResults
+              embedded
+              configId={config.id}
+              configTitle={config.position || config.jd_title || 'AI Interview'}
+              jdTitle={config.jd_title || ''}
+              onBack={onBack}
+              onViewCandidate={handleCandidateClick}
+            />
+          )}
+
+          {/* Invites Tab — mirrors the Candidate Invitations modal on the list page */}
+          {activeTab === 'invites' && (() => {
+            // Overview counts derived from the loaded invitations.
+            const total = recentActivity.length;
+            const completed = recentActivity.filter(a => a.status === 'completed').length;
+            const inProgress = recentActivity.filter(a => a.status === 'in_progress').length;
+            const terminated = recentActivity.filter(a => a.status === 'terminated').length;
+            const cancelled = recentActivity.filter(a => a.status === 'cancelled').length;
+            const invited = Math.max(0, total - completed - inProgress - terminated - cancelled);
+            const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            const statCards = [
+              { label: 'Total', value: total, icon: Users, tone: 'text-gray-500', num: 'text-gray-900' },
+              { label: 'Invited', value: invited, icon: Mail, tone: 'text-brand-blue', num: 'text-brand-blue' },
+              { label: 'In Progress', value: inProgress, icon: Play, tone: 'text-brand-orange-deep', num: 'text-brand-orange-deep' },
+              { label: 'Completed', value: completed, icon: CheckCircle, tone: 'text-green-600', num: 'text-green-600' },
+              { label: 'Terminated', value: terminated, icon: Ban, tone: 'text-red-600', num: 'text-red-600' },
+              { label: 'Cancelled', value: cancelled, icon: X, tone: 'text-red-600', num: 'text-red-600' },
+              { label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, tone: 'text-brand-cyan', num: 'text-brand-cyan' },
+            ];
+
+            const hasActiveFilters =
+              inviteSearch.trim() !== '' || inviteStatusFilter !== 'all' || inviteDateFrom !== '' || inviteDateTo !== '';
+
+            const filtered = recentActivity.filter((a) => {
+              if (inviteStatusFilter !== 'all' && a.status !== inviteStatusFilter) return false;
+              if (inviteSearch.trim()) {
+                const q = inviteSearch.toLowerCase();
+                if (!(a.candidate_name || '').toLowerCase().includes(q) &&
+                    !(a.candidate_email || '').toLowerCase().includes(q)) return false;
+              }
+              if (inviteDateFrom || inviteDateTo) {
+                if (!a.created_at) return false;
+                const d = parseIST(a.created_at);
+                if (inviteDateFrom && d < new Date(`${inviteDateFrom}T00:00:00`)) return false;
+                if (inviteDateTo && d > new Date(`${inviteDateTo}T23:59:59`)) return false;
+              }
+              return true;
+            });
+
+            const clearFilters = () => {
+              setInviteSearch(''); setInviteStatusFilter('all'); setInviteDateFrom(''); setInviteDateTo('');
+            };
+
+            // Status pill with icon — matches the reference modal.
+            const statusPill = (status: string) => {
+              switch (status) {
+                case 'completed': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs font-medium"><CheckCircle className="w-3 h-3" /> Completed</span>;
+                case 'in_progress': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium"><Play className="w-3 h-3" /> In Progress</span>;
+                case 'invited': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs font-medium"><Mail className="w-3 h-3" /> Invited</span>;
+                case 'terminated': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs font-medium"><Ban className="w-3 h-3" /> Terminated</span>;
+                case 'cancelled': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 ring-1 ring-red-200 rounded-full text-xs font-medium"><X className="w-3 h-3" /> Cancelled</span>;
+                case 'expired': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium"><Clock className="w-3 h-3" /> Expired</span>;
+                default: return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(status)}`}>{getStatusLabel(status)}</span>;
+              }
+            };
+
+            const resultsLabel = hasActiveFilters
+              ? `${filtered.length} matching candidate${filtered.length === 1 ? '' : 's'}`
+              : `${total} candidate${total !== 1 ? 's' : ''} invited`;
+
+            return (
+              <div className="space-y-4 sm:space-y-6">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                      <Users className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-gray-900 tracking-tight">Candidate Invitations</h3>
+                      <p className="text-sm text-gray-500 truncate">{config.jd_title || config.position}</p>
+                    </div>
+                  </div>
+                  {config.status === 'published' && canShareAIInterviews && (
+                    <button
+                      onClick={() => setActiveTab('share')}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors self-start sm:self-auto"
+                    >
+                      <Send className="w-4 h-4" /> Invite More
+                    </button>
+                  )}
+                </div>
+
+                {/* Stat cards */}
+                <div className="grid grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
+                  {statCards.map((s) => {
+                    const Icon = s.icon;
+                    return (
+                      <div key={s.label} className="bg-white rounded-xl p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                        <div className={`flex items-center gap-1.5 text-[10px] sm:text-xs mb-1 ${s.tone}`}>
+                          <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          <span className="truncate">{s.label}</span>
+                        </div>
+                        <p className={`text-lg sm:text-2xl font-bold tracking-tight ${s.num}`}>{s.value}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Filter bar */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue" />
+                    <input
+                      type="text"
+                      value={inviteSearch}
+                      onChange={(e) => setInviteSearch(e.target.value)}
+                      placeholder="Search by candidate name or email"
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
+                  <select
+                    value={inviteStatusFilter}
+                    onChange={(e) => setInviteStatusFilter(e.target.value)}
+                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="invited">Invited</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="terminated">Terminated</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={inviteDateFrom}
+                    onChange={(e) => setInviteDateFrom(e.target.value)}
+                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  />
+                  <input
+                    type="date"
+                    value={inviteDateTo}
+                    onChange={(e) => setInviteDateTo(e.target.value)}
+                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  />
+                  <button
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+
+                {/* Candidate list */}
+                {activityLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="text-center py-12 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
+                    <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                      <Users className="w-10 h-10 text-brand-blue" />
+                    </div>
+                    <p className="text-gray-700 font-medium mb-2">
+                      {hasActiveFilters ? 'No candidates match the current filters' : 'No candidates invited yet'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {hasActiveFilters ? 'Try adjusting your search or filters' : 'Invite candidates to see them listed here'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filtered.map((a) => {
+                      const capScore = (a as any).ai_evaluation?.capability_score;
+                      const displayScore = capScore != null ? capScore : a.score;
+                      // Requirement: clicking anywhere on the row opens View Details.
+                      return (
+                        <div
+                          key={a.id}
+                          onClick={() => handleCandidateClick(a.id, filtered.map(f => f.id))}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+                        >
+                          {/* Candidate info */}
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs sm:text-sm font-medium text-brand-blue">
+                                {(a.candidate_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-gray-900 text-sm truncate">{a.candidate_name || 'Unknown'}</div>
+                              <div className="text-xs text-gray-500 truncate">{a.candidate_email}</div>
+                            </div>
+                          </div>
+
+                          {/* Status + score + timeline + action */}
+                          <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-11 sm:pl-0">
+                            {statusPill(a.status)}
+
+                            {displayScore != null && (
+                              <div className="text-right">
+                                <div className="text-[10px] text-gray-500">Score</div>
+                                <div className="text-sm font-semibold text-green-600">{Number(displayScore)}%</div>
+                              </div>
+                            )}
+
+                            <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400">
+                              {a.created_at && (
+                                <span className="flex items-center gap-1" title="Invited">
+                                  <Mail className="w-3 h-3 text-brand-blue" />
+                                  {formatIST(a.created_at)}
+                                </span>
+                              )}
+                              {a.started_at && (
+                                <span className="flex items-center gap-1" title="Started">
+                                  <Play className="w-3 h-3 text-brand-orange" />
+                                  {formatIST(a.started_at)}
+                                </span>
+                              )}
+                              {a.completed_at && (
+                                <span className="flex items-center gap-1" title="Completed">
+                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                  {formatIST(a.completed_at)}
+                                </span>
+                              )}
+                            </div>
+
+                            {(a.status === 'completed' || a.status === 'in_progress' || a.status === 'terminated') && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleCandidateClick(a.id, filtered.map(f => f.id)); }}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                              >
+                                <Eye className="w-3 h-3" />
+                                View Details
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="pt-1 text-xs sm:text-sm text-gray-500">{resultsLabel}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Share Tab — embedded send-invite form */}
+          {activeTab === 'share' && config.status === 'published' && canShareAIInterviews && (
+            <ShareAIInterviewModal
+              embedded
+              isOpen
+              config={config}
+              onClose={() => setActiveTab('overview')}
+              onInviteSent={() => { loadActivity(); }}
+            />
+          )}
 
       </div>
 

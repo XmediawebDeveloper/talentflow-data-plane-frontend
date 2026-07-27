@@ -27,7 +27,7 @@ export default function RecordPager({
   if (totalCount == null || totalCount <= 0) return null;
 
   const btn =
-    'inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 min-h-[34px] text-xs sm:text-sm rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+    'inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 min-h-[34px] text-xs sm:text-sm font-semibold rounded-lg border-2 border-brand-blue/60 dark:border-brand-blue/50 bg-white dark:bg-slate-900 text-brand-blue dark:text-brand-blue shadow-sm hover:bg-brand-blue hover:text-white hover:border-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-900 disabled:hover:text-brand-blue transition-colors';
 
   return (
     <div className={`flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${className}`}>

@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward,
+  Download, Loader2, Sparkles, SkipForward, Play,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -30,11 +30,14 @@ import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ListPagination from '@/components/ListPagination';
 import RecordPager from '@/components/RecordPager';
+import IntegrityCheckTab from './IntegrityCheckTab';
+import { summarizeViolations } from './violationTaxonomy';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -52,6 +55,12 @@ interface CandidateResultsViewProps {
    * clearing the inline state instead.
    */
   onNavigateToList?: () => void;
+  /**
+   * Extra breadcrumb items inserted between "AI Interviews" and "Candidate
+   * Results" — e.g. a "Results" crumb linking back to the Results page the
+   * recruiter drilled in from, so the trail reflects where they came from.
+   */
+  breadcrumbTrail?: { label: string; href?: string; onClick?: () => void }[];
 }
 
 type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
@@ -107,7 +116,7 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   camera_obstructed:        { label: 'Camera Obstructed',    icon: <Eye className="w-4 h-4" />,           color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20' },
   microphone_disabled:      { label: 'Mic Disabled',         icon: <Mic className="w-4 h-4" />,           color: 'text-slate-600',  bg: 'bg-slate-50',  border: 'border-slate-200'  },
   voice_detected:           { label: 'Voice Detected',       icon: <Volume2 className="w-4 h-4" />,       color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20' },
-  multiple_voices:          { label: 'Multiple Voices',      icon: <Volume2 className="w-4 h-4" />,       color: 'text-brand-teal', bg: 'bg-brand-teal/10', border: 'border-brand-teal/20' },
+  multiple_voices:          { label: 'Multiple Speakers',    icon: <Volume2 className="w-4 h-4" />,       color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
   multiple_faces:           { label: 'Multiple Faces',       icon: <Users className="w-4 h-4" />,         color: 'text-brand-blue', bg: 'bg-brand-blue/10', border: 'border-brand-blue/20' },
   face_missing:             { label: 'Face Not Visible',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-600',    bg: 'bg-red-50',    border: 'border-red-200'    },
   gaze_away:                { label: 'Gaze Away',            icon: <Eye className="w-4 h-4" />,           color: 'text-brand-orange', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
@@ -119,12 +128,37 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
   screen_share_stopped:     { label: 'Screen Share Stopped', icon: <Monitor className="w-4 h-4" />,       color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+  interview_terminated:     { label: 'Interview Terminated — Left Screen', icon: <ShieldAlert className="w-4 h-4" />, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-300' },
 };
 
 function formatTs(ts?: string) {
   if (!ts) return '—';
   try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
   catch { return '—'; }
+}
+
+// Elapsed seconds into the interview recording at which an event fired,
+// measured from `startTs` (the session start ≈ recording start). Returns null
+// when either timestamp is missing/invalid or the offset would be negative
+// (clock skew / event stamped before the anchor) — i.e. not seekable.
+function videoOffsetSeconds(ts?: string, startTs?: string): number | null {
+  if (!ts || !startTs) return null;
+  const eventMs = new Date(ts).getTime();
+  const startMs = new Date(startTs).getTime();
+  if (Number.isNaN(eventMs) || Number.isNaN(startMs)) return null;
+  const offsetSec = Math.floor((eventMs - startMs) / 1000);
+  return offsetSec < 0 ? null : offsetSec;
+}
+
+// Elapsed position in the interview recording (mm:ss) at which an event fired.
+// Minutes are not capped at 59 — a 75-minute mark reads "75:12". Returns '—'
+// when the offset is not computable (see videoOffsetSeconds).
+function formatVideoOffset(ts?: string, startTs?: string) {
+  const offsetSec = videoOffsetSeconds(ts, startTs);
+  if (offsetSec == null) return '—';
+  const mm = Math.floor(offsetSec / 60);
+  const ss = offsetSec % 60;
+  return `${mm}:${String(ss).padStart(2, '0')}`;
 }
 
 /* ─── Recording sub-tab component ───────────────────────────────────────── */
@@ -136,6 +170,8 @@ function VideoPane({
   error,
   onError,
   onDuration,
+  seekTo,
+  seekKey,
 }: {
   label: string;
   hasFile: boolean;
@@ -144,6 +180,8 @@ function VideoPane({
   error: boolean;
   onError: () => void;
   onDuration?: (seconds: number) => void;
+  seekTo?: number | null;
+  seekKey?: number;
 }) {
   if (!hasFile) {
     return (
@@ -176,7 +214,7 @@ function VideoPane({
   }
   if (blobUrl) {
     return (
-      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} />
+      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
     );
   }
   return null;
@@ -191,26 +229,53 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function VideoWithDuration({ blobUrl, onError, onDuration }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void }) {
+function VideoWithDuration({ blobUrl, onError, onDuration, seekTo, seekKey }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void; seekTo?: number | null; seekKey?: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  // True once metadata (and, for webm, duration) has resolved so it's safe to
+  // set currentTime. Seek requests that arrive before this are applied on ready.
+  const readyRef = useRef(false);
 
   const applyDuration = (d: number) => {
     setDuration(d);
     if (onDuration && isFinite(d) && d > 0) onDuration(d);
   };
 
+  const applySeek = () => {
+    const v = videoRef.current;
+    if (!v || !readyRef.current || seekTo == null) return;
+    const max = isFinite(v.duration) && v.duration > 0 ? v.duration - 0.25 : seekTo;
+    try {
+      v.currentTime = Math.max(0, Math.min(seekTo, max));
+      // Best-effort autoplay from the seeked point; ignore blocked-autoplay.
+      void v.play?.().catch(() => {});
+    } catch { /* setting currentTime can throw on not-yet-seekable media */ }
+  };
+
+  const markReady = () => {
+    readyRef.current = true;
+    applySeek();
+  };
+
+  // A new seek request (seekKey change) after the video is already loaded.
+  useEffect(() => {
+    applySeek();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekKey]);
+
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     if (isFinite(v.duration) && v.duration > 0) {
       applyDuration(v.duration);
+      markReady();
       return;
     }
     const onTimeUpdate = () => {
       v.removeEventListener('timeupdate', onTimeUpdate);
       v.currentTime = 0;
       applyDuration(v.duration);
+      markReady();
     };
     v.addEventListener('timeupdate', onTimeUpdate);
     v.currentTime = 1e9;
@@ -221,6 +286,7 @@ function VideoWithDuration({ blobUrl, onError, onDuration }: { blobUrl: string; 
       <video
         ref={videoRef}
         controls
+        preload="metadata"
         className="w-full max-h-[500px] rounded-xl bg-slate-900 ring-1 ring-black/[0.04]"
         src={blobUrl}
         onLoadedMetadata={handleLoadedMetadata}
@@ -283,6 +349,7 @@ function RecordingTabContent({
   interview,
   videoBlobUrl, videoBlobSize, videoLoading, videoError, setVideoError,
   screenBlobUrl, screenBlobSize, screenLoading, screenError,
+  seekRequest,
 }: {
   interview: AIInterviewResponse;
   videoBlobUrl: string | null;
@@ -294,10 +361,31 @@ function RecordingTabContent({
   screenBlobSize: number | null;
   screenLoading: boolean;
   screenError: boolean;
+  seekRequest?: { seconds: number; key: number } | null;
 }) {
-  const [recView, setRecView] = useState<'candidate' | 'screen'>('candidate');
+  // Default to the Interview View (screen recording) whenever one exists — the
+  // recruiter wants the screen recording to open first, not the candidate webcam.
+  // Falls back to the candidate view only when there is no screen recording.
+  const [recView, setRecView] = useState<'candidate' | 'screen'>(
+    () => interview.screen_recording_file_path
+      ? 'screen'
+      : interview.recording_file_path ? 'candidate' : 'screen',
+  );
   const [candidateDuration, setCandidateDuration] = useState<number | null>(null);
   const [screenDuration, setScreenDuration] = useState<number | null>(null);
+
+  // A seek requested from the Event Log: jump to the sub-view that actually has
+  // a recording (prefer the Interview View / screen recording) before seeking.
+  // Keyed on the request's monotonic `key` so repeat clicks on the same row re-fire.
+  useEffect(() => {
+    if (!seekRequest) return;
+    setRecView(
+      interview.screen_recording_file_path ? 'screen'
+        : interview.recording_file_path ? 'candidate'
+        : 'screen',
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekRequest?.key]);
 
   const isCandidate = recView === 'candidate';
   const blobUrl = isCandidate ? videoBlobUrl : screenBlobUrl;
@@ -348,6 +436,8 @@ function RecordingTabContent({
               error={videoError}
               onError={() => setVideoError(true)}
               onDuration={setCandidateDuration}
+              seekTo={seekRequest?.seconds ?? null}
+              seekKey={seekRequest?.key ?? 0}
             />
           ) : (
             <VideoPane
@@ -358,6 +448,8 @@ function RecordingTabContent({
               error={screenError}
               onError={() => {}}
               onDuration={setScreenDuration}
+              seekTo={seekRequest?.seconds ?? null}
+              seekKey={seekRequest?.key ?? 0}
             />
           )}
         </div>
@@ -473,12 +565,16 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
-export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList }: CandidateResultsViewProps) {
+export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail }: CandidateResultsViewProps) {
   // Default to the combined "Evaluation Report" (key 'eval'). The old
   // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
   // content is merged into the Eval tab. The render blocks are kept so any
   // deep-link / fallback still works.
   const [activeTab, setActiveTab] = useState<TabKey>('eval');
+  // Seek request from the Violations Event Log → Recording player. `key` is a
+  // monotonic counter (via seekNonceRef) so clicking the same row twice re-fires.
+  const [recordingSeek, setRecordingSeek] = useState<{ seconds: number; key: number } | null>(null);
+  const seekNonceRef = useRef(0);
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [qaExportMenuOpen, setQaExportMenuOpen] = useState(false);
@@ -527,19 +623,32 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     if (activeTab !== 'recording' || !liveSession.recording_file_path || videoBlobUrl) return;
     let cancelled = false;
     setVideoLoading(true);
-    api.get(`/ai-interview/${liveSession.id}/recording`, { responseType: 'blob' })
-      .then((res) => {
+    // STREAM-FIRST: ask for a presigned URL and hand it straight to <video src>
+    // so the browser streams with HTTP Range (instant start + seek). Only fall
+    // back to the old full-file blob download (slow — 2-3 min on long clips) for
+    // local-filesystem storage, where no presigned URL exists.
+    (async () => {
+      try {
+        const meta = await api.get(`/ai-interview/${liveSession.id}/recording-url`);
+        const streamUrl = meta?.data?.url;
         if (cancelled) return;
-        const url = URL.createObjectURL(res.data);
-        setVideoBlobUrl(url);
+        if (streamUrl) {
+          setVideoBlobUrl(streamUrl);   // presigned URL — <video> streams it directly
+          setVideoLoading(false);
+          return;
+        }
+      } catch { /* fall through to blob download */ }
+      try {
+        const res = await api.get(`/ai-interview/${liveSession.id}/recording`, { responseType: 'blob' });
+        if (cancelled) return;
+        setVideoBlobUrl(URL.createObjectURL(res.data));
         setVideoBlobSize(res.data?.size ?? null);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setVideoError(true);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setVideoLoading(false);
-      });
+      }
+    })();
     return () => { cancelled = true; };
   }, [activeTab, liveSession.recording_file_path, liveSession.id, videoBlobUrl]);
 
@@ -548,14 +657,30 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     if (activeTab !== 'recording' || !liveSession.screen_recording_file_path || screenBlobUrl || screenError) return;
     let cancelled = false;
     setScreenLoading(true);
-    api.get(`/ai-interview/${liveSession.id}/screen-recording`, { responseType: 'blob' })
-      .then((res) => {
+    // STREAM-FIRST (see candidate-recording effect above): presigned URL → direct
+    // <video> streaming; blob download only as the local-storage fallback.
+    (async () => {
+      try {
+        const meta = await api.get(`/ai-interview/${liveSession.id}/screen-recording-url`);
+        const streamUrl = meta?.data?.url;
+        if (cancelled) return;
+        if (streamUrl) {
+          setScreenBlobUrl(streamUrl);
+          setScreenLoading(false);
+          return;
+        }
+      } catch { /* fall through to blob download */ }
+      try {
+        const res = await api.get(`/ai-interview/${liveSession.id}/screen-recording`, { responseType: 'blob' });
         if (cancelled) return;
         setScreenBlobUrl(URL.createObjectURL(res.data));
         setScreenBlobSize(res.data?.size ?? null);
-      })
-      .catch(() => { if (!cancelled) setScreenError(true); })
-      .finally(() => { if (!cancelled) setScreenLoading(false); });
+      } catch {
+        if (!cancelled) setScreenError(true);
+      } finally {
+        if (!cancelled) setScreenLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [activeTab, liveSession.screen_recording_file_path, liveSession.id, screenBlobUrl, screenError]);
 
@@ -816,11 +941,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   //
   // Detection: v2 has evaluation_version; v1 has capability_score or cluster_insights.
   // If completed but none of these exist, evaluation is still pending.
+  // Invariant: a PARTIAL ("attended questions only — no pass/fail") result is
+  // allowed ONLY when the interview was actually TERMINATED (production
+  // proctoring: candidate left the screen / tab switch / focus loss). Every
+  // other interview — staging always, and any production interview that ran to
+  // the end — must resolve to a FULL evaluation. If a non-terminated interview
+  // carries an "eval did not run" stub (evaluation_incomplete / evaluation_error,
+  // e.g. the WS dropped mid-eval or the eval timed out), it is NOT partial — the
+  // transcript is intact and can be fully scored, so we treat it as still
+  // generating and kick off a re-evaluation (see the auto-reeval effect below).
+  const _closingReasonLc = (eval_.closing_reason || '').toString().toLowerCase();
+  const wasTerminated =
+    (liveSession.status || '').toString().toLowerCase() === 'terminated' ||
+    _closingReasonLc.includes('proctor') ||
+    _closingReasonLc.includes('terminate') ||
+    _closingReasonLc.includes('left_screen');
+  const evalIncomplete =
+    eval_.evaluation_incomplete === true || !!eval_.evaluation_error;
+
   const evaluationReady = !!(
-    eval_.evaluation_version ||
-    eval_.capability_score ||
-    eval_.cluster_insights?.length ||
-    eval_.evaluations?.length
+    (eval_.evaluation_version ||
+      eval_.capability_score ||
+      eval_.cluster_insights?.length ||
+      eval_.evaluations?.length)
+    // A non-terminated "eval did not run" stub is NOT ready: keep the
+    // "Generating results" spinner (which polls) and let the auto-reeval below
+    // populate real results, instead of rendering the stub as a partial report.
+    && !(evalIncomplete && !wasTerminated)
   );
   const evaluationPending = isCompleted && !evaluationReady;
 
@@ -840,6 +987,59 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     }, 5000);
     return () => { cancelled = true; clearInterval(poll); };
   }, [evaluationPending, liveSession.id]);
+
+  // Auto re-evaluation — a NON-terminated interview that carries an "eval did
+  // not run" stub must be scored fully from its saved transcript (invariant:
+  // partial ⟺ terminated). Fire the re-eval endpoint ONCE per session so the
+  // "Generating results" spinner above converges to a real evaluation instead
+  // of spinning forever. Guarded by a ref so the 5s poll can't re-trigger it.
+  const _autoReevalFiredRef = useRef<string | null>(null);
+  const [retryingEval, setRetryingEval] = useState(false);
+  useEffect(() => {
+    if (!isCompleted || !evalIncomplete || wasTerminated) return;
+    if (_autoReevalFiredRef.current === liveSession.id) return;
+    _autoReevalFiredRef.current = liveSession.id;
+    aiInterviewService.triggerEvaluation(liveSession.id)
+      .then(() => aiInterviewService.get(liveSession.id))
+      .then(updated => setLiveSession(updated))
+      .catch(() => { /* poll fallback keeps trying; stub remains re-evaluable */ });
+  }, [isCompleted, evalIncomplete, wasTerminated, liveSession.id]);
+
+  // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
+  // For an interview whose candidate reached the END of the interview but whose
+  // result is stuck partial / disconnected (candidate closed the tab during the
+  // background finalize, etc.). Eligible ONLY when the candidate crossed the end
+  // — i.e. question_history has no 'not_asked' padding (a genuinely cut-short
+  // interview is NOT eligible, so the button stays hidden). The backend enforces
+  // one-time + not-in-flight; on success the row becomes COMPLETED with a full
+  // evaluation, so `isPartial` flips false → banner + button disappear for good.
+  const reevalCrossedEnd = useMemo(() => {
+    const qh = Array.isArray((eval_ as any)?.question_history) ? (eval_ as any).question_history : [];
+    if (qh.length === 0) return false;
+    return !qh.some((q: any) => String(q?.response_type || '').toLowerCase() === 'not_asked');
+  }, [eval_]);
+  const [reEvaluating, setReEvaluating] = useState(false);
+  const handleReEvaluate = async () => {
+    if (reEvaluating) return;
+    setReEvaluating(true);
+    const _t = toast.loading('Re-evaluating the interview — this can take a minute…');
+    try {
+      await aiInterviewService.reEvaluatePartial(liveSession.id);
+      const updated = await aiInterviewService.get(liveSession.id);
+      setLiveSession(updated); // now COMPLETED + full eval → button hides
+      toast.success('Interview re-evaluated. The full results are now available.', { id: _t });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      const msg =
+        status === 409 ? (detail || 'This interview has already been re-evaluated.')
+        : status === 400 ? (detail || 'Re-evaluation is only available once the candidate reached the end of the interview.')
+        : (detail || 'Re-evaluation could not be completed. Please try again.');
+      toast.error(msg, { id: _t });
+    } finally {
+      setReEvaluating(false);
+    }
+  };
 
   // Live elapsed counter for the evaluation wait. The post-interview
   // multi-agent eval genuinely runs ~1-3 min (sequential gpt-4o-mini agents);
@@ -977,6 +1177,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     [liveSession],
   );
   const totalViolations = violations.length;
+  // Recruiter-facing summary (serious/moderate/minor, advisory excluded) — see violationTaxonomy.
+  const violationSummary = useMemo(() => summarizeViolations(violations), [violations]);
+  // Legacy inline violations UI retained (disabled) for quick rollback; superseded by IntegrityCheckTab.
+  const showLegacyViolations = false;
 
   // Severity-based weighted score and breakdown
   const severityStats = useMemo(() => {
@@ -1013,12 +1217,25 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     );
   }, [violations]);
 
+  // Anchor for the "Video Time" column: the session start ≈ recording start.
+  // Falls back to the earliest event timestamp for legacy sessions that never
+  // stored started_at, so the log still shows relative offsets (first event
+  // then reads 0:00). Undefined only when neither is available.
+  const videoAnchor = useMemo(() => {
+    if (liveSession.started_at) return liveSession.started_at;
+    const stamps = violations
+      .map(v => v.timestamp)
+      .filter((t): t is string => !!t)
+      .sort();
+    return stamps[0];
+  }, [liveSession.started_at, violations]);
+
   const ROWS_PER_PAGE = violationsPerPage;
   const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
   const safeViolationPage = Math.min(violationPage, totalPages);
   const pagedViolations = groupedViolations.slice((safeViolationPage - 1) * ROWS_PER_PAGE, safeViolationPage * ROWS_PER_PAGE);
 
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; badgeTone?: 'critical' | 'neutral'; live?: boolean }[] = [
     // 'Overview' tab hidden 2026-05-30 — merged into the combined Evaluation Report (Eval) tab.
     // { key: 'overview',         label: 'Overview',          icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
@@ -1042,7 +1259,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
-    { key: 'violations',       label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
+    { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1076,6 +1293,39 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
           Processing… {mm}:{ss}
         </span>
       </div>
+      {/* Bounded fallback — after the typical 1–3 min window the eval may have
+          failed to land (OpenAI hiccup / interrupted save). Offer an explicit
+          Retry so a non-terminated interview never spins forever: it re-runs
+          the same transcript evaluation and refreshes. */}
+      {evalElapsedSec >= 180 && (
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <p className="text-xs text-gray-400 text-center max-w-xs">
+            Taking longer than usual. You can retry the evaluation — it re-scores
+            from the saved transcript.
+          </p>
+          <button
+            type="button"
+            disabled={retryingEval}
+            onClick={async () => {
+              setRetryingEval(true);
+              _autoReevalFiredRef.current = null; // allow the auto-effect to re-fire too
+              try {
+                await aiInterviewService.triggerEvaluation(liveSession.id);
+                const updated = await aiInterviewService.get(liveSession.id);
+                setLiveSession(updated);
+              } catch { /* keep spinner + polling; user can retry again */ }
+              finally { setRetryingEval(false); }
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            {retryingEval ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Retrying…</>
+            ) : (
+              <><RefreshCw className="w-4 h-4" /> Retry evaluation</>
+            )}
+          </button>
+        </div>
+      )}
     </div>
     );
   };
@@ -1107,6 +1357,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 onNavigateToList
                   ? { label: 'AI Interviews', onClick: onNavigateToList }
                   : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                ...(breadcrumbTrail ?? []),
                 { label: 'Candidate Results' },
               ]}
             />
@@ -1188,11 +1439,99 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
           </div>
         )}
 
+        {/* Interview TERMINATED — candidate left the interview screen (proctoring).
+            Prominent red banner so the recruiter immediately sees the session was
+            cut short for an integrity violation, independent of the eval flow. */}
+        {(() => {
+          const term = violations.find(v => v.event_type === 'interview_terminated');
+          if (!term) return null;
+          const d = (term.details || {}) as Record<string, unknown>;
+          // Prefer the human-readable message the candidate portal sent; fall
+          // back to mapping the reason code (kept in sync with the portal's
+          // TERMINATION_MESSAGES).
+          const REASON_LABELS: Record<string, string> = {
+            key_f11: 'Pressed F11 to exit fullscreen',
+            key_escape: 'Pressed the Esc key to exit fullscreen',
+            key_alt_tab: 'Used Alt + Tab to switch away from the interview',
+            key_meta: 'Pressed the Windows / ⌘ (Meta) key',
+            left_screen_fullscreen_exit: 'Exited fullscreen mode',
+            left_screen_tab_hidden: 'Switched to another tab or minimized the window',
+            left_screen_focus_lost: 'Moved focus away from the interview window',
+            left_screen: 'Left the interview screen',
+          };
+          const reason = typeof d.reason === 'string' ? d.reason : '';
+          const what = (typeof d.message === 'string' && d.message)
+            || REASON_LABELS[reason]
+            || '';
+          return (
+            <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-300 ring-1 ring-red-100 rounded-xl text-sm text-red-800 shadow-sm">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold">Interview terminated — candidate left the screen</div>
+                {what ? (
+                  <div className="text-red-700/90 mt-0.5">
+                    What the candidate did: <b>{what}</b>{term.timestamp ? <> at <b>{formatTs(term.timestamp)}</b></> : null}. Per the proctoring policy the session was ended automatically and cannot be resumed.
+                  </div>
+                ) : (
+                  <div className="text-red-700/90 mt-0.5">
+                    The candidate switched tabs, minimized, lost window focus, or exited fullscreen during the interview. Per the proctoring policy the session was ended automatically and cannot be resumed.
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Multiple speakers / voice-identity malpractice — prominent red banner.
+            The server voice-ID check flags when a SECOND voice is heard in one
+            answer (multiple_voices) or the speaker changes (voice_identity_changed).
+            Surface it up front as a strong malpractice signal; the individual
+            turns' answers are still preserved in the transcript below. */}
+        {(() => {
+          const voiceHits = violations.filter(v =>
+            v.event_type === 'multiple_voices' || v.event_type === 'voice_identity_changed'
+          );
+          if (voiceHits.length === 0) return null;
+          const first = voiceHits[0];
+          return (
+            <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-300 ring-1 ring-red-100 rounded-xl text-sm text-red-800 shadow-sm">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold">Multiple speakers detected — possible malpractice</div>
+                <div className="text-red-700/90 mt-0.5">
+                  A voice other than the enrolled candidate was heard during the interview
+                  {voiceHits.length > 1 ? <> ({voiceHits.length} times)</> : null}
+                  {first.timestamp ? <>, first at <b>{formatTs(first.timestamp)}</b></> : null}.
+                  The affected answers are kept in the transcript (marked, not scored) for your review.
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Partial warning banner — only when truly partial (not auto-completed) */}
         {isPartial && !isCompleted && (
-          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            Interview disconnected — showing partial results
+          <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              Interview disconnected — showing partial results
+            </div>
+            {/* Re-Evaluate — ONLY when the candidate reached the END of the
+                interview (answered every question) but the result is stuck
+                partial. Runs the full evaluation once and finalizes the row.
+                Hidden for genuinely cut-short interviews; disabled while running;
+                disappears permanently once the interview is fully evaluated. */}
+            {reevalCrossedEnd && (
+              <button
+                type="button"
+                onClick={handleReEvaluate}
+                disabled={reEvaluating}
+                title="The candidate answered all questions — re-run the full evaluation. This can be done only once."
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-orange-deep hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition"
+              >
+                {reEvaluating ? 'Re-Evaluating…' : 'Re-Evaluate'}
+              </button>
+            )}
           </div>
         )}
 
@@ -1295,10 +1634,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   )}
                   {tab.badge !== undefined && (
                     <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                      tab.badge > 0
-                        ? activeTab === 'violations'
-                          ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                          : 'bg-red-100 text-red-600 ring-1 ring-red-200'
+                      tab.badge > 0 && tab.badgeTone === 'critical'
+                        ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
                         : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
                     }`}>
                       {tab.badge}
@@ -1530,6 +1867,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                         };
                       });
                     })();
+                // ── Meta / non-question guard (display last-resort) ──────────
+                // The opening "about the role" warm-up, redirect/deflection, and
+                // farewell turns are NOT interview questions and must never appear
+                // in Question Analysis (only in the Transcript tab). They are
+                // excluded upstream (backend), but if an older/partial evaluation
+                // still carries one in question_history, drop it here so the
+                // report never shows it as a scored question. Matched by unique
+                // meta lead-ins that never open a real interview question.
+                const _isMetaTurn = (q: any): boolean => {
+                  const t = String(q?.question || '').toLowerCase();
+                  if (!t) return false;
+                  const META = [
+                    'your interviewer today', "here's a quick overview", 'here is a quick overview',
+                    'here to conduct the interview', 'here to conduct this interview',
+                    "i'm here to listen", 'im here to listen',
+                    "let's focus on the interview", 'lets focus on the interview',
+                    'completing the interview', 'responses have been recorded',
+                    'wish you all the best', 'future endeavors',
+                    'welcome back',
+                  ];
+                  // Meta turns are statements (no "?"). A real question that merely
+                  // quotes one of these phrases still has a "?" and is kept.
+                  return !t.includes('?') && META.some(m => t.includes(m));
+                };
+                const qaItemsFiltered: any[] = qaItemsRaw.filter((q) => !_isMetaTurn(q));
                 // Some re-evaluated sessions store question_history with every
                 // entry flagged as a main question even when the conversation
                 // clearly contained follow-ups (intent="main_question",
@@ -1584,7 +1946,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 };
                 const _seenKeys = new Set<string>();
                 const qaItems: any[] = [];
-                for (const _it of qaItemsRaw) {
+                for (const _it of qaItemsFiltered) {
                   const _intent = String(_it.question_intent || '').toLowerCase();
                   const _isFu = !!_it.is_follow_up
                     || ['follow_up', 'probe', 'deep_dive'].includes(_intent);
@@ -1625,6 +1987,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 // ── Q&A export helpers ────────────────────────────────────
                 const qaBaseName = `qa_${interview.candidate_name || 'candidate'}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
                 const candidateNameLabel = interview.candidate_name || 'Candidate';
+                // Partial banner ONLY for a genuine early-end: a real
+                // termination, or a truncated interview explicitly marked
+                // `partial`. A non-terminated "eval did not run" stub is NOT
+                // partial — it is handled by the generating spinner + auto-reeval
+                // above (invariant: partial ⟺ terminated / truncated).
+                const isPartialEvaluation =
+                  eval_?.partial === true || (wasTerminated && eval_?.evaluation_incomplete === true);
 
                 const roundLabelFor = (rt?: string) => {
                   const k = (rt || '').toLowerCase();
@@ -2162,6 +2531,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
 
                 return (
                   <div className="space-y-6">
+                    {isPartialEvaluation && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        This interview ended early. The scores below are for attended questions only; no final pass/fail or overall match score is generated here.
+                      </div>
+                    )}
                     {/* Export toolbar */}
                     <div className="flex justify-end relative">
                       <button
@@ -2191,7 +2565,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                       <section>
                         <SectionHeader
                           title="Must-Have Section"
-                          badge="Scored for Pass/Fail"
+                          badge={isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail'}
                           badgeCls="bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20"
                         />
                         <div className="space-y-3">
@@ -2245,6 +2619,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   screenBlobSize={screenBlobSize}
                   screenLoading={screenLoading}
                   screenError={screenError}
+                  seekRequest={recordingSeek}
                 />
               )
             )}
@@ -2253,22 +2628,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 the transcript even when the recruiter opened the view mid-interview */}
             {!evaluationPending && activeTab === 'transcript' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
-                // Silence prompts ("Are you there?…") and closing thank-yous are
-                // meta-messages from Linda, not real questions. They must not
-                // count toward Q#/F# numbering or the message total — match
-                // the backend's _is_silence_or_closing_prompt filter.
+                // Closing thank-yous are meta-messages from Bina that we keep out
+                // of the transcript list. The silence "Are you there?" nudge is
+                // NOT filtered here anymore: it is a real utterance the candidate
+                // heard and belongs in the transcript. It still won't inflate Q#/F#
+                // numbering — the labeling loop below classifies it as an
+                // 'interstitial' (via interstitial:true / kind="silence_*" / text
+                // match in isInterstitialMsg) and renders it with NO question label,
+                // exactly like the "I didn't get any response…" move-on line (which
+                // was already shown). This fixes the reported inconsistency where the
+                // move-on appeared in the Transcript tab but the "Are you there?"
+                // nudge did not.
                 const _isMetaAssistant = (msg: any) => {
                   if (msg.role !== 'assistant') return false;
                   const c = (msg.content || '').toLowerCase().trim();
-                  return c.startsWith('are you there')
-                    || c.startsWith('thank you for taking the time')
+                  return c.startsWith('thank you for taking the time')
                     || c.startsWith('thanks for taking the time')
                     || c.startsWith('thank you for speaking')
                     || c.startsWith('it was great chatting');
                 };
                 const rawMessages = (liveSession.conversation_transcript || interview.conversation_transcript || []);
                 const messages = rawMessages
-                  .filter((msg: any) => msg.role !== 'system' && msg.content?.trim() && !_isMetaAssistant(msg));
+                  .filter((msg: any) => msg.role !== 'system' && !_isMetaAssistant(msg) && (
+                    (msg.content && msg.content.trim())
+                    // Non-English discard: no English content, but the candidate DID
+                    // respond — keep it so the verbatim Original ASR shows in the tab.
+                    || (msg.role === 'user' && msg.discarded_non_english && (msg.original_asr || msg.raw_content))
+                  ));
 
                 if (messages.length === 0) return renderPlaceholder('No transcript available');
 
@@ -2283,7 +2669,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 // Build Q/F/D numbering using question_history intent data.
                 // Strategy: build an intent lookup from ALL question_history entries
                 // (keyed by question text prefix), then classify each assistant message.
-                type QType = 'followup' | 'deepdive' | 'main' | 'closing';
+                type QType = 'followup' | 'deepdive' | 'main' | 'closing' | 'interstitial';
                 const _chatQh = (eval_.question_history || []) as any[];
 
                 // Map: first-60-chars of question → intent ('follow_up'|'probe'|'deep_dive'|'explore')
@@ -2322,7 +2708,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 };
 
                 // Skip-status detection: a skipped question shows in the chat as
-                // a Linda bubble with NO candidate reply after it, so the viewer
+                // a Bina bubble with NO candidate reply after it, so the viewer
                 // can't tell HOW it was skipped. Shared with the Question Analysis
                 // answer block via buildSkipReasoner (transcript-sequence first —
                 // reliable; skip_source enhancement). "answered" is decided by the
@@ -2338,7 +2724,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 let ddCounter = 0;
                 let clCounter = 0;  // Clarifications under current main Q
                 // Detect clarifications by either explicit flag (backend) or
-                // the recognizable rephrase opener Linda uses.
+                // the recognizable rephrase opener Bina uses.
                 const isClarificationMsg = (m: any): boolean => {
                   if (m.is_clarification === true) return true;
                   const t = (m.content || '').toLowerCase().trim();
@@ -2356,11 +2742,52 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   return (
                     t.includes('thank you for completing the interview') ||
                     t.includes('thank you for your time today') ||
-                    (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
+                    (t.includes('your responses have been recorded') && t.includes('wish you all the best')) ||
+                    // Bina's LLM-generated sendoff varies in wording. These phrases
+                    // only appear in the wrap-up turn (often prefixed by an
+                    // acknowledgment of the last answer, e.g. "That's a compelling
+                    // case… This concludes our interview…"), never in a real question.
+                    t.includes('this concludes our interview') ||
+                    t.includes('this concludes the interview') ||
+                    t.includes('that concludes our interview') ||
+                    t.includes('it was a pleasure speaking with you') ||
+                    t.includes('wish you the best of luck with the next steps') ||
+                    t.includes('best of luck with the next steps') ||
+                    t.includes('best of luck in the next steps')
+                  );
+                };
+                // Detect informative / silence-ladder utterances ("Are you there?",
+                // "I couldn't get any response…", "…let's move on…"). These are spoken
+                // by Bina outside the question pipeline and must NOT be counted as
+                // questions — otherwise a silence nudge inflates the Q number (e.g. the
+                // nudge showed as "Q5" and stole the candidate's answer). Backend tags
+                // them interstitial:true / kind="silence_*"; we also match text as a
+                // fallback in case those flags don't survive the transcript pipeline.
+                const isInterstitialMsg = (m: any): boolean => {
+                  if (m.interstitial === true) return true;
+                  if (String(m.kind || '').toLowerCase().startsWith('silence')) return true;
+                  const t = (m.content || '').toLowerCase();
+                  return (
+                    t.startsWith('are you there') ||
+                    t.includes("couldn't get any response from you") ||
+                    t.includes('couldn’t get any response from you') ||
+                    t.includes("didn't get any response from you") ||
+                    t.includes('didn’t get any response from you') ||
+                    t.includes("haven't been able to hear any response") ||
+                    t.includes('haven’t been able to hear any response') ||
+                    t.includes("if you're there, please start speaking") ||
+                    t.includes('if you’re there, please start speaking')
                   );
                 };
                 for (const m of messages) {
                   if (m.role === 'assistant') {
+                    // Interstitial → show in transcript but with NO Q label, and leave
+                    // the running question label untouched so the candidate's next
+                    // answer stays attributed to the real question.
+                    if (isInterstitialMsg(m)) {
+                      labeled.push({ msg: m, label: '', isFollowUp: false, qtype: 'interstitial' });
+                      continue;
+                    }
                     const intent = _lookupIntent(m.content);
                     const isDd = intent === 'deep_dive';
                     const isFu = !isDd && (intent === 'follow_up' || intent === 'probe' || !!m.is_follow_up);
@@ -2414,7 +2841,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
                             <Bot className="w-3.5 h-3.5 text-white" />
                           </div>
-                          <span className="text-xs text-gray-500">Linda (AI Interviewer)</span>
+                          <span className="text-xs text-gray-500">Bina (AI Interviewer)</span>
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
@@ -2439,18 +2866,34 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           const isAssistant = msg.role === 'assistant';
                           const ts = formatTs(msg.timestamp);
                           const content = msg.content as string;
-                          const rawContent: string | undefined = !isAssistant ? msg.raw_content : undefined;
+                          // Prefer the VERBATIM Original ASR (untouched STT output —
+                          // keeps fillers + any non-English the engine produced). Fall
+                          // back to the salvaged raw, then content, for older records.
+                          const rawContent: string | undefined = !isAssistant ? (msg.original_asr || msg.raw_content) : undefined;
                           const language: string | undefined = !isAssistant ? msg.language : undefined;
-                          const hasCorrection = !isAssistant && rawContent && rawContent !== content;
+                          // Non-English discard: candidate responded but there was no
+                          // scorable English → Original ASR shows verbatim, Corrected empty.
+                          const noScorableEnglish = !isAssistant && !!msg.discarded_non_english && !(content || '').trim() && !!(rawContent || '').trim();
+                          const hasCorrection = !isAssistant && !noScorableEnglish && rawContent && rawContent !== content;
                           const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
-                          // For a Linda question that was skipped, show WHY. A
+                          // For a Bina question that was skipped, show WHY. A
                           // question is "answered" when the NEXT chat message is a
                           // real candidate reply; otherwise it was skipped and
                           // _skipReason explains how. Only on assistant question
                           // bubbles (never closing / clarification rephrases).
-                          const _nextMsg = labeled[idx + 1]?.msg;
-                          const _answered = !!_nextMsg && _nextMsg.role === 'user' && !!(_nextMsg.content || '').trim();
-                          const skipNote = isAssistant && qtype !== 'closing' && !isClarificationMsg(msg)
+                          // Skip past interstitial nudges to find the real next turn,
+                          // so a question answered only after "Are you there?" still
+                          // reads as answered (not skipped).
+                          let _niIdx = idx + 1;
+                          while (_niIdx < labeled.length && labeled[_niIdx]?.qtype === 'interstitial') _niIdx++;
+                          const _nextMsg = labeled[_niIdx]?.msg;
+                          // A non-English discard turn IS a response (just not scorable),
+                          // so the question shows the Original ASR below it, not "No response".
+                          const _answered = !!_nextMsg && _nextMsg.role === 'user' && (
+                            !!(_nextMsg.content || '').trim()
+                            || (_nextMsg.discarded_non_english && !!(_nextMsg.original_asr || _nextMsg.raw_content || '').trim())
+                          );
+                          const skipNote = isAssistant && qtype !== 'closing' && qtype !== 'interstitial' && !isClarificationMsg(msg)
                             ? _skipReason(content, _answered)
                             : null;
 
@@ -2501,30 +2944,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                       </div>
                                     )}
                                   </>
-                                ) : hasCorrection && diff ? (
+                                ) : (
                                   <>
-                                    {/* Original (raw ASR) — shown FIRST */}
+                                    {/* Original (raw ASR) — ALWAYS shown, even when the
+                                        enhancer made no change, so the recruiter can always
+                                        see exactly what the ASR engine produced. */}
                                     <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-brand-orange/10 ring-1 ring-brand-orange/25 text-brand-orange-deep">
                                       <div className="text-[10px] font-semibold text-brand-orange-deep mb-1 uppercase tracking-wide">Original (ASR)</div>
-                                      {diff.mode === 'word'
+                                      {hasCorrection && diff && diff.mode === 'word'
                                         ? <DiffText parts={diff.raw} tone="raw" />
-                                        : <span>{rawContent}</span>}
+                                        : <span>{rawContent || content}</span>}
                                     </div>
-                                    {/* Corrected — shown BELOW */}
+                                    {/* Corrected — ALWAYS shown below. When identical to the
+                                        raw ASR it simply repeats the same text (no correction).
+                                        For a non-English discard there is no scorable English,
+                                        so it shows a muted "not scored" marker instead of text. */}
                                     <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
                                       <div className="text-[10px] font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
-                                      {diff.mode === 'word'
-                                        ? <DiffText parts={diff.corrected} tone="corrected" />
-                                        : <span>{content}</span>}
+                                      {noScorableEnglish
+                                        ? <span className="italic text-white/50">— no scorable English (not scored)</span>
+                                        : hasCorrection && diff && diff.mode === 'word'
+                                          ? <DiffText parts={diff.corrected} tone="corrected" />
+                                          : <span>{content}</span>}
                                     </div>
-                                    {diff.mode === 'sentence' && (
+                                    {hasCorrection && diff && diff.mode === 'sentence' && (
                                       <div className="text-[10px] text-brand-orange-deep mt-1 pr-1 text-right italic">full-sentence rewrite</div>
                                     )}
                                   </>
-                                ) : (
-                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white rounded-tr-sm ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
-                                    {content}
-                                  </div>
                                 )}
 
                                 {ts && (
@@ -2618,9 +3064,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           (t.includes('your responses have been recorded') && t.includes('wish you all the best'))
                         );
                       };
+                      // Informative / silence-ladder utterances — not questions.
+                      // Skipped entirely in the table view so they never occupy a Q row
+                      // (mirrors the chat view's isInterstitialMsg).
+                      const _tblIsInterstitial = (m: any): boolean => {
+                        if (m.interstitial === true) return true;
+                        if (String(m.kind || '').toLowerCase().startsWith('silence')) return true;
+                        const t = (m.content || '').toLowerCase();
+                        return (
+                          t.startsWith('are you there') ||
+                          t.includes("couldn't get any response from you") ||
+                          t.includes('couldn’t get any response from you') ||
+                          t.includes("didn't get any response from you") ||
+                          t.includes('didn’t get any response from you') ||
+                          t.includes("haven't been able to hear any response") ||
+                          t.includes('haven’t been able to hear any response') ||
+                          t.includes("if you're there, please start speaking") ||
+                          t.includes('if you’re there, please start speaking')
+                        );
+                      };
 
                       for (const m of messages) {
                         if (m.role === 'assistant') {
+                          // Interstitial nudge → leave current group + pendingAI intact
+                          // so the candidate's answer attaches to the real question.
+                          if (_tblIsInterstitial(m)) continue;
                           const _tblMsgIntent = _tblLookup(m.content);
                           const isDd = _tblMsgIntent === 'deep_dive';
                           const isFu = !isDd && (_tblMsgIntent === 'follow_up' || _tblMsgIntent === 'probe' || !!m.is_follow_up);
@@ -2682,7 +3150,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             _tblClCtr = 0;
                           }
                         } else if (m.role === 'user' && current) {
-                          const raw = (m.raw_content || m.content || '') as string;
+                          const raw = (m.original_asr || m.raw_content || m.content || '') as string;
                           const corrected = (m.content || '') as string;
                           if (pendingAI && pendingAI.isSub) {
                             current.followUps.push({
@@ -3303,8 +3771,23 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               );
             })()}
 
-            {/* Violations Tab */}
+            {/* Integrity Check (violations) tab — recruiter-friendly redesign */}
             {!evaluationPending && activeTab === 'violations' && (
+              <IntegrityCheckTab
+                violations={violations}
+                startTs={videoAnchor}
+                completedAt={liveSession.completed_at}
+                hasRecording={!!(liveSession.recording_file_path || liveSession.screen_recording_file_path)}
+                onJumpToRecording={(seconds) => {
+                  seekNonceRef.current += 1;
+                  setRecordingSeek({ seconds, key: seekNonceRef.current });
+                  setActiveTab('recording');
+                }}
+              />
+            )}
+            {/* Legacy inline violations UI — superseded by IntegrityCheckTab above.
+                Guarded off (never rendered); kept for quick rollback, delete in a follow-up. */}
+            {showLegacyViolations && (
               <div className="space-y-6">
 
                 {/* Total Violations Banner */}
@@ -3449,6 +3932,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Event</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Time</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Video Time</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
                               <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
                             </tr>
@@ -3466,6 +3950,17 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 row.count >= 3 ? 'text-brand-orange-deep font-semibold' :
                                                  'text-gray-600';
                               const globalIdx = (safeViolationPage - 1) * ROWS_PER_PAGE + idx + 1;
+                              // Video Time is clickable only when we can compute
+                              // an offset AND a recording exists to seek into.
+                              const offsetSec = videoOffsetSeconds(row.timestamp, videoAnchor);
+                              const hasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+                              const seekable = offsetSec != null && hasRecording;
+                              const jumpToRecording = () => {
+                                if (offsetSec == null) return;
+                                seekNonceRef.current += 1;
+                                setRecordingSeek({ seconds: offsetSec, key: seekNonceRef.current });
+                                setActiveTab('recording');
+                              };
                               return (
                                 <tr key={idx} className="hover:bg-brand-blue/[0.02] transition-colors">
                                   <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
@@ -3478,6 +3973,21 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                     </div>
                                   </td>
                                   <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{formatTs(row.timestamp)}</td>
+                                  <td className="px-4 py-2.5 text-xs font-mono">
+                                    {seekable ? (
+                                      <button
+                                        type="button"
+                                        onClick={jumpToRecording}
+                                        title="Jump to this moment in the recording"
+                                        className="inline-flex items-center gap-1 text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue/40 rounded"
+                                      >
+                                        <Play className="w-3 h-3" />
+                                        {formatVideoOffset(row.timestamp, videoAnchor)}
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-500">{formatVideoOffset(row.timestamp, videoAnchor)}</span>
+                                    )}
+                                  </td>
                                   <td className="px-4 py-2.5">
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
                                       {sev}

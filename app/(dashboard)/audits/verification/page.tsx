@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import type { PendingVerification, VerificationStatus } from '@/lib/services/auditVerificationService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const STATUS_CONFIG: Record<VerificationStatus, { label: string; color: string; icon: LucideIcon }> = {
   PENDING: { label: 'Pending', color: 'bg-gray-100 text-gray-700 border border-gray-200', icon: Clock },
@@ -65,6 +66,21 @@ export default function LogVerificationPage() {
     setStatusFilter(filter);
     setPageView('list');
   };
+
+  // Persist the cards<->list view, status filter and search + scroll position
+  // so returning to this page restores exactly where the user left off. The
+  // cards overview and the list differ a lot in height, so re-detect the scroll
+  // container when pageView flips.
+  const rootRef = useScrollRestoration<HTMLElement>('audits-verification', true, [pageView]);
+  useListStatePersistence(
+    'audits-verification',
+    { pageView, statusFilter, searchQuery },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+    },
+  );
 
   // Refresh on mount
   useEffect(() => {
@@ -162,7 +178,7 @@ export default function LogVerificationPage() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audits' }, { label: 'Log Verification' }]} />

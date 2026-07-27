@@ -1,7 +1,7 @@
 /**
  * E2E tests for:
  *  - Global timer runs NON-STOP in timed/fixed mode
- *  - Per-question timer starts after Linda stops speaking
+ *  - Per-question timer starts after Bina stops speaking
  *  - `speaking_ended` unsticks "Speaking..." state
  *  - Timer syncs from connected.remaining_seconds
  *  - Silence nudge banner appears
@@ -117,7 +117,7 @@ async function doGreeting(
     audio_config: { sample_rate: 24000, channels: 1 },
     vad_config: { silence_threshold: 0.02, silence_duration_ms: 800 },
   });
-  await send({ type: "greeting", text: "Hello! I'm Linda, your AI interviewer." });
+  await send({ type: "greeting", text: "Hello! I'm Bina, your AI interviewer." });
   await send({ type: "speaking_started" });
   for (let i = 0; i < 3; i++) await sendBin(4800);
   await send({ type: "audio_end" });
@@ -162,7 +162,7 @@ test.describe("Timer & Speaking State", () => {
     expect(inRange).toBe(true);
   });
 
-  test("T2: Global timer ticks NON-STOP in fixed/timed mode (even during Linda speaking)", async ({ page }) => {
+  test("T2: Global timer ticks NON-STOP in fixed/timed mode (even during Bina speaking)", async ({ page }) => {
     await mockCandidateApi(page);
     const { send, sendBin } = await setupWsMock(page);
     await page.goto(INTERVIEW_URL);
@@ -193,7 +193,7 @@ test.describe("Timer & Speaking State", () => {
     const before = await getGlobalTimerSeconds();
     console.log("[T2] Timer before:", before);
 
-    // Linda is "speaking" — timer should still tick
+    // Bina is "speaking" — timer should still tick
     await send({ type: "speaking_started" });
     await page.waitForTimeout(3000);  // wait 3s while speaking
 
@@ -241,7 +241,7 @@ test.describe("Timer & Speaking State", () => {
     await doGreeting(send, sendBin);
     await page.waitForTimeout(1000);
 
-    // Send question_timer_started WHILE Linda is speaking
+    // Send question_timer_started WHILE Bina is speaking
     await send({ type: "speaking_started" });
     await send({
       type: "question_timer_started",
@@ -253,7 +253,7 @@ test.describe("Timer & Speaking State", () => {
       total_questions: 15,
     });
 
-    // Linda finishes → timer should start
+    // Bina finishes → timer should start
     await sendBin(4800);
     await send({ type: "audio_end" });
     await send({ type: "speaking_ended" });
@@ -305,7 +305,7 @@ test.describe("Timer & Speaking State", () => {
     await doGreeting(send, sendBin);
     await page.waitForTimeout(500);
 
-    // Backend sends silence_detected (fires 5s after Linda stops)
+    // Backend sends silence_detected (fires 5s after Bina stops)
     await send({
       type: "silence_detected",
       seconds_elapsed: 5,
@@ -391,7 +391,7 @@ test.describe("Timer & Speaking State", () => {
     });
     console.log("[T7] Timer before follow-up:", timerBefore);
 
-    // Follow-up from Linda (SAME question number — same slot)
+    // Follow-up from Bina (SAME question number — same slot)
     await send({
       type: "question_timer_started",
       seconds: 120, total_seconds: 120, linda_spoke_seconds: 5,

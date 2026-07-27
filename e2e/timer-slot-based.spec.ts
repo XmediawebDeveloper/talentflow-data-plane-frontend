@@ -1,9 +1,9 @@
 /**
  * E2E tests for slot-based timed-mode semantics (updated spec):
  *
- *  - Global timer PAUSES during Linda's regular speech
+ *  - Global timer PAUSES during Bina's regular speech
  *  - Global timer KEEPS TICKING during "Are you there?" silence nudge
- *  - Per-question timer is HIDDEN while Linda speaks, APPEARS when she stops
+ *  - Per-question timer is HIDDEN while Bina speaks, APPEARS when she stops
  *  - When candidate ends turn, global JUMPS to the next 2-min slot boundary
  *    (full 2 min deducted regardless of actual answer time)
  *  - Q2 global resumes from 28:00 with a fresh 2-min per-question
@@ -134,10 +134,10 @@ async function readGlobalTimerSeconds(page: Page): Promise<number | null> {
   });
 }
 
-/** Linda's text bubble content (empty string if not shown). */
+/** Bina's text bubble content (empty string if not shown). */
 async function readLindaBubbleText(page: Page): Promise<string> {
   return page.evaluate(() => {
-    // Find Linda's live violet bubble (currentAiText)
+    // Find Bina's live violet bubble (currentAiText)
     const violet = Array.from(document.querySelectorAll("[class*='violet'] p"))
       .map(el => el.textContent?.trim() ?? "")
       .find(t => t.length > 0);
@@ -149,7 +149,7 @@ async function readLindaBubbleText(page: Page): Promise<string> {
 
 test.describe("Slot-based timed-mode semantics", () => {
 
-  test("S1: Global timer PAUSES during Linda's regular speech", async ({ page }) => {
+  test("S1: Global timer PAUSES during Bina's regular speech", async ({ page }) => {
     await mockCandidateApi(page);
     const { send, sendBin } = await setupWsMock(page);
     await openInterview(page);
@@ -161,16 +161,16 @@ test.describe("Slot-based timed-mode semantics", () => {
     expect(before).not.toBeNull();
     expect(before!).toBeGreaterThanOrEqual(1795);  // ≈30:00
 
-    // Linda starts speaking → global should PAUSE (new slot-based behaviour)
+    // Bina starts speaking → global should PAUSE (new slot-based behaviour)
     await send({ type: "speaking_started" });
     await page.waitForTimeout(3000);
 
     const after = await readGlobalTimerSeconds(page);
-    // Allow 1s drift for the paused-detection gate; must not drop by more than 1s during 3s of Linda talking
+    // Allow 1s drift for the paused-detection gate; must not drop by more than 1s during 3s of Bina talking
     expect(Math.abs(before! - after!)).toBeLessThanOrEqual(1);
   });
 
-  test("S2: Per-question timer is HIDDEN while Linda speaks, APPEARS when she stops", async ({ page }) => {
+  test("S2: Per-question timer is HIDDEN while Bina speaks, APPEARS when she stops", async ({ page }) => {
     await mockCandidateApi(page);
     const { send, sendBin } = await setupWsMock(page);
     await openInterview(page);
@@ -181,7 +181,7 @@ test.describe("Slot-based timed-mode semantics", () => {
       question_number: 1, total_questions: 15, linda_spoke_seconds: 2 });
     await page.waitForTimeout(200);
 
-    // While Linda speaks, per-Q timer must NOT be showing 2:00
+    // While Bina speaks, per-Q timer must NOT be showing 2:00
     const showingWhileSpeaking = await page.evaluate(() =>
       Array.from(document.querySelectorAll("span, div"))
         .map(el => el.textContent?.trim() ?? "")
@@ -189,7 +189,7 @@ test.describe("Slot-based timed-mode semantics", () => {
     );
     expect(showingWhileSpeaking).toBe(false);
 
-    // Linda finishes — audio flushes and per-Q timer should surface
+    // Bina finishes — audio flushes and per-Q timer should surface
     for (let i = 0; i < 3; i++) await sendBin(4800);
     await send({ type: "audio_end" });
     await page.waitForTimeout(2500);
@@ -256,12 +256,12 @@ test.describe("Slot-based timed-mode semantics", () => {
     );
     expect(perQ.length).toBeGreaterThan(0);
 
-    // Silence nudge — Linda asks "Are you there?"
+    // Silence nudge — Bina asks "Are you there?"
     await send({ type: "interstitial_prompt", text: "Are you there?", kind: "silence_nudge" });
     await send({ type: "speaking_started" });
 
     const beforeNudge = await readGlobalTimerSeconds(page);
-    await page.waitForTimeout(3000);  // wait 3s while Linda plays the nudge
+    await page.waitForTimeout(3000);  // wait 3s while Bina plays the nudge
     const afterNudge = await readGlobalTimerSeconds(page);
 
     // Per spec, timers SHOULD KEEP ticking during the silence nudge

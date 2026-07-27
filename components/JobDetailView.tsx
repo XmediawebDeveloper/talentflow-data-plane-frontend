@@ -103,6 +103,7 @@ interface ExtendedJob extends Job {
   hasAiMatchResults?: boolean;
   rawDescription?: string;
   mustHaveComments?: string[];
+  niceToHaveComments?: string[];
   education?: string;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
@@ -138,6 +139,55 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
   const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
+
+  // ---- Read-only label helpers for the Extracted Data Summary dropdown ----
+  const prettifyCode = (value?: string): string =>
+    (value || '')
+      .replace(/[_-]+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const educationLabelMap: Record<string, string> = {
+    diploma: 'Diploma',
+    associate: 'Associate Degree',
+    bachelors: "Bachelor's Degree",
+    masters: "Master's Degree",
+    doctorate: 'Doctorate / PhD',
+    none: 'No formal education required',
+    others: 'Others',
+  };
+  const educationLabel = (value?: string): string =>
+    value ? (educationLabelMap[value.toLowerCase()] || prettifyCode(value)) : 'Not specified';
+
+  const employmentTypeLabel = (value?: string): string => {
+    switch (value) {
+      case 'full_time': return 'Full Time';
+      case 'part_time': return 'Part Time';
+      case 'contract': return 'Contract';
+      case 'internship': return 'Internship';
+      case 'temporary': return 'Temporary / Seasonal';
+      default: return value ? prettifyCode(value) : 'Not specified';
+    }
+  };
+  const workModeLabel = (value?: string): string => {
+    switch (value) {
+      case 'onsite': return 'Onsite';
+      case 'remote': return 'Remote';
+      case 'hybrid': return 'Hybrid';
+      case 'field_based': return 'Field-based / Travel';
+      default: return value ? prettifyCode(value) : 'Not specified';
+    }
+  };
+
+  const mustHaveSkills = job.skills || [];
+  const niceToHaveSkills = job.niceToHaveSkills || [];
+  const mustHaveComments = job.mustHaveComments || [];
+  const niceToHaveComments = job.niceToHaveComments || [];
+  const hasAnyExtractedData =
+    mustHaveSkills.length > 0 || niceToHaveSkills.length > 0 ||
+    mustHaveComments.length > 0 || niceToHaveComments.length > 0 ||
+    !!job.experience || !!job.education || !!job.industry_type ||
+    !!job.employmentType || !!job.workMode;
 
   const handleEdit = () => {
     if (onEdit) {
@@ -230,6 +280,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any>(null);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+  // Collapsible "Extracted Data Summary" (mirrors the Step 2/Review summary dropdown)
+  const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
   // Scored resumes state
   const [scoredResumes, setScoredResumes] = useState<any[]>([]);
@@ -960,6 +1012,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         jobTitle={job.title}
         jobId={job.id}
         onBack={() => setViewingScoredResume(null)}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: job.title || 'Job Details', onClick: () => setViewingScoredResume(null) },
+          { label: 'Candidate Details' },
+        ]}
         currentIndex={_scoredIdx >= 0 ? _scoredIdx : undefined}
         totalCount={scoredResumes.length}
         onPrev={_scoredIdx > 0 ? () => _goToScoredCandidate(_scoredIdx - 1) : undefined}
@@ -983,6 +1041,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     return (
       <CandidateResultDetails
         onBack={() => setViewingAssessmentResult(null)}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: job.title || 'Job Details', onClick: () => setViewingAssessmentResult(null) },
+          { label: 'Candidate Details' },
+        ]}
         assessmentId={aId}
         assessmentShortId={viewingAssessmentResult.assessmentShortId}
         candidateId={viewingAssessmentResult.id}
@@ -1508,6 +1572,135 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               </div>
             )}
           </div>
+
+          {/* Extracted Data Summary - Collapsible (mirrors Step 2 / Review summary) */}
+          {hasAnyExtractedData && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+              {/* Header toggle */}
+              <button
+                onClick={() => setShowExtractedSummary(!showExtractedSummary)}
+                className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors rounded-t-xl"
+              >
+                <div className="text-left">
+                  <h3 className="text-sm sm:text-lg text-gray-900 dark:text-slate-50 flex items-center gap-2 flex-wrap">
+                    📊 Extracted Data Summary
+                    <Eye className="w-5 h-5 text-gray-500 dark:text-slate-500" />
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements</p>
+                </div>
+                <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
+                  <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 rotate-90" />
+                </div>
+              </button>
+
+              {showExtractedSummary && (
+                <>
+                  {/* Skills & Comments */}
+                  <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
+                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Skills &amp; Requirements</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      {/* Left: Skills */}
+                      <div className="space-y-4 sm:space-y-6">
+                        <div>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Skills ({mustHaveSkills.length})</h4>
+                          {mustHaveSkills.length > 0 ? (
+                            <div className="space-y-2">
+                              {mustHaveSkills.map((skill, index) => (
+                                <div key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                                  <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                  {skill}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Skills ({niceToHaveSkills.length})</h4>
+                          {niceToHaveSkills.length > 0 ? (
+                            <div className="space-y-2">
+                              {niceToHaveSkills.map((skill, index) => (
+                                <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                  <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
+                                  {skill}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Comments */}
+                      <div className="space-y-4 sm:space-y-6">
+                        <div>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Comments ({mustHaveComments.length})</h4>
+                          {mustHaveComments.length > 0 ? (
+                            <div className="space-y-2">
+                              {mustHaveComments.map((comment, index) => (
+                                <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
+                                  <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                                  <span>{comment}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Comments ({niceToHaveComments.length})</h4>
+                          {niceToHaveComments.length > 0 ? (
+                            <div className="space-y-2">
+                              {niceToHaveComments.map((comment, index) => (
+                                <div key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                  <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                  <span>{comment}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requirements Grid */}
+                  <div className="p-4 sm:p-6">
+                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Requirements</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
+                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.experience || 'Not specified'}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Education</h4>
+                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{educationLabel(job.education)}</p>
+                      </div>
+                      {job.industry_type && (
+                        <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                          <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
+                          <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{prettifyCode(job.industry_type)}</p>
+                        </div>
+                      )}
+                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Employment Type</h4>
+                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{employmentTypeLabel(job.employmentType)}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Work Mode</h4>
+                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{workModeLabel(job.workMode)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Column - Actions & Activity */}

@@ -7,6 +7,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -202,6 +203,24 @@ export default function HRQuestionBank() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // Persist + restore the list's scroll position and view state so returning
+  // from a detail page lands the user exactly where they left off.
+  const rootRef = useScrollRestoration<HTMLElement>('hr-question-bank', !loading);
+  useListStatePersistence(
+    'hr-question-bank',
+    { searchQuery, filterCategory, filterDifficulty, answerTypeFilter, currentPage, itemsPerPage },
+    (s) => {
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.filterCategory === 'string') setFilterCategory(s.filterCategory);
+      if (typeof s.filterDifficulty === 'string') setFilterDifficulty(s.filterDifficulty);
+      if (s.answerTypeFilter === 'all' || s.answerTypeFilter === 'text' || s.answerTypeFilter === 'yes_no') {
+        setAnswerTypeFilter(s.answerTypeFilter);
+      }
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, filterCategory, filterDifficulty, answerTypeFilter]);
@@ -364,7 +383,7 @@ export default function HRQuestionBank() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb

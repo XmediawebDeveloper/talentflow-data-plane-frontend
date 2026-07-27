@@ -39,6 +39,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -428,6 +429,45 @@ export default function MyResumesPage() {
   const hasMountedRef = useRef(false);
   const lastFetchParamsRef = useRef<string>('');
   const isFetchingRef = useRef(false);
+
+  // Persist + restore this list's scroll position and view state so returning
+  // from a resume detail page (router.push -> remount) lands the user exactly
+  // where they left off. Re-detect the scroll container when the list<->card
+  // view toggles, since that changes the page height drastically.
+  const rootRef = useScrollRestoration<HTMLElement>('my-resumes', !loading, [viewMode]);
+  useListStatePersistence(
+    'my-resumes',
+    {
+      searchQuery,
+      appliedSearchQuery,
+      selectedFolder,
+      filters,
+      sortBy,
+      currentPage,
+      itemsPerPage,
+      viewMode,
+      cardViewFolder,
+      breadcrumbPath,
+    },
+    (s) => {
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.appliedSearchQuery === 'string') setAppliedSearchQuery(s.appliedSearchQuery);
+      if (typeof s.selectedFolder === 'string') setSelectedFolder(s.selectedFolder);
+      if (s.filters && typeof s.filters === 'object' && !Array.isArray(s.filters)) {
+        setFilters(s.filters as typeof filters);
+      }
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+      if (s.viewMode === 'list' || s.viewMode === 'card') setViewMode(s.viewMode);
+      if (s.cardViewFolder === null || typeof s.cardViewFolder === 'string') {
+        setCardViewFolder(s.cardViewFolder as string | null);
+      }
+      if (Array.isArray(s.breadcrumbPath)) {
+        setBreadcrumbPath(s.breadcrumbPath as { id: string; name: string }[]);
+      }
+    },
+  );
 
   useEffect(() => {
     fetchData();
@@ -2397,7 +2437,7 @@ export default function MyResumesPage() {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'My Resumes' }]} />

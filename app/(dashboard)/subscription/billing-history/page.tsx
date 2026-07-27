@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { TableSkeleton } from '@/components/ui/skeleton';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface LineItem {
   description: string;
@@ -92,6 +93,18 @@ interface AddonTransaction {
   created_at?: string;
 }
 
+function normalizeBillingInvoice(inv: BillingInvoice): BillingInvoice {
+  const status = (inv.status || '').toUpperCase();
+  const normalizedDueDate =
+    status === 'PAID' && inv.billing_interval && (inv.next_billing_date || inv.subscription_end_date)
+      ? (inv.next_billing_date || inv.subscription_end_date || inv.due_date)
+      : inv.due_date;
+
+  return normalizedDueDate === inv.due_date
+    ? inv
+    : { ...inv, due_date: normalizedDueDate };
+}
+
 export default function BillingHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -120,6 +133,23 @@ export default function BillingHistoryPage() {
     setPageView('list');
   };
 
+  // Persist/restore list view state + scroll position across navigation.
+  // Re-detect the scroll container when the two-step view flips.
+  const rootRef = useScrollRestoration<HTMLElement>('sub-billing-history', !loading, [pageView]);
+  useListStatePersistence(
+    'sub-billing-history',
+    { pageView, statusFilter, searchQuery, invoicePage, invoicePageSize, addonPage, addonPageSize },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.statusFilter === 'all' || s.statusFilter === 'paid' || s.statusFilter === 'open') setStatusFilter(s.statusFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.invoicePage === 'number') setInvoicePage(s.invoicePage);
+      if (typeof s.invoicePageSize === 'number') setInvoicePageSize(s.invoicePageSize);
+      if (typeof s.addonPage === 'number') setAddonPage(s.addonPage);
+      if (typeof s.addonPageSize === 'number') setAddonPageSize(s.addonPageSize);
+    },
+  );
+
   useEffect(() => {
     fetchBillingData();
     fetchAddonTransactions();
@@ -137,7 +167,7 @@ export default function BillingHistoryPage() {
       const res = await api.get('/billing/invoices/billing');
 
       const result = res.data;
-      const invoiceData: BillingInvoice[] = result.data?.invoices || [];
+      const invoiceData: BillingInvoice[] = ((result.data?.invoices || []) as BillingInvoice[]).map(normalizeBillingInvoice);
       setInvoices(invoiceData);
 
       const paid = invoiceData.filter(inv => inv.status.toUpperCase() === 'PAID');
@@ -255,7 +285,7 @@ export default function BillingHistoryPage() {
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Billing History' }]} />

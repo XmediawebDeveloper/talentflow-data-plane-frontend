@@ -29,7 +29,7 @@ interface USStateOption {
 const VALIDATION = {
   JOB_TITLE: { min: 2, max: 100 },
   AI_PROMPT: { min: 30, max: 1500 },
-  MANUAL_JD: { min: 100, max: 10000 },
+  MANUAL_JD: { min: 1000, max: 10000 },
   ASSESSMENT_GUIDANCE: { min: 10, max: 100 },
 };
 
@@ -173,23 +173,11 @@ const TITLE_ROLE_HEADWORDS = new Set([
   'president', 'ceo', 'cto', 'cfo', 'coo', 'cio', 'cmo',
 ]);
 
-const TITLE_ROLE_BOUNDARY_STOPWORDS = new Set([
-  'with', 'and', 'or', 'for', 'to', 'of', 'in', 'on', 'at', 'from', 'by',
-  'using', 'need', 'needs', 'needed', 'require', 'requires', 'required',
-  'must', 'musthave', 'should', 'preferred', 'prefer', 'experience', 'years',
-  'year', 'yrs', 'salary', 'package', 'ctc', 'remote', 'hybrid', 'onsite',
-  'full', 'time', 'part', 'contract', 'internship', 'temporary', 'monthly',
-  'yearly', 'hourly', 'daily', 'domain', 'industry',
-]);
-
 const TITLE_ROLE_GENERIC_MODIFIERS = new Set([
   'senior', 'junior', 'lead', 'principal', 'staff', 'expert', 'chief',
-]);
-
-const TITLE_ROLE_TERMINALS = new Set([
-  ...TITLE_ROLE_HEADWORDS,
-  'lead', 'head', 'fellow', 'investigator', 'inspector', 'buyer', 'clerk',
-  'cashier', 'dispatcher',
+  'associate', 'assistant', 'intern', 'trainee',
+  'entry', 'entry-level', 'entrylevel', 'fresher',
+  'mid', 'mid-level', 'midlevel', 'intermediate',
 ]);
 
 const PLACEHOLDER_TOKENS = new Set([
@@ -204,6 +192,19 @@ const PROMPT_DETAIL_STOPWORDS = new Set([
   'years', 'year', 'yrs', 'experience', 'exp',
 ]);
 
+const EXCLUSIVE_SENIORITY_BUCKETS = {
+  junior: new Set(['junior', 'entry', 'entry-level', 'entrylevel', 'fresher', 'trainee', 'intern']),
+  mid: new Set(['mid', 'mid-level', 'midlevel', 'intermediate']),
+  senior: new Set(['senior']),
+} as const;
+
+const REPEATED_TEXT_MIN_UNIT_CHARS = 12;
+
+const TITLE_WORK_MODE_PATTERN = /\b(?:remote|hybrid|on[\s-]?site|work\s+from\s+home|wfh|field[\s-]?based)\b/i;
+const TITLE_JOB_TYPE_PATTERN = /\b(?:full[\s-]?time|part[\s-]?time|internship|temporary|permanent|contractual)\b/i;
+const TITLE_VACANCY_PATTERN = /\b(?:hiring\s+\d+|(?:no\.?\s+of\s+)?vacanc(?:y|ies)\s*:?\s*\d+|(?:no\.?\s+of\s+)?openings?\s*:?\s*\d+|\d+\s+positions?\s+available)\b/i;
+const TITLE_SALARY_PATTERN = /(?:₹|\$|USD\b|INR\b|Rs\.?)\s*\d|(?:\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|per\s*annum|per\s*month|per\s*year|ctc|package|k\b|m\b))|(?:(?:salary|sal|compensation|ctc|package|pay|remuneration)\s*(?:is|of|from|:|\s)\s*(?:₹|\$|USD\b|INR\b|Rs\.?)?\s*\d)/i;
+
 const roleTokenPattern = /[A-Za-z][A-Za-z0-9#+./-]*/g;
 
 const normalizeRoleToken = (value: string): string =>
@@ -211,6 +212,51 @@ const normalizeRoleToken = (value: string): string =>
 
 const extractRoleTokens = (text: string): string[] =>
   Array.from(text.matchAll(roleTokenPattern), (match) => normalizeRoleToken(match[0])).filter(Boolean);
+
+const detectTitleMetadataMarkers = (value: string): string[] => {
+  const markers: string[] = [];
+  if (TITLE_WORK_MODE_PATTERN.test(value)) {
+    markers.push('work mode');
+  }
+  if (TITLE_JOB_TYPE_PATTERN.test(value)) {
+    markers.push('job type');
+  }
+  if (TITLE_SALARY_PATTERN.test(value)) {
+    markers.push('salary');
+  }
+  if (TITLE_VACANCY_PATTERN.test(value)) {
+    markers.push('vacancy details');
+  }
+  return markers;
+};
+
+const extractSeniorityBuckets = (tokens: string[]): string[] =>
+  Object.entries(EXCLUSIVE_SENIORITY_BUCKETS)
+    .filter(([, bucketTokens]) => tokens.some((token) => bucketTokens.has(token)))
+    .map(([bucket]) => bucket);
+
+const compactRepetitionText = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const hasRepeatedCompactSequence = (value: string, minUnitChars = REPEATED_TEXT_MIN_UNIT_CHARS): boolean => {
+  const compact = compactRepetitionText(value);
+  if (compact.length < minUnitChars * 2) {
+    return false;
+  }
+
+  return new RegExp(`(.{${minUnitChars},}?)\\1+`).test(compact);
+};
+
+const countNonGenericRoleHeads = (tokens: string[]): Map<string, number> => {
+  const counts = new Map<string, number>();
+  tokens.forEach((token) => {
+    if (TITLE_ROLE_GENERIC_MODIFIERS.has(token) || !isRoleHeadToken(token)) {
+      return;
+    }
+    counts.set(token, (counts.get(token) || 0) + 1);
+  });
+  return counts;
+};
 
 const isPlaceholderLikeToken = (token: string): boolean => {
   const normalized = normalizeRoleToken(token);
@@ -223,66 +269,6 @@ const isPlaceholderLikeToken = (token: string): boolean => {
 
 const isRoleHeadToken = (token: string): boolean =>
   TITLE_ROLE_HEADWORDS.has(token) || token.endsWith('ologist');
-
-const extractRolePhrases = (text: string): Array<{ phrase: string }> => {
-  const tokens = extractRoleTokens(text);
-  const phrases: Array<{ phrase: string }> = [];
-  const seen = new Set<string>();
-
-  tokens.forEach((token, idx) => {
-    if (!isRoleHeadToken(token)) {
-      return;
-    }
-
-    let start = idx;
-    while (start > 0) {
-      const previous = tokens[start - 1];
-      if (!previous || TITLE_ROLE_BOUNDARY_STOPWORDS.has(previous) || idx - start >= 3) {
-        break;
-      }
-      start -= 1;
-    }
-
-    const phraseTokens = tokens
-      .slice(start, idx + 1)
-      .filter((currentToken) => !TITLE_ROLE_GENERIC_MODIFIERS.has(currentToken));
-    if (phraseTokens.length === 0) {
-      return;
-    }
-
-    const phrase = phraseTokens.join(' ');
-    if (seen.has(phrase)) {
-      return;
-    }
-
-    seen.add(phrase);
-    phrases.push({ phrase });
-  });
-
-  return phrases;
-};
-
-const looksLikeValidJobTitle = (value: string): boolean => {
-  const tokens = extractRoleTokens(value);
-  if (tokens.length === 0) {
-    return false;
-  }
-
-  if (tokens.some((token) => isPlaceholderLikeToken(token))) {
-    return false;
-  }
-
-  if (extractRolePhrases(value).length > 0) {
-    return true;
-  }
-
-  const distinctTokens = new Set(
-    tokens.filter((token) => !TITLE_ROLE_BOUNDARY_STOPWORDS.has(token))
-  );
-  const lastToken = tokens[tokens.length - 1];
-
-  return TITLE_ROLE_TERMINALS.has(lastToken) && distinctTokens.size >= 2;
-};
 
 const getJobTitleValidationError = (value: string): string => {
   const trimmedValue = value.trim();
@@ -298,8 +284,13 @@ const getJobTitleValidationError = (value: string): string => {
     return JOB_TITLE_ENGLISH_ONLY_MESSAGE;
   }
 
-  if (!looksLikeValidJobTitle(trimmedValue)) {
-    return 'Please enter a real job title such as "Java Developer" or "HR Executive".';
+  if (hasRepeatedCompactSequence(trimmedValue)) {
+    return 'Job title contains repeated text. Please enter one clear job title only.';
+  }
+
+  const metadataMarkers = detectTitleMetadataMarkers(trimmedValue);
+  if (metadataMarkers.length > 0) {
+    return `Job title should contain only the role name. Remove ${metadataMarkers.join(', ')} from the title and keep those details in the JD fields instead.`;
   }
 
   return '';
@@ -320,15 +311,35 @@ const getAIPromptValidationError = (value: string): string => {
     return '';
   }
 
+  if (hasRepeatedCompactSequence(trimmedValue)) {
+    return 'AI prompt contains repeated text. Please describe the role once and add real details like skills, experience, location, salary, or responsibilities.';
+  }
+
+  const seniorityBuckets = extractSeniorityBuckets(tokens);
+  const detailTokens = tokens.filter(
+    (token) => !PROMPT_DETAIL_STOPWORDS.has(token) && !TITLE_ROLE_GENERIC_MODIFIERS.has(token)
+  );
+  const distinctDetailCount = new Set(detailTokens).size;
+
+  if (seniorityBuckets.length > 1 && distinctDetailCount < 6) {
+    return 'AI prompt contains conflicting seniority levels. Please choose only one level and describe the actual role requirements.';
+  }
+
+  const roleHeadCounts = countNonGenericRoleHeads(tokens);
+  const dominantRoleHeadCount = Math.max(0, ...Array.from(roleHeadCounts.values()));
+  if (dominantRoleHeadCount >= 2 && distinctDetailCount < 6) {
+    return 'AI prompt repeats the job role too many times. Please describe the role once and add real details like skills, experience, location, salary, or responsibilities.';
+  }
+
   const placeholderTokens = tokens.filter((token) => isPlaceholderLikeToken(token));
   if (placeholderTokens.length === 0) {
     return '';
   }
 
-  const detailTokens = tokens.filter(
+  const placeholderFilteredDetailTokens = tokens.filter(
     (token) => !PROMPT_DETAIL_STOPWORDS.has(token) && !isPlaceholderLikeToken(token)
   );
-  const distinctDetailCount = new Set(detailTokens).size;
+  const distinctPlaceholderDetailCount = new Set(placeholderFilteredDetailTokens).size;
   const tokenCounts = new Map<string, number>();
 
   tokens.forEach((token) => {
@@ -345,12 +356,12 @@ const getAIPromptValidationError = (value: string): string => {
   });
 
   if (
-    (placeholderTokens.length >= 2 && distinctDetailCount < 4) ||
+    (placeholderTokens.length >= 2 && distinctPlaceholderDetailCount < 4) ||
     (
       isPlaceholderLikeToken(mostCommonToken) &&
       mostCommonCount >= 2 &&
       (mostCommonCount / tokens.length) >= 0.3 &&
-      distinctDetailCount < 4
+      distinctPlaceholderDetailCount < 4
     )
   ) {
     return 'AI prompt contains repetitive placeholder text. Please describe actual skills, experience, salary, location, or responsibilities.';
@@ -387,18 +398,19 @@ const isEnglishOnly = (text: string): boolean => {
 
 const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English only. Other languages are not supported.';
 
-const validateEnglishOnlyJobTitle = (value: string): boolean => {
-  const trimmedValue = value.trim();
-  const validationError = getJobTitleValidationError(trimmedValue);
-  if (!trimmedValue || !validationError) {
-    return true;
-  }
-
+const showJobTitleValidationToast = (validationError: string): void => {
   toast.error({
     title: validationError === JOB_TITLE_ENGLISH_ONLY_MESSAGE ? 'English Only' : 'Invalid Job Title',
     description: validationError,
   });
-  return false;
+};
+
+const fetchJobTitleValidationError = async (value: string): Promise<string> => {
+  const response = await jdService.validateTitle(value);
+  if (response.is_valid) {
+    return '';
+  }
+  return response.error || 'Please enter a real job title such as "Java Developer" or "HR Executive".';
 };
 
 const validateEnglishOnlyExtractedValue = (value: string, fieldLabel: string): boolean => {
@@ -441,6 +453,116 @@ const applyEnglishOnlyInputChange = (
 
 const isPromptConflictMessage = (message: string): boolean =>
   /conflicts with the job title|different role|change the job title/i.test(message);
+
+// ---------------------------------------------------------------------------
+// Duplicate detection across the four requirement lists
+// (Must-Have Skills, Nice-to-Have Skills, Must-Have Comments, Nice-to-Have Comments).
+// A given requirement is only allowed to exist ONCE anywhere across all four.
+// ---------------------------------------------------------------------------
+type DuplicateListKey =
+  | 'mustHaveSkills'
+  | 'niceToHaveSkills'
+  | 'mustHaveComments'
+  | 'niceToHaveComments';
+
+const DUPLICATE_LIST_LABELS: Record<DuplicateListKey, string> = {
+  mustHaveSkills: 'Must-Have Skills',
+  niceToHaveSkills: 'Nice-to-Have Skills',
+  mustHaveComments: 'Must-Have Comments',
+  niceToHaveComments: 'Nice-to-Have Comments',
+};
+
+// Small filler-word list so "Strong expertise in Python" and "Python" compare
+// as the same near-exact item. True semantic merging is handled server-side.
+const DUPLICATE_STOPWORDS = new Set<string>([
+  'a', 'an', 'the', 'of', 'in', 'on', 'with', 'and', 'or', 'to', 'for',
+  'is', 'are', 'be', 'using', 'use', 'used', 'strong', 'solid', 'good',
+  'experience', 'expertise', 'knowledge', 'proficiency', 'proficient',
+  'familiarity', 'familiar', 'skills', 'skill', 'ability', 'hands',
+]);
+
+const normalizeForDuplicate = (value: string): string => {
+  if (!value) return '';
+  const withoutParens = value.toLowerCase().replace(/\(.*?\)/g, ' ');
+  const tokens = withoutParens
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((token) => token && !DUPLICATE_STOPWORDS.has(token));
+  tokens.sort();
+  return tokens.join(' ');
+};
+
+interface DuplicateHit {
+  listKey: DuplicateListKey;
+  existingValue: string;
+}
+
+// Returns the first list where `value` already exists (normalized match), or
+// null when it is unique. `skip` lets an inline edit ignore its own slot.
+const findDuplicateAcrossLists = (
+  value: string,
+  lists: Record<DuplicateListKey, string[]>,
+  skip?: { listKey: DuplicateListKey; index: number },
+): DuplicateHit | null => {
+  const target = normalizeForDuplicate(value);
+  if (!target) return null;
+
+  const order: DuplicateListKey[] = [
+    'mustHaveSkills',
+    'niceToHaveSkills',
+    'mustHaveComments',
+    'niceToHaveComments',
+  ];
+
+  for (const listKey of order) {
+    const items = lists[listKey] || [];
+    for (let index = 0; index < items.length; index++) {
+      if (skip && skip.listKey === listKey && skip.index === index) continue;
+      if (normalizeForDuplicate(items[index]) === target) {
+        return { listKey, existingValue: items[index] };
+      }
+    }
+  }
+  return null;
+};
+
+// Deterministic (no-AI) cross-list de-duplication. Keeps the first occurrence of
+// each normalized item, following the priority order below, so every requirement
+// survives in exactly one list. Mirrors the backend's _dedupe_exact_across_lists.
+const dedupeListsDeterministic = (
+  lists: Record<DuplicateListKey, string[]>,
+): Record<DuplicateListKey, string[]> => {
+  const seen = new Set<string>();
+  const result: Record<DuplicateListKey, string[]> = {
+    mustHaveSkills: [],
+    niceToHaveSkills: [],
+    mustHaveComments: [],
+    niceToHaveComments: [],
+  };
+  const order: DuplicateListKey[] = [
+    'mustHaveSkills',
+    'niceToHaveSkills',
+    'mustHaveComments',
+    'niceToHaveComments',
+  ];
+  for (const listKey of order) {
+    for (const raw of lists[listKey] || []) {
+      const value = (raw ?? '').trim();
+      if (!value) continue;
+      const norm = normalizeForDuplicate(value);
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      result[listKey].push(value);
+    }
+  }
+  return result;
+};
+
+const totalListItems = (lists: Record<DuplicateListKey, string[]>): number =>
+  (lists.mustHaveSkills?.length || 0) +
+  (lists.niceToHaveSkills?.length || 0) +
+  (lists.mustHaveComments?.length || 0) +
+  (lists.niceToHaveComments?.length || 0);
 
 interface ExtractedData {
   mustHaveSkills: string[];
@@ -977,6 +1099,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             internal_comments: jd.internal_comments,
             must_have_comments: jd.must_have_comments,
             nice_to_have_comments: jd.nice_to_have_comments,
+            department: jd.department,
+            certifications: jd.certifications,
+            domain_keywords: jd.domain_keywords,
             allow_overqualified: jd.allow_overqualified,
             locations: jd.locations?.map(loc => ({
               city: loc.city || '',
@@ -1160,6 +1285,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
+  // Baseline of Step-1 content captured when an existing JD is loaded for editing.
+  // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
+  // the extraction / reformat LLM calls on a no-op edit pass-through.
+  const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -1170,6 +1299,145 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     industryType?: string;
     salaryRange?: string;
   }>({});
+  const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
+  const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
+  const [isJobTitleValidating, setIsJobTitleValidating] = useState(false);
+  const jobTitleValidationRequestIdRef = useRef(0);
+  const jobTitleValidationCacheRef = useRef(new Map<string, string>());
+
+  const getResolvedJobTitleValidationError = (value: string): string => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return '';
+    }
+
+    // Temporarily bypass semantic job title validation and let AI generation handle it.
+    // const localValidationError = getJobTitleValidationError(trimmedValue);
+    // if (localValidationError) {
+    //   return localValidationError;
+    // }
+    //
+    // if (trimmedValue === jobTitleServerValidatedValue) {
+    //   return jobTitleServerValidationError;
+    // }
+    //
+    // return jobTitleValidationCacheRef.current.get(trimmedValue) || '';
+    return '';
+  };
+
+  const ensureValidJobTitle = async (value: string): Promise<boolean> => {
+    const trimmedValue = value.trim();
+    // Temporarily bypass semantic job title validation and let AI generation handle it.
+    // const localValidationError = getJobTitleValidationError(trimmedValue);
+    // if (!trimmedValue || localValidationError) {
+    //   if (localValidationError) {
+    //     showJobTitleValidationToast(localValidationError);
+    //   }
+    //   return false;
+    // }
+    //
+    // const cachedValidationError = jobTitleValidationCacheRef.current.get(trimmedValue);
+    // if (cachedValidationError !== undefined) {
+    //   setJobTitleServerValidatedValue(trimmedValue);
+    //   setJobTitleServerValidationError(cachedValidationError);
+    //   if (cachedValidationError) {
+    //     showJobTitleValidationToast(cachedValidationError);
+    //     return false;
+    //   }
+    //   return true;
+    // }
+    //
+    // const requestId = jobTitleValidationRequestIdRef.current + 1;
+    // jobTitleValidationRequestIdRef.current = requestId;
+    // setIsJobTitleValidating(true);
+    //
+    // try {
+    //   const remoteValidationError = await fetchJobTitleValidationError(trimmedValue);
+    //   jobTitleValidationCacheRef.current.set(trimmedValue, remoteValidationError);
+    //
+    //   if (jobTitleValidationRequestIdRef.current === requestId) {
+    //     setJobTitleServerValidatedValue(trimmedValue);
+    //     setJobTitleServerValidationError(remoteValidationError);
+    //   }
+    //
+    //   if (remoteValidationError) {
+    //     showJobTitleValidationToast(remoteValidationError);
+    //     return false;
+    //   }
+    //
+    //   return true;
+    // } catch (error) {
+    //   console.error('[JD-CREATION] Failed to validate job title with backend:', error);
+    //
+    //   if (jobTitleValidationRequestIdRef.current === requestId) {
+    //     setJobTitleServerValidatedValue('');
+    //     setJobTitleServerValidationError('');
+    //   }
+    //
+    //   return true;
+    // } finally {
+    //   if (jobTitleValidationRequestIdRef.current === requestId) {
+    //     setIsJobTitleValidating(false);
+    //   }
+    // }
+    return Boolean(trimmedValue);
+  };
+
+  useEffect(() => {
+    // Temporarily disable background job title validation and let AI generation handle it.
+    // const trimmedJobTitle = jobTitle.trim();
+    // const localValidationError = getJobTitleValidationError(trimmedJobTitle);
+    // jobTitleValidationRequestIdRef.current += 1;
+    // const requestId = jobTitleValidationRequestIdRef.current;
+    //
+    // if (!trimmedJobTitle || trimmedJobTitle.length < VALIDATION.JOB_TITLE.min || localValidationError) {
+    //   setJobTitleServerValidatedValue('');
+    //   setJobTitleServerValidationError('');
+    //   setIsJobTitleValidating(false);
+    //   return;
+    // }
+    //
+    // const cachedValidationError = jobTitleValidationCacheRef.current.get(trimmedJobTitle);
+    // if (cachedValidationError !== undefined) {
+    //   setJobTitleServerValidatedValue(trimmedJobTitle);
+    //   setJobTitleServerValidationError(cachedValidationError);
+    //   setIsJobTitleValidating(false);
+    //   return;
+    // }
+    //
+    // setJobTitleServerValidatedValue('');
+    // setJobTitleServerValidationError('');
+    //
+    // const validationTimer = window.setTimeout(async () => {
+    //   setIsJobTitleValidating(true);
+    //
+    //   try {
+    //     const remoteValidationError = await fetchJobTitleValidationError(trimmedJobTitle);
+    //     jobTitleValidationCacheRef.current.set(trimmedJobTitle, remoteValidationError);
+    //
+    //     if (jobTitleValidationRequestIdRef.current === requestId) {
+    //       setJobTitleServerValidatedValue(trimmedJobTitle);
+    //       setJobTitleServerValidationError(remoteValidationError);
+    //     }
+    //   } catch (error) {
+    //     console.error('[JD-CREATION] Background job title validation failed:', error);
+    //
+    //     if (jobTitleValidationRequestIdRef.current === requestId) {
+    //       setJobTitleServerValidatedValue('');
+    //       setJobTitleServerValidationError('');
+    //     }
+    //   } finally {
+    //     if (jobTitleValidationRequestIdRef.current === requestId) {
+    //       setIsJobTitleValidating(false);
+    //     }
+    //   }
+    // }, 300);
+    //
+    // return () => window.clearTimeout(validationTimer);
+    setJobTitleServerValidatedValue('');
+    setJobTitleServerValidationError('');
+    setIsJobTitleValidating(false);
+  }, [jobTitle]);
 
   // Sanitize a salary number from backend/extraction: if > 8 digits (>99999999), clear it
   const sanitizeExtractedSalary = (val: number | null | undefined): string => {
@@ -1564,7 +1832,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Need at least 1 non-space character in job title
     const trimmedJobTitle = jobTitle.trim();
     if (!trimmedJobTitle) return;
-    if (getJobTitleValidationError(trimmedJobTitle)) {
+    if (getResolvedJobTitleValidationError(trimmedJobTitle) || isJobTitleValidating) {
       setAutosaveStatus('idle');
       return;
     }
@@ -1619,7 +1887,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(autosaveTimer);
-  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished]);
+  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished, isJobTitleValidating]);
 
   // Track changes for unsaved changes warning
   useEffect(() => {
@@ -1699,7 +1967,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -1844,6 +2112,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const toVal = sanitizeExtractedSalary(params.salary_max);
         const error = validateSalaryRange(fromVal, toVal);
         setValidationErrors(prev => ({ ...prev, salaryRange: error }));
+      }
+
+      // Generation already extracted these params for THIS exact JD text. Record it
+      // as the last-extracted JD so clicking "Next" does NOT run a SECOND extraction
+      // that would overwrite these skills/comments with differently-worded results
+      // (the surprising "single word" change + "extracted" toast the user saw). If
+      // the user edits the JD before Next, jdText won't match and extraction re-runs.
+      // Guard: only skip re-extraction when generation actually produced skills, so
+      // an empty extraction never strands Step 2 with no skills.
+      const generationHasSkills =
+        (params.must_have_skills?.length || 0) > 0 ||
+        (params.nice_to_have_skills?.length || 0) > 0;
+      if (experienceSourceText && experienceSourceText.trim() && generationHasSkills) {
+        setLastExtractedJD(experienceSourceText);
       }
     };
 
@@ -1998,6 +2280,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // True when every Step-1 field matches what was loaded for an existing JD, i.e.
+  // the user opened an existing/published JD to edit but changed nothing in Step 1.
+  const isStage1UnchangedFromLoad = (): boolean => {
+    const b = stage1LoadBaseline.current;
+    if (!b) return false;
+    return (
+      jobTitle.trim() === b.jobTitle.trim() &&
+      aiPrompt.trim() === b.aiPrompt.trim() &&
+      generatedJD.trim() === b.generatedJD.trim() &&
+      manualJD.trim() === b.manualJD.trim()
+    );
+  };
+
+  const hasExtractedRequirementData = (): boolean =>
+    (extractedData.mustHaveSkills?.length || 0) +
+      (extractedData.niceToHaveSkills?.length || 0) +
+      (extractedData.mustHaveComments?.length || 0) +
+      (extractedData.niceToHaveComments?.length || 0) >
+    0;
+
   const handleNext = async () => {
     const trimmedJobTitle = jobTitle.trim();
     const jdText = mode === 'ai' ? generatedJD : manualJD;
@@ -2010,7 +2312,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -2021,6 +2323,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         description: 'Please provide a valid job description with at least 50 characters.',
       });
       return;
+    }
+
+    // Manual JD: enforce a content-length range so there is enough detail for AI
+    // extraction, without exceeding what the model handles cleanly. Bounds come
+    // from the single source of truth (VALIDATION.MANUAL_JD) that also drives the
+    // live character counter, inline hints, and the Next-button disabled state.
+    if (mode === 'manual') {
+      const manualLength = jdText.trim().length;
+      if (manualLength < VALIDATION.MANUAL_JD.min) {
+        toast.error({
+          title: 'Job Description Too Short',
+          description: `Please provide at least ${VALIDATION.MANUAL_JD.min.toLocaleString()} characters for accurate AI processing and skill extraction. Currently ${manualLength.toLocaleString()}.`,
+        });
+        return;
+      }
+      if (manualLength > VALIDATION.MANUAL_JD.max) {
+        toast.error({
+          title: 'Job Description Too Long',
+          description: `Please keep the job description under ${VALIDATION.MANUAL_JD.max.toLocaleString()} characters. Currently ${manualLength.toLocaleString()}.`,
+        });
+        return;
+      }
     }
 
     // Validate JD contains meaningful text (not just symbols or garbage)
@@ -2054,6 +2378,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Note: Removed code pattern validation here since AI-generated content is trusted
     // Validation only applies to AI prompt input, not the generated JD content
+
+    // EDIT FLOW — NO CHANGE, NO LLM:
+    // If we loaded an existing JD (draft or published) and the user has not changed
+    // ANY Step-1 field since load, and extracted data already exists, skip extraction
+    // entirely and go straight to Step 2. This prevents an extraction LLM call when
+    // the user just clicks Next through an unchanged Step 1.
+    if (effectiveEditingJD && isStage1UnchangedFromLoad() && hasExtractedRequirementData()) {
+      console.log('[TalentFlow] Editing existing JD, Step 1 unchanged since load — skipping extraction LLM');
+      setHasProceededToExtract(true);
+      setStep('extract');
+      return;
+    }
 
     // Check if any Stage 1 field has changed since last extraction
     // If user has proceeded to review and comes back to Stage 1:
@@ -2507,12 +2843,44 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // Blocks a value that already exists in ANY of the four lists (Must/Nice
+  // Skills + Comments). Shows a clear toast naming where the duplicate lives.
+  // `skip` lets an inline edit ignore the slot it is editing. Returns true when
+  // a duplicate was found (i.e. the caller should abort).
+  const isDuplicateAcrossLists = (
+    value: string,
+    skip?: { listKey: DuplicateListKey; index: number },
+  ): boolean => {
+    const hit = findDuplicateAcrossLists(
+      value,
+      {
+        mustHaveSkills: extractedData.mustHaveSkills || [],
+        niceToHaveSkills: extractedData.niceToHaveSkills || [],
+        mustHaveComments: extractedData.mustHaveComments || [],
+        niceToHaveComments: extractedData.niceToHaveComments || [],
+      },
+      skip,
+    );
+
+    if (!hit) return false;
+
+    toast.error({
+      title: 'Already added',
+      description: `"${hit.existingValue}" already exists under ${DUPLICATE_LIST_LABELS[hit.listKey]}. Each skill or comment can be added only once across Must-Have and Nice-to-Have lists.`,
+    });
+    return true;
+  };
+
   const handleAddSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
     if (newSkill.trim()) {
       const skillToAdd = newSkill.trim();
       const fieldLabel = category === 'mustHaveSkills' ? 'Must-have skills' : 'Nice-to-have skills';
 
       if (!validateEnglishOnlyExtractedValue(skillToAdd, fieldLabel)) {
+        return;
+      }
+
+      if (isDuplicateAcrossLists(skillToAdd)) {
         return;
       }
 
@@ -2649,6 +3017,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
+      if (isDuplicateAcrossLists(commentToAdd)) {
+        return;
+      }
+
       const updatedComments = [...extractedData.mustHaveComments, commentToAdd];
 
       setExtractedData(prev => ({
@@ -2713,6 +3085,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
+      if (isDuplicateAcrossLists(newValue, { listKey: category, index })) {
+        return;
+      }
+
       // Calculate updated arrays
       const updatedMustHave = category === 'mustHaveSkills'
         ? extractedData.mustHaveSkills.map((skill, i) => i === index ? newValue : skill)
@@ -2763,6 +3139,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
+      if (isDuplicateAcrossLists(newValue, { listKey: 'mustHaveComments', index: editingCommentIndex })) {
+        return;
+      }
+
       const updatedComments = extractedData.mustHaveComments.map((comment, i) =>
         i === editingCommentIndex ? newValue : comment
       );
@@ -2800,6 +3180,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const commentToAdd = newComment.trim();
 
       if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Nice-to-have comments')) {
+        return;
+      }
+
+      if (isDuplicateAcrossLists(commentToAdd)) {
         return;
       }
 
@@ -2844,6 +3228,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const newValue = editingNiceCommentValue.trim();
 
       if (!validateEnglishOnlyExtractedValue(newValue, 'Nice-to-have comments')) {
+        return;
+      }
+
+      if (isDuplicateAcrossLists(newValue, { listKey: 'niceToHaveComments', index: editingNiceCommentIndex })) {
         return;
       }
 
@@ -3190,7 +3578,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -3300,19 +3688,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
 
+    // --- De-duplication is folded into the reformat pass ---
+    // IMPORTANT: the AI reformat (which also de-duplicates) must fire ONLY when the
+    // user actually changed Step 2 data, i.e. `shouldReformat`. On a no-op edit
+    // pass-through (e.g. editing a published JD and clicking Next without changes)
+    // we make NO AI call and leave the lists untouched. `clientDeduped` is only used
+    // as cleaned input WHEN we reformat; otherwise `finalLists` stays as the loaded
+    // lists so nothing is silently mutated or re-saved.
+    const baseLists: Record<DuplicateListKey, string[]> = {
+      mustHaveSkills: extractedData.mustHaveSkills || [],
+      niceToHaveSkills: extractedData.niceToHaveSkills || [],
+      mustHaveComments: extractedData.mustHaveComments || [],
+      niceToHaveComments: extractedData.niceToHaveComments || [],
+    };
+    const clientDeduped = dedupeListsDeterministic(baseLists);
+    let finalLists: Record<DuplicateListKey, string[]> = baseLists;  // unchanged unless we reformat
+    const effectiveReformat = shouldReformat;
+
     // Track the final description to use (avoiding React state async issues)
     let finalDescription = currentDescription;
 
-    // Reformat with AI if user edited something in Step 2
-    // Uses both flag-based check AND data snapshot comparison for reliability
-    if (shouldReformat) {
-      console.log('[DEBUG] Data modified in Step 2, reformatting with AI...');
+    // Reformat with AI ONLY when the user edited something in Step 2 (shouldReformat).
+    // The reformat pass also de-duplicates the requirement lists. No edits → no AI call.
+    if (effectiveReformat) {
+      console.log('[DEBUG] Reformatting/de-duplicating with AI... (shouldReformat:', shouldReformat, ') - triggered only by Step 2 changes');
       setIsRegenerating(true);
 
       try {
-        const mustHaveComments = extractedData.mustHaveComments || [];
-        const niceToHaveComments = extractedData.niceToHaveComments || [];
-
         if (editingId) {
           const persistedExperiencePayload = resolvePersistedExperiencePayload(extractedData.experience);
           const experienceMin = persistedExperiencePayload.experienceMin;
@@ -3328,12 +3730,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             }
           }
 
-          // Call reformat endpoint with ALL parameters directly in the request
+          // Call reformat endpoint with the (client-deduped) lists. The endpoint
+          // additionally merges semantically-equivalent items and returns the
+          // final, fully de-duplicated lists.
           const reformatParams = {
-            must_have_skills: extractedData.mustHaveSkills,
-            nice_to_have_skills: extractedData.niceToHaveSkills,
-            must_have_comments: mustHaveComments,
-            nice_to_have_comments: niceToHaveComments,
+            must_have_skills: clientDeduped.mustHaveSkills,
+            nice_to_have_skills: clientDeduped.niceToHaveSkills,
+            must_have_comments: clientDeduped.mustHaveComments,
+            nice_to_have_comments: clientDeduped.niceToHaveComments,
             experience_min: experienceMin,
             experience_max: experienceMax,
             job_level: persistedExperiencePayload.jobLevel,
@@ -3349,6 +3753,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
 
+          // Adopt the server's de-duplicated lists (falls back to the cleaned
+          // client-deduped input if the response omits any list).
+          finalLists = {
+            mustHaveSkills: reformattedJD.must_have_skills ?? clientDeduped.mustHaveSkills,
+            niceToHaveSkills: reformattedJD.nice_to_have_skills ?? clientDeduped.niceToHaveSkills,
+            mustHaveComments: reformattedJD.must_have_comments ?? clientDeduped.mustHaveComments,
+            niceToHaveComments: reformattedJD.nice_to_have_comments ?? clientDeduped.niceToHaveComments,
+          };
+
           // Store the reformatted description for saving (React state is async)
           finalDescription = reformattedJD.description;
 
@@ -3359,10 +3772,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             setManualJD(reformattedJD.description);
           }
 
-          toast.success({
-            title: 'JD Reformatted',
-            description: 'Job description has been regenerated with your changes.',
-          });
+          const mergedCount = totalListItems(baseLists) - totalListItems(finalLists);
+          if (mergedCount > 0) {
+            toast.success({
+              title: 'Duplicates combined',
+              description: `${mergedCount} duplicate ${mergedCount === 1 ? 'entry was' : 'entries were'} merged. Job description has been regenerated.`,
+            });
+          } else {
+            toast.success({
+              title: 'JD Reformatted',
+              description: 'Job description has been regenerated with your changes.',
+            });
+          }
         } else if (mode === 'manual') {
           finalDescription = normalizeManualJDToMarkdown(currentDescription);
           setManualJD(finalDescription);
@@ -3398,11 +3819,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
+    // Reflect the de-duplicated lists into the extracted data used by the review
+    // UI and the DB save below (setExtractedData is async, so we also keep a local
+    // `reviewData` copy to avoid reading stale state).
+    const reviewData = {
+      ...extractedData,
+      mustHaveSkills: finalLists.mustHaveSkills,
+      niceToHaveSkills: finalLists.niceToHaveSkills,
+      mustHaveComments: finalLists.mustHaveComments,
+      niceToHaveComments: finalLists.niceToHaveComments,
+    };
+    if (effectiveReformat) {
+      setExtractedData(reviewData);
+    }
+
     // Go to review step to show the reformatted summary
     setStep('review');
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
-    step2DataSnapshot.current = JSON.stringify(extractedData);  // Update snapshot so returning without new edits skips
+    step2DataSnapshot.current = JSON.stringify(reviewData);  // Update snapshot so returning without new edits skips
     // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
     // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed
@@ -3419,10 +3854,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         creation_stage: 'review' as const,
         creation_method: (mode === 'ai' ? 'ai_generated' : 'manual') as 'ai_generated' | 'manual',
         ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
-        must_have_skills: extractedData.mustHaveSkills,
-        nice_to_have_skills: extractedData.niceToHaveSkills,
-        must_have_comments: extractedData.mustHaveComments,
-        nice_to_have_comments: extractedData.niceToHaveComments,
+        must_have_skills: finalLists.mustHaveSkills,
+        nice_to_have_skills: finalLists.niceToHaveSkills,
+        must_have_comments: finalLists.mustHaveComments,
+        nice_to_have_comments: finalLists.niceToHaveComments,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
         experience_max: experienceMax,
@@ -3526,8 +3961,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     if (!trimmedJobTitle) {
       missingFields.push('Job Title');
-    } else if (getJobTitleValidationError(trimmedJobTitle)) {
-      missingFields.push(getJobTitleValidationError(trimmedJobTitle));
+    } else if (getResolvedJobTitleValidationError(trimmedJobTitle)) {
+      missingFields.push(getResolvedJobTitleValidationError(trimmedJobTitle));
     }
 
     if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
@@ -3588,7 +4023,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -3658,7 +4093,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -3684,7 +4119,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         /^[-*+]\s/m.test(publishDescription)          // bullet points
       );
 
-      if (lacksMarkdownFormatting && editingId) {
+      // NO CHANGE, NO LLM: when republishing an existing JD that the user did not
+      // change (Step 1 unchanged since load AND no Step 2 edits), never call the
+      // reformat LLM here — publish the description exactly as it is.
+      const contentChangedSinceLoad = extractedDataModified || !isStage1UnchangedFromLoad();
+
+      if (lacksMarkdownFormatting && editingId && contentChangedSinceLoad) {
         console.log('[DEBUG] handleConfirmPublish - manual JD lacks formatting, reformatting before publish');
         try {
           const reformatParams = {
@@ -3993,7 +4433,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    if (!validateEnglishOnlyJobTitle(trimmedJobTitle)) {
+    if (!(await ensureValidJobTitle(trimmedJobTitle))) {
       return;
     }
 
@@ -4200,6 +4640,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setManualJD(prev => prev || effectiveEditingJD.description || '');  // Preserve user edits
       }
 
+      // Capture the Step-1 baseline for change detection on Next (used to skip the
+      // extraction LLM when the user edits an existing JD but changes nothing here).
+      stage1LoadBaseline.current = {
+        jobTitle: effectiveEditingJD.title || '',
+        aiPrompt: effectiveEditingJD.ai_prompt || '',
+        generatedJD: effectiveEditingJD.description || '',
+        manualJD: effectiveEditingJD.creation_method === 'manual' ? (effectiveEditingJD.description || '') : '',
+      };
+
       // Set lastExtractedJD to the loaded description only if extraction has already happened.
       // For drafts saved at 'create' stage, leave it empty so handleNext triggers extraction.
       if (effectiveEditingJD.creation_stage !== 'create') {
@@ -4353,7 +4802,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     );
   }
 
-  const jobTitleValidationError = getJobTitleValidationError(jobTitle);
+  const jobTitleValidationError = getResolvedJobTitleValidationError(jobTitle);
+  const jobTitleLengthInvalid = jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max);
+  const hasJobTitleValidationError = jobTitleLengthInvalid || Boolean(jobTitleValidationError);
+  const isJobTitlePendingValidation = (
+    jobTitle.trim().length >= VALIDATION.JOB_TITLE.min &&
+    !jobTitleValidationError &&
+    isJobTitleValidating
+  );
   const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
 
   return (
@@ -4495,18 +4951,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || Boolean(jobTitleValidationError))
+                            : hasJobTitleValidationError
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
                           {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
+                          {jobTitle.length >= VALIDATION.JOB_TITLE.min && !jobTitleValidationError && !jobTitleLengthInvalid && isJobTitlePendingValidation && 'Validating job title...'}
                         </p>
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -4585,6 +5042,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           isJDInUse ||
                           !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                           Boolean(jobTitleValidationError) ||
+                          isJobTitlePendingValidation ||
                           // Always require AI prompt with min/max length validation (for both generate and regenerate)
                           promptLength < VALIDATION.AI_PROMPT.min ||
                           promptLength > VALIDATION.AI_PROMPT.max ||
@@ -4651,17 +5109,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : jobTitle.length > 0 && (!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) || Boolean(jobTitleValidationError))
+                            : hasJobTitleValidationError
                               ? 'border-red-300 bg-red-50'
                               : 'border-gray-200'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
                           {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                          {jobTitle.length >= VALIDATION.JOB_TITLE.min && !jobTitleValidationError && !jobTitleLengthInvalid && isJobTitlePendingValidation && 'Validating job title...'}
                         </p>
-                        <p className={`text-xs ${jobTitle.length > 0 && ((!isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)) || Boolean(jobTitleValidationError)) ? 'text-red-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-red-500' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -4889,6 +5348,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                   Boolean(jobTitleValidationError) ||
+                  isJobTitlePendingValidation ||
                   (mode === 'ai'
                     ? !generatedJD || !containsMeaningfulText(generatedJD) || !isEnglishOnly(generatedJD)
                     : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))
@@ -5244,7 +5704,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       }
 
                       setShowCustomExperienceInput(false);
-                      setExperienceYearsExplicit(false);
+                      // A level picked from the dropdown is a deliberate user choice,
+                      // and each level carries a definitional year range (e.g. "Junior
+                      // Level" = 2-4 years). Mark years as explicit so the range
+                      // persists into Step 3 and the published JD. (Without this, the
+                      // selected experience was silently dropped before reaching Step 3.)
+                      const selectedLevel = getExperienceLevelByCode(nextValue);
+                      const levelHasYears = !!selectedLevel
+                        && (selectedLevel.min_years != null || selectedLevel.max_years != null);
+                      setExperienceYearsExplicit(levelHasYears);
                       setExtractedData(prev => ({ ...prev, experience: nextValue }));
                       markExtractedDataModified();
                       // Clear validation error when user makes a selection

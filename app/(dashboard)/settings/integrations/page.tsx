@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { integrationsApi, Integration } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -12,6 +13,13 @@ export default function IntegrationsPage() {
   const [filter, setFilter] = useState('all');
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
+  const rootRef = useScrollRestoration<HTMLElement>('settings-integrations', !isLoading);
+  useListStatePersistence(
+    'settings-integrations',
+    { filter },
+    (s) => { if (typeof s.filter === 'string') setFilter(s.filter); },
+  );
 
   useEffect(() => {
     loadIntegrations();
@@ -79,7 +87,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Integrations' }]} />

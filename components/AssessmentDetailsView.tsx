@@ -1,6 +1,9 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService, jdService } from '@/lib/services';
 import type { JDResponse } from '@/lib/services';
@@ -177,11 +180,12 @@ export default function AssessmentDetailsView({
     fetchSiblings();
   }, [assessment?.id, assessment?.jd_id, activeTab]);
 
-  // Lazy-fetch the linked JD when the View JD tab is opened. Cached per
-  // assessment.jd_id so switching tabs doesn't re-fetch.
+  // Lazy-fetch the linked JD when the View JD OR Assessment Details (overview)
+  // tab is opened — the overview tab now also shows the JD's Assessment
+  // Guidance. Cached per assessment.jd_id so switching tabs doesn't re-fetch.
   useEffect(() => {
     const fetchJd = async () => {
-      if (activeTab !== 'viewjd' || !assessment?.jd_id) return;
+      if ((activeTab !== 'viewjd' && activeTab !== 'overview') || !assessment?.jd_id) return;
       if (jdData && jdData.id === assessment.jd_id) return;
       setJdLoading(true);
       setJdError(null);
@@ -455,7 +459,7 @@ export default function AssessmentDetailsView({
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: assessment.short_id || stripVersionFromTitle(assessment.title) || 'Assessment Details' },
+              { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
             ]}
           />
           <RecordPager
@@ -1210,6 +1214,30 @@ export default function AssessmentDetailsView({
                 </div>
               </div>
             </div>
+
+            {/* Assessment Guidance — mirrors the JD view's guidance section so
+                recruiters see it without switching to the View JD tab. */}
+            {jdData?.assessment_guidance && (
+              <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+                    <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                      <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                    </div>
+                    Assessment Guidance
+                  </h3>
+                </div>
+                <div className="p-3 sm:p-4 lg:p-6">
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800">
+                    <div className="markdown-content leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {jdData.assessment_guidance}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1240,6 +1268,24 @@ export default function AssessmentDetailsView({
               const totalPages = Math.max(1, Math.ceil(recentActivity.length / ACTIVITY_PAGE_SIZE));
               const startIdx = (activityPage - 1) * ACTIVITY_PAGE_SIZE;
               const pageItems = recentActivity.slice(startIdx, startIdx + ACTIVITY_PAGE_SIZE);
+              // Open a completed candidate's result details. Stores the ordered
+              // list of completed candidates (with a resolvable attempt_id) so
+              // the details view offers Prev/Next between them — mirrors the
+              // Results page + Track-Invites flow.
+              const openCompletedResult = (activity: any) => {
+                if (!activity.attempt_id) return;
+                try {
+                  const navList = recentActivity
+                    .filter((e: any) => e._eventType === 'completed' && e.attempt_id)
+                    .map((e: any) => ({ id: e.attempt_id, cid: e.candidate_display_id || '' }));
+                  sessionStorage.setItem('assessmentResultNavList', JSON.stringify(navList));
+                } catch { /* ignore quota errors */ }
+                router.push(
+                  `/recruitment/assessments/${assessment.id}/results/details`
+                  + `?candidate_id=${activity.attempt_id}`
+                  + `${activity.candidate_display_id ? `&cid=${encodeURIComponent(activity.candidate_display_id)}` : ''}`
+                );
+              };
               return (
                 <>
                   <div className="divide-y divide-gray-100">
@@ -1271,9 +1317,18 @@ export default function AssessmentDetailsView({
                       const ActivityIcon = info.icon;
                       const formattedDate = activity._eventAt ? formatIST(activity._eventAt) : 'N/A';
                       const showScores = activity._eventType === 'completed';
+                      // Only completed rows with a resolvable attempt open the
+                      // candidate's result details; other lifecycle events stay
+                      // as a read-only log.
+                      const isClickable = showScores && !!activity.attempt_id;
 
                       return (
-                        <div key={`${activity.id}-${activity._eventType}-${idx}`} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-brand-blue/5 transition-colors">
+                        <div
+                          key={`${activity.id}-${activity._eventType}-${idx}`}
+                          onClick={isClickable ? () => openCompletedResult(activity) : undefined}
+                          title={isClickable ? 'View candidate results' : undefined}
+                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-4 transition-colors ${isClickable ? 'cursor-pointer hover:bg-brand-blue/5' : ''}`}
+                        >
                           <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
                             <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${info.color}`}>
                               <ActivityIcon className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2090,8 +2145,12 @@ export default function AssessmentDetailsView({
                     <FileText className="w-3.5 h-3.5 text-gray-500" />
                     Description
                   </div>
-                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-slate-50 rounded-lg ring-1 ring-black/[0.02] text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                    {jdData.description}
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-slate-50 rounded-lg ring-1 ring-black/[0.02] text-sm text-gray-800">
+                    <div className="markdown-content leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {jdData.description}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2103,8 +2162,12 @@ export default function AssessmentDetailsView({
                     <Info className="w-3.5 h-3.5 text-brand-blue" />
                     Assessment Guidance
                   </div>
-                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                    {jdData.assessment_guidance}
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800">
+                    <div className="markdown-content leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {jdData.assessment_guidance}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               )}

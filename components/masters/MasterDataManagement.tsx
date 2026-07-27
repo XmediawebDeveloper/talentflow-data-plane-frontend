@@ -14,6 +14,7 @@ import {
 } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -76,11 +77,30 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   const config = typeConfig[type];
   const Icon = config.icon;
 
+  // Persist scroll + view state so returning to this master-data page restores
+  // the pagination the user left off on. Keyed per master-data type.
+  const persistenceKey =
+    type === 'education' ? 'masters-education-levels'
+    : type === 'experience' ? 'masters-experience-levels'
+    : 'masters-industry-types';
+  const rootRef = useScrollRestoration<HTMLElement>(persistenceKey, !loading);
+
   // Fetch data
   useEffect(() => {
     fetchData();
     setCurrentPage(1);
   }, [type]);
+
+  // Declared AFTER the type effect above so, on mount, restore's page value
+  // wins over that effect's setCurrentPage(1) reset.
+  useListStatePersistence(
+    persistenceKey,
+    { currentPage, itemsPerPage },
+    (s) => {
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
 
   const paginatedItems = items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const itemLabel = type === 'industry' ? 'types' : 'levels';
@@ -261,7 +281,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   };
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb

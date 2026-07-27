@@ -143,6 +143,6 @@ export function describeCapability(cap: DeviceCapability): string {
     `tier=${cap.tier} cores=${cap.cores} ram=${cap.memoryGB ?? '?'}GB ` +
     `bench=${cap.benchmarkMs?.toFixed(1) ?? '?'}ms ` +
     `[neuralVad=${cap.useNeuralVad} avatar3d=${cap.use3DAvatar} ` +
-    `rnnoise=${cap.useNoiseSuppression} faceVerify=${cap.faceVerifyIntervalMs / 1000}s]`
+    `noiseSuppress=${cap.useNoiseSuppression} faceVerify=${cap.faceVerifyIntervalMs / 1000}s]`
   );
 }

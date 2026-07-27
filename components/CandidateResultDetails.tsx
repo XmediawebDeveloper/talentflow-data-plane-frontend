@@ -7,6 +7,7 @@ import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringSer
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -27,6 +28,13 @@ interface CandidateResultDetailsProps {
    * parent page already shows the pager (e.g. on its breadcrumb row).
    */
   showRecordPager?: boolean;
+  /**
+   * Optional breadcrumb rendered at the very top. Provide it when this view is
+   * shown inline inside another page that doesn't already wrap it with a
+   * breadcrumb (e.g. JobDetailView's assessment-result view). The standalone
+   * results/details route wraps its own breadcrumb externally and omits this.
+   */
+  breadcrumbItems?: BreadcrumbCrumb[];
 }
 
 interface CandidateBasicInfo {
@@ -150,6 +158,7 @@ export default function CandidateResultDetails({
   onPrev,
   onNext,
   showRecordPager = true,
+  breadcrumbItems,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -431,6 +440,11 @@ export default function CandidateResultDetails({
 
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto">
+      {breadcrumbItems && breadcrumbItems.length > 0 && (
+        <div className="px-3 sm:px-4 pt-3">
+          <PageBreadcrumb className="mb-0" sticky={false} items={breadcrumbItems} />
+        </div>
+      )}
       {showRecordPager && totalCount != null && totalCount > 0 && (
         <div className="flex justify-end px-3 sm:px-4 pt-3">
           <RecordPager
@@ -2251,7 +2265,7 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Screenshot Violations (screenshot + screen recording) */}
+                      {/* Screen capture attempts (screenshots + screen recording) */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
@@ -2268,7 +2282,7 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Screenshot Violation</div>
+                        <div className="text-sm text-gray-600 mb-1">Screen Capture Attempt</div>
                         <div className={`text-3xl font-bold tracking-tight ${
                           (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                             ? 'text-brand-orange-deep'
@@ -2377,8 +2391,8 @@ export default function CandidateResultDetails({
                                   case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'screenshot_attempt':       return { label: 'Screenshot Violation',    icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
-                                  case 'screen_recording_attempt': return { label: 'Screenshot Violation',    icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'screenshot_attempt':       return { label: 'Screenshot Attempt',      icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording Attempt', icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
                                   default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }

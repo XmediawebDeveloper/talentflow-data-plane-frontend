@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -56,6 +57,19 @@ export default function JobOpeningsPage() {
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const canManageMasters = hasPermission('canManageSettings');
+
+  // Restore/persist the list's view state + scroll position so returning from a
+  // job-details page lands the user exactly where they left off. The outer div
+  // below is the outermost root that owns the scroll container, so the scroll
+  // ref is attached here (JobsListing renders inside it).
+  const rootRef = useScrollRestoration('job-openings', !loading);
+  useListStatePersistence(
+    'job-openings',
+    { activeFilter },
+    (s) => {
+      if (typeof s.activeFilter === 'string') setActiveFilter(s.activeFilter as FilterStatus);
+    },
+  );
 
   // Sync filter with URL parameter
   useEffect(() => {
@@ -392,7 +406,7 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       <JobsListing
         jobs={jobs}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}

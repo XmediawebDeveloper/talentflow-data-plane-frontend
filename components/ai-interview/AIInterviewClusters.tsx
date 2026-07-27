@@ -383,7 +383,7 @@ function ClusterRow({
           </div>
 
           {/* Reason / description was removed per UX request. cluster.reason
-              is still preserved on the data model so Linda's prompts can use
+              is still preserved on the data model so Bina's prompts can use
               it. Edit it from the JD config page if needed. */}
 
           {/* Skills — single section, type-coded chip colors (Skill = violet, Command = sky-blue) */}
@@ -935,13 +935,55 @@ export default function AIInterviewClusters() {
           return survivors;
         };
         const initialExpandIds: string[] = [];
+        // Fold the SAVED distribution's skills back into the restored clusters so
+        // the cluster card shows every skill the interview actually asks. The
+        // saved skill_distribution can carry JD-pool skills that were never
+        // written into nth_clusters/mth_clusters, so without this the card showed
+        // e.g. 2 NHS skills while the Question Distribution popover (which reads
+        // the distribution) correctly showed 8. Matched by cluster_id → name →
+        // first cluster; case-insensitive dedupe; never drops an existing skill.
+        const _distRows = (si.skill_distribution && typeof si.skill_distribution === 'object')
+          ? si.skill_distribution as { mth_questions?: any[]; nth_questions?: any[] }
+          : {};
+        const foldDistOnLoad = (clustersArr: any[], rows?: any[]): any[] => {
+          if (!Array.isArray(clustersArr) || clustersArr.length === 0) return clustersArr;
+          if (!Array.isArray(rows) || rows.length === 0) return clustersArr;
+          const next = clustersArr.map(c => ({ ...c, skills: [...(c.skills || [])] }));
+          const byId = new Map(next.map(c => [String(c.id), c]));
+          const byName = new Map(next.map(c => [String(c.name).toLowerCase().trim(), c]));
+          // BUCKET-WIDE dedup (not per-cluster): clusters partition skills 1:1, but
+          // the slot distribution is many-to-many — the same skill is often a
+          // secondary across multiple clusters' question rows. A per-cluster set
+          // let such a skill be folded into TWO clusters (e.g. "Test case design"
+          // in both "Testing Tools" and "Defect Tracking"). Scope dedup to the
+          // whole bucket so a skill already present in ANY cluster is never added
+          // to another. First cluster to own it wins.
+          const seenBucket = new Set<string>(
+            next.flatMap(c => (c.skills as string[]).map(s => s.toLowerCase().trim())),
+          );
+          for (const r of rows) {
+            const target = byId.get(String(r?.cluster_id))
+              ?? byName.get(String(r?.cluster_name || '').toLowerCase().trim())
+              ?? next[0];
+            if (!target) continue;
+            const names = [
+              String(r?.primary_skill || r?.primary || '').trim(),
+              ...((r?.secondary_skills || r?.secondaries || []) as any[]).map((x: any) => String(x || '').trim()),
+            ].filter(Boolean);
+            for (const nm of names) {
+              const k = nm.toLowerCase().trim();
+              if (k && !seenBucket.has(k)) { (target.skills as string[]).push(nm); seenBucket.add(k); }
+            }
+          }
+          return next;
+        };
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
           const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
-          const mthRestored = mthTrimmed.map((c: any) => ({
-            ...c,
-            priority: normalizePriority(c.priority),
-          }));
+          const mthRestored = foldDistOnLoad(
+            mthTrimmed.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })),
+            _distRows.mth_questions,
+          );
           setMthClusters(mthRestored);
           // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
@@ -951,10 +993,10 @@ export default function AIInterviewClusters() {
           const nthTrimmed = !nthEnabledForTimed
             ? []
             : trimAndRedistribute(si.nth_clusters as any[], nthMax);
-          const nthRestored = nthTrimmed.map((c: any) => ({
-            ...c,
-            priority: normalizePriority(c.priority),
-          }));
+          const nthRestored = foldDistOnLoad(
+            nthTrimmed.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })),
+            _distRows.nth_questions,
+          );
           setNthClusters(nthRestored);
           // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
@@ -1775,6 +1817,67 @@ export default function AIInterviewClusters() {
                   nth_questions: dist.nth_questions || [],
                   generated_at: new Date().toISOString(),
                 };
+
+                // ── Sync clusters ⇐ distribution ──────────────────────────
+                // The distribution can introduce JD-pool skills (e.g. Canva,
+                // WordPress) that were NOT in the clusters the recruiter typed.
+                // Those skills are what the interview actually asks, but the
+                // cluster CARD renders `cluster.skills` — so without this sync it
+                // showed only the 2 original skills while the Question
+                // Distribution popover correctly showed all 8. Fold every
+                // distribution skill back into its own cluster (matched by
+                // cluster_id, else cluster_name, else the first cluster) so the
+                // card and the popover agree. Case-insensitive dedupe; never
+                // drops an existing skill.
+                const foldDistIntoClusters = (
+                  clustersArr: Cluster[],
+                  rows: any[],
+                ): Cluster[] => {
+                  if (!clustersArr.length || !Array.isArray(rows) || rows.length === 0) {
+                    return clustersArr;
+                  }
+                  // Work on fresh cluster objects (new skills arrays) so React
+                  // re-renders when we setState with the result.
+                  const next: Cluster[] = clustersArr.map(c => ({ ...c, skills: [...c.skills] }));
+                  const byId = new Map(next.map(c => [String(c.id), c]));
+                  const byName = new Map(next.map(c => [String(c.name).toLowerCase().trim(), c]));
+                  // BUCKET-WIDE dedup (not per-cluster): a skill already present in
+                  // ANY cluster of this bucket must not be folded into another —
+                  // the many-to-many slot rows otherwise duplicate a cross-cluster
+                  // secondary into a second cluster card.
+                  const seenBucket = new Set<string>(
+                    next.flatMap(c => c.skills.map(s => s.toLowerCase().trim())),
+                  );
+                  for (const r of rows) {
+                    const target =
+                      byId.get(String(r?.cluster_id)) ??
+                      byName.get(String(r?.cluster_name || '').toLowerCase().trim()) ??
+                      next[0];
+                    if (!target) continue;
+                    const skillNames: string[] = [
+                      String(r?.primary_skill || r?.primary || '').trim(),
+                      ...((r?.secondary_skills || r?.secondaries || []) as any[])
+                        .map((s: any) => String(s || '').trim()),
+                    ].filter(Boolean);
+                    for (const nm of skillNames) {
+                      const k = nm.toLowerCase().trim();
+                      if (k && !seenBucket.has(k)) {
+                        target.skills.push(nm);
+                        seenBucket.add(k);
+                      }
+                    }
+                  }
+                  return next;
+                };
+                newMthClusters = foldDistIntoClusters(newMthClusters, dist.mth_questions || []);
+                if (nthEnabled) {
+                  newNthClusters = foldDistIntoClusters(newNthClusters, dist.nth_questions || []);
+                }
+                // Re-sync state + SI so the cluster CARD shows the full set.
+                setMthClusters(newMthClusters);
+                if (nthEnabled) setNthClusters(newNthClusters);
+                si.mth_clusters = newMthClusters;
+                si.nth_clusters = nthEnabled ? newNthClusters : [];
               }
             } catch (distErr) {
               // Non-fatal — clusters still persist; finalize will compute the
@@ -1783,16 +1886,60 @@ export default function AIInterviewClusters() {
             }
           }
 
-          await aiInterviewService.update(id, {
+          const _updated = await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
           });
-          // Reflect the persisted si (incl. skill_distribution) into local
-          // config state so the distribution preview re-renders from the SAVED
-          // AI distribution immediately — no page reload, and it now matches
-          // exactly what the post-publish view will show.
+          // Adopt the BACKEND-CORRECTED special_instructions from the update
+          // response. The server-side over-allocation backstop expands a bucket
+          // whose unique skills < question count (e.g. recruiter left just 1 MHS
+          // + 1 NHS skill) with JD-grounded skills and RECOMPUTES the
+          // distribution with a unique skill per question. If we instead kept the
+          // LOCAL `si` (as before), the preview showed the frontend's
+          // pre-backstop distribution — the single seed skill CYCLED/duplicated
+          // across all questions — even though the DB now holds the correct,
+          // deduped, expanded plan. Re-deriving the cluster cards from the
+          // returned SI makes the preview match what actually got stored.
+          const _serverSi = (_updated && typeof (_updated as any).special_instructions === 'string')
+            ? (_updated as any).special_instructions as string
+            : JSON.stringify(si);
+          let _serverParsed: any = null;
+          try { _serverParsed = JSON.parse(_serverSi); } catch { _serverParsed = null; }
+          if (_serverParsed && typeof _serverParsed === 'object') {
+            // Re-derive cluster cards from the backend clusters (already expanded
+            // by the backstop), folding the backend distribution so the card and
+            // the Question Distribution popover agree.
+            const _foldServer = (clArr: any[], rws?: any[]): any[] => {
+              if (!Array.isArray(clArr) || clArr.length === 0) return clArr || [];
+              if (!Array.isArray(rws) || rws.length === 0) return clArr;
+              const nx = clArr.map(c => ({ ...c, skills: [...(c.skills || [])] }));
+              const byId = new Map(nx.map(c => [String(c.id), c]));
+              const byName = new Map(nx.map(c => [String(c.name).toLowerCase().trim(), c]));
+              // BUCKET-WIDE dedup (see foldDistOnLoad): a skill already present in
+              // ANY cluster of this bucket must not be folded into another — the
+              // many-to-many slot rows otherwise duplicate a cross-cluster
+              // secondary into a second cluster card.
+              const snBucket = new Set<string>(nx.flatMap(c => (c.skills as string[]).map(s => s.toLowerCase().trim())));
+              for (const r of rws) {
+                const t = byId.get(String(r?.cluster_id)) ?? byName.get(String(r?.cluster_name || '').toLowerCase().trim()) ?? nx[0];
+                if (!t) continue;
+                const names = [String(r?.primary_skill || r?.primary || '').trim(), ...((r?.secondary_skills || r?.secondaries || []) as any[]).map((x: any) => String(x || '').trim())].filter(Boolean);
+                for (const nm of names) { const k = nm.toLowerCase().trim(); if (k && !snBucket.has(k)) { (t.skills as string[]).push(nm); snBucket.add(k); } }
+              }
+              return nx;
+            };
+            const _sd = (_serverParsed.skill_distribution && typeof _serverParsed.skill_distribution === 'object') ? _serverParsed.skill_distribution : {};
+            if (Array.isArray(_serverParsed.mth_clusters)) {
+              const mthC = _foldServer(_serverParsed.mth_clusters.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })), _sd.mth_questions);
+              setMthClusters(mthC);
+            }
+            if (nthEnabled && Array.isArray(_serverParsed.nth_clusters)) {
+              const nthC = _foldServer(_serverParsed.nth_clusters.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })), _sd.nth_questions);
+              setNthClusters(nthC);
+            }
+          }
           setConfig(prev => prev
-            ? ({ ...prev, special_instructions: JSON.stringify(si), rounds_config: rounds } as AIInterviewResponse)
+            ? ({ ...prev, special_instructions: _serverSi, rounds_config: (_updated as any)?.rounds_config ?? rounds } as AIInterviewResponse)
             : prev);
         } catch {
           // Non-fatal — clusters are visible in UI; user can still save manually
@@ -1806,7 +1953,14 @@ export default function AIInterviewClusters() {
       );
     } catch (err) {
       console.error('[CLUSTER-DEBUG] handleGenerateClusters FAILED:', err);
-      toast.error('Failed to generate clusters');
+      // Surface the REAL backend reason (e.g. the OpenAI 429 / quota message from
+      // /expand-skills) instead of a generic "failed" — so the recruiter knows to
+      // top up the OpenAI account or add skills manually, rather than silently
+      // getting fabricated "<skill> – Concept N" placeholder clones.
+      const _reason = (err instanceof Error && err.message && err.message.trim())
+        ? err.message.trim()
+        : 'Failed to generate clusters. Please try again, or add skills manually.';
+      toast.error(_reason, { duration: 9000 });
     } finally {
       setGenerating(false);
     }
@@ -1834,6 +1988,52 @@ export default function AIInterviewClusters() {
     void handleGenerateClusters({ forceExpand: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, config, id, mthSkills.length, nthSkills.length]);
+
+  /* ─── Auto-heal under-filled saved clusters ───────────────────────────────
+     Page load restores saved clusters from special_instructions VERBATIM — it
+     does NOT re-run expansion. So a config whose clusters were saved while a
+     bucket was under-filled (the autogen page-load race, or a pre-expansion
+     generation) permanently shows more questions than skills (e.g. 5 NTH
+     questions / 2 NTH skills) until the recruiter clicks "Regenerate with AI".
+     Removal is locked at the floor, so they can't fix it here either.
+
+     When a restored, enabled bucket has fewer UNIQUE skills than its question
+     budget, re-run generation once with forceExpand so /expand-skills fills the
+     pool to ≥1 skill/question (backend floors to the question count and even
+     tops up with placeholders, so this converges and never loops). Timed mode
+     only — flexible mode has no fixed question floor. The autogen path already
+     regenerates, so skip when that flag is present. ─────────────────────── */
+  const autoHealFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoHealFiredRef.current) return;
+    if (loading || generating || !config || !id) return;
+    if (!isFixed) return;                              // no fixed floor in flexible mode
+    if (searchParams.get('autogen') === '1') return;   // autogen effect handles this entry
+    // Only heal a config that was already generated — leave a fresh, never-
+    // generated config to the autogen path / the recruiter's Generate click.
+    if (mthClusters.length === 0 && nthClusters.length === 0) return;
+    // Need input skills to expand from.
+    if (mthSkills.length === 0 && nthSkills.length === 0) return;
+
+    const mthFloor = timedAllocation.mthQuestions ?? 0;
+    const nthFloor = nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+    const uniqueCount = (clusters: Cluster[]) =>
+      new Set(clusters.flatMap(c => c.skills.map(s => s.toLowerCase()))).size;
+    const mthShort = mthFloor > 0 && uniqueCount(mthClusters) < mthFloor;
+    const nthShort = nthFloor > 0 && uniqueCount(nthClusters) < nthFloor;
+    if (!mthShort && !nthShort) return;
+
+    autoHealFiredRef.current = true;
+    console.log('[CLUSTER-DEBUG] Auto-heal: under-filled bucket detected, re-expanding', {
+      mthFloor, nthFloor,
+      mthUnique: uniqueCount(mthClusters), nthUnique: uniqueCount(nthClusters),
+      mthShort, nthShort,
+    });
+    toast.info('Expanding skills to match the question budget…');
+    void handleGenerateClusters({ forceExpand: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, generating, config, id, isFixed, nthEnabled,
+      mthClusters, nthClusters, mthSkills.length, nthSkills.length]);
 
   /* ── Save & Navigate ── */
   /** Build updated rounds_config with topics/topic_weights from clusters */
@@ -2588,7 +2788,7 @@ export default function AIInterviewClusters() {
                         ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                       ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
                       // 2026-05-26 fix: this stealth-dot popover MUST mirror the
-                      // SAVED skill_distribution (what Linda actually asks at runtime
+                      // SAVED skill_distribution (what Bina actually asks at runtime
                       // AND what the post-publish "View Skill Clusters" popover shows),
                       // NOT a fresh local distribute() recompute. The local algorithm
                       // produces a DIFFERENT layout than the backend AI distribution
@@ -3155,7 +3355,7 @@ export default function AIInterviewClusters() {
             // 2026-05-22 fix: Distribution panel must mirror the saved
             // skill_distribution that the runtime actually follows. The
             // older local `distribute()` recomputed a DIFFERENT layout
-            // (priority-block layout) which never matched what Linda
+            // (priority-block layout) which never matched what Bina
             // asked. Read from saved si.skill_distribution when present;
             // fall back to local distribute() only for fresh sessions
             // that haven't generated/saved yet.
