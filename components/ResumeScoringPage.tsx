@@ -17,6 +17,7 @@ import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
@@ -1736,6 +1737,12 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
+        <ModuleInfoBanner
+          icon={<Target className="h-4 w-4" />}
+          title="AI-Powered Resume Scoring"
+          description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
+        />
+
         {/* Overview cards — always visible; the active card is highlighted
             once its list is open below. */}
           <div className="mb-4 sm:mb-5">
@@ -2740,6 +2747,12 @@ export default function ResumeScoringPage({
           </div>
         </div>
       </div>
+
+      <ModuleInfoBanner
+        icon={<Target className="h-4 w-4" />}
+        title="AI-Powered Resume Scoring"
+        description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
+      />
 
       {/* Job Selection */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-5">
