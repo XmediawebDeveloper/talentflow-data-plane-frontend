@@ -110,6 +110,19 @@ const ORT_URLS = [
 const DETECTOR_NAME = "rf-detr-nano";
 
 /**
+ * Cache-buster for the worker script. **Bump this whenever you edit
+ * public/workers/objectDetection.worker.js.**
+ *
+ * next.config.ts now serves /workers/* as no-store, which is the real fix — but
+ * this stays as belt-and-braces for copies already held by a browser or the
+ * Cloudflare edge from before that header existed. A stale worker is uniquely
+ * nasty here: it silently runs a known-broken detector against live interviews
+ * while the code in the repo looks correct.
+ */
+const WORKER_VERSION = "3";
+const WORKER_URL = `/workers/objectDetection.worker.js?v=${WORKER_VERSION}`;
+
+/**
  * Warm the HTTP cache with the detector weights.
  *
  * The model is tens of MB and the candidate would otherwise download it at
@@ -232,7 +245,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
     let worker: Worker;
     try {
-      worker = new Worker("/workers/objectDetection.worker.js");
+      worker = new Worker(WORKER_URL);
     } catch (err) {
       markUnavailable(`Worker failed to start: ${(err as Error)?.message ?? err}`);
       return;

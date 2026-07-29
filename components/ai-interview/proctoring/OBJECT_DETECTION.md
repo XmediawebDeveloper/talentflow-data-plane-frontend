@@ -47,6 +47,32 @@ was off for the entire interview with a single warning line to show for it.
 The worker now tries the ORT sources in order (env var → `/ort/` → jsDelivr) and
 reports which one it used, so a same-origin miss is visible instead of silent.
 
+## Deploying changes — read this before debugging
+
+Two traps have already burned live interviews:
+
+**1. A stale worker runs while the repo looks correct.** `public/` files got the
+default `Cache-Control: public, max-age=14400`, so after a deploy candidates'
+browsers and the Cloudflare edge kept the *previous* worker for 4 hours. Fixed
+by serving `/workers/*` as `no-store` (next.config.ts). **Also bump
+`WORKER_VERSION` in InterviewObjectDetection.ts whenever you edit the worker** —
+that busts copies cached before the header existed.
+
+**2. The server serves a stale `public/` snapshot.** Newly *added* public files
+404 until the Next server restarts. So: run `npm run fetch:od-model` as part of
+build/deploy, and restart afterwards.
+
+When something looks wrong, check what is actually deployed rather than what is
+in the repo:
+
+```bash
+curl -s https://<host>/workers/objectDetection.worker.js | grep -c 'let ortLib'
+curl -sI https://<host>/models/object-detection/rf-detr-nano.onnx | grep -i content-length
+```
+
+`28826010` = q8 (correct). `54356067` = fp16, which cannot run without
+`shader-f16` — see the warning above.
+
 ## Architecture
 
 | Piece | Role |
