@@ -1327,13 +1327,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (stream) {
       webcamStreamRef.current = stream;
 
-      // ── Boost the RECORDING audio so quiet headset/earbud mics are clearly
-      // audible in the saved video (raw webcam audio is too quiet on headphones).
-      // The webcam AUDIO track is routed through gain → limiter and swapped into
-      // the recorded stream; the VIDEO track passes through untouched. Non-
+      // ── Build the RECORDING audio mix: boosted candidate mic + Bina's clean
+      // TTS tap. Mirrors the screen-recording mix in CandidateAIInterviewPortal
+      // so both saved views have the same two-voice balance.
+      //
+      // Mic: boosted via gain → limiter because raw webcam audio is too quiet on
+      // headphones/earbuds. The VIDEO track passes through untouched. Non-
       // destructive: the original audio track stays live for proctoring, and the
-      // ASR/transcription path uses its own separately-boosted stream. If Web
-      // Audio setup fails for any reason we record the raw stream unchanged.
+      // ASR/transcription path uses its own separately-boosted stream.
+      //
+      // Bina: taken from the DIRECT tap (__interviewRecordingDest), never from
+      // mic bleed. The webcam mic runs echoCancellation ON (Webcam.tsx), so her
+      // voice off the speakers is mostly cancelled — without this tap the saved
+      // Candidate View is one-sided (candidate only, questions inaudible) with
+      // hollow half-cancelled residue where she spoke. Trimmed to 0.75 so the
+      // boosted candidate sits at a comparable level instead of under her.
+      //
+      // If Web Audio setup fails for any reason we record the raw stream unchanged.
       let recordStream: MediaStream = stream;
       try {
         const aTracks = stream.getAudioTracks();
@@ -1343,6 +1353,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           const actx = new Ctx();
           recordingAudioCtxRef.current = actx;
           if (actx.state === 'suspended') actx.resume().catch(() => {});
+          const dest = actx.createMediaStreamDestination();
+
           const srcNode = actx.createMediaStreamSource(new MediaStream(aTracks));
           const boost = actx.createGain();
           boost.gain.value = 3.0; // lift quiet headset/earbud speech
@@ -1353,16 +1365,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           limiter.ratio.value = 20;
           limiter.attack.value = 0.003;
           limiter.release.value = 0.1;
-          const dest = actx.createMediaStreamDestination();
           srcNode.connect(boost).connect(limiter).connect(dest);
+
+          // Bina's voice — direct tap only. The dest is created by the portal
+          // BEFORE TalkingHead mounts (that's when the avatar wires itself into
+          // it), so only use an existing one; creating it this late would route
+          // nothing. Absent in flows without a screen-recording mix — the
+          // recording then stays mic-only, exactly as before.
+          const lindaDest = (window as any).__interviewRecordingDest as MediaStreamAudioDestinationNode | null;
+          let binaMixed = false;
+          if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
+            const lindaGain = actx.createGain();
+            lindaGain.gain.value = 0.75;
+            actx.createMediaStreamSource(lindaDest.stream).connect(lindaGain).connect(dest);
+            binaMixed = true;
+          }
+
           recordStream = new MediaStream([
             ...stream.getVideoTracks(),
             ...dest.stream.getAudioTracks(),
           ]);
-          console.log('[Recording] audio boost active (gain 3× + limiter) for clearer voice');
+          console.log(
+            `[Recording] audio mix active (mic gain 3× + limiter${binaMixed ? ', Bina tap @0.75' : ', Bina tap unavailable — mic only'})`,
+          );
         }
       } catch (e) {
-        console.warn('[Recording] audio boost setup failed — recording raw audio:', e);
+        console.warn('[Recording] audio mix setup failed — recording raw audio:', e);
         recordStream = stream;
       }
 
@@ -2606,12 +2634,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   }, [classifyMicType, applyMicProfile, tuneTrackForMicType]);
 
   const getRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
+    let stream: MediaStream;
     try {
-      return await getDedicatedRecordingAudioStream();
+      stream = await getDedicatedRecordingAudioStream();
     } catch (dedicatedErr) {
       console.warn('[InterviewUI] Dedicated answer microphone unavailable — falling back to webcam audio track', dedicatedErr);
-      return await getSharedRecordingAudioStream();
+      stream = await getSharedRecordingAudioStream();
     }
+    // Point the screen-recording audio mix at the SAME device the candidate is
+    // answering on. That mix is built in CandidateAIInterviewPortal before this
+    // component mounts, so its first capture may be the OS default (often the
+    // laptop array mic) even when the candidate speaks into a headset — which
+    // made them almost inaudible in the saved Interview View. Best-effort: the
+    // portal ignores the call when no mix is active.
+    try {
+      const pinned = pinnedAudioDeviceIdRef.current;
+      if (pinned) {
+        // Global so a mid-interview re-share rebuilds the mix on the right device
+        // immediately, instead of waiting for the next answer turn to retarget.
+        (window as any).__interviewMicDeviceId = pinned;
+        void (window as any).__interviewSetRecordingMic?.(pinned);
+      }
+    } catch { /* best-effort — never block mic acquisition */ }
+    return stream;
   }, [getDedicatedRecordingAudioStream, getSharedRecordingAudioStream]);
 
   const flushPreSpeechAudioToBackend = useCallback(() => {
