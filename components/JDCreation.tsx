@@ -104,7 +104,7 @@ const containsCodePatterns = (text: string): boolean => {
   // Only truly unique code tokens that never appear in plain English job descriptions
   const codeKeywords = [
     'printf', 'cout', 'println', 'console.log', 'print(',
-    '__init__', 'self.', 'this.', '<?php', '#!/bin',
+    '__init__', '<?php', '#!/bin',
     'function(', '=>{', '=>{', '};', '});',
   ];
 
@@ -118,8 +118,9 @@ const containsCodePatterns = (text: string): boolean => {
     /\(\s*\w+\s*\)\s*[:=]>/,      // Arrow function: (param) => or (param) ->
     /\w+\s*\(\s*\w*\s*\)\s*\{/,   // Function with braces: foo() {
     /\breturn\s+[^;]+;/,          // Return statement with semicolon
-    /\bimport\s+\w+\s+from/,      // ES6 import
-    /\bimport\s+[\w.]+/,          // Python import
+    /^\s*import\s+[\w.*]+(?:\s*,\s*[\w.*]+)*(?:\s+as\s+\w+)?\s*;?\s*$/m, // Python import line
+    /^\s*from\s+[\w.]+\s+import\s+[\w.*]+(?:\s*,\s*[\w.*]+)*\s*;?\s*$/m, // Python from-import line
+    /^\s*import\s+.*?\s+from\s+['"][^'"]+['"]\s*;?\s*$/m, // ES module import line
     /[{}\[\]]\s*[{}\[\]]/,        // Multiple consecutive brackets
     /[=!<>]{2,3}/,                // Comparison operators: ==, ===, !==, etc.
     /\w+\.\w+\s*\(/,              // Method calls: obj.method(
@@ -468,8 +469,8 @@ type DuplicateListKey =
 const DUPLICATE_LIST_LABELS: Record<DuplicateListKey, string> = {
   mustHaveSkills: 'Must-Have Skills',
   niceToHaveSkills: 'Nice-to-Have Skills',
-  mustHaveComments: 'Must-Have Comments',
-  niceToHaveComments: 'Nice-to-Have Comments',
+  mustHaveComments: 'Must-Have Additional Requirements',
+  niceToHaveComments: 'Nice-to-Have Additional Requirements',
 };
 
 // Small filler-word list so "Strong expertise in Python" and "Python" compare
@@ -5563,7 +5564,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Must-Have Comments */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Must-Have Comments ({extractedData.mustHaveComments?.length || 0})</h3>
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Must-Have Additional Requirements ({extractedData.mustHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}
@@ -5627,7 +5628,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div>
                     {(() => { console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments); return null; })()}
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Nice-to-Have Additional Requirements ({extractedData.niceToHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('nice-comments')}
@@ -7539,7 +7540,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {/* Must-Have Comments */}
                     {extractedData.mustHaveComments.length > 0 && (
                       <div>
-                        <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Comments ({extractedData.mustHaveComments.length})</h4>
+                        <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Additional Requirements ({extractedData.mustHaveComments.length})</h4>
                         <div className="space-y-2">
                           {extractedData.mustHaveComments.map((comment, index) => (
                             <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
@@ -7554,7 +7555,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {/* Nice-to-Have Comments */}
                     {(extractedData.niceToHaveComments || []).length > 0 && (
                       <div>
-                        <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Comments ({(extractedData.niceToHaveComments || []).length})</h4>
+                        <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Additional Requirements ({(extractedData.niceToHaveComments || []).length})</h4>
                         <div className="space-y-2">
                           {(extractedData.niceToHaveComments || []).map((comment, index) => (
                             <div key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-slate-400">
