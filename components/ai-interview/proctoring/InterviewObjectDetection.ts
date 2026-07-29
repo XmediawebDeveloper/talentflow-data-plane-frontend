@@ -73,12 +73,23 @@ const MODEL_URL =
   process.env.NEXT_PUBLIC_OBJECT_DETECTION_MODEL_URL ||
   "/models/object-detection/rf-detr-nano.onnx";
 
-// Pinned to the onnxruntime-web version in package.json. Loading vision models
-// from jsDelivr matches the existing MediaPipe pattern in InterviewFaceDetection;
-// set the env var to a same-origin path for CSP-strict / air-gapped deployments.
-const ORT_URL =
-  process.env.NEXT_PUBLIC_ORT_WEBGPU_URL ||
-  "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort.webgpu.min.js";
+/**
+ * ORT runtime sources, tried in order.
+ *
+ * Same-origin FIRST, CDN only as a backstop. An earlier build loaded ORT solely
+ * from jsDelivr and a candidate's network blocked it — importScripts threw and
+ * object detection was silently disabled for that entire interview. Proctoring
+ * must not depend on a third-party CDN being reachable from wherever the
+ * candidate happens to be sitting.
+ *
+ * `npm run fetch:od-model` vendors the same-origin copy. The version in the CDN
+ * fallback is pinned to the onnxruntime-web version in package.json.
+ */
+const ORT_URLS = [
+  process.env.NEXT_PUBLIC_ORT_WEBGPU_URL,
+  "/ort/ort.webgpu.min.js",
+  "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort.webgpu.min.js",
+].filter(Boolean) as string[];
 
 const DETECTOR_NAME = "rf-detr-nano";
 
@@ -209,7 +220,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         isReadyRef.current = true;
         console.log(
           `[INTERVIEW_OBJECT_DETECTION] Ready — ${msg.backend}, ` +
-          `input ${msg.inputSize}px, labels ${msg.labelSpace}`,
+          `input ${msg.inputSize}px, labels ${msg.labelSpace}, ort ${msg.ortUrl}`,
         );
         startLoop();
         return;
@@ -249,7 +260,11 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
     worker.postMessage({
       type: "init",
       modelUrl: MODEL_URL,
-      ortUrl: ORT_URL,
+      ortUrls: ORT_URLS,
+      // 384×384 — matches preprocessor_config.json for rfdetr_nano-ONNX. The
+      // worker overrides this from the model's own static input shape if the
+      // export pins one, so a different export can't silently run at the
+      // wrong resolution.
       inputSize: 384,
       watchedLabels: WATCHED_COCO_LABELS,
       scoreFloor: WORKER_SCORE_FLOOR,

@@ -7,23 +7,39 @@ violation that names the **specific item detected**, never a generic "object".
 ## Setup (required before it does anything)
 
 ```bash
-npm run fetch:od-model            # fp16, ~60 MB
-npm run fetch:od-model -- --dtype q8   # ~30 MB, faster download
+npm run fetch:od-model                 # fp16, 54 MB  (recommended)
+npm run fetch:od-model -- --dtype q8   # 28 MB, faster download
+npm run fetch:od-model -- --dtype fp32 # 108 MB
 ```
 
-This vendors RF-DETR-Nano into `public/models/object-detection/rf-detr-nano.onnx`.
-**Until that file exists the detector fails init and stays dormant** — the rest of
-the interview is unaffected.
+Vendors two things into `public/`, **both same-origin**:
+
+| Path | What | Size |
+|---|---|---|
+| `models/object-detection/rf-detr-nano.onnx` | weights (`onnx-community/rfdetr_nano-ONNX`) | 54 MB fp16 |
+| `ort/ort.webgpu.min.js` + `.wasm`/`.mjs` siblings | onnxruntime-web runtime | ~27 MB |
+
+**Until both exist the detector fails init and stays dormant** — the rest of the
+interview is unaffected. These are deployment artifacts, not source: they must
+be present on the server, so run this in your build/deploy step.
 
 Optional overrides:
 
 | Env var | Default |
 |---|---|
 | `NEXT_PUBLIC_OBJECT_DETECTION_MODEL_URL` | `/models/object-detection/rf-detr-nano.onnx` |
-| `NEXT_PUBLIC_ORT_WEBGPU_URL` | jsDelivr `onnxruntime-web@1.27.0/dist/ort.webgpu.min.js` |
+| `NEXT_PUBLIC_ORT_WEBGPU_URL` | *(unset)* — tried first, before `/ort/…`, then jsDelivr |
 
-Point `NEXT_PUBLIC_ORT_WEBGPU_URL` at a same-origin copy for CSP-strict or
-air-gapped deployments.
+### Why both are vendored rather than CDN-loaded
+
+This code runs **during a live interview**. A CDN that is slow, down, or blocked
+by the candidate's network silently disables proctoring for that session — not
+hypothetical: the first production run loaded onnxruntime-web from jsDelivr,
+a candidate's network blocked it, `importScripts` threw, and object detection
+was off for the entire interview with a single warning line to show for it.
+
+The worker now tries the ORT sources in order (env var → `/ort/` → jsDelivr) and
+reports which one it used, so a same-origin miss is visible instead of silent.
 
 ## Architecture
 
@@ -98,22 +114,51 @@ without WebGPU enabled.
 console for `[INTERVIEW_OBJECT_DETECTION] Unavailable:` to tell "nothing
 detected" apart from "detector never ran".
 
+## Verified model facts
+
+Parsed from the vendored `rf-detr-nano.onnx` and its `preprocessor_config.json`:
+
+| | |
+|---|---|
+| Input | `pixel_values` `[batch, 3, height, width]` — H/W **dynamic**, so the configured 384 applies |
+| Outputs | `logits [*, 300, 91]`, `pred_boxes [*, 300, 4]` |
+| Label space | **91-class sparse COCO** → `cell phone`=77, `tv`=72, `laptop`=73, `remote`=75, `book`=84 |
+| Preprocessing | rescale 1/255 only — `do_normalize: false` |
+| Decode | 300 queries, per-class **sigmoid** (focal loss), no background class, no NMS |
+
+The worker picks the label space from the logits class dim at runtime rather
+than assuming, because the 80- vs 91-class spaces differ by a few indices and
+guessing wrong turns `cell phone` into `microwave` — a confidently-labelled lie.
+
+### The preprocessing call, and how to reverse it
+
+`APPLY_IMAGENET_NORM = false` in the worker follows `do_normalize: false`.
+Scanning the graph found no separate ImageNet mean/std constants either, so the
+normalisation is almost certainly folded into the first conv.
+
+If detections are consistently missing in a case where a phone is plainly in
+frame, flipping that flag to `true` is the first thing to try — double- or
+un-normalised input degrades quality to near-zero, which looks exactly like
+"the candidate had no phone". That is the most dangerous failure mode this
+feature has, which is why it gets a named flag rather than an inline constant.
+
 ## Before shipping: measure
 
-The WASM caveat above means the WebGPU path's real latency is the thing to
-verify first. Load an interview in Chrome and read the console:
+Load an interview in Chrome and read the console:
 
 ```
-[INTERVIEW_OBJECT_DETECTION] Ready — webgpu, input 384px, labels coco91
+[INTERVIEW_OBJECT_DETECTION] Ready — webgpu, input 384px, labels coco91, ort /ort/ort.webgpu.min.js
 ```
 
-If `labels` reads `custom-N`, the export uses a class space this code doesn't
-recognise and detections will be dropped rather than mislabelled — fix the label
-map in the worker before relying on it.
+- `labels` must read `coco91`. `custom-N` means the export uses a class space
+  this code doesn't recognise — detections are dropped rather than mislabelled.
+- `ort` should read `/ort/…`. If it reads `https://cdn.jsdelivr.net/…`, the
+  same-origin vendoring didn't reach the server; fix that before rollout.
 
-Then confirm per-frame `inferenceMs` on both a typical and a low-tier machine.
-If WebGPU inference is not comfortably under ~500 ms, revisit the model choice
-before rollout.
+Then confirm per-frame `inferenceMs` on both a typical and a low-tier machine,
+and **hold a phone up to the camera** to confirm end-to-end that a violation is
+written. If WebGPU inference is not comfortably under ~500 ms, revisit the
+model choice.
 
 ## Tuning
 
