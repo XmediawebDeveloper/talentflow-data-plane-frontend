@@ -1131,6 +1131,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             severity: 'severe',
             details: { reason: 'candidate_stopped_sharing' },
           }).catch(() => {});
+        } else if (stepRef.current === 'final_consent' || stepRef.current === 'hide_share_bar') {
+          // Candidate stopped sharing on a pre-start gate. Screen sharing is
+          // mandatory — send them back to re-share Entire Screen; they must NOT
+          // be able to start the interview without an active share.
+          setShareBarChecking(false);
+          setStartSubmitting(false);
+          setScreenShareDeclined(true);
+          setScreenShareDeclinedReason(SCREEN_SHARE_REQUIRED_MESSAGE);
+          setStep('fullscreen_prompt');
         }
       });
       setScreenShareDeclined(false);
@@ -1199,6 +1208,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Consume a unit + start the backend interview, then enter the interview UI.
   // Extracted so BOTH the final-consent accept and the share-bar gate can start.
   const startInterviewNow = useCallback(async () => {
+    // HARD REQUIREMENT: screen sharing must be ACTIVE to start. If the candidate
+    // stopped sharing on a pre-start gate, send them back to re-share Entire
+    // Screen instead of starting a shareless interview.
+    const _shareTrack = screenStreamRef.current?.getVideoTracks?.()[0];
+    if (!screenStreamRef.current || !_shareTrack || _shareTrack.readyState !== 'live') {
+      setShareBarChecking(false);
+      setStartSubmitting(false);
+      setScreenShareDeclined(true);
+      setScreenShareDeclinedReason(SCREEN_SHARE_REQUIRED_MESSAGE);
+      setStep('fullscreen_prompt');
+      return;
+    }
     setStartSubmitting(true);
     try {
       await candidateAIInterviewService.recordPracticeComplete(token);
@@ -1224,6 +1245,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // if the frame can't be captured or the check errors, so it never bricks start.
   const handleVerifyShareBarAndStart = useCallback(async () => {
     if (shareBarChecking || startSubmitting) return;
+    // Screen sharing MUST still be active. If the candidate clicked "Stop
+    // sharing" on the browser bar, send them back to re-share Entire Screen —
+    // never start (or even run the vision check) without a live share.
+    const _shareTrack = screenStreamRef.current?.getVideoTracks?.()[0];
+    if (!screenStreamRef.current || !_shareTrack || _shareTrack.readyState !== 'live') {
+      setScreenShareDeclined(true);
+      setScreenShareDeclinedReason(SCREEN_SHARE_REQUIRED_MESSAGE);
+      setStep('fullscreen_prompt');
+      return;
+    }
     // Keep the start IN fullscreen (this click is the required user gesture).
     if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified in UI */ } }
     // Resume audio (Bina TTS) on this gesture too.

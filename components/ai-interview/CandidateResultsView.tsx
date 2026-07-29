@@ -959,6 +959,30 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const evalIncomplete =
     eval_.evaluation_incomplete === true || !!eval_.evaluation_error;
 
+  // Did the candidate actually reach the END of the interview? Two independent
+  // signals — either is sufficient:
+  //   (a) question_history has no 'not_asked' padding (every planned Q was asked)
+  //   (b) closing_reason is a NORMAL completion (all rounds done / candidate
+  //       ended / max questions), i.e. not a mid-interview drop.
+  // A reached-the-end, non-terminated interview that only carries a partial /
+  // stub checkpoint is NOT "disconnected" — its FULL evaluation is simply still
+  // being produced in the background (detached finalize). We must show the
+  // "Generating results" spinner for it, never the disconnected/partial banner.
+  const reevalCrossedEnd = useMemo(() => {
+    const qh = Array.isArray((eval_ as any)?.question_history) ? (eval_ as any).question_history : [];
+    if (qh.length === 0) return false;
+    return !qh.some((q: any) => String(q?.response_type || '').toLowerCase() === 'not_asked');
+  }, [eval_]);
+  const _normalCloseReasons = new Set([
+    'all_rounds_completed',
+    'all_rounds_completed_in_buffer',
+    'candidate_ended',
+    'max_questions',
+    'max_questions_reached',
+  ]);
+  const closedNormally = _normalCloseReasons.has(_closingReasonLc.split(':')[0].trim());
+  const reachedEnd = reevalCrossedEnd || closedNormally;
+
   const evaluationReady = !!(
     (eval_.evaluation_version ||
       eval_.capability_score ||
@@ -969,7 +993,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // populate real results, instead of rendering the stub as a partial report.
     && !(evalIncomplete && !wasTerminated)
   );
-  const evaluationPending = isCompleted && !evaluationReady;
+  // The full evaluation is still being produced in the background when EITHER:
+  //   • status flipped to 'completed' but the eval payload hasn't landed yet, OR
+  //   • the candidate reached the END (reachedEnd) and wasn't terminated, but the
+  //     row is transiently 'in_progress' + partial/stub while the detached
+  //     finalize runs. Both render the friendly "Generating results" spinner and
+  //     poll until the real evaluation arrives — NOT the disconnected banner.
+  const evaluationInFlight = reachedEnd && !wasTerminated && !evaluationReady;
+  const evaluationPending = (isCompleted && !evaluationReady) || evaluationInFlight;
 
   // Polling fallback — when the page loads after interview ended but before
   // evaluation finished, there's no WS to receive evaluation_ready. Poll
@@ -1006,18 +1037,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   }, [isCompleted, evalIncomplete, wasTerminated, liveSession.id]);
 
   // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
-  // For an interview whose candidate reached the END of the interview but whose
-  // result is stuck partial / disconnected (candidate closed the tab during the
-  // background finalize, etc.). Eligible ONLY when the candidate crossed the end
-  // — i.e. question_history has no 'not_asked' padding (a genuinely cut-short
-  // interview is NOT eligible, so the button stays hidden). The backend enforces
-  // one-time + not-in-flight; on success the row becomes COMPLETED with a full
-  // evaluation, so `isPartial` flips false → banner + button disappear for good.
-  const reevalCrossedEnd = useMemo(() => {
-    const qh = Array.isArray((eval_ as any)?.question_history) ? (eval_ as any).question_history : [];
-    if (qh.length === 0) return false;
-    return !qh.some((q: any) => String(q?.response_type || '').toLowerCase() === 'not_asked');
-  }, [eval_]);
+  // Fallback for an interview whose candidate reached the END but whose result is
+  // GENUINELY stuck partial (the background finalize never converged and the
+  // eval-pending spinner isn't in play). `reevalCrossedEnd` (computed above) gates
+  // eligibility; the backend enforces one-time + not-in-flight. On success the row
+  // becomes COMPLETED with a full evaluation, so `isPartial` flips false → banner +
+  // button disappear for good. Note: while the eval is still being produced in the
+  // background this banner does NOT show at all — `evaluationPending` renders the
+  // "Generating results" spinner instead (see the partial-banner gate below).
   const [reEvaluating, setReEvaluating] = useState(false);
   const handleReEvaluate = async () => {
     if (reEvaluating) return;
@@ -1509,8 +1536,12 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
           );
         })()}
 
-        {/* Partial warning banner — only when truly partial (not auto-completed) */}
-        {isPartial && !isCompleted && (
+        {/* Partial warning banner — only for a GENUINELY cut-short / stuck-partial
+            interview. Suppressed while the full evaluation is still being produced
+            in the background (evaluationPending → "Generating results" spinner) and
+            for any interview that reached its end normally (reachedEnd) — those are
+            not disconnections. */}
+        {isPartial && !isCompleted && !evaluationPending && !reachedEnd && (
           <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl text-sm text-brand-orange-deep shadow-sm shadow-brand-orange/5">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />

@@ -7,10 +7,16 @@ violation that names the **specific item detected**, never a generic "object".
 ## Setup (required before it does anything)
 
 ```bash
-npm run fetch:od-model                 # fp16, 54 MB  (recommended)
-npm run fetch:od-model -- --dtype q8   # 28 MB, faster download
-npm run fetch:od-model -- --dtype fp32 # 108 MB
+npm run fetch:od-model                   # q8, 28 MB — the default, use this
+npm run fetch:od-model -- --dtype fp32   # 108 MB
+npm run fetch:od-model -- --dtype fp16   # 54 MB — see the f16 warning below
 ```
+
+> **Do not ship fp16.** It requires the WebGPU `shader-f16` device feature, and
+> common candidate hardware does not have it — verified on Intel Gen-9
+> integrated graphics, where session creation dies with *"Program Transpose
+> requires f16 but the device does not support it"* and proctoring silently does
+> nothing. q8 is both the most compatible **and** the smallest.
 
 Vendors two things into `public/`, **both same-origin**:
 
@@ -113,6 +119,37 @@ without WebGPU enabled.
 **A session with no phone flags is not proof of a clean session** — check the
 console for `[INTERVIEW_OBJECT_DETECTION] Unavailable:` to tell "nothing
 detected" apart from "detector never ran".
+
+## Measured behaviour (Intel Gen-9 iGPU, q8, 384px)
+
+Benched with `public/od-worker-test.html` against a real interview frame of a
+candidate holding a phone up to the webcam:
+
+| | |
+|---|---|
+| Session create | ~2.1 s |
+| Inference | **~2.1 s/frame** (bench also saw 1.8–8.2 s) |
+| `shader-f16` | not supported → fp16 model unusable |
+| Result on that frame | `laptop` 0.431 → fires `unauthorized_object` |
+
+Two things follow, and both are load-bearing:
+
+**1. The cadence must adapt.** ~2.1 s/frame against the original fixed 2 s
+cadence would have queued frames back-to-back. `DUTY_CYCLE_DIVISOR` now spaces
+frames at 3× the last measured inference, capped at 20 s.
+
+**2. A phone held close to the lens is often classified `laptop`, not
+`cell phone`.** Up close it is just a large dark rectangle. That means it lands
+as a **moderate** `unauthorized_object` ("Second laptop or computer in view"),
+not a **severe** `phone_detected`. We store what the model actually said rather
+than promoting a guess to "phone" — the recruiter still gets a flag with a
+timestamp and can confirm in the recording.
+
+If severe-on-every-phone matters more than label accuracy, the fix is
+**fine-tuning on webcam-perspective phone images**, not threshold tweaking.
+Thresholds are already near the noise floor: the original 0.45 phone / 0.55
+laptop cut-offs are precisely why a blatant phone produced zero flags in
+production.
 
 ## Verified model facts
 

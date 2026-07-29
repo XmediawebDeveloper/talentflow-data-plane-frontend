@@ -1,0 +1,110 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Object detection worker — end-to-end test</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, monospace; margin:16px; background:#111; color:#ddd; }
+  .ok{color:#5f5}.bad{color:#f66}.warn{color:#fb0}
+  canvas{border:1px solid #444;max-width:340px;height:auto}
+</style>
+<h3>Real worker, end-to-end (public/workers/objectDetection.worker.js)</h3>
+<div id="row"></div>
+<pre id="out">…</pre>
+<script type="module">
+/**
+ * Drives the ACTUAL shipping worker — not a reimplementation — so this verifies
+ * the code path a live interview uses: worker boot, ORT resolution, model load,
+ * preprocessing, DETR decode, allowlist filtering, and the per-class
+ * confirmation thresholds from detectableObjects.ts.
+ *
+ * Mirrors the registry values by hand because a plain .html can't import TS.
+ * Keep in sync with detectableObjects.ts if you change thresholds.
+ */
+const WATCHED = {
+  'cell phone': { minConfidence: 0.22, minBoxArea: 0.0015, event: 'phone_detected' },
+  laptop:       { minConfidence: 0.40, minBoxArea: 0.01,   event: 'unauthorized_object' },
+  tv:           { minConfidence: 0.45, minBoxArea: 0.01,   event: 'unauthorized_object' },
+  book:         { minConfidence: 0.35, minBoxArea: 0.006,  event: 'unauthorized_object' },
+  remote:       { minConfidence: 0.30, minBoxArea: 0.0015, event: 'unauthorized_object' },
+};
+const SCORE_FLOOR = Math.min(...Object.values(WATCHED).map(o => o.minConfidence));
+
+const out = document.getElementById('out');
+out.textContent = '';
+const log = (s, c) => out.innerHTML += (c ? `<span class="${c}">${s}</span>` : s) + '\n';
+
+/**
+ * Build the bitmap FIRST, on a quiet main thread. Decoding it inside the
+ * worker's onmessage handler hung indefinitely — the worker had just finished a
+ * multi-second warm-up inference and image decode never got scheduled. Order
+ * matters here; don't "simplify" this back into the handler.
+ */
+async function frameBitmap() {
+  // Supply your own still via ?frame=<url> — no frame is committed, since a
+// real interview frame contains a candidate's face and public/ is public.
+  const res = await fetch(new URLSearchParams(location.search).get('frame') || '/od-test-frame.png');
+  if (!res.ok) throw new Error(`frame HTTP ${res.status}`);
+  const full = await createImageBitmap(await res.blob());
+  log(`frame ${full.width}×${full.height}`);
+
+  // The webcam panel — what the detector really sees during an interview.
+  const c = document.createElement('canvas');
+  c.width = 726; c.height = 492;
+  c.getContext('2d').drawImage(full, 20, 588, 726, 492, 0, 0, 726, 492);
+  document.getElementById('row').appendChild(c);
+  full.close();
+  return createImageBitmap(c);
+}
+
+log('preparing frame…');
+let bmp;
+try {
+  bmp = await frameBitmap();
+  log('frame ready', 'ok');
+} catch (e) {
+  log(`frame prep FAILED: ${e.message}`, 'bad');
+  throw e;
+}
+
+const w = new Worker('/workers/objectDetection.worker.js');
+w.onerror = e => log(`WORKER ERROR: ${e.message}`, 'bad');
+
+w.onmessage = ({ data: m }) => {
+  if (m.type === 'init-failed') { log(`INIT FAILED: ${m.error}`, 'bad'); return; }
+
+  if (m.type === 'ready') {
+    log(`ready — backend=${m.backend} input=${m.inputSize} labels=${m.labelSpace} shaderF16=${m.shaderF16}`, 'ok');
+    log(`ort=${m.ortUrl}`);
+    log('sending webcam-crop frame…');
+    w.postMessage({ type: 'detect', bitmap: bmp, frameId: 1 }, [bmp]);
+    return;
+  }
+
+  if (m.type === 'detect-failed') { log(`DETECT FAILED: ${m.error}`, 'bad'); return; }
+
+  if (m.type === 'detections') {
+    log(`\ninference ${Math.round(m.inferenceMs)} ms — ${m.detections.length} allowlisted detection(s)`);
+    if (!m.detections.length) log('  (nothing above the worker score floor)', 'warn');
+    let fired = 0;
+    for (const d of m.detections) {
+      const def = WATCHED[d.label];
+      const area = d.box[2] * d.box[3];
+      const pass = d.score >= def.minConfidence && area >= def.minBoxArea;
+      if (pass) fired++;
+      log(`  ${d.score.toFixed(3)}  ${d.label.padEnd(12)} area=${area.toFixed(4)}  ` +
+          (pass ? `WOULD FIRE → ${def.event}` : 'filtered'), pass ? 'ok' : '');
+    }
+    log(`\n=> ${fired} event type(s) pass the thresholds (then need the consecutive-frame gate)`,
+        fired ? 'ok' : 'bad');
+  }
+};
+
+log('booting worker…');
+w.postMessage({
+  type: 'init',
+  modelUrl: '/models/object-detection/rf-detr-nano.onnx',
+  ortUrls: ['/ort/ort.webgpu.min.js'],
+  inputSize: 384,
+  watchedLabels: Object.keys(WATCHED),
+  scoreFloor: SCORE_FLOOR,
+});
+</script>

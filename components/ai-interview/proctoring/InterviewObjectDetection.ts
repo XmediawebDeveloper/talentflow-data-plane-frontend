@@ -16,9 +16,12 @@
  *
  * Load profile
  * ------------
- *   - Inference: one frame every DETECT_INTERVAL (2 s; 4 s on low-tier), so the
- *     detector is idle ~95% of the time. Object detection at video framerate
- *     would buy nothing — using a phone takes seconds, not milliseconds.
+ *   - Inference: one frame every DETECT_INTERVAL (3 s; 6 s on low-tier), and
+ *     automatically slower on weak GPUs — see DUTY_CYCLE_DIVISOR. Measured
+ *     inference on Intel Gen-9 integrated graphics is ~2.1 s/frame, so the
+ *     cadence has to follow the hardware rather than assume it. Object
+ *     detection at video framerate would buy nothing regardless — using a
+ *     phone takes seconds, not milliseconds.
  *   - Main thread: only `createImageBitmap` + a postMessage transfer per cycle.
  *   - WebGPU is REQUIRED. See the worker header for why WASM is not an
  *     acceptable fallback for this model family.
@@ -55,9 +58,22 @@ interface UseInterviewObjectDetectionConfig {
   onUnavailable?: (reason: string) => void;
 }
 
-const DETECT_INTERVAL = 2000;
-const DETECT_INTERVAL_LOW_TIER = 4000;
+const DETECT_INTERVAL = 3000;
+const DETECT_INTERVAL_LOW_TIER = 6000;
 const POLL_INTERVAL_MS = 250; // cheap timestamp check, same as InterviewFaceDetection
+
+/**
+ * Keep the detector's GPU duty cycle at roughly 1/N by spacing frames at
+ * N× the last measured inference time.
+ *
+ * The fixed 2 s cadence assumed inference was ~50–150 ms. Measured reality on
+ * Intel Gen-9 integrated graphics is **1.8–8.2 s per frame** — RF-DETR's
+ * deformable attention is expensive on WebGPU (cf. onnxruntime#22425). A fixed
+ * cadence there would queue frames back-to-back and starve the interview's own
+ * rendering, so the interval follows the hardware instead of assuming it.
+ */
+const DUTY_CYCLE_DIVISOR = 3;
+const MAX_DETECT_INTERVAL = 20000;
 
 /**
  * Cycles a class must be ABSENT before it can raise a second event. Without
@@ -134,6 +150,8 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
   const inFlightRef = useRef(false);
   const frameIdRef = useRef(0);
   const classStateRef = useRef<Record<string, ClassState>>({});
+  const lastInferenceMsRef = useRef(0);
+  const loggedTimingRef = useRef(false);
 
   const callbacksRef = useRef(config);
   useEffect(() => { callbacksRef.current = config; }, [config]);
@@ -162,6 +180,15 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       markUnavailable("WebGPU not supported in this browser");
       return;
     }
+
+    // Space frames at DUTY_CYCLE_DIVISOR× the last measured inference so slow
+    // GPUs back off instead of queueing. Before the first result this is just
+    // the base interval.
+    const effectiveInterval = () =>
+      Math.min(
+        MAX_DETECT_INTERVAL,
+        Math.max(baseInterval, lastInferenceMsRef.current * DUTY_CYCLE_DIVISOR),
+      );
 
     /**
      * Confirm a class across consecutive cycles before raising it. A single
@@ -233,6 +260,16 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
       if (msg.type === "detections") {
         inFlightRef.current = false;
+        if (typeof msg.inferenceMs === "number") {
+          lastInferenceMsRef.current = msg.inferenceMs;
+          if (!loggedTimingRef.current) {
+            loggedTimingRef.current = true;
+            console.log(
+              `[INTERVIEW_OBJECT_DETECTION] First inference ${Math.round(msg.inferenceMs)} ms ` +
+              `→ cadence ${Math.round(effectiveInterval())} ms`,
+            );
+          }
+        }
         const mapped: DetectedObjectEvent[] = (msg.detections || []).map((d: any) => ({
           object_class: d.label,
           object_label: DETECTABLE_OBJECTS[d.label]?.displayLabel ?? d.label,
@@ -273,7 +310,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
     // Self-scheduling timer rather than requestAnimationFrame — same reasoning
     // as InterviewFaceDetection's Phase 1 perf fix: rAF would wake the main
     // thread 60×/s just to read a clock.
-    const interval = lowTier ? DETECT_INTERVAL_LOW_TIER : DETECT_INTERVAL;
+    const baseInterval = lowTier ? DETECT_INTERVAL_LOW_TIER : DETECT_INTERVAL;
     const startLoop = () => {
       if (timerRef.current !== null) return;
       let lastDetect = 0;
@@ -283,7 +320,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         const now = performance.now();
         const video = videoRef.current;
 
-        const due = now - lastDetect >= interval;
+        const due = now - lastDetect >= effectiveInterval();
         const capturable = video && video.readyState >= 2 && video.videoWidth > 0;
 
         // Skip rather than queue when the previous frame is still running —

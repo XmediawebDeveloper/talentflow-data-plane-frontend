@@ -277,6 +277,19 @@ const REVEAL_DEBUG = true;
 // reads as tightly in sync instead of laggy. Kept small so text never finishes
 // noticeably before the audio.
 const REVEAL_LEAD_MS = 550;
+// Phase A reveal rate (chars/sec) used until `audio_end` tells us the TRUE total
+// audio duration. Prior only — replaced by the previous turn's MEASURED rate
+// (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
+// to voice, language and AI_TTS_SPEED instead of trusting a constant.
+// 12 rather than the ~14 of a normal-rate voice because the backend ships
+// AI_TTS_SPEED = 0.85 (Bina speaks ~15% slower). Deliberately conservative:
+// undershooting makes the caption trail slightly, overshooting makes it outrun
+// the voice — the exact symptom this system exists to prevent.
+const DEFAULT_REVEAL_CPS = 12;
+// Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
+// pacer above governs; this only stops a bad CPS prior from completing the
+// bubble before `audio_end` confirms the total.
+const PHASE_A_MAX_FRACTION = 0.94;
 
 const formatTimeMMSS = (seconds: number): string => {
   const safe = Math.max(0, Math.floor(seconds || 0));
@@ -1275,12 +1288,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     [emitEvent],
   );
 
-  // Detection is best-effort: it needs WebGPU, which Safari/Firefox may not
-  // provide. Log the reason so an interview reviewed later can be read
-  // correctly — "no phone flags" must not be confused with "detector never ran".
+  // Detection is best-effort: it needs WebGPU (Safari/Firefox may not have it)
+  // and the vendored model+runtime to be present on the server.
+  //
+  // Record the failure as a proctoring event, not just a console line. A
+  // detector that never started produces an interview with zero phone flags,
+  // which is indistinguishable from a genuinely clean one — so the recruiter
+  // MUST be able to see that the check didn't run. Persisted as "info"
+  // severity server-side, so it never counts against the candidate.
   const handleObjectDetectionUnavailable = useCallback((reason: string) => {
-    console.warn('[INTERVIEW-DEBUG] Object detection disabled for this session:', reason);
-  }, []);
+    console.warn('[INTERVIEW_OBJECT_DETECTION] Unavailable —', reason);
+    emitEvent('object_detection_unavailable', { reason });
+  }, [emitEvent]);
 
   const objectDetection = useInterviewObjectDetection({
     enabled: isConnected && webcamReady,
@@ -1759,6 +1778,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Token reveal system
   const tokenBufferRef = useRef("");
   const revealedCharsRef = useRef(0);
+  // Bina's MEASURED speaking rate (chars/sec), learned from completed turns:
+  // chars ÷ actual audio seconds. Phase A of the reveal uses it instead of
+  // DEFAULT_REVEAL_CPS from the second turn on, so pacing self-calibrates to the
+  // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
+  const measuredRevealCpsRef = useRef<number | null>(null);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
   const startRecordingInternalRef = useRef<() => void>(() => {});
   const disconnectRef = useRef<() => void>(() => {});
@@ -2687,6 +2711,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
     // Always use full tokenBuffer — currentAiTextRef may be partially revealed
     const text = tokenBufferRef.current.trim();
+    // Learn Bina's real speaking rate from this completed turn so the NEXT
+    // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
+    // here because this is the one place where both the final text length and
+    // the final audio duration are known (currentTurnAudioMsRef is reset by the
+    // next turn's first token, not before). Short clips are skipped — their
+    // ratio is dominated by leading/trailing silence. Smoothed so one odd turn
+    // (a long pause mid-sentence) can't skew the next, and clamped to a sane
+    // speech range so a bad sample can never make the caption race.
+    const turnAudioSec = currentTurnAudioMsRef.current / 1000;
+    if (text.length > 20 && turnAudioSec > 1.5) {
+      const sample = text.length / turnAudioSec;
+      if (sample >= 6 && sample <= 30) {
+        const prev = measuredRevealCpsRef.current;
+        measuredRevealCpsRef.current = prev === null ? sample : prev * 0.7 + sample * 0.3;
+        if (REVEAL_DEBUG) {
+          console.debug(`[Reveal] cps sample=${sample.toFixed(1)} smoothed=${measuredRevealCpsRef.current.toFixed(1)} (chars=${text.length} audio=${turnAudioSec.toFixed(2)}s)`);
+        }
+      }
+    }
     if (text) {
       const wasFollowup = isCurrentFollowupRef.current;
       setMessages(prev => [...prev, {
@@ -2715,18 +2758,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // There are TWO reveal phases, because the total audio duration is
   // unknown until the backend sends `audio_end`:
   //
-  //   Phase A (streaming): audio_end not yet received. We don't know the
-  //   total TTS duration, and `currentTurnAudioMsRef` only reflects audio
-  //   RECEIVED so far (chunks stream at real-time rate, so it roughly
-  //   equals wall-clock elapsed → useless as a denominator). Use a
-  //   conservative CPS (~14 chars/sec) pacing; this matches typical TTS
-  //   speaking rate so the text advances with the audio instead of
-  //   out-racing or lagging it.
+  //   Phase A (streaming): audio_end not yet received, so the total TTS
+  //   duration is UNKNOWN — every "end of audio" figure available
+  //   (`currentTurnAudioMsRef`, the tracker's scheduled end) describes only
+  //   what has ARRIVED so far. Fraction math is therefore invalid here: it
+  //   divides the played position by a partial total, which inflates progress
+  //   toward 1 and reveals text the voice hasn't reached — worst at the start
+  //   of a turn, where the partial total is smallest. So Phase A paces by
+  //   RATE (chars/sec, see DEFAULT_REVEAL_CPS) instead of by fraction. Rate
+  //   pacing cannot inflate, because it never divides by an unknown.
   //
-  //   Phase B (post-audio_end): we know the TRUE total audio duration
-  //   (currentTurnAudioMsRef is final) AND the wall-clock end point
-  //   (`firstPcmAt + audioMs`). Compute progress from the anchor and
-  //   drive the reveal to finish exactly at that wall-clock moment.
+  //   Phase B (post-audio_end): the totals are final, so fraction math is
+  //   exact. Progress is measured against the AUDIBLE span and drives the
+  //   reveal to land REVEAL_LEAD_MS before the voice stops.
   //
   // The reveal loop KEEPS ticking while Bina is still audible, even once
   // all text is revealed, so the bubble cannot "finish" before audio does.
@@ -2750,7 +2794,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // mode where "text appears only after Bina finishes speaking").
       const pbCtx = playbackTrackerCtxRef.current;
       const ctxStart = audibleStartCtxSecRef.current;
-      const ctxEnd = playbackScheduledEndAtRef.current;
+      // Shift the tracker's scheduled end onto the AUDIBLE timeline. The silent
+      // mirror buffers are scheduled from chunk ARRIVAL, but TalkingHead's
+      // speakers only start TALKING_HEAD_BUFFER_MS later — so the real voice
+      // occupies [mirrorStart + buffer, mirrorEnd + buffer]. `ctxStart` already
+      // carries that shift (see trackPlaybackChunk); without the matching shift
+      // here the span is short by the whole buffer, which made the reveal finish
+      // ~2 s before Bina stopped speaking on EVERY turn.
+      const ctxEnd = playbackScheduledEndAtRef.current + TALKING_HEAD_BUFFER_MS / 1000;
       const ctxAvailable =
         !!pbCtx &&
         pbCtx.state === "running" &&
@@ -2759,6 +2810,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         ctxEnd > ctxStart;
 
       let progress: number | null = null;
+      // Seconds of Bina's voice actually heard so far (negative before she is
+      // audible). Phase A paces off this directly — no division, no inflation.
+      let playedSec = 0;
 
       if (ctxAvailable) {
         const now = pbCtx!.currentTime;
@@ -2769,8 +2823,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
           return;  // inside buffer delay
         }
-        progress = (now - ctxStart! + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
-        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} prog=${progress.toFixed(3)}`);
+        playedSec = now - ctxStart!;
+        progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
+        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
       } else if (firstPcmAt !== null) {
         // Fallback: wall-clock math so streaming reveal works even when the
         // tracker AudioContext is stalled. `audibleStartMs` waits out the
@@ -2782,6 +2837,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
           return;
         }
+        playedSec = (Date.now() - audibleStartMs) / 1000;
         const receivedMs = currentTurnAudioMsRef.current;
         if (receivedMs <= 0) return;
         progress = elapsedMs / receivedMs;
@@ -2792,13 +2848,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
 
       if (progress === null) return;
-      // During streaming (audio_end not yet received) allow the text to track
-      // the voice closely — 0.94 instead of the old 0.85, so the caption keeps
-      // pace instead of trailing ~15% behind. It still can't fully finish before
-      // audio_end (which flips the cap to 1.0).
-      const cap = audioEndReceivedRef.current ? 1 : 0.94;
-      progress = Math.max(0, Math.min(cap, progress));
-      target = Math.floor(progress * fullText.length);
+      if (audioEndReceivedRef.current) {
+        // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
+        // on the audible timeline the span equals the real audio duration, so
+        // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
+        // beyond the natural 1.0.
+        progress = Math.max(0, Math.min(1, progress));
+        target = Math.floor(progress * fullText.length);
+      } else {
+        // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
+        // PARTIAL total and would inflate (see the header note), so it is only
+        // logged, never used to position the text.
+        const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
+        const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
+        // Ceiling is a backstop against a bad CPS prior, not the pacer.
+        target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
+        if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+      }
       if (target > revealedCharsRef.current) {
         revealedCharsRef.current = target;
         const revealedText = fullText.substring(0, target);
