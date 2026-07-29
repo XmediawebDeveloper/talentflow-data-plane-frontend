@@ -11,6 +11,11 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
+const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
+const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
+const normalizeTitleSearch = (value?: string | null) =>
+  normalizeSearchValue(value).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
 export default function AIInterviewJDSelection() {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
@@ -41,10 +46,21 @@ export default function AIInterviewJDSelection() {
   // a JD can't be configured twice, so configured ones are hidden entirely
   // (previously they showed disabled with an "AI Config Created" badge).
   const selectableJds = jds.filter(jd => jd.has_published_config !== true);
-  const filteredJds = selectableJds.filter(jd =>
-    jd.title.toLowerCase().includes(jdSearch.toLowerCase()) ||
-    (jd.department || '').toLowerCase().includes(jdSearch.toLowerCase())
-  );
+  const searchQuery = normalizeSearchValue(jdSearch);
+  const titleSearchQuery = normalizeTitleSearch(jdSearch);
+  const searchTerms = titleSearchQuery.split(/\s+/).filter(Boolean);
+  const normalizedSearchIdentifier = normalizeIdentifier(jdSearch);
+  const filteredJds = selectableJds.filter(jd => {
+    if (!searchQuery) return true;
+
+    const normalizedTitle = normalizeTitleSearch(jd.title);
+    const matchesTitle = searchTerms.length > 0 && searchTerms.every(term => normalizedTitle.includes(term));
+    const matchesIdentifier = normalizedSearchIdentifier
+      ? normalizeIdentifier(jd.job_id).includes(normalizedSearchIdentifier)
+      : false;
+
+    return matchesTitle || matchesIdentifier;
+  });
   // True when JDs exist but every one is already configured — lets the empty
   // state say something accurate instead of "create a JD first".
   const allConfigured = jds.length > 0 && selectableJds.length === 0;
@@ -101,7 +117,7 @@ export default function AIInterviewJDSelection() {
         <div className="mb-5">
           <input
             type="text"
-            placeholder="Search job descriptions..."
+            placeholder="Search by JD ID or title..."
             value={jdSearch}
             onChange={e => setJdSearch(e.target.value)}
             className="w-full px-4 py-2.5 border border-gray-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"

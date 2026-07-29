@@ -1115,8 +1115,25 @@ export default function AIInterview() {
                     </span>
                   </div>
                 )}
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{hint}</p>
-              </StatsCard>
+                {/* Row 1: icon (left) + count (right) */}
+                <div className="flex items-center gap-3 mb-2 sm:mb-3">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  <div className="text-xl sm:text-3xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight tabular-nums truncate">
+                    {value}
+                  </div>
+                </div>
+                {/* Row 2: label text */}
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 font-medium leading-snug whitespace-normal break-words">
+                    {label}
+                  </div>
+                  <div className="hidden sm:block text-[11px] text-gray-400 dark:text-slate-500 leading-snug whitespace-normal break-words">
+                    {hint}
+                  </div>
+                </div>
+              </button>
             );
           })}
         </StatsCardGrid>

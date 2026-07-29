@@ -151,6 +151,23 @@ export function EvalReportCombined({
         const fw = Math.max(0, Math.min(w, (score / 10) * w));
         if (fw > 0.1) { fill(c); doc.roundedRect(x, by, fw, 2, 1, 1, 'F'); }
       };
+      const QUESTION_LINE_H = 4.0;
+      const SKILL_LINE_H = 3.6;
+      const SKILL_ROW_GAP = 0.8;
+      const RATIONALE_LINE_H = 3.4;
+      const RATIONALE_PARAGRAPH_GAP = 0.6;
+      const splitLines = (
+        value: string,
+        width: number,
+        fontSize: number,
+        fontStyle: 'normal' | 'bold' = 'normal',
+      ): string[] => {
+        doc.setFont('helvetica', fontStyle);
+        doc.setFontSize(fontSize);
+        const raw = doc.splitTextToSize(value || '', width);
+        const lines = (Array.isArray(raw) ? raw : [raw]).map((line) => String(line));
+        return lines.length > 0 ? lines : [''];
+      };
 
       // Header
       doc.setFont('helvetica', 'bold'); doc.setFontSize(16); txt(ink);
@@ -222,70 +239,87 @@ export function EvalReportCombined({
           else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) status = { label: 'Not Answered', color: faint, isScore: false };
           else status = { label: `${q.questionScore.toFixed(2)}/10`, color: scoreRGB(q.questionScore), isScore: true };
 
-          const qText = doc.splitTextToSize(q.question || `Question ${q.qNum}`, CW - 28);
           const qSkills = key === 'hr' ? [] : q.skills;
+          const qText = splitLines(q.question || `Question ${q.qNum}`, CW - 28, 8.5);
+          const skillRows = qSkills.map((s) => {
+            const lines = splitLines(s.name, CW - 62, 8);
+            return {
+              skill: s,
+              lines,
+              rowHeight: lines.length * SKILL_LINE_H + SKILL_ROW_GAP,
+            };
+          });
           // "Why this score" rationale (skill-wise, newline-separated). HR: none.
           const rationale = key !== 'hr' ? String(q.scoreRationale || '').trim() : '';
           const ratRaw = rationale ? rationale.split('\n').map(l => l.trim()).filter(Boolean) : [];
-          let ratRows = 0;
-          if (ratRaw.length) { doc.setFontSize(7.5); for (const rl of ratRaw) ratRows += doc.splitTextToSize(rl, CW - 8).length; }
-          const ratBoxH = ratRaw.length ? (ratRows * 3.4 + 9) : 0;
-          const blockH = 6 + qText.length * 4 + qSkills.length * 4.6 + ratBoxH + 5;
+          const rationaleBlocks = ratRaw.map((rl) => splitLines(rl, CW - 8, 7.5));
+          const ratContentH = rationaleBlocks.reduce((sum, lines, idx) => (
+            sum
+            + lines.length * RATIONALE_LINE_H
+            + (idx < rationaleBlocks.length - 1 ? RATIONALE_PARAGRAPH_GAP : 0)
+          ), 0);
+          const ratBoxH = rationaleBlocks.length > 0 ? ratContentH + 10.5 : 0;
+          const questionTextH = qText.length * QUESTION_LINE_H + 1;
+          const skillsBlockH = skillRows.reduce((sum, row) => sum + row.rowHeight, 0);
+          const blockH = 5 + questionTextH + skillsBlockH + (rationaleBlocks.length > 0 ? ratBoxH + 1 : 0) + 3.5;
           ensure(blockH);
 
+          let cursorY = y;
           doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(indigo);
-          doc.text(`Q${q.qNum}`, M, y + 3);
+          doc.text(`Q${q.qNum}`, M, cursorY + 3);
           doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(status.color);
-          doc.text(status.label, pageW - M, y + 3, { align: 'right' });
-          y += 5;
+          doc.text(status.label, pageW - M, cursorY + 3, { align: 'right' });
+          cursorY += 5;
 
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
-          doc.text(qText, M, y + 2.5); y += qText.length * 4 + 1;
+          qText.forEach((lineText, idx) => {
+            doc.text(lineText, M, cursorY + 2.5 + idx * QUESTION_LINE_H);
+          });
+          cursorY += questionTextH;
 
-          qSkills.forEach((s) => {
+          skillRows.forEach(({ skill, lines, rowHeight }) => {
+            const rowTop = cursorY;
             // Priority tag P1/P2/P3 (High/Medium/Low → weights 10/7/4) — was missing.
-            const pLabel = s.priority === 'High' ? 'P1' : s.priority === 'Medium' ? 'P2' : 'P3';
-            const pColor: RGB = s.priority === 'High' ? indigo : s.priority === 'Medium' ? amber : faint;
+            const pLabel = skill.priority === 'High' ? 'P1' : skill.priority === 'Medium' ? 'P2' : 'P3';
+            const pColor: RGB = skill.priority === 'High' ? indigo : skill.priority === 'Medium' ? amber : faint;
             doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
-            doc.text(`•  ${doc.splitTextToSize(s.name, CW - 58)[0]}`, M + 2, y + 2.5);
+            lines.forEach((lineText, idx) => {
+              const prefix = idx === 0 ? '•  ' : '   ';
+              doc.text(`${prefix}${lineText}`, M + 2, rowTop + 2.5 + idx * SKILL_LINE_H);
+            });
             doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); txt(pColor);
-            doc.text(pLabel, pageW - M - 41, y + 2.5, { align: 'right' });
-            if (s.is_unscored) {
+            doc.text(pLabel, pageW - M - 41, rowTop + 2.5, { align: 'right' });
+            if (skill.is_unscored) {
               doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(faint);
-              doc.text('Not evaluated', pageW - M, y + 2.5, { align: 'right' });
+              doc.text('Not evaluated', pageW - M, rowTop + 2.5, { align: 'right' });
             } else {
-              bar(pageW - M - 38, y + 0.8, 22, s.score, scoreRGB(s.score));
-              doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt(scoreRGB(s.score));
-              doc.text(`${s.score.toFixed(1)}/10`, pageW - M, y + 2.5, { align: 'right' });
+              bar(pageW - M - 38, rowTop + 0.8, 22, skill.score, scoreRGB(skill.score));
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt(scoreRGB(skill.score));
+              doc.text(`${skill.score.toFixed(1)}/10`, pageW - M, rowTop + 2.5, { align: 'right' });
             }
-            y += 4.6;
+            cursorY += rowHeight;
           });
 
           // "Why this score" — skill-wise rationale in an amber callout (was
           // omitted from the PDF; recruiters need the per-skill reasoning here).
-          if (ratRaw.length) {
-            fill(amberBg); stroke(amberBd); doc.roundedRect(M, y + 0.5, CW, ratBoxH, 1.2, 1.2, 'FD');
+          if (rationaleBlocks.length > 0) {
+            fill(amberBg); stroke(amberBd); doc.roundedRect(M, cursorY + 0.5, CW, ratBoxH, 1.2, 1.2, 'FD');
             doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); txt(amberDk);
-            doc.text('Why this score', M + 3, y + 4.7);
-            let cy = y + 8.4;
-            doc.setFontSize(7.5);
-            for (const rl of ratRaw) {
-              const wrapped = doc.splitTextToSize(rl, CW - 8);
+            doc.text('Why this score', M + 3, cursorY + 4.7);
+            let cy = cursorY + 8.4;
+            rationaleBlocks.forEach((wrapped, idx) => {
               doc.setFont('helvetica', 'normal'); txt(ink);
-              doc.text(wrapped, M + 3, cy);
-              const ci = rl.indexOf(':');
-              if (ci > 0 && ci <= 120) {
-                doc.setFont('helvetica', 'bold'); txt(amberDk);
-                doc.text(rl.slice(0, ci), M + 3, cy); // overprint skill label bold
-                txt(ink);
-              }
-              cy += wrapped.length * 3.4 + 0.6;
-            }
-            y += ratBoxH + 1;
+              wrapped.forEach((lineText, lineIdx) => {
+                doc.text(lineText, M + 3, cy + lineIdx * RATIONALE_LINE_H);
+              });
+              cy += wrapped.length * RATIONALE_LINE_H + (idx < rationaleBlocks.length - 1 ? RATIONALE_PARAGRAPH_GAP : 0);
+            });
+            cursorY += ratBoxH + 1;
           }
 
-          y += 2.5;
-          stroke(line); doc.setLineWidth(0.1); doc.line(M, y - 1, pageW - M, y - 1); doc.setLineWidth(0.2);
+          cursorY += 2.5;
+          stroke(line); doc.setLineWidth(0.1); doc.line(M, cursorY - 1, pageW - M, cursorY - 1); doc.setLineWidth(0.2);
+          y = cursorY;
         });
         y += 3;
       };

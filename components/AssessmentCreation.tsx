@@ -28,6 +28,10 @@ const filterCompilable = (langs: string[] | undefined | null): string[] => {
   if (!Array.isArray(langs)) return [];
   return langs.filter(l => l && COMPILABLE_LANGUAGES_LOWER.has(String(l).trim().toLowerCase()));
 };
+const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
+const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
+const normalizeTitleSearch = (value?: string | null) =>
+  normalizeSearchValue(value).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
 // Dynamic import to break circular dependency chain that causes TDZ error
 // when navigating to Assessment Results (AssessmentCreation → JDCreation creates
@@ -155,6 +159,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
+  const [jdSearch, setJdSearch] = useState('');
 
   // Helper function to update step and URL
   const setStep = (newStep: 'select-jd' | 'configure' | 'preview', jobId?: string) => {
@@ -1729,6 +1734,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const s = String(j.status || '').toLowerCase();
     return s === 'published';
   });
+  const searchQuery = normalizeSearchValue(jdSearch);
+  const titleSearchQuery = normalizeTitleSearch(jdSearch);
+  const searchTerms = titleSearchQuery.split(/\s+/).filter(Boolean);
+  const normalizedSearchIdentifier = normalizeIdentifier(jdSearch);
+  const filteredAvailableJobs = availableJobs.filter(job => {
+    if (!searchQuery) return true;
+
+    const normalizedTitle = normalizeTitleSearch(job.title);
+    const matchesTitle = searchTerms.length > 0 && searchTerms.every(term => normalizedTitle.includes(term));
+    const matchesIdentifier = normalizedSearchIdentifier
+      ? normalizeIdentifier(job.job_id).includes(normalizedSearchIdentifier)
+      : false;
+
+    return matchesTitle || matchesIdentifier;
+  });
 
   // Plan feature gate: assessment creation not available on current plan
   useEffect(() => {
@@ -1802,9 +1822,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               ) : (
               <div className="space-y-3">
+                <div className="mb-5">
+                  <input
+                    type="text"
+                    placeholder="Search by JD ID or title..."
+                    value={jdSearch}
+                    onChange={e => setJdSearch(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  />
+                </div>
                 {/* `availableJobs` is already Published-only (filtered above)
                     — this map renders all of them as the JD picker. */}
-                {availableJobs.map(job => {
+                {filteredAvailableJobs.map(job => {
                   // Check if this JD already has an assessment (1:1 relationship)
                   const hasExistingAssessment = jdsWithAssessments.has(job.id);
 
@@ -1946,12 +1975,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   );
                 })}
 
-                {availableJobs.length === 0 && (
+                {filteredAvailableJobs.length === 0 && (
                   <div className="text-center py-8 sm:py-12 text-gray-500">
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm sm:text-base">No published jobs available</p>
-                    <p className="text-xs sm:text-sm mt-1">Create and publish a Job first to create assessments</p>
-                    {canCreateJd && (
+                    <p className="text-sm sm:text-base">
+                      {availableJobs.length === 0 ? 'No published jobs available' : 'No matching job descriptions found'}
+                    </p>
+                    <p className="text-xs sm:text-sm mt-1">
+                      {availableJobs.length === 0
+                        ? 'Create and publish a Job first to create assessments'
+                        : 'Try searching with a JD ID like JD-450 or a title like senior python developer'}
+                    </p>
+                    {canCreateJd && availableJobs.length === 0 && (
                       <button
                         onClick={handleCreateNewJD}
                         className="mt-4 px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"

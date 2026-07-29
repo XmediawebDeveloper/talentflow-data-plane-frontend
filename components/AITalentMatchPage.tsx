@@ -21,6 +21,7 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import RecordPager from '@/components/RecordPager';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -1791,6 +1792,12 @@ export default function AITalentMatchPage({
             </button>
           </div>
         </div>
+
+        <ModuleInfoBanner
+          icon={<Sparkles className="h-4 w-4" />}
+          title="AI-Powered Talent Matching"
+          description="Use AI to compare your candidate pool with each job's skills, experience, and requirements. Review ranked matches, understand fit signals, and launch a new match whenever a role needs fresh candidates."
+        />
 
         {/* Stats Cards — clicking Matched Jobs drills into the list */}
         <div className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 p-3 sm:p-4 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">

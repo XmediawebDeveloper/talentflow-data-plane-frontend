@@ -10,8 +10,8 @@
  *
  * Contract
  * --------
- *   → { type: 'init', modelUrl, ortUrl, inputSize, watchedLabels, scoreFloor }
- *   ← { type: 'ready', backend, inputSize, labelSpace }
+ *   → { type: 'init', modelUrl, ortUrls, inputSize, watchedLabels, scoreFloor }
+ *   ← { type: 'ready', backend, inputSize, labelSpace, ortUrl }
  *   ← { type: 'init-failed', error }
  *
  *   → { type: 'detect', bitmap: ImageBitmap, frameId }   (bitmap transferred)
@@ -69,7 +69,23 @@ const COCO_91 = [
   'teddy bear', 'hair drier', 'toothbrush',
 ];
 
-// DINOv2-style backbone → ImageNet normalisation.
+/**
+ * Preprocessing must match the export's preprocessor_config.json exactly.
+ *
+ * For onnx-community/rfdetr_nano-ONNX that config is:
+ *     do_rescale: true  (1/255)   do_normalize: FALSE
+ *
+ * i.e. the model wants plain [0,1] pixels — the ImageNet mean/std listed in the
+ * config are inert defaults carried by the RTDetrImageProcessor class, and the
+ * normalisation is folded into the exported graph. Applying mean/std here as
+ * well would double-normalise the input and collapse detection quality to
+ * near-zero, which is indistinguishable at a glance from "the candidate had no
+ * phone" — the most dangerous possible failure mode for this feature.
+ *
+ * If you swap in a different export, re-read ITS preprocessor_config.json and
+ * set this accordingly rather than assuming.
+ */
+const APPLY_IMAGENET_NORM = false;
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
@@ -120,11 +136,20 @@ function preprocess(bitmap) {
 
   const area = inputSize * inputSize;
   const out = new Float32Array(3 * area);
-  for (let i = 0; i < area; i++) {
-    const p = i * 4;
-    out[i] = (data[p] / 255 - MEAN[0]) / STD[0];                 // R plane
-    out[area + i] = (data[p + 1] / 255 - MEAN[1]) / STD[1];      // G plane
-    out[2 * area + i] = (data[p + 2] / 255 - MEAN[2]) / STD[2];  // B plane
+  if (APPLY_IMAGENET_NORM) {
+    for (let i = 0; i < area; i++) {
+      const p = i * 4;
+      out[i] = (data[p] / 255 - MEAN[0]) / STD[0];                 // R plane
+      out[area + i] = (data[p + 1] / 255 - MEAN[1]) / STD[1];      // G plane
+      out[2 * area + i] = (data[p + 2] / 255 - MEAN[2]) / STD[2];  // B plane
+    }
+  } else {
+    for (let i = 0; i < area; i++) {
+      const p = i * 4;
+      out[i] = data[p] / 255;                 // R plane
+      out[area + i] = data[p + 1] / 255;      // G plane
+      out[2 * area + i] = data[p + 2] / 255;  // B plane
+    }
   }
   return new ort.Tensor('float32', out, [1, 3, inputSize, inputSize]);
 }
@@ -204,14 +229,48 @@ async function init(msg) {
     );
   }
 
-  // eslint-disable-next-line no-undef
-  importScripts(msg.ortUrl);
+  // Try each ORT source in order. The first entry is normally the vendored
+  // same-origin copy; a CDN is only a backstop.
+  //
+  // This is a list rather than one URL because a single hard-coded CDN is a
+  // single point of failure that takes proctoring down silently: in production
+  // a candidate's network blocked cdn.jsdelivr.net and importScripts threw,
+  // disabling detection for the whole interview. A same-origin copy can't be
+  // blocked without the app itself being unreachable.
+  const ortUrls = Array.isArray(msg.ortUrls) ? msg.ortUrls : [msg.ortUrl];
+  let loadedFrom = null;
+  const failures = [];
+  for (const url of ortUrls) {
+    if (!url) continue;
+    try {
+      // eslint-disable-next-line no-undef
+      importScripts(url);
+      if (self.ort) { loadedFrom = url; break; }
+      failures.push(`${url}: loaded but no ort global`);
+    } catch (e) {
+      failures.push(`${url}: ${e && e.message ? e.message : e}`);
+    }
+  }
+  if (!loadedFrom) {
+    throw new Error(`Could not load onnxruntime-web. Tried:\n  ${failures.join('\n  ')}`);
+  }
+
   ort = self.ort;
-  if (!ort) throw new Error('onnxruntime-web global not found after importScripts');
 
   // Serve the ORT .wasm/.mjs siblings from the same directory as the bundle.
-  ort.env.wasm.wasmPaths = msg.ortUrl.slice(0, msg.ortUrl.lastIndexOf('/') + 1);
+  ort.env.wasm.wasmPaths = loadedFrom.slice(0, loadedFrom.lastIndexOf('/') + 1);
   ort.env.wasm.numThreads = 1; // WebGPU does the work; threads would only add contention
+
+  // Preflight the weights. InferenceSession.create on a 404 surfaces as an
+  // opaque protobuf parse error ("failed to load model"), which reads like a
+  // corrupt export rather than "you forgot to run npm run fetch:od-model".
+  const head = await fetch(msg.modelUrl, { method: 'HEAD' });
+  if (!head.ok) {
+    throw new Error(
+      `Model not found at ${msg.modelUrl} (HTTP ${head.status}). ` +
+      'Run: npm run fetch:od-model',
+    );
+  }
 
   session = await ort.InferenceSession.create(msg.modelUrl, {
     executionProviders: ['webgpu'],
@@ -252,7 +311,7 @@ async function init(msg) {
     labelSpace = `warmup-failed: ${e && e.message ? e.message : e}`;
   }
 
-  self.postMessage({ type: 'ready', backend: 'webgpu', inputSize, labelSpace });
+  self.postMessage({ type: 'ready', backend: 'webgpu', inputSize, labelSpace, ortUrl: loadedFrom });
 }
 
 async function detect(msg) {
