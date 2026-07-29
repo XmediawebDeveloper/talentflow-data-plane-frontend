@@ -2,7 +2,7 @@
 
 import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, Mail, BarChart } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -115,6 +115,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
   
   // Advanced filter states
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
@@ -138,6 +139,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // Quota modal state
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [listScrollRequest, setListScrollRequest] = useState(0);
 
   // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows the
   // toolbar + filters + jobs list. Initial render is 'cards' unless the URL
@@ -153,8 +155,23 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   const openListView = (statusFilterValue: string) => {
     setStatusFilter(statusFilterValue);
+    setCurrentPage(1);
     setPageView('list');
+    setListScrollRequest((request) => request + 1);
   };
+
+  const isOverviewCardActive = (filterValue: string) =>
+    pageView === 'list' && statusFilter.toLowerCase() === filterValue.toLowerCase();
+
+  useEffect(() => {
+    if (listScrollRequest === 0 || pageView !== 'list') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [listScrollRequest, pageView, statusFilter]);
 
   // Show/hide the Experience/Education/Industry quick-links group.
   const [showConfig, setShowConfig] = useState(false);
@@ -165,7 +182,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   useListStatePersistence(
     'job-openings-list',
     {
-      searchQuery, statusFilter, creationMethodFilter, locationFilter, viewMode, pageView,
+      searchQuery, statusFilter, creationMethodFilter, locationFilter, viewMode,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
       applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
       sortBy, sortOrder, currentPage, itemsPerPage,
@@ -176,7 +193,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       if (s.creationMethodFilter === null || s.creationMethodFilter === 'manual' || s.creationMethodFilter === 'ai') setCreationMethodFilter(s.creationMethodFilter);
       if (typeof s.locationFilter === 'string') setLocationFilter(s.locationFilter);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       if (typeof s.departmentFilter === 'string') setDepartmentFilter(s.departmentFilter);
       if (typeof s.industryFilter === 'string') setIndustryFilter(s.industryFilter);
       if (typeof s.experienceFilter === 'string') setExperienceFilter(s.experienceFilter);
@@ -676,11 +692,26 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           </div>
 
           {/* SaaS Stats Cards — clicking a card drills into the jobs list with the matching filter applied */}
+          <div className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 p-3 sm:p-4 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900">Job Description Menu</h3>
+                <p className="text-sm leading-5 text-gray-600">
+                  <span className="block">A status-based view of every job description across your hiring workflow.</span>
+                  <span className="block">Review drafts, monitor published roles, and revisit archived openings from one place.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
           <StatsCardGrid>
-            <StatsCard tone="blue" icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')} />
-            <StatsCard tone="emerald" icon={CheckCircle2} label="Published" value={stats.published} sparkline={false} onClick={() => openListView('published')} />
-            <StatsCard tone="orange" icon={FileText} label="Drafts" value={stats.draft} sparkline={false} onClick={() => openListView('draft')} />
-            <StatsCard tone="cyan" icon={Archive} label="Archived" value={stats.archived} sparkline={false} onClick={() => openListView('archived')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={stats.published} sparkline={false} onClick={() => openListView('published')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={stats.draft} sparkline={false} onClick={() => openListView('draft')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={stats.archived} sparkline={false} onClick={() => openListView('archived')} />
           </StatsCardGrid>
 
 
@@ -688,15 +719,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {pageView === 'list' && (
         <>
-        {/* Back to cards button */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => setPageView('cards')}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
+        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
+        <div className="mb-4 flex items-center justify-end gap-2">
           <span className="text-xs text-gray-500 dark:text-slate-400">
             {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
           </span>

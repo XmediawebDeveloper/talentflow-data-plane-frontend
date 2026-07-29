@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ChevronLeft } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -72,10 +72,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   // Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs + filters + assessments list.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  const openAssessmentsList = (tab: 'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'archived' = 'all') => {
-    setActiveTab(tab);
-    setPageView('list');
-  };
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
+  const [listScrollRequest, setListScrollRequest] = useState(0);
   // Proctoring settings are a staging-only testing menu — in production it's
   // hidden, so land on Topics instead.
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>(IS_PRODUCTION_ENV ? 'topics' : 'proctoring');
@@ -184,6 +182,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [completedCandidatesPage, setCompletedCandidatesPage] = useState(1);
   const COMPLETED_PAGE_SIZE = 20;
 
+  const openAssessmentsList = (tab: 'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'archived' = 'all') => {
+    try {
+      window.sessionStorage.removeItem('listScroll:assessments');
+    } catch {
+      /* Ignore unavailable sessionStorage. */
+    }
+    setActiveTab(tab);
+    setAssessmentCurrentPage(1);
+    setCompletedCandidatesPage(1);
+    setPageView('list');
+    setListScrollRequest((request) => request + 1);
+  };
+
+  const isOverviewCardActive = (tab: typeof activeTab) => pageView === 'list' && activeTab === tab;
+
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
   const [isLoadingProctoring, setIsLoadingProctoring] = useState(false);
@@ -237,9 +250,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const rootRef = useScrollRestoration('assessments', !isLoading, [pageView]);
   useListStatePersistence(
     'assessments',
-    { pageView, activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
+    { activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
     (s) => {
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
@@ -247,6 +259,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
     },
   );
+
+  useEffect(() => {
+    if (listScrollRequest === 0 || pageView !== 'list') return;
+
+    let nestedFrame = 0;
+    const frame = window.requestAnimationFrame(() => {
+      nestedFrame = window.requestAnimationFrame(() => {
+        listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (nestedFrame) window.cancelAnimationFrame(nestedFrame);
+    };
+  }, [listScrollRequest, pageView, activeTab]);
 
   const getAssessmentStatusFilter = (tab: typeof activeTab) => {
     if (tab === 'active') return 'published';
@@ -1494,7 +1522,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           {/* Row 2: Current State Metrics — click a card to drill into the matching list */}
           <StatsCardGrid>
             <StatsCard
-              tone="blue"
+              tone="neutral"
+              active={isOverviewCardActive('all')}
+              showClickArrow
               icon={FileText}
               label="Total Assessments"
               value={isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
@@ -1502,7 +1532,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('all')}
             />
             <StatsCard
-              tone="emerald"
+              tone="neutral"
+              active={isOverviewCardActive('active')}
+              showClickArrow
               icon={Play}
               label="Active"
               value={isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
@@ -1510,7 +1542,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('active')}
             />
             <StatsCard
-              tone="cyan"
+              tone="neutral"
+              active={isOverviewCardActive('completed-candidates')}
+              showClickArrow
               icon={Users}
               label="Candidates Assessed"
               value={isLoadingStats ? '...' : stats.total_candidates_completed.toLocaleString()}
@@ -1518,7 +1552,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('completed-candidates')}
             />
             <StatsCard
-              tone="orange"
+              tone="neutral"
+              active={isOverviewCardActive('draft')}
+              showClickArrow
               icon={Pencil}
               label="Drafts"
               value={isLoadingStats ? '...' : stats.draft_assessments.toLocaleString()}
@@ -1530,16 +1566,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {pageView === 'list' && (
         <>
-        {/* Back to cards button */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => setPageView('cards')}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
-        </div>
+        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
         {/* Tabs */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">

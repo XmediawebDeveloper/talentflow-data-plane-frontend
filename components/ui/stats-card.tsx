@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowUpRight, type LucideIcon } from 'lucide-react';
 import { cn } from './utils';
 
 // Design tokens extracted from /recruitment/job-openings (master reference).
@@ -78,6 +78,15 @@ const TONES = {
     sparkText: 'text-rose-500/85',
     sparkId: 'spark-rose',
   },
+  neutral: {
+    container:
+      'border-brand-blue/15 bg-white shadow-sm shadow-slate-950/5 hover:border-brand-blue/35 hover:shadow-md dark:border-brand-blue/25 dark:bg-slate-900 dark:hover:border-brand-blue/40',
+    radial: 'bg-transparent',
+    icon:
+      'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:ring-brand-blue/25 dark:text-slate-300',
+    sparkText: 'text-gray-400',
+    sparkId: 'spark-neutral',
+  },
 } as const;
 
 export type StatsCardTone = keyof typeof TONES;
@@ -103,6 +112,8 @@ export interface StatsCardProps {
   sparkVariant?: 0 | 1 | 2 | 3;
   /** Optional click target — when set the card becomes a button. */
   onClick?: () => void;
+  active?: boolean;
+  showClickArrow?: boolean;
   className?: string;
   /** Render extra content under the value (e.g. trend chip). */
   children?: React.ReactNode;
@@ -117,6 +128,8 @@ export function StatsCard({
   sparkPath,
   sparkVariant = 0,
   onClick,
+  active = false,
+  showClickArrow = false,
   className,
   children,
 }: StatsCardProps) {
@@ -134,6 +147,7 @@ export function StatsCard({
             className={cn(
               'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ring-1 shadow-sm',
               t.icon,
+              active && 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30',
             )}
           >
             <Icon className="h-4.5 w-4.5" />
@@ -161,13 +175,27 @@ export function StatsCard({
           </svg>
         </div>
       )}
+      {onClick && showClickArrow && (
+        <span
+          className={cn(
+            'absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5',
+            active
+              ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+              : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400 dark:group-hover:text-blue-300',
+          )}
+          aria-hidden="true"
+        >
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </span>
+      )}
     </>
   );
 
   const baseClass = cn(
     'group relative overflow-hidden rounded-xl border px-3.5 py-3.5 sm:px-4 sm:py-4 transition-[box-shadow,border-color] duration-200',
     t.container,
-    onClick && 'cursor-pointer text-left',
+    active && 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20 hover:border-brand-blue/65 dark:border-brand-blue/50 dark:bg-brand-blue/10 dark:ring-brand-blue/25',
+    onClick && 'cursor-pointer pr-12 text-left',
     className,
   );
 

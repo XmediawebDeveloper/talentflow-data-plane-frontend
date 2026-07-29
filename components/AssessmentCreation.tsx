@@ -313,6 +313,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
+  const [showPublishSuccessModal, setShowPublishSuccessModal] = useState(false);
+  const [publishedAssessmentTitle, setPublishedAssessmentTitle] = useState('');
+  const publishedAssessmentRef = useRef<any>(null);
+  const publishSuccessHandledRef = useRef(false);
+  const publishSuccessTimerRef = useRef<number | null>(null);
   const [proctoringEnabled, setProctoringEnabled] = useState(initialProctoringSettings?.proctoring_enabled ?? true);
 
   // Sync proctoringEnabled when settings load async (only before user manually toggles)
@@ -1419,6 +1424,37 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     );
   };
 
+  const closePublishSuccessModal = useCallback(() => {
+    if (publishSuccessHandledRef.current) return;
+
+    publishSuccessHandledRef.current = true;
+    if (publishSuccessTimerRef.current !== null) {
+      window.clearTimeout(publishSuccessTimerRef.current);
+      publishSuccessTimerRef.current = null;
+    }
+
+    const publishedAssessment = publishedAssessmentRef.current;
+    publishedAssessmentRef.current = null;
+    setShowPublishSuccessModal(false);
+
+    if (publishedAssessment) {
+      onCreateAssessment(publishedAssessment);
+    }
+  }, [onCreateAssessment]);
+
+  useEffect(() => {
+    if (!showPublishSuccessModal) return;
+
+    publishSuccessTimerRef.current = window.setTimeout(closePublishSuccessModal, 3000);
+
+    return () => {
+      if (publishSuccessTimerRef.current !== null) {
+        window.clearTimeout(publishSuccessTimerRef.current);
+        publishSuccessTimerRef.current = null;
+      }
+    };
+  }, [showPublishSuccessModal, closePublishSuccessModal]);
+
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     // Hard guard for Publish: HR section enabled but no questions picked.
     // The button is already disabled in that state, but the keyboard path
@@ -1527,11 +1563,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       // the parent's onCreateAssessment which closes the creation view and
       // reloads the list — that's the expected "I'm done here" behaviour.
       if (!saveAsDraft) {
-        toast.success('Assessment published successfully! You can now invite candidates.');
+        publishSuccessHandledRef.current = false;
+        publishedAssessmentRef.current = assessmentDefinition;
+        setPublishedAssessmentTitle(assessmentDefinition.title || selectedJob?.title || 'Assessment');
+        setShowPublishSuccessModal(true);
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
+        onCreateAssessment(assessmentDefinition);
       }
-      onCreateAssessment(assessmentDefinition);
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
@@ -2720,6 +2759,55 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   className="w-full px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm rounded-lg transition-colors"
                 >
                   Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPublishSuccessModal && (
+          <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="assessment-published-title">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
+              <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <h2 id="assessment-published-title" className="text-lg font-bold text-gray-900 tracking-tight">Assessment Published</h2>
+                <button
+                  type="button"
+                  onClick={closePublishSuccessModal}
+                  className="p-1.5 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-6 py-5 text-center flex-1 overflow-y-auto">
+                <div className="relative inline-flex items-center justify-center mb-4">
+                  <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
+                  <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
+                  <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
+                  <div className="w-16 h-16 bg-green-100 ring-1 ring-green-200 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 text-green-600" />
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Assessment published successfully. You can now invite candidates.
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  This message will close in 3 seconds.
+                </p>
+                <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 px-4 py-3 text-left">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-gray-500">Assessment</span>
+                    <span className="text-sm font-medium text-brand-blue text-right break-words">{publishedAssessmentTitle}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-3 border-t border-gray-100 bg-slate-50/60 flex items-center justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={closePublishSuccessModal}
+                  className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
+                >
+                  Go to Assessments
                 </button>
               </div>
             </div>

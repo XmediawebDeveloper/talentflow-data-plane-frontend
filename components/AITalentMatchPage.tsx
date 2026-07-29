@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, ChevronLeft, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -25,6 +25,7 @@ import RecordPager from '@/components/RecordPager';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 
 interface Job {
   id: string;
@@ -196,6 +197,14 @@ export default function AITalentMatchPage({
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
   // Two-step view: 'cards' shows just the Matched Jobs stats card; clicking it reveals 'list'.
   const [historyPageView, setHistoryPageView] = useState<'cards' | 'list'>('cards');
+  const historyListSectionRef = useRef<HTMLDivElement | null>(null);
+  const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
+
+  const openHistoryListView = () => {
+    setHistoryCurrentPage(1);
+    setHistoryPageView('list');
+    setHistoryListScrollRequest((request) => request + 1);
+  };
 
   useEffect(() => {
     setHistoryCurrentPage(1);
@@ -230,7 +239,7 @@ export default function AITalentMatchPage({
   useListStatePersistence(
     'ai-talent-match',
     {
-      historyPageView, showHistoryFilters,
+      showHistoryFilters,
       historySearchQuery, historyDateFrom, historyDateTo,
       historyFilterPhone, historyFilterLocation, historyFilterExpMin, historyFilterExpMax,
       historyCurrentPage, historyItemsPerPage,
@@ -239,7 +248,6 @@ export default function AITalentMatchPage({
       currentPage, itemsPerPage,
     },
     (s) => {
-      if (s.historyPageView === 'cards' || s.historyPageView === 'list') setHistoryPageView(s.historyPageView);
       if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
       if (typeof s.historySearchQuery === 'string') setHistorySearchQuery(s.historySearchQuery);
       if (typeof s.historyDateFrom === 'string') setHistoryDateFrom(s.historyDateFrom);
@@ -261,6 +269,16 @@ export default function AITalentMatchPage({
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
   );
+
+  useEffect(() => {
+    if (historyListScrollRequest === 0 || historyPageView !== 'list') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      historyListSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [historyListScrollRequest, historyPageView]);
 
   // Fetch scored resumes when viewing details or results for a JD
   useEffect(() => {
@@ -1775,40 +1793,37 @@ export default function AITalentMatchPage({
         </div>
 
         {/* Stats Cards — clicking Matched Jobs drills into the list */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-          <button
-            type="button"
-            onClick={() => setHistoryPageView('list')}
-            className={`flex items-center gap-3 text-left bg-white dark:bg-slate-900 border rounded-xl p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md ${
-              historyPageView === 'list'
-                ? 'border-brand-blue ring-2 ring-brand-blue/30'
-                : 'border-gray-200 dark:border-slate-700/60 hover:border-brand-blue/30'
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-              <History className="w-4 h-4" />
+        <div className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 p-3 sm:p-4 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <Sparkles className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 dark:text-slate-500">Matched Jobs</p>
-              <p className="text-xl font-semibold text-gray-900 dark:text-slate-50 leading-tight tracking-tight">
-                {matchHistory.length}
+            <div>
+              <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900 dark:text-slate-50">AI Talent Match Menu</h3>
+              <p className="text-sm leading-5 text-gray-600 dark:text-slate-400">
+                <span className="block">Review matched job sessions created by AI candidate ranking.</span>
+                <span className="block">Open matched jobs to compare candidates, scores, and next actions from one place.</span>
               </p>
             </div>
-          </button>
+          </div>
         </div>
+
+        <StatsCardGrid className="mb-5">
+          <StatsCard
+            tone="neutral"
+            active={historyPageView === 'list'}
+            showClickArrow
+            icon={History}
+            label="Matched Jobs"
+            value={matchHistory.length}
+            sparkline={false}
+            onClick={openHistoryListView}
+          />
+        </StatsCardGrid>
 
         {historyPageView === 'list' && (
         <>
-        {/* Back to cards button */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => setHistoryPageView('cards')}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to overview
-          </button>
-        </div>
+        <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
         {/* Search and Filter Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
