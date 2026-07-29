@@ -10,6 +10,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
@@ -674,6 +675,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               )}
             </div>
           </div>
+
+          <ModuleInfoBanner
+            icon={<FileText className="h-4 w-4" />}
+            title="AI-Powered Job Descriptions"
+            description="Create clear, role-specific job descriptions with responsibilities, required skills, experience, location, and hiring criteria. Published jobs become the foundation for AI Talent Match, Resume Scoring, Assessments, and AI Interviews."
+          />
 
           {/* SaaS Stats Cards — clicking a card drills into the jobs list with the matching filter applied */}
           <StatsCardGrid>

@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -564,6 +565,12 @@ export default function JDListPage() {
             </button>
           </div>
         </div>
+
+        <ModuleInfoBanner
+          icon={<FileText className="h-4 w-4" />}
+          title="AI-Powered Job Descriptions"
+          description="Create clear, role-specific job descriptions with responsibilities, required skills, experience, location, and hiring criteria. Published jobs become the foundation for AI Talent Match, Resume Scoring, Assessments, and AI Interviews."
+        />
 
         {/* JD03: Status Tabs */}
         <div className="flex items-center gap-1 mb-6 bg-white rounded-lg border border-gray-200 p-1">
