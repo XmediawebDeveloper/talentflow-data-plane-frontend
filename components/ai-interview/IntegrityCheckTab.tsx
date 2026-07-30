@@ -17,12 +17,12 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import {
   ShieldAlert, ShieldCheck, Users, Eye, Camera, Clipboard,
-  Play, ChevronDown, ChevronRight, AudioLines,
+  Play, ChevronDown, ChevronRight, AudioLines, Smartphone,
 } from 'lucide-react';
 import {
   type ViolationRecord, type RecruiterSeverity, type CategoryKey,
   CATEGORIES, CATEGORY_ORDER,
-  recruiterSeverity, categoryOf, labelOf, confidenceOf,
+  recruiterSeverity, categoryOf, labelOfViolation, groupKeyOf, confidenceOf,
   describeViolation, summarizeViolations,
 } from './violationTaxonomy';
 
@@ -81,6 +81,7 @@ const TONE_DOT: Record<Tone, string> = {
 const CATEGORY_ICON: Record<CategoryKey, ReactNode> = {
   ended: <ShieldAlert className="w-5 h-5" />,
   someone_else: <Users className="w-5 h-5" />,
+  prohibited_item: <Smartphone className="w-5 h-5" />,
   device: <Camera className="w-5 h-5" />,
   capture: <Clipboard className="w-5 h-5" />,
   attention: <Eye className="w-5 h-5" />,
@@ -88,8 +89,8 @@ const CATEGORY_ICON: Record<CategoryKey, ReactNode> = {
 };
 
 const CATEGORY_TONE: Record<CategoryKey, Tone> = {
-  ended: 'critical', someone_else: 'critical', device: 'warning',
-  capture: 'warning', attention: 'info', advisory: 'neutral',
+  ended: 'critical', someone_else: 'critical', prohibited_item: 'critical',
+  device: 'warning', capture: 'warning', attention: 'info', advisory: 'neutral',
 };
 
 const CARD_ACCENT: Record<Tone, string> = {
@@ -110,6 +111,8 @@ function ConfidenceTag({ type }: { type: string }) {
 
 /* ── aggregation types ────────────────────────────────────────────────────── */
 interface TypeGroup {
+  /** Grouping identity — event_type, or event_type:object_class for detections. */
+  key: string;
   event_type: string;
   category: CategoryKey;
   label: string;
@@ -124,23 +127,29 @@ export default function IntegrityCheckTab({
 }: IntegrityCheckTabProps) {
   const summary = useMemo(() => summarizeViolations(violations), [violations]);
 
-  // Group by event_type (which already distinguishes the confidence tiers).
+  // Group by event_type (which already distinguishes the confidence tiers) —
+  // except object detections, which additionally split per detected class so a
+  // phone, a book and a second monitor never collapse into one generic row.
   const groups = useMemo<TypeGroup[]>(() => {
     const map = new Map<string, TypeGroup>();
     for (const v of violations) {
-      let g = map.get(v.event_type);
+      const gk = groupKeyOf(v);
+      let g = map.get(gk);
       if (!g) {
         const sev = recruiterSeverity(v);
         g = {
+          key: gk,
           event_type: v.event_type,
           // Advisory/info events (paused, resumed, background noise) always
           // sit in the advisory bucket, never in a default category.
           category: sev === 'advisory' ? 'advisory' : categoryOf(v.event_type),
-          label: labelOf(v.event_type),
+          // labelOfViolation, not labelOf: object detections name the actual
+          // item that was seen ("Mobile phone in view").
+          label: labelOfViolation(v),
           severity: sev,
           count: 0, firstTs: v.timestamp, records: [],
         };
-        map.set(v.event_type, g);
+        map.set(gk, g);
       }
       g.count += 1;
       g.records.push(v);
@@ -282,7 +291,7 @@ export default function IntegrityCheckTab({
                 </div>
                 <div className="flex flex-wrap gap-2 px-4 pb-3.5 pl-16">
                   {cg.map(g => (
-                    <span key={g.event_type} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100">
+                    <span key={g.key} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100">
                       <span className="font-semibold text-gray-800">{g.label}</span>
                       <span className="tabular-nums text-gray-500">{g.count}×</span>
                       <ConfidenceTag type={g.event_type} />
@@ -365,16 +374,16 @@ export default function IntegrityCheckTab({
             <tbody className="divide-y divide-gray-100">
               {shownGroups.map(g => {
                 const tone = SEV_TONE[g.severity];
-                const isOpen = expanded.has(g.event_type);
+                const isOpen = expanded.has(g.key);
                 const firstOff = offsetSeconds(g.firstTs, startTs);
                 const canSeek = firstOff != null && hasRecording;
                 const canExpand = g.count > 1 && g.records.some(r => r.timestamp);
                 return (
-                  <Fragment key={g.event_type}>
+                  <Fragment key={g.key}>
                     <tr className="hover:bg-brand-blue/[0.02] transition-colors">
                       <td className="px-4 py-3 align-top">
                         {canExpand ? (
-                          <button onClick={() => toggle(g.event_type)} aria-label={isOpen ? 'Collapse' : 'Expand'}
+                          <button onClick={() => toggle(g.key)} aria-label={isOpen ? 'Collapse' : 'Expand'}
                             className="text-gray-400 hover:text-brand-blue">
                             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           </button>
@@ -417,7 +426,7 @@ export default function IntegrityCheckTab({
                         const off = offsetSeconds(r.timestamp, startTs);
                         const seek = off != null && hasRecording;
                         return (
-                          <tr key={`${g.event_type}-${ri}`} className="bg-slate-50/40">
+                          <tr key={`${g.key}-${ri}`} className="bg-slate-50/40">
                             <td className="px-4 py-2"></td>
                             <td className="px-4 py-2 text-xs text-gray-400 pl-10">Occurrence {ri + 1}</td>
                             <td className="px-4 py-2 text-xs text-gray-500 max-w-[34ch]">{describeViolation(r) || '—'}</td>
@@ -484,6 +493,7 @@ function toneToSev(t: Tone): RecruiterSeverity {
 function shortCat(k: CategoryKey): string {
   switch (k) {
     case 'someone_else': return 'Someone else';
+    case 'prohibited_item': return 'Phone / item';
     case 'attention': return 'Attention';
     case 'device': return 'Camera / mic';
     case 'capture': return 'Copy / capture';
@@ -555,7 +565,30 @@ function buildVerdict(
     };
   }
 
-  // 3. Other serious flags (screen share stopped, camera off, etc.)
+  // 3. A phone was seen on camera. Ranked directly below "someone else" and
+  //    above the generic serious bucket: a phone is a specific, self-explanatory
+  //    breach, so the verdict names the device instead of making the recruiter
+  //    open the log to find out what was flagged.
+  if (summary.phoneSeen) {
+    const phone = find('phone_detected');
+    const others = groups
+      .filter(g => g.event_type === 'unauthorized_object')
+      .map(g => g.label.replace(/ in view$/, '').toLowerCase());
+    const n = phone?.count ?? 0;
+    const moment = atMoment(phone?.firstTs);
+    const alsoSaw = others.length
+      ? ` The camera also picked up ${others.join(', ')}.`
+      : '';
+    return {
+      tone: 'critical',
+      headline: 'A mobile phone was visible during the interview',
+      body: `A phone was detected on camera ${n} time${n !== 1 ? 's' : ''}${moment}.${alsoSaw} Jump to each flagged moment in the log below to confirm it in the recording before deciding.`,
+      recommendation: 'Confirm in the recording before deciding',
+      ...toneChrome('critical'),
+    };
+  }
+
+  // 4. Other serious flags (screen share stopped, camera off, etc.)
   if (summary.serious > 0) {
     return {
       tone: 'critical',
@@ -566,7 +599,7 @@ function buildVerdict(
     };
   }
 
-  // 4. Moderate only
+  // 5. Moderate only
   if (summary.moderate > 0) {
     return {
       tone: 'warning',
@@ -576,7 +609,7 @@ function buildVerdict(
     };
   }
 
-  // 5. Minor only
+  // 6. Minor only
   if (summary.minor > 0) {
     return {
       tone: 'info',
@@ -586,7 +619,7 @@ function buildVerdict(
     };
   }
 
-  // 6. Advisory only / nothing counted
+  // 7. Advisory only / nothing counted
   return {
     tone: 'clean',
     headline: 'No integrity concerns detected',

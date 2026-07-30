@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, ShieldAlert, AudioLines } from 'lucide-react';
+import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, ShieldAlert, AudioLines, Smartphone, PackageX } from 'lucide-react';
 import { InterviewEventBus, ProctoringEvent, ProctoringEventType } from './InterviewEventBus';
 
 interface WarningItem {
@@ -58,6 +58,10 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   voice_identity_changed: <AudioLines className="w-6 h-6" />,
   screen_share_stopped: <Monitor className="w-6 h-6" />,
   background_noise: <AudioLines className="w-6 h-6" />,
+  phone_detected: <Smartphone className="w-6 h-6" />,
+  unauthorized_object: <PackageX className="w-6 h-6" />,
+  // Never rendered (backend-only), but the Record must stay exhaustive.
+  object_detection_unavailable: <ShieldAlert className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -82,6 +86,9 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   voice_identity_changed: 'Speaker Changed',
   screen_share_stopped: 'Screen Sharing Stopped',
   background_noise: 'Background Noise Detected',
+  phone_detected: 'Mobile Phone Detected',
+  unauthorized_object: 'Unauthorised Item Detected',
+  object_detection_unavailable: 'Object Detection Unavailable',
 };
 
 const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; border: string; text: string; icon: string }> = {

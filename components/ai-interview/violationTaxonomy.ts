@@ -23,6 +23,8 @@
  * view, PDF export, etc. without pulling in React.
  */
 
+import { objectDisplayLabel } from './proctoring/detectableObjects';
+
 export interface ViolationRecord {
   event_type: string;
   severity: string; // backend-recomputed: 'high' | 'medium' | 'low' (legacy minor/moderate/severe)
@@ -34,6 +36,7 @@ export type RecruiterSeverity = 'serious' | 'moderate' | 'minor' | 'advisory';
 export type Confidence = 'high' | 'possible';
 export type CategoryKey =
   | 'someone_else'
+  | 'prohibited_item'
   | 'attention'
   | 'device'
   | 'capture'
@@ -50,6 +53,7 @@ export interface CategoryDef {
 export const CATEGORY_ORDER: CategoryKey[] = [
   'ended',
   'someone_else',
+  'prohibited_item',
   'device',
   'capture',
   'attention',
@@ -71,6 +75,11 @@ export const CATEGORIES: Record<CategoryKey, CategoryDef> = {
     key: 'device',
     title: 'Camera or microphone off or blocked',
     description: 'The camera couldn’t see the candidate, or a device was switched off during the interview.',
+  },
+  prohibited_item: {
+    key: 'prohibited_item',
+    title: 'A phone or other item was visible',
+    description: 'The camera saw an item that isn’t allowed during the interview, such as a mobile phone, a second screen, or notes.',
   },
   capture: {
     key: 'capture',
@@ -101,6 +110,10 @@ interface EventMeta {
 // are informational timeline markers the backend also omits from scoring.
 export const ADVISORY_TYPES = new Set<string>([
   'background_noise', 'voice_detected', 'session_paused', 'session_resumed',
+  // Infrastructure diagnostic, never the candidate's fault — must not count
+  // against them, but must be visible so "no phone flags" isn't misread as
+  // "we checked and found nothing".
+  'object_detection_unavailable',
 ]);
 
 export const EVENT_META: Record<string, EventMeta> = {
@@ -111,6 +124,13 @@ export const EVENT_META: Record<string, EventMeta> = {
   face_identity_changed:  { category: 'someone_else', label: 'A different face than the candidate', confidence: 'high' },
   face_mismatch:          { category: 'someone_else', label: 'A different face than the candidate', confidence: 'possible' },
   multiple_faces:         { category: 'someone_else', label: 'Another person on camera' },
+
+  // Prohibited items seen on camera. The LABEL stays generic here because the
+  // specific item ("Mobile phone", "Book or printed notes") varies per record
+  // and comes from details.object_label — see labelOfViolation()/describeViolation(),
+  // which are what the Integrity Check tab actually renders.
+  phone_detected:      { category: 'prohibited_item', label: 'Mobile phone in view', confidence: 'high' },
+  unauthorized_object: { category: 'prohibited_item', label: 'Prohibited item in view', confidence: 'possible' },
 
   // Device — camera / mic
   face_missing:           { category: 'device', label: 'Face not visible' },
@@ -136,6 +156,7 @@ export const EVENT_META: Record<string, EventMeta> = {
 
   // Advisory / timeline markers
   background_noise: { category: 'advisory', label: 'Background noise' },
+  object_detection_unavailable: { category: 'advisory', label: 'Phone / item detection did not run' },
   voice_detected:   { category: 'advisory', label: 'Voice activity' },
   session_paused:   { category: 'advisory', label: 'Interview paused' },
   session_resumed:  { category: 'advisory', label: 'Interview resumed' },
@@ -169,8 +190,48 @@ export function labelOf(eventType: string): string {
   return EVENT_META[eventType]?.label ?? eventType.replace(/_/g, ' ');
 }
 
+/**
+ * Per-RECORD label. Identical to labelOf() for every event whose meaning is
+ * fully carried by its type — but object detections carry the actual thing that
+ * was seen in `details`, and a recruiter reviewing an interview needs to read
+ * "Mobile phone" or "Book or printed notes", never a generic "object detected".
+ *
+ * Prefers the stored `object_label` (written at detection time), falls back to
+ * the raw model class (`object_class`, e.g. "cell phone"), and only then to the
+ * event-type label. So a class the model gains before this app knows about it
+ * still shows its real name rather than being flattened into a placeholder.
+ */
+export function labelOfViolation(v: ViolationRecord): string {
+  const d = (v.details ?? {}) as Record<string, unknown>;
+  if (v.event_type === 'phone_detected' || v.event_type === 'unauthorized_object') {
+    if (typeof d.object_label === 'string' && d.object_label) return `${d.object_label} in view`;
+    if (typeof d.object_class === 'string' && d.object_class) {
+      return `${objectDisplayLabel(d.object_class)} in view`;
+    }
+  }
+  return labelOf(v.event_type);
+}
+
 export function confidenceOf(eventType: string): Confidence | undefined {
   return EVENT_META[eventType]?.confidence;
+}
+
+/**
+ * Key the Integrity Check tab groups records by.
+ *
+ * For most events the type IS the identity — twelve `gaze_away` records are one
+ * thing that happened twelve times. Object detections are different: a laptop,
+ * a book and a second monitor all arrive as `unauthorized_object`, and merging
+ * them into a single row would tell the recruiter "3 prohibited items" while
+ * hiding WHICH. Splitting on the detected class keeps each real-world item as
+ * its own row.
+ */
+export function groupKeyOf(v: ViolationRecord): string {
+  if (v.event_type === 'phone_detected' || v.event_type === 'unauthorized_object') {
+    const cls = (v.details as Record<string, unknown> | undefined)?.object_class;
+    if (typeof cls === 'string' && cls) return `${v.event_type}:${cls}`;
+  }
+  return v.event_type;
 }
 
 /* ── Summary ──────────────────────────────────────────────────────────────── */
@@ -183,6 +244,8 @@ export interface ViolationSummary {
   minor: number;
   /** true when a strong "someone else" signal is present. */
   someoneElse: boolean;
+  /** true when a mobile phone was confirmed on camera. */
+  phoneSeen: boolean;
   terminated: boolean;
 }
 
@@ -193,11 +256,13 @@ const SOMEONE_ELSE_SERIOUS = new Set<string>([
 export function summarizeViolations(violations: ViolationRecord[]): ViolationSummary {
   const s: ViolationSummary = {
     raw: violations.length, advisory: 0, counted: 0,
-    serious: 0, moderate: 0, minor: 0, someoneElse: false, terminated: false,
+    serious: 0, moderate: 0, minor: 0, someoneElse: false, phoneSeen: false,
+    terminated: false,
   };
   for (const v of violations) {
     if (v.event_type === 'interview_terminated') s.terminated = true;
     if (SOMEONE_ELSE_SERIOUS.has(v.event_type)) s.someoneElse = true;
+    if (v.event_type === 'phone_detected') s.phoneSeen = true;
     const rs = recruiterSeverity(v);
     if (rs === 'advisory') { s.advisory += 1; continue; }
     s.counted += 1;
@@ -329,6 +394,31 @@ export function describeViolation(v: ViolationRecord): string {
       if (d.reason === 'too_uniform') return 'The camera view appeared covered or blocked.';
       return 'The camera view was obstructed.';
     }
+    case 'phone_detected':
+    case 'unauthorized_object': {
+      // details: { object_class, object_label, confidence, box, consecutive_frames, detector }
+      // object_class is the model's verbatim class ("cell phone"); object_label
+      // is its recruiter-facing name. We show the recruiter-facing name and keep
+      // the raw class visible in parentheses so the finding stays auditable —
+      // a recruiter challenging a flag can see exactly what the model called it.
+      const cls = typeof d.object_class === 'string' ? d.object_class : '';
+      const name = typeof d.object_label === 'string' && d.object_label
+        ? d.object_label
+        : objectDisplayLabel(cls);
+      const conf = num(d.confidence);
+      const frames = num(d.consecutive_frames);
+
+      const parts = [`The camera saw a ${name.toLowerCase()}`];
+      if (cls && cls.toLowerCase() !== name.toLowerCase()) parts.push(` (detected as "${cls}")`);
+      parts.push('.');
+      if (conf != null) parts.push(` Detection confidence ${Math.round(conf * 100)}%`);
+      if (frames != null && frames > 1) {
+        parts.push(conf != null ? `, seen in ${frames} consecutive checks.` : ` Seen in ${frames} consecutive checks.`);
+      } else if (conf != null) {
+        parts.push('.');
+      }
+      return parts.join('');
+    }
     case 'face_missing':
       return 'No face was detected by the camera.';
     case 'camera_disabled':
@@ -339,6 +429,13 @@ export function describeViolation(v: ViolationRecord): string {
       const msg = typeof d.message === 'string' && d.message ? d.message : '';
       const reason = typeof d.reason === 'string' ? d.reason : '';
       return msg || TERM_REASON[reason] || 'The candidate left the interview screen.';
+    }
+    case 'object_detection_unavailable': {
+      // details: { reason }
+      const why = typeof d.reason === 'string' && d.reason ? d.reason : 'reason not recorded';
+      return `Phone / prohibited-item detection could not start, so nothing was checked for. ` +
+        `This does not count against the candidate — but a clean result here means "not checked", ` +
+        `not "nothing found". Technical reason: ${why}`;
     }
     case 'background_noise':
       return 'A noisy environment was detected. This does not affect the result.';

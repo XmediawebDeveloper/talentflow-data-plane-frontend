@@ -23,6 +23,7 @@ const ALLOW_PREFIXES = [
   '[InterviewUI]',       // mic profile, RNNoise, AudioContext, worklet
   '[TalkingHead]',       // avatar/audio playback
   '[AUDIO-SEND-FAILED]', // upstream PCM send failures
+  '[INTERVIEW_OBJECT_DETECTION]', // phone/object detector: init, backend, failures
 ];
 // Connection diagnostics that may not carry a known prefix.
 const CONN_SUBSTR = ['close code', 'WebSocket', 'Connection lost', 'onclose', 'WS closed', 'reconnect'];

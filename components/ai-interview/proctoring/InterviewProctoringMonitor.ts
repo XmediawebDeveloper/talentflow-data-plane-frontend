@@ -81,6 +81,13 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   voice_identity_changed: 15000,
   screen_share_stopped: 10000,
   background_noise: 30000,
+  // Long windows: the object detector runs on a 2 s cadence and a phone left in
+  // view stays in view. The per-CLASS re-arm gate in InterviewObjectDetection
+  // already suppresses repeats; this is the belt-and-braces per-type throttle.
+  phone_detected: 20000,
+  unauthorized_object: 30000,
+  // Fires at most once per session anyway.
+  object_detection_unavailable: 600000,
 };
 
 // Backend batch flush interval
@@ -101,6 +108,13 @@ const NOISE_WARNING_COOLDOWN = 30000; // 30 seconds
 // on TV/fan/neighbour audio; the authoritative "another speaker" signal is
 // voice_identity_changed/voice_mismatch from InterviewVoiceVerification.
 const UI_ONLY_EVENT_TYPES: ReadonlySet<ProctoringEventType> = new Set<ProctoringEventType>(['voice_detected']);
+
+// The mirror image of UI_ONLY: recorded for the recruiter but never shown to
+// the candidate. object_detection_unavailable is an infrastructure diagnostic
+// ("the phone detector couldn't start") — the candidate can do nothing about it
+// and telling them a proctoring check is DOWN actively invites cheating.
+const BACKEND_ONLY_EVENT_TYPES: ReadonlySet<ProctoringEventType> =
+  new Set<ProctoringEventType>(['object_detection_unavailable']);
 // Window during which a fresh speaker-identity event suppresses the
 // voice_detected hint — the identity layer already covered it.
 const IDENTITY_SUPPRESSION_MS = 5000;
@@ -413,7 +427,8 @@ export function useInterviewProctoringMonitor({
     }
 
     // 2. UI warning with per-type cooldown (same window — keeps toast and
-    //    backend log in lockstep).
+    //    backend log in lockstep). Backend-only diagnostics never toast.
+    if (BACKEND_ONLY_EVENT_TYPES.has(eventType)) return;
     const lastShown = lastUiWarningTimeRef.current[eventType] || 0;
     if (now - lastShown >= cooldown) {
       lastUiWarningTimeRef.current[eventType] = now;
@@ -1096,8 +1111,11 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     face_identity_changed:    'severe',
     voice_identity_changed:   'severe',
     screen_share_stopped:     'severe',
+    phone_detected:           'severe',
+    unauthorized_object:      'moderate',
     // Advisory — not a proctoring violation (AIU-67)
     background_noise:         'minor',
+    object_detection_unavailable: 'minor',
   };
   return map[type] ?? 'minor';
 }

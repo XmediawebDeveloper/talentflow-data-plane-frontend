@@ -8,6 +8,7 @@
     "rebuild": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\" && NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
+    "fetch:od-model": "node scripts/fetch-object-detection-model.mjs",
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui"
   },

@@ -1103,9 +1103,13 @@ export default function AIInterview() {
                   </div>
                 </div>
                 {/* Row 2: label text */}
-                <div className="flex items-center justify-between gap-1 min-w-0">
-                  <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 font-medium truncate">{label}</span>
-                  <span className="hidden lg:inline text-[11px] text-gray-400 dark:text-slate-500 truncate">{hint}</span>
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 font-medium leading-snug whitespace-normal break-words">
+                    {label}
+                  </div>
+                  <div className="hidden sm:block text-[11px] text-gray-400 dark:text-slate-500 leading-snug whitespace-normal break-words">
+                    {hint}
+                  </div>
                 </div>
               </button>
             );

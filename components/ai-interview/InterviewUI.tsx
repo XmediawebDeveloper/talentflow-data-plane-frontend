@@ -9,8 +9,11 @@ import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
 import {
   useInterviewFaceDetection,
+  useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
+  type DetectedObjectEvent,
+  type ObjectEventType,
 } from './proctoring';
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
@@ -274,6 +277,19 @@ const REVEAL_DEBUG = true;
 // reads as tightly in sync instead of laggy. Kept small so text never finishes
 // noticeably before the audio.
 const REVEAL_LEAD_MS = 550;
+// Phase A reveal rate (chars/sec) used until `audio_end` tells us the TRUE total
+// audio duration. Prior only — replaced by the previous turn's MEASURED rate
+// (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
+// to voice, language and AI_TTS_SPEED instead of trusting a constant.
+// 12 rather than the ~14 of a normal-rate voice because the backend ships
+// AI_TTS_SPEED = 0.85 (Bina speaks ~15% slower). Deliberately conservative:
+// undershooting makes the caption trail slightly, overshooting makes it outrun
+// the voice — the exact symptom this system exists to prevent.
+const DEFAULT_REVEAL_CPS = 12;
+// Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
+// pacer above governs; this only stops a bad CPS prior from completing the
+// bubble before `audio_end` confirms the total.
+const PHASE_A_MAX_FRACTION = 0.94;
 
 const formatTimeMMSS = (seconds: number): string => {
   const safe = Math.max(0, Math.floor(seconds || 0));
@@ -1254,6 +1270,44 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     emitEvent('gaze_away', { direction });
   }, [emitEvent]);
 
+  // Prohibited object on camera (phone / second screen / book).
+  // The whole payload is forwarded verbatim so `object_class` — the model's own
+  // class string — lands in the stored violation. The recruiter's Integrity
+  // Check tab reads it back to name the exact item; never a generic "object".
+  const handleObjectDetected = useCallback(
+    (eventType: ObjectEventType, det: DetectedObjectEvent) => {
+      emitEvent(eventType, {
+        object_class: det.object_class,
+        object_label: det.object_label,
+        confidence: Number(det.confidence.toFixed(3)),
+        box: det.box.map(n => Number(n.toFixed(4))),
+        consecutive_frames: det.consecutive_frames,
+        detector: det.detector,
+      });
+    },
+    [emitEvent],
+  );
+
+  // Detection is best-effort: it needs WebGPU (Safari/Firefox may not have it)
+  // and the vendored model+runtime to be present on the server.
+  //
+  // Record the failure as a proctoring event, not just a console line. A
+  // detector that never started produces an interview with zero phone flags,
+  // which is indistinguishable from a genuinely clean one — so the recruiter
+  // MUST be able to see that the check didn't run. Persisted as "info"
+  // severity server-side, so it never counts against the candidate.
+  const handleObjectDetectionUnavailable = useCallback((reason: string) => {
+    console.warn('[INTERVIEW_OBJECT_DETECTION] Unavailable —', reason);
+    emitEvent('object_detection_unavailable', { reason });
+  }, [emitEvent]);
+
+  const objectDetection = useInterviewObjectDetection({
+    enabled: isConnected && webcamReady,
+    lowTier: effectiveDeviceCapability?.tier === 'low',
+    onObjectDetected: handleObjectDetected,
+    onUnavailable: handleObjectDetectionUnavailable,
+  });
+
   // Face verification event handlers (identity check, not just presence)
   useEffect(() => {
     if (!faceVerification || !isConnected) return;
@@ -1282,6 +1336,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const handleVideoReady = useCallback((video: HTMLVideoElement) => {
     handDetection.setVideoElement(video);
     faceDetection.setVideoElement(video);
+    objectDetection.setVideoElement(video);
     setWebcamReady(true);
 
     // Start video recording from webcam stream.
@@ -1291,13 +1346,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (stream) {
       webcamStreamRef.current = stream;
 
-      // ── Boost the RECORDING audio so quiet headset/earbud mics are clearly
-      // audible in the saved video (raw webcam audio is too quiet on headphones).
-      // The webcam AUDIO track is routed through gain → limiter and swapped into
-      // the recorded stream; the VIDEO track passes through untouched. Non-
+      // ── Build the RECORDING audio mix: boosted candidate mic + Bina's clean
+      // TTS tap. Mirrors the screen-recording mix in CandidateAIInterviewPortal
+      // so both saved views have the same two-voice balance.
+      //
+      // Mic: boosted via gain → limiter because raw webcam audio is too quiet on
+      // headphones/earbuds. The VIDEO track passes through untouched. Non-
       // destructive: the original audio track stays live for proctoring, and the
-      // ASR/transcription path uses its own separately-boosted stream. If Web
-      // Audio setup fails for any reason we record the raw stream unchanged.
+      // ASR/transcription path uses its own separately-boosted stream.
+      //
+      // Bina: taken from the DIRECT tap (__interviewRecordingDest), never from
+      // mic bleed. The webcam mic runs echoCancellation ON (Webcam.tsx), so her
+      // voice off the speakers is mostly cancelled — without this tap the saved
+      // Candidate View is one-sided (candidate only, questions inaudible) with
+      // hollow half-cancelled residue where she spoke. Trimmed to 0.75 so the
+      // boosted candidate sits at a comparable level instead of under her.
+      //
+      // If Web Audio setup fails for any reason we record the raw stream unchanged.
       let recordStream: MediaStream = stream;
       try {
         const aTracks = stream.getAudioTracks();
@@ -1307,6 +1372,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           const actx = new Ctx();
           recordingAudioCtxRef.current = actx;
           if (actx.state === 'suspended') actx.resume().catch(() => {});
+          const dest = actx.createMediaStreamDestination();
+
           const srcNode = actx.createMediaStreamSource(new MediaStream(aTracks));
           const boost = actx.createGain();
           boost.gain.value = 3.0; // lift quiet headset/earbud speech
@@ -1317,16 +1384,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           limiter.ratio.value = 20;
           limiter.attack.value = 0.003;
           limiter.release.value = 0.1;
-          const dest = actx.createMediaStreamDestination();
           srcNode.connect(boost).connect(limiter).connect(dest);
+
+          // Bina's voice — direct tap only. The dest is created by the portal
+          // BEFORE TalkingHead mounts (that's when the avatar wires itself into
+          // it), so only use an existing one; creating it this late would route
+          // nothing. Absent in flows without a screen-recording mix — the
+          // recording then stays mic-only, exactly as before.
+          const lindaDest = (window as any).__interviewRecordingDest as MediaStreamAudioDestinationNode | null;
+          let binaMixed = false;
+          if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
+            const lindaGain = actx.createGain();
+            lindaGain.gain.value = 0.75;
+            actx.createMediaStreamSource(lindaDest.stream).connect(lindaGain).connect(dest);
+            binaMixed = true;
+          }
+
           recordStream = new MediaStream([
             ...stream.getVideoTracks(),
             ...dest.stream.getAudioTracks(),
           ]);
-          console.log('[Recording] audio boost active (gain 3× + limiter) for clearer voice');
+          console.log(
+            `[Recording] audio mix active (mic gain 3× + limiter${binaMixed ? ', Bina tap @0.75' : ', Bina tap unavailable — mic only'})`,
+          );
         }
       } catch (e) {
-        console.warn('[Recording] audio boost setup failed — recording raw audio:', e);
+        console.warn('[Recording] audio mix setup failed — recording raw audio:', e);
         recordStream = stream;
       }
 
@@ -1384,7 +1467,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       faceVerification.startVerification(video, lowTier ? 30000 : undefined);
       console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${lowTier ? '30s low-tier' : '10s'} cadence)`);
     }
-  }, [handDetection, faceDetection, faceVerification, effectiveDeviceCapability]);
+  }, [handDetection, faceDetection, objectDetection, faceVerification, effectiveDeviceCapability]);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
@@ -1695,6 +1778,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Token reveal system
   const tokenBufferRef = useRef("");
   const revealedCharsRef = useRef(0);
+  // Bina's MEASURED speaking rate (chars/sec), learned from completed turns:
+  // chars ÷ actual audio seconds. Phase A of the reveal uses it instead of
+  // DEFAULT_REVEAL_CPS from the second turn on, so pacing self-calibrates to the
+  // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
+  const measuredRevealCpsRef = useRef<number | null>(null);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
   const startRecordingInternalRef = useRef<() => void>(() => {});
   const disconnectRef = useRef<() => void>(() => {});
@@ -2570,12 +2658,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   }, [classifyMicType, applyMicProfile, tuneTrackForMicType]);
 
   const getRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
+    let stream: MediaStream;
     try {
-      return await getDedicatedRecordingAudioStream();
+      stream = await getDedicatedRecordingAudioStream();
     } catch (dedicatedErr) {
       console.warn('[InterviewUI] Dedicated answer microphone unavailable — falling back to webcam audio track', dedicatedErr);
-      return await getSharedRecordingAudioStream();
+      stream = await getSharedRecordingAudioStream();
     }
+    // Point the screen-recording audio mix at the SAME device the candidate is
+    // answering on. That mix is built in CandidateAIInterviewPortal before this
+    // component mounts, so its first capture may be the OS default (often the
+    // laptop array mic) even when the candidate speaks into a headset — which
+    // made them almost inaudible in the saved Interview View. Best-effort: the
+    // portal ignores the call when no mix is active.
+    try {
+      const pinned = pinnedAudioDeviceIdRef.current;
+      if (pinned) {
+        // Global so a mid-interview re-share rebuilds the mix on the right device
+        // immediately, instead of waiting for the next answer turn to retarget.
+        (window as any).__interviewMicDeviceId = pinned;
+        void (window as any).__interviewSetRecordingMic?.(pinned);
+      }
+    } catch { /* best-effort — never block mic acquisition */ }
+    return stream;
   }, [getDedicatedRecordingAudioStream, getSharedRecordingAudioStream]);
 
   const flushPreSpeechAudioToBackend = useCallback(() => {
@@ -2606,6 +2711,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
     // Always use full tokenBuffer — currentAiTextRef may be partially revealed
     const text = tokenBufferRef.current.trim();
+    // Learn Bina's real speaking rate from this completed turn so the NEXT
+    // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
+    // here because this is the one place where both the final text length and
+    // the final audio duration are known (currentTurnAudioMsRef is reset by the
+    // next turn's first token, not before). Short clips are skipped — their
+    // ratio is dominated by leading/trailing silence. Smoothed so one odd turn
+    // (a long pause mid-sentence) can't skew the next, and clamped to a sane
+    // speech range so a bad sample can never make the caption race.
+    const turnAudioSec = currentTurnAudioMsRef.current / 1000;
+    if (text.length > 20 && turnAudioSec > 1.5) {
+      const sample = text.length / turnAudioSec;
+      if (sample >= 6 && sample <= 30) {
+        const prev = measuredRevealCpsRef.current;
+        measuredRevealCpsRef.current = prev === null ? sample : prev * 0.7 + sample * 0.3;
+        if (REVEAL_DEBUG) {
+          console.debug(`[Reveal] cps sample=${sample.toFixed(1)} smoothed=${measuredRevealCpsRef.current.toFixed(1)} (chars=${text.length} audio=${turnAudioSec.toFixed(2)}s)`);
+        }
+      }
+    }
     if (text) {
       const wasFollowup = isCurrentFollowupRef.current;
       setMessages(prev => [...prev, {
@@ -2634,18 +2758,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // There are TWO reveal phases, because the total audio duration is
   // unknown until the backend sends `audio_end`:
   //
-  //   Phase A (streaming): audio_end not yet received. We don't know the
-  //   total TTS duration, and `currentTurnAudioMsRef` only reflects audio
-  //   RECEIVED so far (chunks stream at real-time rate, so it roughly
-  //   equals wall-clock elapsed → useless as a denominator). Use a
-  //   conservative CPS (~14 chars/sec) pacing; this matches typical TTS
-  //   speaking rate so the text advances with the audio instead of
-  //   out-racing or lagging it.
+  //   Phase A (streaming): audio_end not yet received, so the total TTS
+  //   duration is UNKNOWN — every "end of audio" figure available
+  //   (`currentTurnAudioMsRef`, the tracker's scheduled end) describes only
+  //   what has ARRIVED so far. Fraction math is therefore invalid here: it
+  //   divides the played position by a partial total, which inflates progress
+  //   toward 1 and reveals text the voice hasn't reached — worst at the start
+  //   of a turn, where the partial total is smallest. So Phase A paces by
+  //   RATE (chars/sec, see DEFAULT_REVEAL_CPS) instead of by fraction. Rate
+  //   pacing cannot inflate, because it never divides by an unknown.
   //
-  //   Phase B (post-audio_end): we know the TRUE total audio duration
-  //   (currentTurnAudioMsRef is final) AND the wall-clock end point
-  //   (`firstPcmAt + audioMs`). Compute progress from the anchor and
-  //   drive the reveal to finish exactly at that wall-clock moment.
+  //   Phase B (post-audio_end): the totals are final, so fraction math is
+  //   exact. Progress is measured against the AUDIBLE span and drives the
+  //   reveal to land REVEAL_LEAD_MS before the voice stops.
   //
   // The reveal loop KEEPS ticking while Bina is still audible, even once
   // all text is revealed, so the bubble cannot "finish" before audio does.
@@ -2669,7 +2794,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // mode where "text appears only after Bina finishes speaking").
       const pbCtx = playbackTrackerCtxRef.current;
       const ctxStart = audibleStartCtxSecRef.current;
-      const ctxEnd = playbackScheduledEndAtRef.current;
+      // Shift the tracker's scheduled end onto the AUDIBLE timeline. The silent
+      // mirror buffers are scheduled from chunk ARRIVAL, but TalkingHead's
+      // speakers only start TALKING_HEAD_BUFFER_MS later — so the real voice
+      // occupies [mirrorStart + buffer, mirrorEnd + buffer]. `ctxStart` already
+      // carries that shift (see trackPlaybackChunk); without the matching shift
+      // here the span is short by the whole buffer, which made the reveal finish
+      // ~2 s before Bina stopped speaking on EVERY turn.
+      const ctxEnd = playbackScheduledEndAtRef.current + TALKING_HEAD_BUFFER_MS / 1000;
       const ctxAvailable =
         !!pbCtx &&
         pbCtx.state === "running" &&
@@ -2678,6 +2810,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         ctxEnd > ctxStart;
 
       let progress: number | null = null;
+      // Seconds of Bina's voice actually heard so far (negative before she is
+      // audible). Phase A paces off this directly — no division, no inflation.
+      let playedSec = 0;
 
       if (ctxAvailable) {
         const now = pbCtx!.currentTime;
@@ -2688,8 +2823,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
           return;  // inside buffer delay
         }
-        progress = (now - ctxStart! + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
-        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} prog=${progress.toFixed(3)}`);
+        playedSec = now - ctxStart!;
+        progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
+        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
       } else if (firstPcmAt !== null) {
         // Fallback: wall-clock math so streaming reveal works even when the
         // tracker AudioContext is stalled. `audibleStartMs` waits out the
@@ -2701,6 +2837,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
           return;
         }
+        playedSec = (Date.now() - audibleStartMs) / 1000;
         const receivedMs = currentTurnAudioMsRef.current;
         if (receivedMs <= 0) return;
         progress = elapsedMs / receivedMs;
@@ -2711,13 +2848,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
 
       if (progress === null) return;
-      // During streaming (audio_end not yet received) allow the text to track
-      // the voice closely — 0.94 instead of the old 0.85, so the caption keeps
-      // pace instead of trailing ~15% behind. It still can't fully finish before
-      // audio_end (which flips the cap to 1.0).
-      const cap = audioEndReceivedRef.current ? 1 : 0.94;
-      progress = Math.max(0, Math.min(cap, progress));
-      target = Math.floor(progress * fullText.length);
+      if (audioEndReceivedRef.current) {
+        // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
+        // on the audible timeline the span equals the real audio duration, so
+        // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
+        // beyond the natural 1.0.
+        progress = Math.max(0, Math.min(1, progress));
+        target = Math.floor(progress * fullText.length);
+      } else {
+        // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
+        // PARTIAL total and would inflate (see the header note), so it is only
+        // logged, never used to position the text.
+        const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
+        const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
+        // Ceiling is a backstop against a bad CPS prior, not the pacer.
+        target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
+        if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+      }
       if (target > revealedCharsRef.current) {
         revealedCharsRef.current = target;
         const revealedText = fullText.substring(0, target);

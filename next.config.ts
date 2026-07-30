@@ -84,6 +84,33 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Proctoring web workers must never be served stale. These files live in
+      // public/, so Next gives them the default 4-hour max-age — meaning after a
+      // deploy, candidates' browsers AND the Cloudflare edge keep running the
+      // previous worker for up to 4 hours. That silently shipped a known-broken
+      // object detector to live interviews.
+      {
+        source: '/workers/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
+      // Model weights and the ONNX runtime are large (28 MB + 24 MB) and
+      // content-stable — the filename changes when the contents do. Cache them
+      // hard so a candidate downloads them once, not on every interview.
+      // Without this they were served max-age=0 and revalidated every time.
+      {
+        source: '/models/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/ort/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
       {
         source: '/:path((?!_next/static|_next/image|favicon.ico|.*\\..*).*)',
         headers: [

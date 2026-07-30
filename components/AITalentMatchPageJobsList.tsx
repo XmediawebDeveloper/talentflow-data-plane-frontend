@@ -1,8 +1,9 @@
-import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X } from 'lucide-react';
+import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 
 interface Job {
   id: string;
@@ -47,6 +48,7 @@ export default function AITalentMatchPageJobsList({
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
+  const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -143,6 +145,12 @@ export default function AITalentMatchPageJobsList({
         </div>
       </div>
 
+      <ModuleInfoBanner
+        icon={<Sparkles className="h-4 w-4" />}
+        title="AI-Powered Talent Matching"
+        description="Select a published job and let AI compare its skills, experience, and requirements against your candidate pool. Review ranked matches to quickly focus on the most relevant people for the role."
+      />
+
       {/* Search and Filter Bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
@@ -160,6 +168,28 @@ export default function AITalentMatchPageJobsList({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5" role="group" aria-label="Job view">
+              <button
+                type="button"
+                onClick={() => setJobsView('grid')}
+                className={`rounded-md p-1.5 transition-colors ${jobsView === 'grid' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
+                aria-label="Grid view"
+                aria-pressed={jobsView === 'grid'}
+                title="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setJobsView('list')}
+                className={`rounded-md p-1.5 transition-colors ${jobsView === 'list' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
+                aria-label="List view"
+                aria-pressed={jobsView === 'list'}
+                title="List view"
+              >
+                <ListIcon className="h-4 w-4" />
+              </button>
+            </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all flex items-center justify-center gap-2 font-medium text-sm sm:text-base ${
@@ -265,6 +295,7 @@ export default function AITalentMatchPageJobsList({
             <p className="text-xs sm:text-sm text-gray-600">Click any job to run AI matching</p>
           </div>
 
+          {jobsView === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginatedJobs.map((job) => {
               const jobHistory = getJobMatchHistory(job.id);
@@ -404,6 +435,73 @@ export default function AITalentMatchPageJobsList({
               );
             })}
           </div>
+          ) : (
+            <div className="space-y-3">
+              {paginatedJobs.map((job) => {
+                const jobHistory = getJobMatchHistory(job.id);
+                const latestMatch = jobHistory.length > 0 ? jobHistory[jobHistory.length - 1] : null;
+                const isSelected = selectedJobs.includes(job.id);
+
+                return (
+                  <div
+                    key={job.id}
+                    onClick={() => onSelectJob(job.id)}
+                    className={`cursor-pointer rounded-xl border p-4 transition-all ${
+                      isSelected
+                        ? 'border-brand-blue/50 bg-brand-blue/[0.03] ring-1 ring-brand-blue/30'
+                        : 'border-gray-100 bg-white shadow-sm hover:border-brand-blue/30 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); handleSelectJob(job.id); }}
+                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center"
+                        aria-label={isSelected ? 'Deselect job' : 'Select job'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          readOnly
+                          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 pointer-events-none"
+                        />
+                      </button>
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                          <Briefcase className="h-5 w-5 text-brand-blue" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {job.jobId && <span className="rounded-md border border-brand-blue/20 bg-brand-blue/10 px-2 py-0.5 font-mono text-xs font-bold text-brand-blue">{job.jobId}</span>}
+                            <h3 className="truncate text-sm font-semibold text-gray-900 sm:text-base">{job.title}</h3>
+                            {job.currentVersion && <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">{job.currentVersion > 1 ? 'Republished' : 'Published'}</span>}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-gray-600">
+                            {job.department && <span className="flex items-center gap-1.5"><Briefcase className="h-4 w-4 text-gray-400" />{job.department}</span>}
+                            <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-gray-400" />{job.location?.trim() || '-'}</span>
+                            {job.employmentType && <span>{job.employmentType}</span>}
+                            {job.experience && <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-gray-400" />{job.experience}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">
+                        <span className="flex items-center gap-1.5 rounded-lg bg-brand-blue/5 px-3 py-1.5 text-sm font-medium text-brand-blue ring-1 ring-brand-blue/15"><User className="h-4 w-4" />{job.applicants}</span>
+                        {latestMatch && <span className="text-xs text-green-700">{latestMatch.totalMatches} matched</span>}
+                        <button
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); onSelectJob(job.id); }}
+                          className="ml-auto inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-3 py-2 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:bg-brand-blue-2"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          Run AI Match
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <ListPagination
             currentPage={currentPage}
