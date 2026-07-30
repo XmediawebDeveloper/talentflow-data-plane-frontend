@@ -76,6 +76,29 @@ const DUTY_CYCLE_DIVISOR = 3;
 const MAX_DETECT_INTERVAL = 20000;
 
 /**
+ * How often to ask the worker for its top raw scores (any class, allowlist and
+ * thresholds ignored). Left ON in production deliberately: this feature has
+ * already shipped broken twice in ways only a production log could reveal, and
+ * one line per 30 s is cheap next to that.
+ */
+const DEBUG_SNAPSHOT_MS = 30000;
+
+/**
+ * If the worker reports `ready` but no frame result arrives within this window,
+ * treat the detector as dead and say so.
+ *
+ * "Ready, then silence" has been this feature's dominant failure mode: init
+ * succeeds, something in the loop throws or stalls, and the interview completes
+ * with an empty Integrity Check tab that is indistinguishable from a clean one.
+ * A generic liveness check catches that class of bug regardless of cause —
+ * including causes not yet imagined.
+ *
+ * Generous, because the first inference can take seconds on weak GPUs and the
+ * camera may not be ready the instant the model is.
+ */
+const FIRST_RESULT_TIMEOUT_MS = 60000;
+
+/**
  * Cycles a class must be ABSENT before it can raise a second event. Without
  * this, a phone left on the desk in view would re-fire every cadence tick for
  * the whole interview and bury the Integrity Check tab in duplicates. The
@@ -119,7 +142,7 @@ const DETECTOR_NAME = "rf-detr-nano";
  * nasty here: it silently runs a known-broken detector against live interviews
  * while the code in the repo looks correct.
  */
-const WORKER_VERSION = "3";
+const WORKER_VERSION = "5";
 const WORKER_URL = `/workers/objectDetection.worker.js?v=${WORKER_VERSION}`;
 
 /**
@@ -165,6 +188,10 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
   const classStateRef = useRef<Record<string, ClassState>>({});
   const lastInferenceMsRef = useRef(0);
   const loggedTimingRef = useRef(false);
+  const lastDebugAtRef = useRef(0);
+  const pendingConfirmRef = useRef(false);
+  const watchdogRef = useRef<number | null>(null);
+  const sawResultRef = useRef(false);
 
   const callbacksRef = useRef(config);
   useEffect(() => { callbacksRef.current = config; }, [config]);
@@ -194,14 +221,28 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       return;
     }
 
-    // Space frames at DUTY_CYCLE_DIVISOR× the last measured inference so slow
-    // GPUs back off instead of queueing. Before the first result this is just
-    // the base interval.
-    const effectiveInterval = () =>
-      Math.min(
+    /**
+     * Space frames at DUTY_CYCLE_DIVISOR× the last measured inference so slow
+     * GPUs back off instead of queueing. Before the first result this is just
+     * the base interval.
+     *
+     * EXCEPT while corroborating a suspicion. The confirmation gate needs
+     * `framesToConfirm` consecutive detections, and at a ~6 s idle cadence that
+     * would mean a phone had to stay in frame for ~13 s — long enough that a
+     * quick glance at a phone is missed entirely. So: poll slowly when the frame
+     * looks clean, then sample back-to-back the moment something watched shows
+     * up. Corroboration arrives in ~2 inferences instead of ~2 cadences, and the
+     * idle duty cycle is unchanged.
+     */
+    const effectiveInterval = () => {
+      if (pendingConfirmRef.current) {
+        return Math.max(500, lastInferenceMsRef.current);
+      }
+      return Math.min(
         MAX_DETECT_INTERVAL,
         Math.max(baseInterval, lastInferenceMsRef.current * DUTY_CYCLE_DIVISOR),
       );
+    };
 
     /**
      * Confirm a class across consecutive cycles before raising it. A single
@@ -211,6 +252,9 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
      */
     const consider = (detections: DetectedObjectEvent[]) => {
       const seen = new Set(detections.map(d => d.object_class));
+      // Reset each cycle; set below if some class passed its thresholds but
+      // still needs more consecutive hits. Drives the burst sampling above.
+      let awaitingCorroboration = false;
 
       // Age out classes that were not seen this cycle.
       for (const [cls, st] of Object.entries(classStateRef.current)) {
@@ -223,9 +267,20 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       for (const det of detections) {
         const def = DETECTABLE_OBJECTS[det.object_class];
         if (!def) continue;
-        if (det.confidence < def.minConfidence) continue;
         const area = det.box[2] * det.box[3];
-        if (area < def.minBoxArea) continue;
+
+        // Log near-misses. A detection that reaches the worker but dies on a
+        // threshold here is the single most useful tuning signal there is, and
+        // it is otherwise completely invisible — the interview just ends with no
+        // flag and no explanation.
+        if (det.confidence < def.minConfidence || area < def.minBoxArea) {
+          console.log(
+            `[INTERVIEW_OBJECT_DETECTION] near-miss ${det.object_class} ` +
+            `score=${det.confidence.toFixed(3)}/${def.minConfidence} ` +
+            `area=${area.toFixed(4)}/${def.minBoxArea} — filtered`,
+          );
+          continue;
+        }
 
         const st = classStateRef.current[det.object_class] ??= {
           hits: 0, absent: 0, armed: true,
@@ -235,12 +290,20 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
         if (st.armed && st.hits >= def.framesToConfirm) {
           st.armed = false;
+          console.log(
+            `[INTERVIEW_OBJECT_DETECTION] FLAG ${def.eventType} ` +
+            `${det.object_class} score=${det.confidence.toFixed(3)} frames=${st.hits}`,
+          );
           callbacksRef.current?.onObjectDetected?.(def.eventType, {
             ...det,
             consecutive_frames: st.hits,
           });
+        } else if (st.armed) {
+          awaitingCorroboration = true;
         }
       }
+
+      pendingConfirmRef.current = awaitingCorroboration;
     };
 
     let worker: Worker;
@@ -252,12 +315,26 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
     }
     workerRef.current = worker;
 
-    worker.onmessage = (e: MessageEvent) => {
+    // Every branch below runs inside this handler, so ANY throw in here kills
+    // the detector for the rest of the interview. That is exactly how a stale
+    // `interval` reference once stopped the loop from ever starting while the
+    // console still cheerfully reported "Ready" — init had already succeeded, so
+    // the unavailable path never fired and the interview finished with no flags
+    // and no explanation. Never let an exception in here be silent.
+    const handleMessage = (e: MessageEvent) => {
       if (!mounted) return;
       const msg = e.data;
 
       if (msg.type === "ready") {
         isReadyRef.current = true;
+        // Liveness watchdog — cleared by the first frame result.
+        watchdogRef.current = setTimeout(() => {
+          if (!mounted || sawResultRef.current) return;
+          markUnavailable(
+            `Detector reported ready but produced no frame within ` +
+            `${FIRST_RESULT_TIMEOUT_MS / 1000}s — the detection loop is not running.`,
+          );
+        }, FIRST_RESULT_TIMEOUT_MS) as unknown as number;
         console.log(
           `[INTERVIEW_OBJECT_DETECTION] Ready — ${msg.backend}, ` +
           `input ${msg.inputSize}px, labels ${msg.labelSpace}, ort ${msg.ortUrl}`,
@@ -273,6 +350,22 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
       if (msg.type === "detections") {
         inFlightRef.current = false;
+        sawResultRef.current = true;
+        if (watchdogRef.current !== null) {
+          clearTimeout(watchdogRef.current);
+          watchdogRef.current = null;
+        }
+        // Periodic ground truth: the model's top raw scores, allowlist ignored.
+        // This is what distinguishes "saw nothing" from "saw the phone at 0.19"
+        // from "called the phone a laptop" — three problems, three fixes.
+        if (Array.isArray(msg.topRaw) && msg.topRaw.length) {
+          console.log(
+            "[INTERVIEW_OBJECT_DETECTION] frame sees: " +
+            msg.topRaw
+              .map((d: any) => `${d.label} ${d.score.toFixed(3)}`)
+              .join(", "),
+          );
+        }
         if (typeof msg.inferenceMs === "number") {
           lastInferenceMsRef.current = msg.inferenceMs;
           if (!loggedTimingRef.current) {
@@ -299,6 +392,18 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       if (msg.type === "detect-failed") {
         inFlightRef.current = false;
         console.warn("[INTERVIEW_OBJECT_DETECTION] Frame failed:", msg.error);
+      }
+    };
+
+    worker.onmessage = (e: MessageEvent) => {
+      try {
+        handleMessage(e);
+      } catch (err) {
+        inFlightRef.current = false;
+        markUnavailable(
+          `Detector crashed handling '${e?.data?.type ?? "?"}': ` +
+          `${(err as Error)?.message ?? err}`,
+        );
       }
     };
 
@@ -344,7 +449,13 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
           try {
             const bitmap = await createImageBitmap(video as HTMLVideoElement);
             const frameId = ++frameIdRef.current;
-            workerRef.current?.postMessage({ type: "detect", bitmap, frameId }, [bitmap]);
+            // Ask for the diagnostic snapshot at most once per DEBUG_SNAPSHOT_MS
+            // so the extra decode pass stays negligible.
+            const wantDebug = now - lastDebugAtRef.current >= DEBUG_SNAPSHOT_MS;
+            if (wantDebug) lastDebugAtRef.current = now;
+            workerRef.current?.postMessage(
+              { type: "detect", bitmap, frameId, wantDebug }, [bitmap],
+            );
           } catch {
             inFlightRef.current = false; // camera not ready yet; retry next tick
           }
@@ -355,7 +466,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
       timerRef.current = setTimeout(tick, POLL_INTERVAL_MS) as unknown as number;
       console.log(
-        `[INTERVIEW_OBJECT_DETECTION] Loop started (${interval} ms cadence` +
+        `[INTERVIEW_OBJECT_DETECTION] Loop started (base ${baseInterval} ms cadence` +
         `${lowTier ? ", low-tier" : ""})`,
       );
     };
@@ -366,6 +477,10 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
+      }
+      if (watchdogRef.current !== null) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
       }
       try {
         worker.postMessage({ type: "dispose" });

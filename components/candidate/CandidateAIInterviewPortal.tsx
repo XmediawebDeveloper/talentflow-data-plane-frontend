@@ -66,6 +66,23 @@ const POST_VIOLATION_RECORD_MS = 4000;
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
 
+// The "…is sharing your screen" bar with a "Hide" button is a CHROMIUM feature
+// (Chrome / Edge / Brave). Safari shows an OS-level indicator with no in-page
+// bar to hide, and Firefox differs too — so the hide-share-bar step only makes
+// sense on Chromium. Used to skip that step on non-Chromium browsers.
+const isChromiumBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  try {
+    const brands = (navigator as any).userAgentData?.brands as Array<{ brand: string }> | undefined;
+    if (brands?.length) {
+      return brands.some((b) => /Chromium|Google Chrome|Microsoft Edge/i.test(b.brand));
+    }
+  } catch { /* fall through to UA sniff */ }
+  const ua = navigator.userAgent || '';
+  // Chrome/Edge/Brave all contain "Chrome/"; Safari does not. Exclude Firefox.
+  return /Chrome\//.test(ua) && !/Firefox|FxiOS/i.test(ua);
+};
+
 // Strict tab-switch/minimize proctoring is enforced only in PRODUCTION so that
 // developers testing on staging aren't paused/terminated. Frontend reads the
 // browser-exposed NEXT_PUBLIC_ENVIRONMENT (the plain ENVIRONMENT var is server-only).
@@ -1273,8 +1290,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (res.hidden) {
         await startInterviewNow();
       } else {
-        setShareBarAttempts((n) => n + 1);
-        setShareBarError('We can still see the screen-sharing bar. Click "Hide" on that bar, then press Continue again.');
+        // Vision detecting the tiny collapsed pill is imperfect, so never trap a
+        // candidate who DID hide it: after a few failed checks, proceed anyway
+        // (deterministic fail-open on repeated failure — the recording still
+        // shows whether they hid it, so the recruiter can review).
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        const MAX_SHARE_BAR_ATTEMPTS = 3;
+        if (nextAttempt >= MAX_SHARE_BAR_ATTEMPTS) {
+          console.warn(`[ShareBar] ${nextAttempt} failed checks — proceeding anyway (fail-open)`);
+          await startInterviewNow();
+        } else {
+          setShareBarError('We can still see the screen-sharing bar. Click "Hide" on that bar, then press Continue again.');
+        }
       }
     } catch (e) {
       console.warn('[ShareBar] verify failed — proceeding (fail-open):', e);
@@ -1282,7 +1310,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     } finally {
       setShareBarChecking(false);
     }
-  }, [shareBarChecking, startSubmitting, token, captureScreenFrame, startInterviewNow]);
+  }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow]);
 
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
@@ -1331,7 +1359,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // hidden, and only then consumes a unit + starts. The whole step is inside
     // fullscreen with the screen recorder running, so the recording captures the
     // candidate hiding the bar → interview start.
-    if (interview?.verify_share_bar_hidden) {
+    // Only Chromium (Chrome/Edge/Brave) has the hideable "sharing your screen"
+    // bar; on Safari/Firefox there's nothing to hide, so skip the step and start.
+    if (interview?.verify_share_bar_hidden && isChromiumBrowser()) {
       setShareBarError(null);
       setShareBarAttempts(0);
       setStartSubmitting(false);

@@ -147,6 +147,11 @@ interface BrowserSpeechRecognitionConstructor {
 
 type InterviewWindow = Window & {
   __interviewAudioContext?: AudioContext;
+  /** Delay between a PCM chunk arriving and it becoming AUDIBLE, for the audio
+   *  path TalkingHeadAvatar actually took this turn. 0 for its raw Web Audio
+   *  fallback (plays immediately); null/undefined means the worklet path, so
+   *  TALKING_HEAD_BUFFER_MS applies. Set by TalkingHeadAvatar.streamStart. */
+  __interviewAudibleDelayMs?: number | null;
   SpeechRecognition?: BrowserSpeechRecognitionConstructor;
   webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
   __audioFramesDropped?: number;
@@ -290,6 +295,22 @@ const DEFAULT_REVEAL_CPS = 12;
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
 const PHASE_A_MAX_FRACTION = 0.94;
+// TalkingHead's WORKLET path buffers incoming PCM before its speaker goes
+// audible. Text reveal must wait this long after the first chunk arrives, else
+// the bubble paints while Bina is still silent. 1500ms gives generous headroom
+// for network jitter + TalkingHead's internal codec init.
+// NOTE: this is an unmeasured estimate, and it is NOT universal — Talking-
+// HeadAvatar's raw Web Audio fallback (Edge / audioOnly / avatar-load failure)
+// plays chunks immediately, i.e. a delay of 0. Always read the ACTIVE path's
+// value via getAudibleDelayMs() rather than using this constant directly.
+const TALKING_HEAD_BUFFER_MS = 1500;
+// Delay between chunk arrival and audible output for the path TalkingHeadAvatar
+// actually took this turn. It publishes 0 for its Web Audio fallback and null
+// for the worklet path (see TalkingHeadAvatar.streamStart).
+const getAudibleDelayMs = (): number => {
+  const v = (window as InterviewWindow).__interviewAudibleDelayMs;
+  return typeof v === 'number' && v >= 0 ? v : TALKING_HEAD_BUFFER_MS;
+};
 
 const formatTimeMMSS = (seconds: number): string => {
   const safe = Math.max(0, Math.floor(seconds || 0));
@@ -1604,8 +1625,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // actual scheduled start time (not ctx.currentTime in queueAudio). This
       // is the spec-correct anchor — the ctx second when this buffer begins
       // playing through TalkingHead after its ~700ms internal buffering.
-      if (audibleStartCtxSecRef.current === null) {
-        audibleStartCtxSecRef.current = startAt + TALKING_HEAD_BUFFER_MS / 1000;
+      // Store the RAW scheduled start. The audible-delay shift is applied by the
+      // reveal loop at READ time, not here: this runs BEFORE streamStart (see the
+      // chunk handler), so the active audio path — and therefore the correct
+      // delay — isn't known yet on the first chunk of a turn.
+      if (firstChunkStartCtxSecRef.current === null) {
+        firstChunkStartCtxSecRef.current = startAt;
       }
       playbackScheduledEndAtRef.current = startAt + buf.duration;
       playbackTrackerPendingRef.current += 1;
@@ -1761,19 +1786,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // the tracker path working, this margin is rarely reached — it's the
   // safety net, not the primary signal.
   const AUDIO_TAIL_MARGIN_MS = 3000;
-  // TalkingHead buffers incoming PCM before its speaker goes audible.
-  // Text reveal must wait this long after the first chunk arrives, else
-  // the bubble paints while Bina is still silent. 1500ms gives generous
-  // headroom for network jitter + TalkingHead's internal codec init.
-  const TALKING_HEAD_BUFFER_MS = 1500;
+  // (TALKING_HEAD_BUFFER_MS + getAudibleDelayMs() now live at module scope.)
   // Set to true to pipe reveal timing to the browser console — invaluable
   // for diagnosing text-before-voice reports from candidates.
-  // AudioContext clock (in seconds) at which Bina's audio is expected to
-  // become audible. Stamped when the first PCM chunk is received:
-  //   audibleStartCtxSec = ctx.currentTime + (TALKING_HEAD_BUFFER_MS / 1000)
-  // The reveal loop uses this — NOT wall-clock, NOT chunk rates — as the
-  // single source of truth for "how far into Bina's voice are we".
-  const audibleStartCtxSecRef = useRef<number | null>(null);
+  // Tracker-clock second (in AudioContext seconds) at which the FIRST PCM chunk
+  // of this turn was scheduled — RAW, with no audible-delay shift applied.
+  // The reveal loop adds getAudibleDelayMs() to derive the audible start, so the
+  // shift always reflects the audio path actually in use this turn (which isn't
+  // known yet at stamp time). This — NOT wall-clock, NOT chunk rates — is the
+  // basis for "how far into Bina's voice are we".
+  const firstChunkStartCtxSecRef = useRef<number | null>(null);
 
   // Token reveal system
   const tokenBufferRef = useRef("");
@@ -2793,15 +2815,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // which happens post-fullscreen-exit / cold start — the exact failure
       // mode where "text appears only after Bina finishes speaking").
       const pbCtx = playbackTrackerCtxRef.current;
-      const ctxStart = audibleStartCtxSecRef.current;
-      // Shift the tracker's scheduled end onto the AUDIBLE timeline. The silent
-      // mirror buffers are scheduled from chunk ARRIVAL, but TalkingHead's
-      // speakers only start TALKING_HEAD_BUFFER_MS later — so the real voice
-      // occupies [mirrorStart + buffer, mirrorEnd + buffer]. `ctxStart` already
-      // carries that shift (see trackPlaybackChunk); without the matching shift
-      // here the span is short by the whole buffer, which made the reveal finish
-      // ~2 s before Bina stopped speaking on EVERY turn.
-      const ctxEnd = playbackScheduledEndAtRef.current + TALKING_HEAD_BUFFER_MS / 1000;
+      // Put BOTH ends of the span on the AUDIBLE timeline using ONE delay lookup.
+      // The silent mirror buffers are scheduled from chunk ARRIVAL, but the
+      // speakers start `delay` later, so the real voice occupies
+      // [mirrorStart + delay, mirrorEnd + delay]. Shifting only the start (the
+      // original bug) leaves the span short by the whole delay, which made the
+      // reveal finish ~2 s before Bina stopped speaking on every turn. Shifting
+      // them with different values would reintroduce it — hence one `delaySec`.
+      const delaySec = getAudibleDelayMs() / 1000;
+      const rawStart = firstChunkStartCtxSecRef.current;
+      const ctxStart = rawStart === null ? null : rawStart + delaySec;
+      const ctxEnd = playbackScheduledEndAtRef.current + delaySec;
       const ctxAvailable =
         !!pbCtx &&
         pbCtx.state === "running" &&
@@ -2825,13 +2849,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         playedSec = now - ctxStart!;
         progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
-        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
+        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
       } else if (firstPcmAt !== null) {
         // Fallback: wall-clock math so streaming reveal works even when the
-        // tracker AudioContext is stalled. `audibleStartMs` waits out the
-        // TalkingHead buffer; the denominator is the ACCUMULATED audio
-        // duration received so far (a reliable estimate of total playback).
-        const audibleStartMs = firstPcmAt + TALKING_HEAD_BUFFER_MS;
+        // tracker AudioContext is stalled. `audibleStartMs` waits out the active
+        // path's audible delay (0 on TalkingHead's Web Audio fallback); in
+        // Phase B the denominator is the accumulated — and by then total —
+        // audio duration.
+        const audibleStartMs = firstPcmAt + getAudibleDelayMs();
         const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
         if (elapsedMs < 0) {
           if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
@@ -3262,7 +3287,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!isPlayingRef.current) {
       // First chunk of this turn — stamp the wall-clock anchor (still used
       // by a few legacy code paths for timeouts). The authoritative audio-
-      // clock anchor (audibleStartCtxSecRef) is stamped inside
+      // clock anchor (firstChunkStartCtxSecRef) is stamped inside
       // trackPlaybackChunk, which has the real scheduled start time.
       firstPcmAtMsRef.current = Date.now();
       isPlayingRef.current = true;
@@ -3774,7 +3799,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           firstPcmAtMsRef.current = null;
           lastPcmAtMsRef.current = null;
           currentTurnAudioMsRef.current = 0;
-          audibleStartCtxSecRef.current = null;
+          firstChunkStartCtxSecRef.current = null;
         }
         if (!revealTimerRef.current) {
           startRevealingTokens();
@@ -3888,7 +3913,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         currentTurnAudioMsRef.current = 0; // reset audio duration counter for this turn
         firstPcmAtMsRef.current = null;    // reset first-chunk anchor for this turn
         lastPcmAtMsRef.current = null;     // reset last-chunk anchor for this turn
-        audibleStartCtxSecRef.current = null; // reset audio-clock anchor for this turn
+        firstChunkStartCtxSecRef.current = null; // reset audio-clock anchor for this turn
         // Reset the playback tracker's per-turn counters. We deliberately
         // DO NOT reset `playbackScheduledEndAtRef` — that's the AudioContext
         // clock position. Each new chunk is scheduled at
@@ -6492,7 +6517,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // journald-forwarded logs — code 1006=abnormal/network, 1012=service
       // restart, 1001=tab closed, 1000=normal. Flush it immediately (beacon)
       // since the socket is already gone and the page may be tearing down.
-      console.warn(`[INTERVIEW-DEBUG] WebSocket closed code=${event.code} reason="${event.reason || ''}" wasClean=${event.wasClean} qNum=${questionNumberRef.current ?? '?'} isClosing=${isClosingRef.current} recording=${isRecordingRef.current}`);
+      // Level matters for triage: an intentional end-of-interview close (1000 +
+      // wasClean) is the happy path and logging it as a warning trains everyone
+      // to ignore warnings here. Anything else keeps warn.
+      const cleanFinish = event.code === 1000 && event.wasClean;
+      const logClose = cleanFinish ? console.log : console.warn;
+      logClose(`[INTERVIEW-DEBUG] WebSocket closed code=${event.code} reason="${event.reason || ''}" wasClean=${event.wasClean} qNum=${questionNumberRef.current ?? '?'} isClosing=${isClosingRef.current} recording=${isRecordingRef.current}`);
       flushClientLogBeacon();
       setIsConnected(false);
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }

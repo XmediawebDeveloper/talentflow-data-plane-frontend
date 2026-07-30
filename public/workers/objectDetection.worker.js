@@ -226,6 +226,40 @@ function postprocess(logits, boxes) {
   return detections;
 }
 
+/**
+ * Top-N detections of ANY class, ignoring the allowlist and the score floor.
+ *
+ * Purely diagnostic, and worth the extra pass: without it, "no violation was
+ * recorded" is indistinguishable between "the model saw nothing", "it saw the
+ * phone but scored 0.19", and "it called the phone a laptop". All three have
+ * completely different fixes, and in production we only ever get to see the log.
+ */
+function topRaw(logits, boxes, n) {
+  const [, numQueries, numClasses] = logits.dims;
+  const L = logits.data;
+  const B = boxes.data;
+  const all = [];
+  for (let q = 0; q < numQueries; q++) {
+    let bestClass = -1;
+    let bestLogit = -Infinity;
+    const base = q * numClasses;
+    for (let c = 0; c < numClasses; c++) {
+      const v = L[base + c];
+      if (v > bestLogit) { bestLogit = v; bestClass = c; }
+    }
+    const score = sigmoid(bestLogit);
+    if (score < 0.08) continue;
+    const o = q * 4;
+    all.push({
+      label: (labels && labels[bestClass]) || `id${bestClass}`,
+      score,
+      area: B[o + 2] * B[o + 3],
+    });
+  }
+  all.sort((a, b) => b.score - a.score);
+  return all.slice(0, n);
+}
+
 async function init(msg) {
   inputSize = msg.inputSize || 384;
   watched = new Set(msg.watchedLabels || []);
@@ -364,6 +398,9 @@ async function detect(msg) {
       type: 'detections',
       frameId: msg.frameId,
       detections,
+      // Only computed when the hook asks (it throttles to ~1 frame/30 s), so the
+      // extra pass never rides on every cycle.
+      topRaw: msg.wantDebug && logits && boxes ? topRaw(logits, boxes, 5) : null,
       inferenceMs: performance.now() - t0,
     });
   } catch (e) {
