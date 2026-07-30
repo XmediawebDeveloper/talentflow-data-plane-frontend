@@ -1,0 +1,31 @@
+# =============================================================================
+# TalentFlow Frontend — production compose (single VM)
+#
+# Joins the same external network as the backend compose so server-side code
+# can reach the API by service name.
+#
+# Server prereqs (one-time):
+#   docker network create talentflow           # created by backend deploy too
+#   /opt/talentflow/frontend/.env              # runtime server-side vars only
+#                                              # (NEXT_PUBLIC_* are baked at build)
+#
+# Deploy (CI does this):
+#   FRONTEND_IMAGE=<registry>/<image>:<sha> docker compose up -d
+# =============================================================================
+
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:-talentflow-frontend:latest}
+    env_file: .env
+    ports:
+      # WEB_PORT lets staging + production co-exist on one VM (3100 vs 3000)
+      - "${WEB_PORT:-3000}:3000"
+    restart: unless-stopped
+    networks:
+      - talentflow
+
+networks:
+  talentflow:
+    # TF_NETWORK isolates staging from production ("talentflow-staging" vs "talentflow")
+    name: ${TF_NETWORK:-talentflow}
+    external: true

@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import webpack from "webpack";
 
 const nextConfig: NextConfig = {
+  // Standalone output: emits .next/standalone with a self-contained server.js —
+  // lets the Docker image ship without node_modules (~250MB instead of ~2GB).
+  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },
