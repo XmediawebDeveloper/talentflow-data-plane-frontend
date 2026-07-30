@@ -24,8 +24,13 @@ stages:
   - build
   - deploy
 
+# NOTE: gitlab.mo.vc has no instance-level Container Registry configured
+# ($CI_REGISTRY is empty), so images are built and used LOCALLY on the VM —
+# build and deploy run on the same shell runner, no push/pull needed.
+# If a registry is enabled later: switch IMAGE to $CI_REGISTRY_IMAGE and
+# restore docker login/push/pull.
 variables:
-  IMAGE: $CI_REGISTRY_IMAGE
+  IMAGE: talentflow-frontend
   TAG: $CI_COMMIT_SHORT_SHA
 
 # ---------------------------------------------------------------- test ------
@@ -66,7 +71,6 @@ build-image:
   stage: build
   tags: [talentflow]
   script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - docker build --pull
         --build-arg NEXT_PUBLIC_ENVIRONMENT="$NEXT_PUBLIC_ENVIRONMENT"
         --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
@@ -79,7 +83,6 @@ build-image:
         --build-arg NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED="$NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED"
         --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="$NEXT_PUBLIC_RAZORPAY_KEY_ID"
         -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG" .
-    - docker push "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG"
   environment:
     name: staging
     action: prepare
@@ -105,10 +108,8 @@ build-image:production:
     - test -f "$DEPLOY_DIR/.env" || (echo "MISSING $DEPLOY_DIR/.env (runtime server-side vars)" && exit 1)
     - cp docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
     - docker network inspect "$TF_NETWORK" >/dev/null 2>&1 || docker network create "$TF_NETWORK"
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - cd "$DEPLOY_DIR"
     - export FRONTEND_IMAGE="$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG"
-    - docker compose pull frontend
     - docker compose up -d
     - docker image prune -f
     # smoke check
