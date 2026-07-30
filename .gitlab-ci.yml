@@ -50,33 +50,61 @@ lint:
   rules:
     - if: '$CI_COMMIT_BRANCH == "staging" || $CI_COMMIT_BRANCH == "aws"'
 
-# Playwright e2e — includes the Excel data-driven suite (e2e/data/testdata.xlsx
-# → one test per row, backend API mocked so no live services are needed).
-# The official Playwright image ships all browser system deps; the version tag
-# must match the @playwright/test version in package.json.
-e2e:
+# ---------------------------------------------------------------- e2e -------
+# Playwright runs in two jobs so the whole suite still executes on every push
+# while only the trustworthy part can block a deploy:
+#
+#   e2e            BLOCKING  — build/deploy require it (see `needs:` below).
+#   e2e:quarantine NON-BLOCK — specs that were already failing before this
+#                              pipeline existed (proof: the repo ships a
+#                              committed test-results/.last-run.json with
+#                              status "failed" for the timer-slot-based specs).
+#                              Move a spec into the blocking job as it is fixed.
+#
+# Backend APIs are mocked inside the specs, so no live services are needed.
+# The Playwright image tag must match @playwright/test in package.json.
+.playwright: &playwright
   stage: test
   tags: [talentflow]
-  script:
-    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
-        -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
-        sh -c "npm ci --no-audit --no-fund
-               && npx playwright install firefox
-               && npx playwright test excel-data-driven --reporter=line,html"
   artifacts:
     when: always
     expire_in: 1 week
     paths:
       - playwright-report
       - test-results
-  allow_failure: true   # flip to false once the suite is stable, to block bad deploys
   rules:
     - if: '$CI_COMMIT_BRANCH == "staging" || $CI_COMMIT_BRANCH == "aws"'
 
+e2e:
+  <<: *playwright
+  script:
+    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
+        sh -c "npm ci --no-audit --no-fund
+               && npx playwright install firefox
+               && npx playwright test smoke-auth smoke-dashboard smoke-jd excel-data-driven
+                    --reporter=line,html"
+  allow_failure: false   # a red suite stops the deploy
+
+e2e:quarantine:
+  <<: *playwright
+  script:
+    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
+        sh -c "npm ci --no-audit --no-fund
+               && npx playwright install firefox
+               && npx playwright test ai-interview-pipeline timer-slot-based timer-speaking
+                    --reporter=line,html"
+  allow_failure: true    # known-red today — reported, but does not gate the deploy
+
 # --------------------------------------------------------------- build ------
+# `needs: [e2e]` is the deploy gate: a red Playwright run stops the pipeline
+# here, so nothing is built or shipped. Stage order alone would not be enough —
+# it has to be an explicit dependency for the failure to block.
 build-image:
   stage: build
   tags: [talentflow]
+  needs: ["e2e"]
   script:
     - docker build --pull
         --build-arg NEXT_PUBLIC_ENVIRONMENT="$NEXT_PUBLIC_ENVIRONMENT"
@@ -100,6 +128,7 @@ build-image:
 # prod image must be built with prod-scoped variable values.
 build-image:production:
   extends: build-image
+  needs: ["e2e"]
   environment:
     name: production
     action: prepare
@@ -131,6 +160,7 @@ build-image:production:
 
 deploy:staging:
   <<: *deploy
+  needs: ["build-image"]          # which in turn needs a green e2e
   variables:
     DEPLOY_DIR: /opt/talentflow/staging/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-staging
@@ -143,6 +173,7 @@ deploy:staging:
 
 deploy:production:
   <<: *deploy
+  needs: ["build-image:production"]   # which in turn needs a green e2e
   variables:
     DEPLOY_DIR: /opt/talentflow/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-prod
